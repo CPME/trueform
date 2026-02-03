@@ -1,0 +1,19 @@
+{
+  "name": "trueform",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "example": "npm run build -- --pretty false && node dist/examples/hello.js",
+    "occt:e2e": "npm run build -- --pretty false && node dist/examples/occt_e2e.js",
+    "test": "npm run build -- --pretty false && node tools/run-tests.mjs",
+    "viewer:export": "npm run build -- --pretty false && node tools/viewer/export.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "opencascade.js": "beta",
+    "typescript": "^5.4.5"
+  }
+}

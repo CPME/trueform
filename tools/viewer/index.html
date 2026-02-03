@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trueform Viewer</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #f6f2ea;
+        color: #1a1a1a;
+        font-family: "Iowan Old Style", "Garamond", "Times New Roman", serif;
+      }
+      #app {
+        position: relative;
+        height: 100%;
+        width: 100%;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+      .hud {
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.85);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+        font-size: 14px;
+      }
+      .hud code {
+        font-family: "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono",
+          "Courier New", monospace;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="viewport"></canvas>
+      <div class="hud" id="status">Loading…</div>
+    </div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./node_modules/three/build/three.module.js",
+          "three/examples/jsm/": "./node_modules/three/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="./viewer.js"></script>
+  </body>
+</html>

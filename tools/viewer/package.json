@@ -1,0 +1,8 @@
+{
+  "name": "trueform-viewer",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "three": "0.161.0"
+  }
+}
