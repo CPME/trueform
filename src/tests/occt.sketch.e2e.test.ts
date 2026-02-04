@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { buildPart, PartIR } from "../index.js";
+import { dsl } from "../dsl.js";
+import { buildPart } from "../executor.js";
 import { countFaces, getBackendContext, runTests } from "./occt_test_utils.js";
 
 const tests = [
@@ -7,33 +8,25 @@ const tests = [
     name: "occt e2e: extrude sketch profile ref produces solid output",
     fn: async () => {
       const { occt, backend } = await getBackendContext();
-      const part: PartIR = {
-        id: "sketch-plate",
-        features: [
+      const part = dsl.part("sketch-plate", [
+        dsl.sketch2d("sketch-base", [
           {
-            id: "sketch-base",
-            kind: "feature.sketch2d",
-            profiles: [
-              {
-                name: "profile:base",
-                profile: { kind: "profile.rectangle", width: 50, height: 30 },
-              },
-            ],
+            name: "profile:base",
+            profile: dsl.profileRect(50, 30),
           },
-          {
-            id: "sketch-extrude",
-            kind: "feature.extrude",
-            profile: { kind: "profile.ref", name: "profile:base" },
-            depth: 5,
-            result: "body:sketch",
-            deps: ["sketch-base"],
-          },
-        ],
-      };
+        ]),
+        dsl.extrude(
+          "sketch-extrude",
+          dsl.profileRef("profile:base"),
+          5,
+          "body:main",
+          ["sketch-base"]
+        ),
+      ]);
 
       const result = buildPart(part, backend);
-      const body = result.final.outputs.get("body:sketch");
-      assert.ok(body, "missing body:sketch output");
+      const body = result.final.outputs.get("body:main");
+      assert.ok(body, "missing body:main output");
       assert.equal(result.partId, "sketch-plate");
       assert.deepEqual(result.order, ["sketch-base", "sketch-extrude"]);
 

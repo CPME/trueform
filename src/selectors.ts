@@ -5,7 +5,7 @@ import {
   ID,
   NamedOutput,
   Predicate,
-} from "./ir.js";
+} from "./dsl.js";
 import { CompileError } from "./graph.js";
 
 export type Selection = {
@@ -64,13 +64,13 @@ function resolveNamed(selector: NamedOutput, ctx: ResolutionContext): Selection 
 function predicateMatches(predicate: Predicate, selection: Selection): boolean {
   switch (predicate.kind) {
     case "pred.planar":
-      return selection.meta["planar"] === true;
+      return requireBool(selection, "planar") === true;
     case "pred.normal":
-      return selection.meta["normal"] === predicate.value;
+      return requireString(selection, "normal") === predicate.value;
     case "pred.createdBy":
-      return selection.meta["createdBy"] === predicate.featureId;
+      return requireString(selection, "createdBy") === predicate.featureId;
     case "pred.role":
-      return selection.meta["role"] === predicate.value;
+      return requireString(selection, "role") === predicate.value;
     default:
       return false;
   }
@@ -78,6 +78,7 @@ function predicateMatches(predicate: Predicate, selection: Selection): boolean {
 
 function applyRanking(candidates: Selection[], rank: RankRule[]): Selection[] {
   if (rank.length === 0) return candidates;
+  validateRankingMetadata(candidates, rank);
   let current = candidates.slice();
   for (const rule of rank) {
     current = rankOnce(current, rule);
@@ -98,16 +99,57 @@ function rankOnce(candidates: Selection[], rule: RankRule): Selection[] {
 function scoreForRule(selection: Selection, rule: RankRule): number {
   switch (rule.kind) {
     case "rank.maxArea":
-      return Number(selection.meta["area"] ?? 0);
+      return requireNumber(selection, "area");
     case "rank.minZ":
-      return -Number(selection.meta["centerZ"] ?? 0);
+      return -requireNumber(selection, "centerZ");
     case "rank.maxZ":
-      return Number(selection.meta["centerZ"] ?? 0);
+      return requireNumber(selection, "centerZ");
     case "rank.closestTo":
-      return -Number(selection.meta["distanceTo"] ?? 0);
+      return -requireNumber(selection, "distanceTo");
     default:
       return 0;
   }
+}
+
+function validateRankingMetadata(candidates: Selection[], rank: RankRule[]) {
+  for (const rule of rank) {
+    for (const candidate of candidates) {
+      void scoreForRule(candidate, rule);
+    }
+  }
+}
+
+function requireNumber(selection: Selection, key: string): number {
+  const value = selection.meta[key];
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    throw new CompileError(
+      "selector_meta_missing",
+      `Selector requires numeric metadata ${key}`
+    );
+  }
+  return value;
+}
+
+function requireString(selection: Selection, key: string): string {
+  const value = selection.meta[key];
+  if (typeof value !== "string") {
+    throw new CompileError(
+      "selector_meta_missing",
+      `Selector requires string metadata ${key}`
+    );
+  }
+  return value;
+}
+
+function requireBool(selection: Selection, key: string): boolean {
+  const value = selection.meta[key];
+  if (typeof value !== "boolean") {
+    throw new CompileError(
+      "selector_meta_missing",
+      `Selector requires boolean metadata ${key}`
+    );
+  }
+  return value;
 }
 
 export function normalizeSelector(selector: Selector): Selector {

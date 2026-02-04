@@ -1,41 +1,22 @@
-import { buildPart, MockBackend, PartIR, Selector } from "../index.js";
+import { dsl } from "../dsl.js";
+import { buildPart } from "../executor.js";
+import { MockBackend } from "../mock_backend.js";
 
-const topFace: Selector = {
-  kind: "selector.face",
-  predicates: [
-    { kind: "pred.planar" },
-    { kind: "pred.normal", value: "+Z" },
-  ],
-  rank: [{ kind: "rank.maxArea" }],
-};
-
-const part: PartIR = {
-  id: "plate",
-  features: [
+const part = dsl.part("plate", [
+  dsl.sketch2d("sketch-base", [
     {
-      id: "datum-top",
-      kind: "datum.plane",
-      normal: "+Z",
+      name: "profile:base",
+      profile: dsl.profileRect(100, 60),
     },
-    {
-      id: "base-extrude",
-      kind: "feature.extrude",
-      profile: { kind: "profile.rectangle", width: 100, height: 60 },
-      depth: 6,
-      result: "body:main",
-      deps: ["datum-top"],
-    },
-    {
-      id: "hole-1",
-      kind: "feature.hole",
-      onFace: topFace,
-      axis: "+Z",
-      diameter: 5,
-      depth: "throughAll",
-      deps: ["base-extrude"],
-    },
-  ],
-};
+  ]),
+  dsl.extrude(
+    "base-extrude",
+    dsl.profileRef("profile:base"),
+    6,
+    "body:main",
+    ["sketch-base"]
+  ),
+]);
 
 const backend = new MockBackend();
 const built = buildPart(part, backend);

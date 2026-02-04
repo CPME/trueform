@@ -1,6 +1,7 @@
 import { Backend, KernelResult, KernelSelection } from "./backend.js";
-import { compilePart } from "./compiler.js";
-import { PartIR, Selector } from "./ir.js";
+import { compileNormalizedPart, normalizePart } from "./compiler.js";
+import { IntentPart, Selector } from "./dsl.js";
+import { ParamOverrides } from "./params.js";
 import { resolveSelector } from "./selectors.js";
 
 export type FeatureStep = {
@@ -15,9 +16,14 @@ export type BuildResult = {
   steps: FeatureStep[];
 };
 
-export function buildPart(part: PartIR, backend: Backend): BuildResult {
-  const compiled = compilePart(part);
-  const byId = new Map(part.features.map((f) => [f.id, f]));
+export function buildPart(
+  part: IntentPart,
+  backend: Backend,
+  overrides?: ParamOverrides
+): BuildResult {
+  const normalized = normalizePart(part, overrides);
+  const compiled = compileNormalizedPart(normalized);
+  const byId = new Map(normalized.features.map((f) => [f.id, f]));
 
   let current: KernelResult = { outputs: new Map(), selections: [] };
   const steps: FeatureStep[] = [];

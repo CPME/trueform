@@ -1,0 +1,13 @@
+- [x] Check if it's actually using opencascade.js, and taking advantage of the native format. It's using `opencascade.js` for B-Rep in `src/backend_occt.ts`; the viewer now consumes `MeshData` JSON from `tools/viewer/export.mjs`.
+- [x] Make sure the DSL and IR (internal) are clearly encapsulated in this library. Only the DSL is exposed. Implemented `src/dsl.ts`, made `src/ir.ts` internal, and narrowed public exports to DSL + build/compile/backends.
+- [x] Start building the DSL. Added builder helpers and selector helpers, and updated examples/tests to use them.
+- [ ] Make sure this is practical for use in a webapp (can it compile to opencascade.js, and then wasm, without footguns). Avoid choices that block complex assemblies or responsive rotation later.
+- [x] If it doesn't exist already, build a backend for opencascade.js. `OcctBackend` exists in `src/backend_occt.ts`.
+- [x] Docs: update `aidocs/summary.md` with IR-only rationale, pure-data builders, selector+datum stability, v1 scope (PartIR only), explicit placeholder warnings + compile warning, v1 feature slice, `body:main` output, Node+ocjs target, viewer-only mesh export, and “unsupported features error” policy.
+- [x] Docs: add backend interface doc page including required selector metadata schema and minimal backend input contract.
+- [x] Params/units: add param types (`length`, `angle`, `count`), basic arithmetic expression AST, mixed-unit support normalized to canonical (mm/radians), compile-time normalization, and override API; make invalid expressions compile errors.
+- [x] Selector engine: global-context resolution; error on 0 or >1 matches after ranking; apply ranking in author-provided order; error on missing required metadata; keep numeric tolerance in backend-emitted metadata; named outputs preferred but optional; add tests.
+- [x] Backend seam: keep single package for now with internal module boundaries; limit public exports to DSL + compile/build; keep ocjs types out of DSL and isolated to backend/tools; add export audit checklist/test.
+- [x] v1 features: implement only Sketch2D + profile.rect/circle + extrude + revolve; ensure hooks for future hole/boolean/fillet; make ocjs backend throw explicit “not in v1” errors for unsupported features.
+- [x] v1 outputs + demos: standardize primary output as `body:main`; update examples/tests (sketch→extrude plate, revolve ring); ensure viewer export uses `body:main`; keep 2 e2e tests for these paths.
+- [x] JSON round-trip test: ensure DSL output serializes/deserializes without loss (pure-data builders).

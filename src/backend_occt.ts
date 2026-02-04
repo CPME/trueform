@@ -1,5 +1,12 @@
-import { Backend, ExecuteInput, KernelResult } from "./backend.js";
-import { Extrude, Profile, ProfileRef, Revolve, Sketch2D } from "./ir.js";
+import {
+  Backend,
+  ExecuteInput,
+  KernelResult,
+  KernelObject,
+  MeshData,
+  MeshOptions,
+} from "./backend.js";
+import { AxisDirection, Extrude, Profile, ProfileRef, Revolve, Sketch2D } from "./dsl.js";
 
 export type OcctModule = {
   // Placeholder for OpenCascade.js module type.
@@ -18,7 +25,8 @@ export class OcctBackend implements Backend {
   }
 
   execute(input: ExecuteInput): KernelResult {
-    switch (input.feature.kind) {
+    const kind = (input.feature as { kind: string }).kind;
+    switch (kind) {
       case "datum.plane":
       case "datum.axis":
       case "datum.frame":
@@ -35,18 +43,72 @@ export class OcctBackend implements Backend {
       case "feature.boolean":
       case "pattern.linear":
       case "pattern.circular":
-        break;
+        throw new Error(
+          `OCCT backend: ${kind} is not supported in v1`
+        );
       default:
-        break;
+        throw new Error(`OCCT backend: unsupported feature ${kind}`);
+    }
+  }
+
+  mesh(target: KernelObject, opts: MeshOptions = {}): MeshData {
+    const shape = target.meta["shape"] as any;
+    if (!shape) {
+      throw new Error("OCCT backend: mesh target missing shape metadata");
+    }
+    this.ensureTriangulation(shape, opts);
+
+    const occt = this.occt as any;
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_FACE,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+
+    const positions: number[] = [];
+    const indices: number[] = [];
+    const faceIds: number[] = [];
+    let vertexOffset = 0;
+    let faceIndex = 0;
+
+    for (; explorer.More(); explorer.Next()) {
+      const face = explorer.Current();
+      const { triangulation, loc } = this.getTriangulation(face);
+      if (!triangulation) {
+        faceIndex += 1;
+        continue;
+      }
+
+      const nbNodes = this.callNumber(triangulation, "NbNodes");
+      for (let i = 1; i <= nbNodes; i += 1) {
+        const pnt = this.call(triangulation, "Node", i);
+        const transformed = this.applyLocation(pnt, loc);
+        const coords = this.pointToArray(transformed);
+        positions.push(coords[0], coords[1], coords[2]);
+      }
+
+      const nbTriangles = this.callNumber(triangulation, "NbTriangles");
+      for (let i = 1; i <= nbTriangles; i += 1) {
+        const tri = this.call(triangulation, "Triangle", i);
+        const [n1, n2, n3] = this.triangleNodes(tri);
+        indices.push(vertexOffset + n1 - 1, vertexOffset + n2 - 1, vertexOffset + n3 - 1);
+        faceIds.push(faceIndex);
+      }
+
+      vertexOffset += nbNodes;
+      faceIndex += 1;
     }
 
-    // Scaffold: replace with real OCCT calls per feature kind.
-    return { outputs: new Map(), selections: [] };
+    return { positions, indices, faceIds };
   }
 
   private execExtrude(feature: Extrude, upstream: KernelResult): KernelResult {
     if (feature.depth === "throughAll") {
       throw new Error("OCCT backend: throughAll not implemented yet");
+    }
+    if (typeof feature.depth !== "number") {
+      throw new Error("OCCT backend: extrude depth must be normalized to number");
     }
     const depth = feature.depth;
     const profile = this.resolveProfile(feature.profile, upstream);
@@ -66,7 +128,14 @@ export class OcctBackend implements Backend {
 
   private execRevolve(feature: Revolve, upstream: KernelResult): KernelResult {
     const angle = feature.angle ?? "full";
-    const angleRad = angle === "full" ? Math.PI * 2 : angle;
+    const angleRad =
+      angle === "full"
+        ? Math.PI * 2
+        : typeof angle === "number"
+          ? angle
+          : (() => {
+              throw new Error("OCCT backend: revolve angle must be normalized to number");
+            })();
     const profile = this.resolveProfile(feature.profile, upstream);
     const face = this.buildProfileFace(profile);
     const axis = this.makeAxis(feature.axis, feature.origin);
@@ -125,9 +194,16 @@ export class OcctBackend implements Backend {
   private buildProfileFace(profile: Profile) {
     switch (profile.kind) {
       case "profile.rectangle":
-        return this.makeRectangleFace(profile.width, profile.height, profile.center);
+        return this.makeRectangleFace(
+          expectNumber(profile.width, "profile.width"),
+          expectNumber(profile.height, "profile.height"),
+          profile.center
+        );
       case "profile.circle":
-        return this.makeCircleFace(profile.radius, profile.center);
+        return this.makeCircleFace(
+          expectNumber(profile.radius, "profile.radius"),
+          profile.center
+        );
       default:
         throw new Error(`OCCT backend: unsupported profile ${(profile as Profile).kind}`);
     }
@@ -258,7 +334,7 @@ export class OcctBackend implements Backend {
   }
 
   private makeAxis(
-    dir: "+X" | "-X" | "+Y" | "-Y" | "+Z" | "-Z",
+    dir: AxisDirection,
     origin?: [number, number, number]
   ) {
     const [x, y, z] = axisVector(dir);
@@ -272,9 +348,119 @@ export class OcctBackend implements Backend {
     if (occt.gp_Circ_2) return new occt.gp_Circ_2(ax2, radius);
     throw new Error("OCCT backend: gp_Circ_2 constructor not available");
   }
+
+  private ensureTriangulation(shape: any, opts: MeshOptions) {
+    const linear = opts.linearDeflection ?? 0.5;
+    const angular = opts.angularDeflection ?? 0.5;
+    const relative = opts.relative ?? false;
+    const progress = this.makeProgressRange();
+    const argsList: Array<unknown[]> = [
+      ["BRepMesh_IncrementalMesh_2", [shape, linear, relative, angular, progress]],
+      ["BRepMesh_IncrementalMesh_2", [shape, linear, relative, angular, this.makeProgressRange()]],
+    ];
+    for (const [name, args] of argsList) {
+      try {
+        this.newOcct(name as string, ...(args as unknown[]));
+        return;
+      } catch {
+        continue;
+      }
+    }
+    throw new Error("OCCT backend: failed to triangulate shape");
+  }
+
+  private makeProgressRange() {
+    try {
+      return this.newOcct("Message_ProgressRange_1");
+    } catch {
+      return null;
+    }
+  }
+
+  private getTriangulation(face: any): { triangulation: any; loc: any } {
+    const occt = this.occt as any;
+    const loc = this.newOcct("TopLoc_Location_1");
+    const tool = occt.BRep_Tool;
+    const topo = occt.TopoDS;
+    if (!tool?.Triangulation) {
+      throw new Error("OCCT backend: BRep_Tool.Triangulation not available");
+    }
+    if (!topo?.Face_1) {
+      throw new Error("OCCT backend: TopoDS.Face_1 not available");
+    }
+    const faceHandle = topo.Face_1(face);
+    return { triangulation: tool.Triangulation(faceHandle, loc, 0), loc };
+  }
+
+  private applyLocation(pnt: any, loc: any) {
+    if (!loc || typeof loc.Transformation !== "function") return pnt;
+    const trsf = loc.Transformation();
+    if (!trsf || typeof pnt.Transformed !== "function") return pnt;
+    return pnt.Transformed(trsf);
+  }
+
+  private pointToArray(pnt: any): [number, number, number] {
+    if (typeof pnt.X === "function") {
+      return [pnt.X(), pnt.Y(), pnt.Z()];
+    }
+    if (typeof pnt.x === "function") {
+      return [pnt.x(), pnt.y(), pnt.z()];
+    }
+    if (typeof pnt.Coord === "function") {
+      const out = { value: [] as number[] };
+      pnt.Coord(out);
+      const coords = out.value;
+      return [coords[0] ?? 0, coords[1] ?? 0, coords[2] ?? 0];
+    }
+    throw new Error("OCCT backend: unsupported point type");
+  }
+
+  private triangleNodes(tri: any): [number, number, number] {
+    if (typeof tri.Get === "function") {
+      const a = { value: 0 };
+      const b = { value: 0 };
+      const c = { value: 0 };
+      tri.Get(a, b, c);
+      return [a.value, b.value, c.value];
+    }
+    if (typeof tri.Value === "function") {
+      const a = { value: 0 };
+      const b = { value: 0 };
+      const c = { value: 0 };
+      tri.Value(a, b, c);
+      return [a.value, b.value, c.value];
+    }
+    if (typeof tri.Node === "function") {
+      return [tri.Node(1), tri.Node(2), tri.Node(3)];
+    }
+    throw new Error("OCCT backend: unsupported triangle type");
+  }
+
+  private call(target: any, name: string, ...args: unknown[]) {
+    const fn = target?.[name];
+    if (typeof fn !== "function") {
+      throw new Error(`OCCT backend: missing ${name}()`);
+    }
+    return fn.call(target, ...args);
+  }
+
+  private callNumber(target: any, name: string): number {
+    const value = this.call(target, name);
+    if (typeof value !== "number") {
+      throw new Error(`OCCT backend: ${name}() did not return number`);
+    }
+    return value;
+  }
 }
 
-function axisVector(dir: "+X" | "-X" | "+Y" | "-Y" | "+Z" | "-Z"): [number, number, number] {
+function expectNumber(value: unknown, label: string): number {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    throw new Error(`OCCT backend: ${label} must be a number`);
+  }
+  return value;
+}
+
+function axisVector(dir: AxisDirection): [number, number, number] {
   switch (dir) {
     case "+X":
       return [1, 0, 0];

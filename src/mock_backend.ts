@@ -1,5 +1,13 @@
-import { Backend, ExecuteInput, KernelResult, KernelSelection } from "./backend.js";
-import { FeatureIR, Sketch2D, Selector } from "./ir.js";
+import {
+  Backend,
+  ExecuteInput,
+  KernelResult,
+  KernelSelection,
+  MeshData,
+  MeshOptions,
+  KernelObject,
+} from "./backend.js";
+import { IntentFeature, Sketch2D, Selector } from "./dsl.js";
 
 let seq = 0;
 
@@ -29,15 +37,23 @@ export class MockBackend implements Backend {
     }
   }
 
-  private emitDatum(feature: FeatureIR): KernelResult {
+  mesh(_target: KernelObject, _opts?: MeshOptions): MeshData {
+    return { positions: [], indices: [] };
+  }
+
+  private emitDatum(feature: IntentFeature): KernelResult {
     return {
       outputs: new Map([[`datum:${feature.id}`, this.makeObj("datum")]]),
       selections: [],
     };
   }
 
-  private emitSolid(feature: FeatureIR): KernelResult {
+  private emitSolid(feature: IntentFeature): KernelResult {
     const solidId = this.nextId("solid");
+    const resultName =
+      "result" in feature && typeof (feature as { result?: string }).result === "string"
+        ? (feature as { result: string }).result
+        : `body:${feature.id}`;
     const selections = [
       this.makeSelection("solid", { createdBy: feature.id, role: "body" }),
       this.makeSelection("face", {
@@ -58,9 +74,7 @@ export class MockBackend implements Backend {
       }),
     ];
 
-    const outputs = new Map([
-      [`body:${feature.id}`, this.makeObj("solid", solidId)],
-    ]);
+    const outputs = new Map([[resultName, this.makeObj("solid", solidId)]]);
     return { outputs, selections };
   }
 
@@ -76,7 +90,7 @@ export class MockBackend implements Backend {
   }
 
   private emitHole(
-    feature: FeatureIR,
+    feature: IntentFeature,
     resolve: (s: Selector, r: KernelResult) => KernelSelection,
     upstream: KernelResult
   ): KernelResult {
@@ -94,7 +108,7 @@ export class MockBackend implements Backend {
     return { outputs: new Map(), selections };
   }
 
-  private emitGeneric(feature: FeatureIR): KernelResult {
+  private emitGeneric(feature: IntentFeature): KernelResult {
     return {
       outputs: new Map([[`feat:${feature.id}`, this.makeObj("unknown")]]),
       selections: [],

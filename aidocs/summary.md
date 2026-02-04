@@ -25,6 +25,20 @@ And it explicitly does *not* promise:
 
 ---
 
+## V1 scope (current)
+
+* **IR-only source of truth** (no kernel history stored)
+* **Pure-data builders** (JSON-serializable intent)
+* **PartIR only**; `AssemblyIR` + FTI are **data-only placeholders** (compile warns if present)
+* **Features**: `Sketch2D`, `profile.rect/circle`, `Extrude`, `Revolve`
+* **Primary output**: `body:main` (single-body v1)
+* **Runtime target**: Node + OpenCascade.js (no browser/wasm perf guarantees yet)
+* **Exports**: Mesh export exists only in the viewer tool (no public export API yet)
+* **Packaging**: single package for now; backend types stay internal
+* **Unsupported features** must throw explicit errors in the OCJS backend
+
+---
+
 ## What problem TrueForm solves
 
 Modern CAD kernels (OCCT, pythonOCC, OpenCascade.js) expose **procedural, stateful APIs**. These APIs are powerful but brittle:
@@ -200,49 +214,26 @@ Functional tolerancing intent is **authoritative**. Assertions remain **validati
 
 ## “Hello world” example
 
-A minimal part with a base plate and four mounting holes:
+A minimal part with a sketch + extrude:
 
 ```ts
-import { Document, Part, Datum, Extrude, Hole, Pattern } from "trueform";
+import { dsl, buildPart } from "trueform";
 
-// Create a document
-const doc = new Document({ units: "mm" });
+const part = dsl.part("plate", [
+  dsl.sketch2d("sketch-base", [
+    { name: "profile:base", profile: dsl.profileRect(100, 60) },
+  ]),
+  dsl.extrude(
+    "base-extrude",
+    dsl.profileRef("profile:base"),
+    6,
+    "body:main",
+    ["sketch-base"]
+  ),
+]);
 
-// Define a part
-const part = new Part("plate");
-
-// Datums
-part.add(
-  Datum.plane("top", { normal: "+Z" }),
-  Datum.frame("center", { on: "top" })
-);
-
-// Base solid
-part.add(
-  Extrude.fromRectangle({
-    width: 100,
-    height: 60,
-    depth: 6,
-    result: "body:main"
-  })
-);
-
-// Hole feature (semantic)
-part.add(
-  Hole.simple({
-    onFace: { query: "planar(normal=+Z, maxArea=true)" },
-    axis: "+Z",
-    diameter: 5,
-    depth: "throughAll",
-    pattern: Pattern.rectangular({
-      origin: "datum:center",
-      spacing: [40, 20],
-      count: [2, 2]
-    })
-  })
-);
-
-doc.add(part);
+// Compile + build with a backend (ocjs in v1, via local tooling)
+// const result = buildPart(part, backend);
 ```
 
 What’s important:
@@ -256,11 +247,14 @@ What’s important:
 
 ## Feature set (current / intended)
 
-### Geometry
+### Geometry (v1)
 
 * Datums: plane, axis, frame
-* Sketch primitives (procedural v1)
+* Sketch2D + profile.rect/circle
 * Extrude / Revolve
+
+### Geometry (later)
+
 * Hole (simple, counterbore, countersink)
 * Fillet / Chamfer
 * Boolean (union / subtract / intersect)
@@ -506,7 +500,7 @@ In other words: **kernel-agnostic at the language level, kernel-specific at the 
 
 TrueForm stores **capabilities** (manufacturing + inspection limits, tolerances) and **functional tolerancing intent** inside the same Intent IR as geometry. FTI is authoritative; assertions are fast local checks.
 
-Assembly-level constraints are supported in the IR as an optional `assemblies` section (placeholder in v1), allowing FTI constraints to reference multi-part GeometryRefs when needed.
+Assemblies are supported in the IR as an optional `assemblies` section (v1 data-only). Instances carry transforms, and mates record intent. FTI constraints can reference multi-part GeometryRefs when needed.
 
 This is the same separation used by:
 
