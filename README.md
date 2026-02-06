@@ -14,6 +14,10 @@ npm test
 ```
 
 **Viewer (Verification Helper)**
+Screenshot: generated from the DSL and viewed with the packaged viewer.
+
+![TrueForm viewer screenshot](tf-web-viewer-screenshot.png)
+
 ```bash
 cd /home/eveber/code/trueform
 npm run viewer:export
