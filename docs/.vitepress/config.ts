@@ -3,6 +3,7 @@ import { defineConfig } from "vitepress";
 export default defineConfig({
   title: "TrueForm",
   description: "Declarative, intent-first modeling on OpenCascade.js.",
+  base: "/trueform/",
   themeConfig: {
     nav: [
       { text: "Guide", link: "/guide/getting-started" },
