@@ -1,16 +1,40 @@
 # TrueForm
 
-Create an end-to-end engineering system that enables humans and agents to rapidly iterate on designs while validating them against simulation and manufacturing design rules.
+TrueForm is a declarative, intent-first modeling layer on top of OpenCascade.js. It lets agents and web apps describe what a part is (features, constraints, assertions) without scripting kernel steps.
 
-Designs are authored in a rich DSL, stored in a central native open format, and exported as practical production artifacts (CAD with MBD/PMI, CAM, QIF). Exports stay simple and pragmatic, for example tolerances export as surface profile for CMM inspection.
+The goal: hardware design that feels more like software. A single, digital definition is authored and released with rapid iteration, automated checks, and clean handoff to manufacturing.
 
-If successful, hardware design should feel more like software: a single, digital definition is authored and released with rapid iteration, automated checks, and clean handoff to manufacturing.
+**Status**
+- V1 compiles a JSON-serializable IR and builds with an OpenCascade.js backend.
+- Current runtime target is Node + OpenCascade.js.
+- Assemblies are data-only for now (compile warns).
 
 **Quickstart**
 ```bash
-cd /home/eveber/code/trueform
+git clone https://github.com/CPME/trueform.git
+cd trueform
 npm install
 npm test
+```
+
+**Minimal Example**
+```ts
+import { dsl, buildPart } from "trueform";
+
+const part = dsl.part("plate", [
+  dsl.sketch2d("sketch-base", [
+    { name: "profile:base", profile: dsl.profileRect(100, 60) },
+  ]),
+  dsl.extrude(
+    "base-extrude",
+    dsl.profileRef("profile:base"),
+    6,
+    "body:main",
+    ["sketch-base"]
+  ),
+]);
+
+// const result = buildPart(part, backend);
 ```
 
 **Viewer (Verification Helper)**
@@ -19,20 +43,14 @@ Screenshot: generated from the DSL and viewed with the packaged viewer.
 ![TrueForm viewer screenshot](tf-web-viewer-screenshot.png)
 
 ```bash
-cd /home/eveber/code/trueform
 npm run viewer:export
-cd /home/eveber/code/trueform/tools/viewer
-npm install
-python3 -m http.server 8001
 ```
 
-Then open `http://localhost:8001` in a browser. Use `?debug=1` for axes/grid helpers.
+Viewer setup, mesh schema, and options: `tools/viewer/README.md`.
 
 **Docs**
-- `aidocs/summary.md`
-- `aidocs/spec.md`
-- `aidocs/geometric-abstractions.md`
-- `aidocs/functional-tolerancing-intent.md`
-- `aidocs/mesh-viewer-debug.md`
-- `aidocs/backend-interface.md`
-- `aidocs/future-features.md`
+- Overview and positioning: `aidocs/summary.md`
+- Technical spec (IR, pipeline, backend boundary): `aidocs/spec.md`
+- Functional tolerancing intent: `aidocs/functional-tolerancing-intent.md`
+- Viewer helper + mesh schema: `tools/viewer/README.md`
+- Docs map (source-of-truth guide): `aidocs/docs-map.md`

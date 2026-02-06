@@ -8,6 +8,8 @@
 ## Install
 
 ```bash
+git clone https://github.com/CPME/trueform.git
+cd trueform
 npm install
 ```
 
@@ -54,14 +56,4 @@ const part = dsl.part("plate", [
 npm run viewer:export
 ```
 
-Then serve the viewer:
-
-```bash
-cd tools/viewer
-npm install
-python3 -m http.server 8001
-```
-
-Open `http://localhost:8001` in your browser.
-
-For viewer details and mesh schema, see `tools/viewer/README.md`.
+For viewer setup, details, and mesh schema, see `tools/viewer/README.md`.

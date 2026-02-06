@@ -2,6 +2,8 @@
 
 TrueForm is a declarative, intent-first modeling layer on top of OpenCascade.js. It lets agents and web apps describe **what** a part is (features, constraints, assertions) without scripting kernel steps.
 
+The goal: hardware design that feels more like software. A single, digital definition is authored and released with rapid iteration, automated checks, and clean handoff to manufacturing.
+
 ## What It Is
 
 - A deterministic intent IR compiled into B-Rep geometry.
@@ -16,7 +18,7 @@ TrueForm is a declarative, intent-first modeling layer on top of OpenCascade.js.
 
 ## Status
 
-Current scope (v1) targets Node + OpenCascade.js with a minimal feature set: `Sketch2D`, `profile.rect/circle`, `Extrude`, `Revolve`, and single-body output (`body:main`). Unsupported features must throw explicit errors.
+Current scope (v1) compiles a JSON-serializable IR and builds with an OpenCascade.js backend. Runtime target is Node + OpenCascade.js, with a minimal feature set: `Sketch2D`, `profile.rect/circle`, `Extrude`, `Revolve`, and single-body output (`body:main`). Assemblies are data-only for now (compile warns).
 
 ## Start Here
 
