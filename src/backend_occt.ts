@@ -3,10 +3,22 @@ import {
   ExecuteInput,
   KernelResult,
   KernelObject,
+  KernelSelection,
   MeshData,
   MeshOptions,
 } from "./backend.js";
-import { AxisDirection, Extrude, Profile, ProfileRef, Revolve, Sketch2D } from "./dsl.js";
+import { resolveSelectorSet } from "./selectors.js";
+import {
+  AxisDirection,
+  BooleanOp,
+  Extrude,
+  Fillet,
+  Hole,
+  Profile,
+  ProfileRef,
+  Revolve,
+  Sketch2D,
+} from "./dsl.js";
 
 export type OcctModule = {
   // Placeholder for OpenCascade.js module type.
@@ -19,6 +31,7 @@ export type OcctBackendOptions = {
 
 export class OcctBackend implements Backend {
   private occt: OcctModule;
+  private selectionSeq = 0;
 
   constructor(options: OcctBackendOptions) {
     this.occt = options.occt;
@@ -38,9 +51,24 @@ export class OcctBackend implements Backend {
       case "feature.revolve":
         return this.execRevolve(input.feature as Revolve, input.upstream);
       case "feature.hole":
+        return this.execHole(
+          input.feature as Hole,
+          input.upstream,
+          input.resolve
+        );
       case "feature.fillet":
-      case "feature.chamfer":
+        return this.execFillet(
+          input.feature as Fillet,
+          input.upstream,
+          input.resolve
+        );
       case "feature.boolean":
+        return this.execBoolean(
+          input.feature as BooleanOp,
+          input.upstream,
+          input.resolve
+        );
+      case "feature.chamfer":
       case "pattern.linear":
       case "pattern.circular":
         throw new Error(
@@ -100,7 +128,10 @@ export class OcctBackend implements Backend {
       faceIndex += 1;
     }
 
-    return { positions, indices, faceIds };
+    const normals = this.computeNormals(positions, indices);
+    const edgePositions =
+      opts.includeEdges === false ? undefined : this.buildEdgeLines(shape, opts);
+    return { positions, indices, normals, faceIds, edgePositions };
   }
 
   private execExtrude(feature: Extrude, upstream: KernelResult): KernelResult {
@@ -123,7 +154,8 @@ export class OcctBackend implements Backend {
         },
       ],
     ]);
-    return { outputs, selections: [] };
+    const selections = this.collectSelections(solid, feature.id, feature.result);
+    return { outputs, selections };
   }
 
   private execRevolve(feature: Revolve, upstream: KernelResult): KernelResult {
@@ -140,6 +172,7 @@ export class OcctBackend implements Backend {
     const face = this.buildProfileFace(profile);
     const axis = this.makeAxis(feature.axis, feature.origin);
     const revol = this.makeRevol(face, axis, angleRad);
+    this.tryBuild(revol);
     const solid = this.readShape(revol);
     const outputs = new Map([
       [
@@ -151,7 +184,166 @@ export class OcctBackend implements Backend {
         },
       ],
     ]);
-    return { outputs, selections: [] };
+    const selections = this.collectSelections(solid, feature.id, feature.result);
+    return { outputs, selections };
+  }
+
+  private execHole(
+    feature: Hole,
+    upstream: KernelResult,
+    resolve: ExecuteInput["resolve"]
+  ): KernelResult {
+    const target = resolve(feature.onFace, upstream);
+    if (target.kind !== "face") {
+      throw new Error("OCCT backend: hole target must resolve to a face");
+    }
+
+    const ownerKey = this.resolveOwnerKey(target, upstream);
+    const owner = this.resolveOwnerShape(target, upstream);
+    if (!owner) {
+      throw new Error("OCCT backend: hole target missing owner solid");
+    }
+
+    const diameter = expectNumber(feature.diameter, "feature.diameter");
+    const radius = diameter / 2;
+    if (radius <= 0) {
+      throw new Error("OCCT backend: hole diameter must be positive");
+    }
+
+    const center = this.faceCenter(target.meta["shape"]);
+    let axisDir = axisVector(feature.axis);
+    const faceNormal = target.meta["normal"];
+    if (typeof faceNormal === "string") {
+      const normalDir = axisVector(faceNormal as AxisDirection);
+      if (dot(axisDir, normalDir) > 0.9) {
+        axisDir = [-normalDir[0], -normalDir[1], -normalDir[2]];
+      }
+    }
+    const length =
+      feature.depth === "throughAll"
+        ? this.throughAllDepth(owner, axisDir)
+        : expectNumber(feature.depth, "feature.depth");
+    const origin: [number, number, number] = center;
+
+    const cylinder = this.readShape(
+      this.makeCylinder(radius, length, axisDir, origin)
+    );
+    const cut = this.makeBoolean("cut", owner, cylinder);
+    let solid = this.readShape(cut);
+    solid = this.splitByTools(solid, [owner, cylinder]);
+    solid = this.normalizeSolid(solid);
+
+    const outputs = new Map([
+      [
+        ownerKey,
+        {
+          id: `${feature.id}:solid`,
+          kind: "solid" as const,
+          meta: { shape: solid },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(solid, feature.id, ownerKey);
+    return { outputs, selections };
+  }
+
+  private execBoolean(
+    feature: BooleanOp,
+    upstream: KernelResult,
+    resolve: ExecuteInput["resolve"]
+  ): KernelResult {
+    const leftSel = resolve(feature.left, upstream);
+    const rightSel = resolve(feature.right, upstream);
+    const left = this.resolveOwnerShape(leftSel, upstream);
+    const right = this.resolveOwnerShape(rightSel, upstream);
+    if (!left || !right) {
+      throw new Error("OCCT backend: boolean inputs must resolve to solids");
+    }
+
+    const op = feature.op;
+    const result = this.makeBoolean(op, left, right);
+    let solid = this.readShape(result);
+    solid = this.splitByTools(solid, [left, right]);
+    solid = this.normalizeSolid(solid);
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:solid`,
+          kind: "solid" as const,
+          meta: { shape: solid },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(solid, feature.id, feature.result);
+    return { outputs, selections };
+  }
+
+  private execFillet(
+    feature: Fillet,
+    upstream: KernelResult,
+    _resolve: ExecuteInput["resolve"]
+  ): KernelResult {
+    const targets = resolveSelectorSet(
+      feature.edges,
+      this.toResolutionContext(upstream)
+    );
+    if (targets.length === 0) {
+      throw new Error("OCCT backend: fillet selector matched 0 edges");
+    }
+    for (const target of targets) {
+      if (target.kind !== "edge") {
+        throw new Error("OCCT backend: fillet selector must resolve to an edge");
+      }
+    }
+    const ownerKey = this.resolveOwnerKey(targets[0] as KernelSelection, upstream);
+    const owner = this.resolveOwnerShape(targets[0] as KernelSelection, upstream);
+    if (!owner) {
+      throw new Error("OCCT backend: fillet target missing owner solid");
+    }
+
+    const radius = expectNumber(feature.radius, "feature.radius");
+    if (radius <= 0) {
+      throw new Error("OCCT backend: fillet radius must be positive");
+    }
+
+    const fillet = this.makeFilletBuilder(owner);
+    const add = (fn: string, ...args: unknown[]) => {
+      const method = (fillet as Record<string, unknown>)[fn];
+      if (typeof method === "function") {
+        try {
+          method.apply(fillet, args);
+          return true;
+        } catch {
+          return false;
+        }
+      }
+      return false;
+    };
+    for (const target of targets) {
+      const edge = this.toEdge(target.meta["shape"]);
+      const added =
+        add("Add_2", edge, radius) ||
+        add("Add_2", radius, edge) ||
+        add("Add_1", edge);
+      if (!added) {
+        throw new Error("OCCT backend: failed to add fillet edge");
+      }
+    }
+    this.tryBuild(fillet);
+    const solid = this.readShape(fillet);
+    const outputs = new Map([
+      [
+        ownerKey,
+        {
+          id: `${feature.id}:solid`,
+          kind: "solid" as const,
+          meta: { shape: solid },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(solid, feature.id, ownerKey);
+    return { outputs, selections };
   }
 
   private execSketch(feature: Sketch2D): KernelResult {
@@ -164,6 +356,442 @@ export class OcctBackend implements Backend {
       });
     }
     return { outputs, selections: [] };
+  }
+
+  private collectSelections(
+    shape: any,
+    featureId: string,
+    ownerKey: string
+  ): KernelSelection[] {
+    const occt = this.occt as any;
+    const selections: KernelSelection[] = [];
+
+    selections.push({
+      id: this.nextSelectionId("solid"),
+      kind: "solid",
+      meta: {
+        shape,
+        owner: shape,
+        ownerKey,
+        createdBy: featureId,
+        role: "body",
+      },
+    });
+
+    const faceExplorer = new occt.TopExp_Explorer_1();
+    faceExplorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_FACE,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    for (; faceExplorer.More(); faceExplorer.Next()) {
+      const face = faceExplorer.Current();
+      selections.push({
+        id: this.nextSelectionId("face"),
+        kind: "face",
+        meta: this.faceMetadata(face, shape, featureId, ownerKey),
+      });
+    }
+
+    const edgeExplorer = new occt.TopExp_Explorer_1();
+    edgeExplorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_EDGE,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    for (; edgeExplorer.More(); edgeExplorer.Next()) {
+      const edge = edgeExplorer.Current();
+      selections.push({
+        id: this.nextSelectionId("edge"),
+        kind: "edge",
+        meta: this.edgeMetadata(edge, shape, featureId, ownerKey),
+      });
+    }
+
+    return selections;
+  }
+
+  private nextSelectionId(prefix: string): string {
+    this.selectionSeq += 1;
+    return `${prefix}:${this.selectionSeq}`;
+  }
+
+  private faceMetadata(
+    face: any,
+    owner: any,
+    featureId: string,
+    ownerKey: string
+  ): Record<string, unknown> {
+    const { area, center, planar, normal } = this.faceProperties(face);
+    const meta: Record<string, unknown> = {
+      shape: face,
+      owner,
+      ownerKey,
+      createdBy: featureId,
+      planar,
+      area,
+      center,
+      centerZ: center[2],
+    };
+    if (normal) {
+      meta.normal = normal;
+    }
+    return meta;
+  }
+
+  private edgeMetadata(
+    edge: any,
+    owner: any,
+    featureId: string,
+    ownerKey: string
+  ): Record<string, unknown> {
+    const bounds = this.shapeBounds(edge);
+    const center: [number, number, number] = [
+      (bounds.min[0] + bounds.max[0]) / 2,
+      (bounds.min[1] + bounds.max[1]) / 2,
+      (bounds.min[2] + bounds.max[2]) / 2,
+    ];
+    const centerZ = center[2];
+    return {
+      shape: edge,
+      owner,
+      ownerKey,
+      createdBy: featureId,
+      role: "edge",
+      center,
+      centerZ,
+    };
+  }
+
+  private faceProperties(face: any): {
+    area: number;
+    center: [number, number, number];
+    planar: boolean;
+    normal?: AxisDirection;
+  } {
+    let area = 0;
+    let center: [number, number, number] = [0, 0, 0];
+    try {
+      const props = this.newOcct("GProp_GProps");
+      const faceHandle = this.toFace(face);
+      const occt = this.occt as any;
+      if (occt.BRepGProp?.SurfaceProperties_1) {
+        occt.BRepGProp.SurfaceProperties_1(faceHandle, props, true, true);
+        area = this.callNumber(props, "Mass");
+        const centre = this.call(props, "CentreOfMass");
+        center = this.pointToArray(centre);
+      }
+    } catch {
+      // Fall back to bounding box below.
+    }
+
+    let planar = false;
+    let normal: AxisDirection | undefined;
+    try {
+      const faceHandle = this.toFace(face);
+      const adaptor = this.newOcct("BRepAdaptor_Surface", faceHandle, true);
+      const type = this.call(adaptor, "GetType") as { value?: number } | undefined;
+      const planeType = (this.occt as any).GeomAbs_SurfaceType?.GeomAbs_Plane;
+      if (planeType && typeof type?.value === "number") {
+        planar = type.value === planeType.value;
+      }
+      if (planar) {
+        const plane = this.call(adaptor, "Plane");
+        const axis = this.call(plane, "Axis");
+        const dir = this.call(axis, "Direction");
+        const [x, y, z] = this.dirToArray(dir);
+        normal = axisDirectionFromVector([x, y, z]);
+      }
+    } catch {
+      // If plane detection fails, we still return defaults.
+    }
+
+    if (area === 0) {
+      const bounds = this.shapeBounds(face);
+      const dx = bounds.max[0] - bounds.min[0];
+      const dy = bounds.max[1] - bounds.min[1];
+      const dz = bounds.max[2] - bounds.min[2];
+      area = planar
+        ? normal === "+Z" || normal === "-Z"
+          ? dx * dy
+          : normal === "+X" || normal === "-X"
+            ? dy * dz
+            : dx * dz
+        : dx * dy;
+      center = [
+        (bounds.min[0] + bounds.max[0]) / 2,
+        (bounds.min[1] + bounds.max[1]) / 2,
+        (bounds.min[2] + bounds.max[2]) / 2,
+      ];
+    }
+
+    return { area, center, planar, normal };
+  }
+
+  private faceCenter(face: any): [number, number, number] {
+    const props = this.faceProperties(face);
+    return props.center;
+  }
+
+  private resolveOwnerKey(selection: KernelSelection, upstream: KernelResult): string {
+    const ownerKey = selection.meta["ownerKey"];
+    if (typeof ownerKey === "string") return ownerKey;
+    for (const [key, output] of upstream.outputs) {
+      if (output.kind === "solid") return key;
+    }
+    return "body:main";
+  }
+
+  private resolveOwnerShape(selection: KernelSelection, upstream: KernelResult): any | null {
+    const owner = selection.meta["owner"];
+    if (owner) return owner;
+    if (selection.kind === "solid") {
+      const shape = selection.meta["shape"];
+      if (shape) return shape;
+    }
+    const key = this.resolveOwnerKey(selection, upstream);
+    const output = upstream.outputs.get(key);
+    return output?.meta["shape"] ?? null;
+  }
+
+  private toResolutionContext(upstream: KernelResult) {
+    const named = new Map<string, KernelSelection>();
+    for (const [key, obj] of upstream.outputs) {
+      if (obj.kind === "face" || obj.kind === "edge" || obj.kind === "solid") {
+        named.set(key, { id: obj.id, kind: obj.kind, meta: obj.meta });
+      }
+    }
+    return { selections: upstream.selections, named };
+  }
+
+  private shapeBounds(shape: any): { min: [number, number, number]; max: [number, number, number] } {
+    const occt = this.occt as any;
+    const box = this.newOcct("Bnd_Box");
+    if (!occt.BRepBndLib?.Add) {
+      return { min: [0, 0, 0], max: [0, 0, 0] };
+    }
+    occt.BRepBndLib.Add(shape, box, true);
+    const min = this.pointToArray(box.CornerMin());
+    const max = this.pointToArray(box.CornerMax());
+    return { min, max };
+  }
+
+  private throughAllDepth(shape: any, axisDir: [number, number, number]): number {
+    const bounds = this.shapeBounds(shape);
+    const lenX = bounds.max[0] - bounds.min[0];
+    const lenY = bounds.max[1] - bounds.min[1];
+    const lenZ = bounds.max[2] - bounds.min[2];
+    const base =
+      Math.abs(axisDir[0]) > 0.5
+        ? lenX
+        : Math.abs(axisDir[1]) > 0.5
+          ? lenY
+          : lenZ;
+    const margin = Math.max(base * 0.2, 1);
+    return base + margin;
+  }
+
+  private makeCylinder(
+    radius: number,
+    height: number,
+    axisDir: [number, number, number],
+    origin: [number, number, number]
+  ) {
+    const pnt = this.makePnt(origin[0], origin[1], origin[2]);
+    const dir = this.makeDir(axisDir[0], axisDir[1], axisDir[2]);
+    const ax2 = this.makeAx2(pnt, dir);
+    const occt = this.occt as Record<string, any>;
+    const ctorWithAxis = occt.BRepPrimAPI_MakeCylinder_3;
+    if (typeof ctorWithAxis === "function") {
+      return new ctorWithAxis(ax2, radius, height);
+    }
+    const candidates: Array<unknown[]> = [
+      [ax2, radius, height],
+      [radius, height],
+    ];
+    for (const args of candidates) {
+      try {
+        return this.newOcct("BRepPrimAPI_MakeCylinder", ...args);
+      } catch {
+        continue;
+      }
+    }
+    throw new Error("OCCT backend: failed to construct cylinder");
+  }
+
+  private makeFilletBuilder(shape: any) {
+    const occt = this.occt as any;
+    const filletShape = occt.ChFi3d_FilletShape?.ChFi3d_Rational;
+    const candidates: Array<unknown[]> = filletShape ? [[shape, filletShape], [shape]] : [[shape]];
+    for (const args of candidates) {
+      try {
+        return this.newOcct("BRepFilletAPI_MakeFillet", ...args);
+      } catch {
+        continue;
+      }
+    }
+    throw new Error("OCCT backend: failed to construct fillet builder");
+  }
+
+  private makeBoolean(
+    op: "union" | "subtract" | "intersect" | "cut",
+    left: any,
+    right: any
+  ) {
+    const map: Record<string, string> = {
+      union: "BRepAlgoAPI_Fuse",
+      subtract: "BRepAlgoAPI_Cut",
+      cut: "BRepAlgoAPI_Cut",
+      intersect: "BRepAlgoAPI_Common",
+    };
+    const ctor = map[op];
+    if (!ctor) {
+      throw new Error(`OCCT backend: unsupported boolean op ${op}`);
+    }
+    const progress = this.makeProgressRange();
+    const occt = this.occt as Record<string, any>;
+    const ctorWithProgress = occt[`${ctor}_3`];
+    if (typeof ctorWithProgress === "function" && progress) {
+      try {
+        const builder = new ctorWithProgress(left, right, progress);
+        this.tryBuild(builder);
+        return builder;
+      } catch {
+        // fall back to generic constructor search
+      }
+    }
+
+    const candidates: Array<unknown[]> = [
+      [left, right, progress],
+      [left, right],
+    ];
+    for (const args of candidates) {
+      try {
+        const builder = this.newOcct(ctor, ...args);
+        this.tryBuild(builder);
+        return builder;
+      } catch {
+        continue;
+      }
+    }
+    throw new Error(`OCCT backend: failed to construct ${ctor}`);
+  }
+
+  private splitByTools(result: any, tools: any[]): any {
+    const occt = this.occt as Record<string, any>;
+    if (!occt.BOPAlgo_Splitter_1) return result;
+    const progress = this.makeProgressRange();
+    if (!progress) return result;
+    let splitter: any;
+    try {
+      splitter = this.newOcct("BOPAlgo_Splitter");
+    } catch {
+      return result;
+    }
+    const call = (name: string, ...args: unknown[]) => {
+      const method = splitter?.[name];
+      if (typeof method !== "function") return false;
+      try {
+        method.apply(splitter, args);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    call("SetNonDestructive", true);
+    const glueOff = occt.BOPAlgo_GlueEnum?.BOPAlgo_GlueOff;
+    if (glueOff) call("SetGlue", glueOff);
+    call("AddArgument", result);
+    for (const tool of tools) {
+      if (!tool) continue;
+      call("AddTool", tool);
+    }
+    try {
+      splitter.Perform(progress);
+    } catch {
+      return result;
+    }
+    try {
+      return this.readShape(splitter);
+    } catch {
+      return result;
+    }
+  }
+
+  private normalizeSolid(shape: any): any {
+    const occt = this.occt as any;
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_SOLID,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    const solids: any[] = [];
+    for (; explorer.More(); explorer.Next()) {
+      solids.push(explorer.Current());
+    }
+    if (solids.length === 0) return shape;
+    if (solids.length === 1) return solids[0];
+    if (!occt.GProp_GProps_1 || !occt.BRepGProp?.VolumeProperties_1) {
+      return solids[0];
+    }
+    let best = solids[0];
+    let bestVolume = -Infinity;
+    for (const solid of solids) {
+      const volume = this.solidVolume(solid);
+      if (volume > bestVolume) {
+        bestVolume = volume;
+        best = solid;
+      }
+    }
+    return best;
+  }
+
+  private solidVolume(solid: any): number {
+    const occt = this.occt as any;
+    if (!occt.GProp_GProps_1 || !occt.BRepGProp?.VolumeProperties_1) {
+      return -Infinity;
+    }
+    try {
+      const props = new occt.GProp_GProps_1();
+      occt.BRepGProp.VolumeProperties_1(solid, props, true, true, true);
+      const mass = typeof props.Mass === "function" ? props.Mass() : undefined;
+      return typeof mass === "number" && !Number.isNaN(mass) ? mass : -Infinity;
+    } catch {
+      return -Infinity;
+    }
+  }
+
+  private tryBuild(builder: any) {
+    if (!builder || typeof builder.Build !== "function") return;
+    const progress = this.makeProgressRange();
+    try {
+      builder.Build(progress);
+      return;
+    } catch {
+      // fall through
+    }
+    try {
+      builder.Build();
+    } catch {
+      // ignore build failures; some builders auto-build
+    }
+  }
+
+  private toFace(face: any) {
+    const occt = this.occt as any;
+    if (occt.TopoDS?.Face_1) {
+      return occt.TopoDS.Face_1(face);
+    }
+    return face;
+  }
+
+  private toEdge(edge: any) {
+    const occt = this.occt as any;
+    if (occt.TopoDS?.Edge_1) {
+      return occt.TopoDS.Edge_1(edge);
+    }
+    return edge;
   }
 
   private resolveProfile(profileRef: ProfileRef, upstream: KernelResult): Profile {
@@ -356,7 +984,10 @@ export class OcctBackend implements Backend {
     const progress = this.makeProgressRange();
     const argsList: Array<unknown[]> = [
       ["BRepMesh_IncrementalMesh_2", [shape, linear, relative, angular, progress]],
-      ["BRepMesh_IncrementalMesh_2", [shape, linear, relative, angular, this.makeProgressRange()]],
+      [
+        "BRepMesh_IncrementalMesh_2",
+        [shape, linear, relative, angular, this.makeProgressRange()],
+      ],
     ];
     for (const [name, args] of argsList) {
       try {
@@ -389,7 +1020,12 @@ export class OcctBackend implements Backend {
       throw new Error("OCCT backend: TopoDS.Face_1 not available");
     }
     const faceHandle = topo.Face_1(face);
-    return { triangulation: tool.Triangulation(faceHandle, loc, 0), loc };
+    const triHandle = tool.Triangulation(faceHandle, loc, 0);
+    if (triHandle?.IsNull && triHandle.IsNull()) {
+      return { triangulation: null, loc };
+    }
+    const triangulation = triHandle?.get ? triHandle.get() : triHandle;
+    return { triangulation, loc };
   }
 
   private applyLocation(pnt: any, loc: any) {
@@ -415,23 +1051,92 @@ export class OcctBackend implements Backend {
     throw new Error("OCCT backend: unsupported point type");
   }
 
+  private dirToArray(dir: any): [number, number, number] {
+    if (typeof dir.X === "function") {
+      return [dir.X(), dir.Y(), dir.Z()];
+    }
+    if (typeof dir.x === "function") {
+      return [dir.x(), dir.y(), dir.z()];
+    }
+    if (typeof dir.Coord === "function") {
+      const out = { value: [] as number[] };
+      dir.Coord(out);
+      const coords = out.value;
+      return [coords[0] ?? 0, coords[1] ?? 0, coords[2] ?? 0];
+    }
+    throw new Error("OCCT backend: unsupported direction type");
+  }
+
+  private computeNormals(positions: number[], indices: number[]): number[] {
+    if (positions.length === 0 || indices.length === 0) return [];
+    const normals = new Array(positions.length).fill(0);
+    for (let i = 0; i < indices.length; i += 3) {
+      const iaIndex = indices[i];
+      const ibIndex = indices[i + 1];
+      const icIndex = indices[i + 2];
+      if (iaIndex === undefined || ibIndex === undefined || icIndex === undefined) {
+        continue;
+      }
+      const ia = iaIndex * 3;
+      const ib = ibIndex * 3;
+      const ic = icIndex * 3;
+      const ax = positions[ia] ?? 0;
+      const ay = positions[ia + 1] ?? 0;
+      const az = positions[ia + 2] ?? 0;
+      const bx = positions[ib] ?? 0;
+      const by = positions[ib + 1] ?? 0;
+      const bz = positions[ib + 2] ?? 0;
+      const cx = positions[ic] ?? 0;
+      const cy = positions[ic + 1] ?? 0;
+      const cz = positions[ic + 2] ?? 0;
+      const abx = bx - ax;
+      const aby = by - ay;
+      const abz = bz - az;
+      const acx = cx - ax;
+      const acy = cy - ay;
+      const acz = cz - az;
+      const nx = aby * acz - abz * acy;
+      const ny = abz * acx - abx * acz;
+      const nz = abx * acy - aby * acx;
+      normals[ia] += nx;
+      normals[ia + 1] += ny;
+      normals[ia + 2] += nz;
+      normals[ib] += nx;
+      normals[ib + 1] += ny;
+      normals[ib + 2] += nz;
+      normals[ic] += nx;
+      normals[ic + 1] += ny;
+      normals[ic + 2] += nz;
+    }
+
+    for (let i = 0; i < normals.length; i += 3) {
+      const nx = normals[i];
+      const ny = normals[i + 1];
+      const nz = normals[i + 2];
+      const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+      if (len > 1e-12) {
+        normals[i] = nx / len;
+        normals[i + 1] = ny / len;
+        normals[i + 2] = nz / len;
+      } else {
+        normals[i] = 0;
+        normals[i + 1] = 0;
+        normals[i + 2] = 0;
+      }
+    }
+    return normals;
+  }
+
   private triangleNodes(tri: any): [number, number, number] {
+    if (typeof tri.Value === "function") {
+      return [tri.Value(1), tri.Value(2), tri.Value(3)];
+    }
     if (typeof tri.Get === "function") {
       const a = { value: 0 };
       const b = { value: 0 };
       const c = { value: 0 };
       tri.Get(a, b, c);
       return [a.value, b.value, c.value];
-    }
-    if (typeof tri.Value === "function") {
-      const a = { value: 0 };
-      const b = { value: 0 };
-      const c = { value: 0 };
-      tri.Value(a, b, c);
-      return [a.value, b.value, c.value];
-    }
-    if (typeof tri.Node === "function") {
-      return [tri.Node(1), tri.Node(2), tri.Node(3)];
     }
     throw new Error("OCCT backend: unsupported triangle type");
   }
@@ -450,6 +1155,63 @@ export class OcctBackend implements Backend {
       throw new Error(`OCCT backend: ${name}() did not return number`);
     }
     return value;
+  }
+
+  private buildEdgeLines(shape: any, opts: MeshOptions): number[] {
+    const occt = this.occt as any;
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_EDGE,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+
+    const positions: number[] = [];
+    for (; explorer.More(); explorer.Next()) {
+      const edgeShape = explorer.Current();
+      const edge = this.toEdge(edgeShape);
+      const points = this.sampleEdgePoints(edge, opts);
+      if (points.length < 2) continue;
+      for (let i = 0; i + 1 < points.length; i += 1) {
+        const a = points[i];
+        const b = points[i + 1];
+        if (!a || !b) continue;
+        positions.push(a[0], a[1], a[2], b[0], b[1], b[2]);
+      }
+    }
+    return positions;
+  }
+
+  private sampleEdgePoints(edge: any, opts: MeshOptions): Array<[number, number, number]> {
+    try {
+      const adaptor = this.newOcct("BRepAdaptor_Curve", edge);
+      const first = this.callNumber(adaptor, "FirstParameter");
+      const last = this.callNumber(adaptor, "LastParameter");
+      if (!Number.isFinite(first) || !Number.isFinite(last)) return [];
+
+      const bounds = this.shapeBounds(edge);
+      const dx = bounds.max[0] - bounds.min[0];
+      const dy = bounds.max[1] - bounds.min[1];
+      const dz = bounds.max[2] - bounds.min[2];
+      const diag = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const step = opts.edgeSegmentLength && opts.edgeSegmentLength > 0 ? opts.edgeSegmentLength : 1;
+      const maxSegments = Math.max(1, opts.edgeMaxSegments ?? 64);
+      const span = Math.abs(last - first);
+      const byDiag = Math.ceil((diag || step) / step);
+      const bySpan = Math.ceil(span || 1);
+      const segments = Math.min(maxSegments, Math.max(1, byDiag, bySpan));
+
+      const points: Array<[number, number, number]> = [];
+      for (let i = 0; i <= segments; i += 1) {
+        const t = i / segments;
+        const u = first + (last - first) * t;
+        const pnt = this.call(adaptor, "Value", u);
+        points.push(this.pointToArray(pnt));
+      }
+      return points;
+    } catch {
+      return [];
+    }
   }
 }
 
@@ -476,4 +1238,20 @@ function axisVector(dir: AxisDirection): [number, number, number] {
       return [0, 0, -1];
   }
   throw new Error(`OCCT backend: invalid axis direction ${dir}`);
+}
+
+function dot(a: [number, number, number], b: [number, number, number]): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function axisDirectionFromVector(vec: [number, number, number]): AxisDirection | undefined {
+  const [x, y, z] = vec;
+  const ax = Math.abs(x);
+  const ay = Math.abs(y);
+  const az = Math.abs(z);
+  const max = Math.max(ax, ay, az);
+  if (max < 0.5) return undefined;
+  if (max === ax) return x >= 0 ? "+X" : "-X";
+  if (max === ay) return y >= 0 ? "+Y" : "-Y";
+  return z >= 0 ? "+Z" : "-Z";
 }

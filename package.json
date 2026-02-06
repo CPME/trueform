@@ -15,11 +15,18 @@
     "example": "npm run build -- --pretty false && node dist/examples/hello.js",
     "occt:e2e": "npm run build -- --pretty false && node dist/examples/occt_e2e.js",
     "test": "npm run build -- --pretty false && node tools/run-tests.mjs",
-    "viewer:export": "npm run build -- --pretty false && node tools/viewer/export.mjs"
+    "viewer:export": "npm run build -- --pretty false && node tools/viewer/export.mjs",
+    "sketch:export": "npm run build -- --pretty false && node tools/sketch/export.mjs",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
+    "docs:api": "typedoc"
   },
   "devDependencies": {
     "@types/node": "^20.11.30",
     "opencascade.js": "beta",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitepress": "^1.0.0",
+    "typedoc": "^0.25.13"
   }
 }

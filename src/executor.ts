@@ -3,6 +3,7 @@ import { compileNormalizedPart, normalizePart } from "./compiler.js";
 import { IntentPart, Selector } from "./dsl.js";
 import { ParamOverrides } from "./params.js";
 import { resolveSelector } from "./selectors.js";
+import { type ValidationOptions } from "./validate.js";
 
 export type FeatureStep = {
   featureId: string;
@@ -19,9 +20,10 @@ export type BuildResult = {
 export function buildPart(
   part: IntentPart,
   backend: Backend,
-  overrides?: ParamOverrides
+  overrides?: ParamOverrides,
+  options?: ValidationOptions
 ): BuildResult {
-  const normalized = normalizePart(part, overrides);
+  const normalized = normalizePart(part, overrides, options);
   const compiled = compileNormalizedPart(normalized);
   const byId = new Map(normalized.features.map((f) => [f.id, f]));
 

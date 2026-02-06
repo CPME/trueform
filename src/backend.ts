@@ -1,4 +1,4 @@
-import { FeatureIR, ID, Selector } from "./ir.js";
+import { IntentFeature, ID, Selector } from "./dsl.js";
 
 export type KernelResult = {
   outputs: Map<string, KernelObject>;
@@ -17,12 +17,32 @@ export type KernelSelection = {
   meta: Record<string, unknown>;
 };
 
+export type MeshOptions = {
+  linearDeflection?: number;
+  angularDeflection?: number;
+  relative?: boolean;
+  parallel?: boolean;
+  includeEdges?: boolean;
+  edgeSegmentLength?: number;
+  edgeMaxSegments?: number;
+};
+
+export type MeshData = {
+  positions: number[];
+  indices?: number[];
+  normals?: number[];
+  faceIds?: number[];
+  edgePositions?: number[];
+  edgeIndices?: number[];
+};
+
 export type ExecuteInput = {
-  feature: FeatureIR;
+  feature: IntentFeature;
   upstream: KernelResult;
   resolve: (selector: Selector, upstream: KernelResult) => KernelSelection;
 };
 
 export interface Backend {
   execute(input: ExecuteInput): KernelResult;
+  mesh(target: KernelObject, opts?: MeshOptions): MeshData;
 }

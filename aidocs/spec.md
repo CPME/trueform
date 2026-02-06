@@ -2,6 +2,8 @@
 
 Build a **reusable TypeScript library for webapps** that lets agents author **declarative design intent** (features, datums, constraints, assertions) and **compile** it into geometry using OpenCascade.js (with a clean seam to add native Open CASCADE Technology later).
 
+Audience: implementers. For a high-level overview, see `aidocs/summary.md`.
+
 ---
 
 ## Deliverable structure (recommended monorepo)
@@ -45,7 +47,7 @@ It is the **single authoritative IR** for geometry, semantic references, functio
 
   * `units`
   * `parts: PartIR[]`
-  * `assemblies?: AssemblyIR[]` (optional; placeholder for assembly-level constraints)
+  * `assemblies?: AssemblyIR[]` (optional; data-only assembly graph)
   * `capabilities` (manufacturing + inspection capability sets, including tolerances)
   * `constraints` (functional tolerancing intent; authoritative bounds)
   * `assertions` (cheap/local checks; not authoritative)
@@ -59,13 +61,27 @@ It is the **single authoritative IR** for geometry, semantic references, functio
 * `assertions`: lightweight local checks (non-authoritative)
 * `outputs`: named bodies + named selection sets (as selectors, not IDs)
 
-### AssemblyIR (placeholder)
+### AssemblyIR (v1 data-only)
 
 * `id`
-* `parts`: references to PartIR instances
-* `mates`: optional (future)
-* `constraints`: functional tolerancing intent scoped to assembly-level GeometryRefs
-* `outputs`: named selection sets (as selectors, not IDs)
+* `instances`: part instances with transforms
+  * `{ id, part, transform?, tags? }`
+* `mates?`: assembly intent constraints (no solver in v1)
+  * `mate.fixed`
+  * `mate.coaxial`
+  * `mate.planar` (optional offset)
+* `outputs?`: named selection sets using `AssemblyRef`
+
+Types:
+
+* `AssemblyRef = { instance, selector }`
+* `Transform = { translation?, rotation?, matrix? }`
+  * `matrix` is a 4x4 column-major array (length 16)
+
+Notes:
+
+* Transforms are authoritative in v1; mates are recorded as intent/validation.
+* Assembly selectors always scope through an instance id + selector.
 
 ### Feature node contract
 
@@ -170,6 +186,8 @@ Implemented in `@cad/intent`, executed with a backend.
 
    * build dependency DAG from feature inputs
    * deterministic topological sort (tie-break on feature id)
+   * hybrid dependencies: explicit `feature.deps` plus inferred anchors (`profile.ref`, `pattern.ref`, `selector.named`, `pred.createdBy`, `rank.closestTo`)
+   * selectors without anchors require explicit deps; missing anchors are compile errors
 
 3. **Build**
 
@@ -191,6 +209,20 @@ Implemented in `@cad/intent`, executed with a backend.
    * B-Rep handles (backend-specific, not serialized)
    * mesh for rendering
    * provenance map (feature → produced bodies, tags, named selections)
+
+---
+
+## Webapp footgun avoidance (MVP)
+
+We are not optimizing for peak runtime performance yet, but we must avoid
+choices that make complex assemblies unusable later. Minimal safeguards:
+
+* **Separate B-Rep from render mesh**: keep OCCT shapes in the backend; stream meshes to the viewer.
+* **Mesh profiles**: allow coarse mesh for interaction, fine mesh for export.
+* **Progressive refinement**: render coarse mesh first, refine later.
+* **Cache per-feature and per-part**: avoid re-meshing unchanged parts.
+* **Instance transforms**: render repeated parts via transforms instead of duplicating mesh.
+* **Async meshing**: perform meshing off the main thread (worker) when used in-browser.
 
 ---
 

@@ -1,0 +1,11 @@
+{
+  "entryPoints": ["src/index.ts"],
+  "out": "docs/public/api",
+  "readme": "none",
+  "tsconfig": "tsconfig.json",
+  "name": "TrueForm API",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "disableGit": true,
+  "disableSources": true
+}

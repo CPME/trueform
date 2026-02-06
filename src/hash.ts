@@ -1,4 +1,4 @@
-import { FeatureIR } from "./ir.js";
+import { IntentFeature } from "./dsl.js";
 
 export function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
@@ -9,7 +9,7 @@ export function stableStringify(value: unknown): string {
   return `{${body.join(",")}}`;
 }
 
-export function hashFeature(feature: FeatureIR): string {
+export function hashFeature(feature: IntentFeature): string {
   const normalized = stableStringify(feature);
   let hash = 0;
   for (let i = 0; i < normalized.length; i += 1) {

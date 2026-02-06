@@ -6,7 +6,7 @@ import {
   NamedOutput,
   Predicate,
 } from "./dsl.js";
-import { CompileError } from "./graph.js";
+import { CompileError } from "./errors.js";
 
 export type Selection = {
   id: ID;
@@ -20,8 +20,29 @@ export type ResolutionContext = {
 };
 
 export function resolveSelector(selector: Selector, ctx: ResolutionContext): Selection {
+  const ranked = resolveSelectorSet(selector, ctx);
+  if (ranked.length !== 1) {
+    throw new CompileError(
+      "selector_ambiguous",
+      "Selector ambiguity: add ranking or tighten predicates"
+    );
+  }
+  const single = ranked[0];
+  if (!single) {
+    throw new CompileError(
+      "selector_empty_after_rank",
+      "Selector ranking produced no candidates"
+    );
+  }
+  return single;
+}
+
+export function resolveSelectorSet(
+  selector: Selector,
+  ctx: ResolutionContext
+): Selection[] {
   if (selector.kind === "selector.named") {
-    return resolveNamed(selector, ctx);
+    return [resolveNamed(selector, ctx)];
   }
 
   const candidates = ctx.selections.filter((s) => {
@@ -36,21 +57,13 @@ export function resolveSelector(selector: Selector, ctx: ResolutionContext): Sel
   }
 
   const ranked = applyRanking(candidates, selector.rank);
-  if (ranked.length !== 1) {
-    throw new CompileError(
-      "selector_ambiguous",
-      "Selector ambiguity: add ranking or tighten predicates"
-    );
-  }
-
-  const single = ranked[0];
-  if (!single) {
+  if (ranked.length === 0) {
     throw new CompileError(
       "selector_empty_after_rank",
       "Selector ranking produced no candidates"
     );
   }
-  return single;
+  return ranked;
 }
 
 function resolveNamed(selector: NamedOutput, ctx: ResolutionContext): Selection {

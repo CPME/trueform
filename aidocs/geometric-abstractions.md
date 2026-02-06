@@ -1,3 +1,7 @@
+# Geometric Abstractions (roadmap)
+
+Status: future ideas and brainstorming. This is not the MVP spec; see `aidocs/spec.md` for the current scope.
+
 Below is a structured list of **geometric abstractions suitable for an agent-facing layer on top of Open CASCADE Technology (OCCT)**. The goal is to minimize direct B-Rep manipulation while preserving manufacturable intent, composability, and deterministic outcomes.
 
 Note: items marked **(future)** are not part of the current MVP IR; they are optional extensions or later additions.

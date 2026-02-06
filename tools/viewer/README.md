@@ -1,7 +1,10 @@
-# Trueform Viewer (lightweight)
+# TrueForm Viewer (lightweight)
 
-This is a minimal STL viewer for quick verification. It avoids showing mesh
-triangulation by rendering smooth faces and only drawing sharp edges.
+This is a minimal mesh viewer for quick verification. It avoids showing mesh
+triangulation by rendering smooth faces and drawing CAD-style B-Rep edges.
+
+The default export uses a TrueForm DSL example (`src/examples/viewer_part.ts`)
+compiled with OpenCascade.js and written to `tools/viewer/assets/plate.mesh.json`.
 
 ## Export geometry
 
@@ -9,7 +12,16 @@ triangulation by rendering smooth faces and only drawing sharp edges.
 npm run viewer:export
 ```
 
-That writes `tools/viewer/assets/plate.stl`.
+That writes `tools/viewer/assets/plate.mesh.json` from the DSL example, plus
+`tools/viewer/assets/plate.debug.json` and edge projection SVGs.
+
+## Mesh format
+
+The viewer expects a JSON payload with:
+- `positions`: flat xyz array (length = 3 * vertex count).
+- `indices`: triangle indices into `positions` (optional but recommended).
+- `normals`: flat xyz array per vertex (optional; viewer will compute if missing).
+- `edgePositions`: flat xyz array for line segments (optional, CAD-style edges).
 
 ## View it
 
@@ -22,13 +34,34 @@ npm install
 
 ```bash
 cd tools/viewer
-python -m http.server 8000
+python3 -m http.server 8001
 ```
 
-Open `http://localhost:8000` in your browser.
+Open `http://localhost:8001` in your browser.
 
-You can load a different STL with:
+Notes:
+- If running the server in WSL, open the URL in a Windows browser.
+- Use `?debug=1` to show axes/grid/debug helpers: `http://localhost:8001/?debug=1`.
+- Use `?hidden=1` to show hidden edges (disable depth test).
+- Load a different mesh with `?file=./assets/your_part.mesh.json`.
+- Edge rendering: `?edges=brep` (default), `?edges=faces`, or `?edges=mesh`.
+- You can also load a local mesh JSON via the file picker in the HUD and download a PNG snapshot.
 
+## Debug outputs
+
+`npm run viewer:export` also writes:
+- `tools/viewer/assets/plate.debug.json`: face/edge counts, adjacency stats, bounds, mesh stats.
+- `tools/viewer/assets/plate.edges.xy.svg`: orthographic edge projection (XY).
+- `tools/viewer/assets/plate.edges.xz.svg`: orthographic edge projection (XZ).
+- `tools/viewer/assets/plate.edges.yz.svg`: orthographic edge projection (YZ).
+
+## Sanity check (optional)
+
+From another shell:
+
+```bash
+curl -sSf http://localhost:8001/viewer.js >/dev/null
+curl -sSf http://localhost:8001/assets/plate.mesh.json >/dev/null
 ```
-http://localhost:8000/?file=./assets/your_part.stl
-```
+
+You can load a different mesh with `?file=./assets/your_part.mesh.json`.

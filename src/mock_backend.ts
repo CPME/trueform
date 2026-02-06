@@ -9,9 +9,13 @@ import {
 } from "./backend.js";
 import { IntentFeature, Sketch2D, Selector } from "./dsl.js";
 
-let seq = 0;
-
 export class MockBackend implements Backend {
+  private seq = 0;
+
+  reset(): void {
+    this.seq = 0;
+  }
+
   execute(input: ExecuteInput): KernelResult {
     const feature = input.feature;
     switch (feature.kind) {
@@ -136,7 +140,7 @@ export class MockBackend implements Backend {
   }
 
   private nextId(prefix: string): string {
-    seq += 1;
-    return `${prefix}-${seq}`;
+    this.seq += 1;
+    return `${prefix}-${this.seq}`;
   }
 }

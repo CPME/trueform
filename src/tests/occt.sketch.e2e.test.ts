@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { dsl } from "../dsl.js";
 import { buildPart } from "../executor.js";
-import { countFaces, getBackendContext, runTests } from "./occt_test_utils.js";
+import {
+  assertValidShape,
+  countFaces,
+  getBackendContext,
+  runTests,
+} from "./occt_test_utils.js";
 
 const tests = [
   {
@@ -34,6 +39,7 @@ const tests = [
       assert.ok(shape, "missing shape metadata");
       const isNull = typeof shape.IsNull === "function" ? shape.IsNull() : false;
       assert.equal(isNull, false, "expected non-null OCCT shape");
+      assertValidShape(occt, shape, "sketch extrude solid");
 
       const faceCount = countFaces(occt, shape);
       assert.ok(faceCount >= 5, `expected at least 5 faces, got ${faceCount}`);

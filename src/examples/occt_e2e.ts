@@ -1,22 +1,15 @@
 import initOpenCascade from "opencascade.js/dist/node.js";
-import { buildPart, OcctBackend, PartIR } from "../index.js";
+import { dsl } from "../dsl.js";
+import { OcctBackend } from "../backend_occt.js";
+import { buildPart } from "../executor.js";
 
 try {
   const occt = await initOpenCascade();
   const backend = new OcctBackend({ occt });
 
-  const part: PartIR = {
-    id: "plate",
-    features: [
-      {
-        id: "base-extrude",
-        kind: "feature.extrude",
-        profile: { kind: "profile.rectangle", width: 80, height: 40 },
-        depth: 8,
-        result: "body:main",
-      },
-    ],
-  };
+  const part = dsl.part("plate", [
+    dsl.extrude("base-extrude", dsl.profileRect(80, 40), 8, "body:main"),
+  ]);
 
   const result = buildPart(part, backend);
   const body = result.final.outputs.get("body:main");

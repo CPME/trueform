@@ -1,34 +1,19 @@
-No need to ask, just keep working on the project if it's low risk. Especially if you already have documentation to work off of and the project is not complete. I will maintain the documentation to reflect the application I want to see.
+## Performance
+Make sure this is practical for use in a webapp (can it compile to opencascade.js, and then wasm, without footguns). Avoid choices that block complex assemblies or responsive rotation later.
 
-## Viewer (verification helper)
+## Docs Pointers
 
-Lightweight STL viewer lives in `tools/viewer/` and is meant only for quick visual verification.
-
-### Export geometry
-
-```bash
-cd /home/eveber/code/trueform.js
-npm run viewer:export
-```
-
-This writes `tools/viewer/assets/plate.stl`.
-
-### Run the viewer (local)
-
-```bash
-cd /home/eveber/code/trueform.js/tools/viewer
-npm install
-python3 -m http.server 8001
-```
-
-Open `http://localhost:8001` in a browser.
-
-Notes:
-- If running the server in WSL, open the URL in a Windows browser.
-- Use `?debug=1` to show axes/grid/debug helpers: `http://localhost:8001/?debug=1`.
-- Load a different STL via `?file=./assets/your_part.stl`.
+- Viewer helper (export/run/mesh schema): `tools/viewer/README.md`
+- Technical spec (IR, pipeline, backend): `aidocs/spec.md`
+- Overview and positioning: `aidocs/summary.md`
+- Functional tolerancing intent: `aidocs/functional-tolerancing-intent.md`
+- Documentation source-of-truth map: `aidocs/docs-map.md`
 
 ## Tests
+
+Write tests as you build features. Run the test after you build the feature to verify it works as intended.
+
+When you are building features, only test the impacted features. Each feature gets it's own test.
 
 Run all tests (build + e2e):
 

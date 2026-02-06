@@ -8,7 +8,7 @@ import {
   Scalar,
   Unit,
 } from "./dsl.js";
-import { CompileError } from "./graph.js";
+import { CompileError } from "./errors.js";
 
 export type ParamOverrides = Record<ID, Scalar>;
 

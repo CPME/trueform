@@ -7,3 +7,7 @@ yarn-error.log*
 pnpm-debug.log*
 *.log
 tools/viewer/assets/*.stl
+docs/public/api/
+**/assets/
+docs/.vitepress/cache/
+docs/.vitepress/dist/

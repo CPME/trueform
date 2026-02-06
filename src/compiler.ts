@@ -3,8 +3,10 @@ import {
   IntentDocument,
   IntentFeature,
   IntentPart,
+  Point2D,
   Profile,
   ProfileRef,
+  SketchEntity,
   Scalar,
   Selector,
 } from "./dsl.js";
@@ -12,6 +14,7 @@ import { buildDependencyGraph, topoSortDeterministic } from "./graph.js";
 import { buildParamContext, normalizeScalar, ParamOverrides } from "./params.js";
 import { normalizeSelector } from "./selectors.js";
 import { hashFeature } from "./hash.js";
+import { shouldValidate, validateDocument, validatePart, type ValidationOptions } from "./validate.js";
 
 export type CompiledPart = {
   partId: string;
@@ -21,22 +24,30 @@ export type CompiledPart = {
 
 export function compileDocument(
   doc: IntentDocument,
-  overrides?: Record<string, ParamOverrides>
+  overrides?: Record<string, ParamOverrides>,
+  options?: ValidationOptions
 ): CompileResult[] {
+  if (shouldValidate(options)) validateDocument(doc);
   warnPlaceholders(doc);
-  return doc.parts.map((part) => compilePart(part, overrides?.[part.id]));
+  return doc.parts.map((part) =>
+    compilePart(part, overrides?.[part.id], options)
+  );
 }
 
 export function compilePart(
   part: IntentPart,
-  overrides?: ParamOverrides
+  overrides?: ParamOverrides,
+  options?: ValidationOptions
 ): CompileResult {
-  const normalized = normalizePart(part, overrides);
+  const normalized = normalizePart(part, overrides, options);
   return compileNormalizedPart(normalized);
 }
 
-export function compilePartWithHashes(part: IntentPart): CompiledPart {
-  const normalized = normalizePart(part);
+export function compilePartWithHashes(
+  part: IntentPart,
+  options?: ValidationOptions
+): CompiledPart {
+  const normalized = normalizePart(part, undefined, options);
   const graph = buildDependencyGraph({ ...normalized, features: normalized.features });
   const order = topoSortDeterministic(normalized.features, graph);
   const hashes = new Map<string, string>();
@@ -49,8 +60,10 @@ export function compilePartWithHashes(part: IntentPart): CompiledPart {
 
 export function normalizePart(
   part: IntentPart,
-  overrides?: ParamOverrides
+  overrides?: ParamOverrides,
+  options?: ValidationOptions
 ): IntentPart {
+  if (shouldValidate(options)) validatePart(part);
   if (part.constraints && part.constraints.length > 0) {
     console.warn(
       `TrueForm: Part constraints are a data-only placeholder in v1; constraints are not evaluated (part ${part.id}).`
@@ -109,6 +122,9 @@ function normalizeFeature(
         ...entry,
         profile: normalizeProfile(entry.profile, ctx),
       }));
+      if (clone.entities) {
+        clone.entities = clone.entities.map((entity) => normalizeSketchEntity(entity, ctx));
+      }
       break;
     case "feature.extrude":
       clone.profile = normalizeProfileRef(clone.profile, ctx);
@@ -160,6 +176,113 @@ function normalizeProfile(profile: Profile, ctx: ReturnType<typeof buildParamCon
       return {
         ...profile,
         radius: normalizeScalar(profile.radius, "length", ctx),
+      };
+  }
+}
+
+function normalizePoint2(
+  point: Point2D,
+  ctx: ReturnType<typeof buildParamContext>
+): [number, number] {
+  return [
+    normalizeScalar(point[0], "length", ctx),
+    normalizeScalar(point[1], "length", ctx),
+  ];
+}
+
+function normalizeSketchEntity(
+  entity: SketchEntity,
+  ctx: ReturnType<typeof buildParamContext>
+): SketchEntity {
+  switch (entity.kind) {
+    case "sketch.line":
+      return {
+        ...entity,
+        start: normalizePoint2(entity.start, ctx),
+        end: normalizePoint2(entity.end, ctx),
+      };
+    case "sketch.arc":
+      return {
+        ...entity,
+        start: normalizePoint2(entity.start, ctx),
+        end: normalizePoint2(entity.end, ctx),
+        center: normalizePoint2(entity.center, ctx),
+      };
+    case "sketch.circle":
+      return {
+        ...entity,
+        center: normalizePoint2(entity.center, ctx),
+        radius: normalizeScalar(entity.radius, "length", ctx),
+      };
+    case "sketch.ellipse":
+      return {
+        ...entity,
+        center: normalizePoint2(entity.center, ctx),
+        radiusX: normalizeScalar(entity.radiusX, "length", ctx),
+        radiusY: normalizeScalar(entity.radiusY, "length", ctx),
+        rotation:
+          entity.rotation === undefined
+            ? undefined
+            : normalizeScalar(entity.rotation, "angle", ctx),
+      };
+    case "sketch.rectangle":
+      if (entity.mode === "center") {
+        return {
+          ...entity,
+          center: normalizePoint2(entity.center, ctx),
+          width: normalizeScalar(entity.width, "length", ctx),
+          height: normalizeScalar(entity.height, "length", ctx),
+          rotation:
+            entity.rotation === undefined
+              ? undefined
+              : normalizeScalar(entity.rotation, "angle", ctx),
+        };
+      }
+      return {
+        ...entity,
+        corner: normalizePoint2(entity.corner, ctx),
+        width: normalizeScalar(entity.width, "length", ctx),
+        height: normalizeScalar(entity.height, "length", ctx),
+        rotation:
+          entity.rotation === undefined
+            ? undefined
+            : normalizeScalar(entity.rotation, "angle", ctx),
+      };
+    case "sketch.slot":
+      return {
+        ...entity,
+        center: normalizePoint2(entity.center, ctx),
+        length: normalizeScalar(entity.length, "length", ctx),
+        width: normalizeScalar(entity.width, "length", ctx),
+        rotation:
+          entity.rotation === undefined
+            ? undefined
+            : normalizeScalar(entity.rotation, "angle", ctx),
+      };
+    case "sketch.polygon":
+      return {
+        ...entity,
+        center: normalizePoint2(entity.center, ctx),
+        radius: normalizeScalar(entity.radius, "length", ctx),
+        sides: normalizeScalar(entity.sides, "count", ctx),
+        rotation:
+          entity.rotation === undefined
+            ? undefined
+            : normalizeScalar(entity.rotation, "angle", ctx),
+      };
+    case "sketch.spline":
+      return {
+        ...entity,
+        points: entity.points.map((point) => normalizePoint2(point, ctx)),
+        degree:
+          entity.degree === undefined
+            ? undefined
+            : normalizeScalar(entity.degree, "count", ctx),
+      };
+    case "sketch.point":
+      return {
+        ...entity,
+        point: normalizePoint2(entity.point, ctx),
       };
   }
 }
