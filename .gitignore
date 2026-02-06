@@ -6,8 +6,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 *.log
-tools/viewer/assets/*.stl
+tools/viewer/assets/
+tools/sketch/assets/
 docs/public/api/
-**/assets/
 docs/.vitepress/cache/
 docs/.vitepress/dist/

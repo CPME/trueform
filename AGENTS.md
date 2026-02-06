@@ -18,6 +18,6 @@ When you are building features, only test the impacted features. Each feature ge
 Run all tests (build + e2e):
 
 ```bash
-cd /home/eveber/code/trueform.js
+cd /home/eveber/code/trueform
 npm test
 ```

@@ -1,4 +1,4 @@
-# Trueform.js
+# TrueForm
 
 Create an end-to-end engineering system that enables humans and agents to rapidly iterate on designs while validating them against simulation and manufacturing design rules.
 
@@ -8,16 +8,16 @@ If successful, hardware design should feel more like software: a single, digital
 
 **Quickstart**
 ```bash
-cd /home/eveber/code/trueform.js
+cd /home/eveber/code/trueform
 npm install
 npm test
 ```
 
 **Viewer (Verification Helper)**
 ```bash
-cd /home/eveber/code/trueform.js
+cd /home/eveber/code/trueform
 npm run viewer:export
-cd /home/eveber/code/trueform.js/tools/viewer
+cd /home/eveber/code/trueform/tools/viewer
 npm install
 python3 -m http.server 8001
 ```
@@ -32,4 +32,3 @@ Then open `http://localhost:8001` in a browser. Use `?debug=1` for axes/grid hel
 - `aidocs/mesh-viewer-debug.md`
 - `aidocs/backend-interface.md`
 - `aidocs/future-features.md`
-
