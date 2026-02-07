@@ -16,4 +16,6 @@ When running the docs site, open:
 
 - `/api/`
 
+[Open the API Reference](/api/)
+
 If you need to regenerate after changes, re-run `npm run docs:api`.
