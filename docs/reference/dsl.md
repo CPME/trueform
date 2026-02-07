@@ -58,6 +58,96 @@ import { dsl } from "trueform";
 - `dsl.sketchSpline(id, points, opts?) -> SketchSpline`
 - `dsl.sketchPoint(id, point, opts?) -> SketchPoint`
 
+### Sketch Examples
+
+The sketch examples below are rendered via `npm run docs:examples` and use
+transparent backgrounds with light strokes for dark docs themes.
+
+#### Line
+
+```ts
+dsl.sketchLine("line-1", [-40, -20], [40, 20]);
+```
+
+![Line sketch](/examples/sketch/line.svg)
+
+#### Arc
+
+```ts
+dsl.sketchArc("arc-1", [30, 0], [0, 30], [0, 0], "ccw");
+```
+
+![Arc sketch](/examples/sketch/arc.svg)
+
+#### Circle
+
+```ts
+dsl.sketchCircle("circle-1", [0, 0], 22);
+```
+
+![Circle sketch](/examples/sketch/circle.svg)
+
+#### Ellipse
+
+```ts
+dsl.sketchEllipse("ellipse-1", [0, 0], 26, 12, { rotation: dsl.exprLiteral(20, "deg") });
+```
+
+![Ellipse sketch](/examples/sketch/ellipse.svg)
+
+#### Rectangle (Center)
+
+```ts
+dsl.sketchRectCenter("rect-center", [0, 0], 60, 32, { rotation: dsl.exprLiteral(10, "deg") });
+```
+
+![Center rectangle sketch](/examples/sketch/rect-center.svg)
+
+#### Rectangle (Corner)
+
+```ts
+dsl.sketchRectCorner("rect-corner", [-25, -12], 60, 30, { rotation: dsl.exprLiteral(-8, "deg") });
+```
+
+![Corner rectangle sketch](/examples/sketch/rect-corner.svg)
+
+#### Slot
+
+```ts
+dsl.sketchSlot("slot-1", [0, 0], 70, 16, { rotation: dsl.exprLiteral(12, "deg") });
+```
+
+![Slot sketch](/examples/sketch/slot.svg)
+
+#### Polygon
+
+```ts
+dsl.sketchPolygon("poly-1", [0, 0], 24, 6);
+```
+
+![Polygon sketch](/examples/sketch/polygon.svg)
+
+#### Spline
+
+```ts
+dsl.sketchSpline("spline-1", [
+  [-30, -10],
+  [-10, 20],
+  [10, 10],
+  [30, -15],
+]);
+```
+
+![Spline sketch](/examples/sketch/spline.svg)
+
+#### Point
+
+```ts
+dsl.sketchPoint("point-1", [0, 0]);
+```
+
+![Point sketch](/examples/sketch/point.svg)
+
 ## Profiles
 
 - `dsl.profileRect(width, height, center?) -> Profile`
@@ -72,6 +162,95 @@ import { dsl } from "trueform";
 - `dsl.fillet(id, edges, radius, deps?) -> Fillet`
 - `dsl.chamfer(id, edges, distance, deps?) -> Chamfer`
 - `dsl.booleanOp(id, op, left, right, result?, deps?) -> BooleanOp`
+
+## Feature Examples
+
+The examples below are rendered from OpenCascade.js output via
+`npm run docs:examples`.
+
+### Extrude
+
+```ts
+const part = dsl.part("example-extrude", [
+  dsl.extrude("base", dsl.profileRect(80, 50), 12, "body:main"),
+]);
+```
+
+![Extrude example](/examples/dsl/extrude.iso.png)
+
+### Revolve
+
+```ts
+const part = dsl.part("example-revolve", [
+  dsl.revolve(
+    "ring-revolve",
+    dsl.profileRect(3, 6, [1.5, 3, 0]),
+    "+X",
+    "full",
+    "body:main"
+  ),
+]);
+```
+
+![Revolve example](/examples/dsl/revolve.iso.png)
+
+### Hole
+
+```ts
+const part = dsl.part("example-hole", [
+  dsl.extrude("base", dsl.profileRect(90, 50), 12, "body:main"),
+  dsl.hole(
+    "hole-1",
+    dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxZ()]),
+    "-Z",
+    14,
+    "throughAll",
+    { deps: ["base"] }
+  ),
+]);
+```
+
+![Hole example](/examples/dsl/hole.iso.png)
+
+### Fillet
+
+```ts
+const part = dsl.part("example-fillet", [
+  dsl.extrude("cyl", dsl.profileCircle(14), 28, "body:main"),
+  dsl.fillet(
+    "edge-fillet",
+    dsl.selectorEdge([dsl.predCreatedBy("cyl")], [dsl.rankMaxZ()]),
+    3,
+    ["cyl"]
+  ),
+]);
+```
+
+![Fillet example](/examples/dsl/fillet.iso.png)
+
+### Boolean Union
+
+```ts
+const part = dsl.part("example-boolean", [
+  dsl.extrude("base", dsl.profileRect(50, 26), 12, "body:base"),
+  dsl.extrude(
+    "tool",
+    dsl.profileRect(26, 26, [12, 0, 0]),
+    12,
+    "body:tool"
+  ),
+  dsl.booleanOp(
+    "union-1",
+    "union",
+    dsl.selectorNamed("body:base"),
+    dsl.selectorNamed("body:tool"),
+    "body:main",
+    ["base", "tool"]
+  ),
+]);
+```
+
+![Boolean example](/examples/dsl/boolean.iso.png)
 
 ## Patterns
 

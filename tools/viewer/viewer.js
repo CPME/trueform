@@ -6,6 +6,8 @@ const statusEl = document.querySelector("#status");
 const fileInput = document.querySelector("#file-input");
 const fileUrlInput = document.querySelector("#file-url");
 const loadUrlBtn = document.querySelector("#load-url");
+const assetSelect = document.querySelector("#asset-select");
+const loadAssetBtn = document.querySelector("#load-asset");
 const downloadBtn = document.querySelector("#download-png");
 
 const renderer = new THREE.WebGLRenderer({
@@ -59,15 +61,14 @@ let currentLabel = filename;
 if (fileUrlInput) fileUrlInput.value = filename;
 
 loadMeshFromUrl(filename);
+loadAssetManifest();
 
 if (loadUrlBtn) {
   loadUrlBtn.addEventListener("click", () => {
     const nextFile = fileUrlInput?.value?.trim();
     if (!nextFile) return;
     loadMeshFromUrl(nextFile);
-    const url = new URL(window.location.href);
-    url.searchParams.set("file", nextFile);
-    window.history.replaceState({}, "", url.toString());
+    updateUrlFileParam(nextFile);
   });
 }
 
@@ -103,6 +104,23 @@ if (downloadBtn) {
       link.click();
       URL.revokeObjectURL(link.href);
     });
+  });
+}
+
+if (assetSelect && loadAssetBtn) {
+  loadAssetBtn.addEventListener("click", () => {
+    const choice = assetSelect.value;
+    if (!choice) return;
+    if (fileUrlInput) fileUrlInput.value = choice;
+    loadMeshFromUrl(choice);
+    updateUrlFileParam(choice);
+  });
+  assetSelect.addEventListener("change", () => {
+    const choice = assetSelect.value;
+    if (!choice) return;
+    if (fileUrlInput) fileUrlInput.value = choice;
+    loadMeshFromUrl(choice);
+    updateUrlFileParam(choice);
   });
 }
 
@@ -144,6 +162,63 @@ function loadMeshFromUrl(source) {
     .catch((err) => {
       statusEl.textContent = `Failed to load ${source}`;
       console.error(err);
+    });
+}
+
+function updateUrlFileParam(source) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("file", source);
+  window.history.replaceState({}, "", url.toString());
+}
+
+function loadAssetManifest() {
+  if (!assetSelect) return;
+  const manifestUrl = "./assets/manifest.json";
+  fetch(manifestUrl)
+    .then((res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    })
+    .then((data) => {
+      const assets = Array.isArray(data?.assets)
+        ? data.assets
+        : Array.isArray(data)
+          ? data
+          : [];
+      const cleaned = assets
+        .filter((item) => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      assetSelect.innerHTML = "";
+      if (cleaned.length === 0) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "No assets found";
+        assetSelect.appendChild(opt);
+        assetSelect.disabled = true;
+        return;
+      }
+      for (const asset of cleaned) {
+        const opt = document.createElement("option");
+        opt.value = asset;
+        const label = asset.split("/").pop() || asset;
+        opt.textContent = label;
+        assetSelect.appendChild(opt);
+      }
+      assetSelect.disabled = false;
+      if (cleaned.includes(filename)) {
+        assetSelect.value = filename;
+      } else {
+        assetSelect.value = cleaned[0];
+      }
+    })
+    .catch(() => {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "Manifest missing";
+      assetSelect.innerHTML = "";
+      assetSelect.appendChild(opt);
+      assetSelect.disabled = true;
     });
 }
 

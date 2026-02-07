@@ -17,6 +17,7 @@
     "test": "npm run build -- --pretty false && node tools/run-tests.mjs",
     "viewer:export": "npm run build -- --pretty false && node tools/viewer/export.mjs",
     "sketch:export": "npm run build -- --pretty false && node tools/sketch/export.mjs",
+    "docs:examples": "npm run build -- --pretty false && node tools/docs/render_dsl_examples.mjs && node tools/docs/render_sketch_examples.mjs",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",

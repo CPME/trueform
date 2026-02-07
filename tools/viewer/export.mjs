@@ -5,11 +5,15 @@ import initOpenCascade from "opencascade.js/dist/node.js";
 import { OcctBackend } from "../../dist/backend_occt.js";
 import { buildPart } from "../../dist/executor.js";
 import { viewerPart } from "../../dist/examples/viewer_part.js";
+import { renderIsometricPng } from "../../dist/viewer/isometric_renderer.js";
+import { collectMeshAssets } from "../../dist/viewer/asset_manifest.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.join(__dirname, "assets");
 const outPath = path.join(outDir, "plate.mesh.json");
 const debugPath = path.join(outDir, "plate.debug.json");
+const isoPath = path.join(outDir, "plate.iso.png");
+const manifestPath = path.join(outDir, "manifest.json");
 
 const part = viewerPart;
 
@@ -155,6 +159,8 @@ try {
   });
 
   await fs.writeFile(outPath, JSON.stringify(mesh));
+  const isoPng = renderIsometricPng(mesh, { width: 1400, height: 1000 });
+  await fs.writeFile(isoPath, isoPng);
   const shape = body.meta["shape"];
   const edgeAdjacency = edgeAdjacencyCounts(occt, shape);
   const debug = {
@@ -180,11 +186,21 @@ try {
   if (svgXY) await fs.writeFile(path.join(outDir, "plate.edges.xy.svg"), svgXY);
   if (svgXZ) await fs.writeFile(path.join(outDir, "plate.edges.xz.svg"), svgXZ);
   if (svgYZ) await fs.writeFile(path.join(outDir, "plate.edges.yz.svg"), svgYZ);
+  const assetEntries = await fs.readdir(outDir);
+  const meshAssets = collectMeshAssets(assetEntries).map(
+    (name) => `./assets/${name}`
+  );
+  await fs.writeFile(
+    manifestPath,
+    JSON.stringify({ assets: meshAssets }, null, 2)
+  );
   console.log(
     JSON.stringify(
       {
         output: outPath,
+        iso: isoPath,
         debug: debugPath,
+        manifest: manifestPath,
         vertices: mesh.positions.length / 3,
       },
       null,

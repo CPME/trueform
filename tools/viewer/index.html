@@ -74,6 +74,13 @@
         font-size: 12px;
         background: #fffdf9;
       }
+      .controls select {
+        border: 1px solid #c9bfb3;
+        border-radius: 6px;
+        padding: 6px 8px;
+        font-size: 12px;
+        background: #fffdf9;
+      }
       .controls button {
         border: 1px solid #b9a896;
         background: #f4efe8;
@@ -94,6 +101,13 @@
         <div class="title">TrueForm Viewer</div>
         <div class="status" id="status">Loading…</div>
         <div class="controls">
+          <label>
+            Assets
+            <div class="row">
+              <select id="asset-select"></select>
+              <button id="load-asset" type="button">Load</button>
+            </div>
+          </label>
           <label>
             Load local mesh JSON
             <input type="file" id="file-input" accept=".json,application/json" />
