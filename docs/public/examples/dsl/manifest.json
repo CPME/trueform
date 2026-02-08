@@ -1,0 +1,64 @@
+{
+  "examples": [
+    {
+      "id": "extrude",
+      "title": "Extrude",
+      "image": "/examples/dsl/extrude.iso.png"
+    },
+    {
+      "id": "revolve",
+      "title": "Revolve",
+      "image": "/examples/dsl/revolve.iso.png"
+    },
+    {
+      "id": "loft",
+      "title": "Loft",
+      "image": "/examples/dsl/loft.iso.png"
+    },
+    {
+      "id": "hole",
+      "title": "Hole",
+      "image": "/examples/dsl/hole.iso.png"
+    },
+    {
+      "id": "fillet",
+      "title": "Fillet",
+      "image": "/examples/dsl/fillet.iso.png"
+    },
+    {
+      "id": "chamfer",
+      "title": "Chamfer",
+      "image": "/examples/dsl/chamfer.iso.png"
+    },
+    {
+      "id": "boolean",
+      "title": "Boolean Union",
+      "image": "/examples/dsl/boolean.iso.png"
+    },
+    {
+      "id": "feature-array",
+      "title": "Feature Array",
+      "image": "/examples/dsl/feature-array.iso.png"
+    },
+    {
+      "id": "tolerancing",
+      "title": "Tolerancing (PMI)",
+      "image": "/examples/dsl/tolerancing.iso.png"
+    },
+    {
+      "id": "spline-array",
+      "title": "Spline Array",
+      "image": "/examples/dsl/spline-array.iso.png"
+    },
+    {
+      "id": "circular-array",
+      "title": "Circular Array",
+      "image": "/examples/dsl/circular-array.iso.png"
+    },
+    {
+      "id": "radial-array",
+      "title": "Radial Array",
+      "image": "/examples/dsl/radial-array.iso.png"
+    }
+  ]
+}

@@ -4,11 +4,13 @@ import { fileURLToPath } from "node:url";
 import initOpenCascade from "opencascade.js/dist/node.js";
 import { OcctBackend } from "../../dist/backend_occt.js";
 import { buildPart } from "../../dist/executor.js";
+import { buildPmiPayload } from "../../dist/pmi.js";
 import { renderIsometricPng } from "../../dist/viewer/isometric_renderer.js";
 import { dslFeatureExamples } from "../../dist/examples/dsl_feature_examples.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.join(__dirname, "..", "..", "docs", "public", "examples", "dsl");
+const pmiDir = path.join(__dirname, "..", "..", "docs", "public", "examples", "pmi");
 
 const meshOpts = {
   linearDeflection: 0.2,
@@ -20,6 +22,7 @@ try {
   const occt = await initOpenCascade();
   const backend = new OcctBackend({ occt });
   await fs.mkdir(outDir, { recursive: true });
+  await fs.mkdir(pmiDir, { recursive: true });
 
   const manifest = [];
 
@@ -38,6 +41,12 @@ try {
       title: example.title,
       image: `/examples/dsl/${filename}`,
     });
+
+    if (example.part.constraints && example.part.constraints.length > 0) {
+      const payload = buildPmiPayload(example.part);
+      const pmiPath = path.join(pmiDir, `${example.id}.pmi.json`);
+      await fs.writeFile(pmiPath, JSON.stringify(payload, null, 2));
+    }
   }
 
   await fs.writeFile(

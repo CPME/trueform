@@ -107,12 +107,16 @@ export function renderIsometricPng(
     (width - padding * 2) / spanX,
     (height - padding * 2) / spanY
   );
+  const viewMidX = (viewMinX + viewMaxX) * 0.5;
+  const viewMidY = (viewMinY + viewMaxY) * 0.5;
+  const screenCenterX = width * 0.5;
+  const screenCenterY = height * 0.5;
 
   const screenX = new Float32Array(vertexCount);
   const screenY = new Float32Array(vertexCount);
   for (let i = 0; i < vertexCount; i += 1) {
-    const sx = padding + ((viewX[i] ?? 0) - viewMinX) * scale;
-    const sy = padding + (viewMaxY - (viewY[i] ?? 0)) * scale;
+    const sx = screenCenterX + ((viewX[i] ?? 0) - viewMidX) * scale;
+    const sy = screenCenterY - ((viewY[i] ?? 0) - viewMidY) * scale;
     screenX[i] = sx;
     screenY[i] = sy;
   }
@@ -212,10 +216,11 @@ export function renderIsometricPng(
       right,
       up,
       viewDir,
-      viewMinX,
-      viewMaxY,
+      viewMidX,
+      viewMidY,
       scale,
-      padding,
+      screenCenterX,
+      screenCenterY,
       width,
       height,
       rgba,
@@ -341,10 +346,11 @@ function drawWireframe(
   right: Vec3,
   up: Vec3,
   viewDir: Vec3,
-  viewMinX: number,
-  viewMaxY: number,
+  viewMidX: number,
+  viewMidY: number,
   scale: number,
-  padding: number,
+  screenCenterX: number,
+  screenCenterY: number,
   width: number,
   height: number,
   rgba: Buffer,
@@ -366,10 +372,10 @@ function drawWireframe(
     const byView = dot(up, [bx, by, bz]);
     const azView = -dot(viewDir, [ax, ay, az]);
     const bzView = -dot(viewDir, [bx, by, bz]);
-    const x0 = padding + (axView - viewMinX) * scale;
-    const y0 = padding + (viewMaxY - ayView) * scale;
-    const x1 = padding + (bxView - viewMinX) * scale;
-    const y1 = padding + (viewMaxY - byView) * scale;
+    const x0 = screenCenterX + (axView - viewMidX) * scale;
+    const y0 = screenCenterY - (ayView - viewMidY) * scale;
+    const x1 = screenCenterX + (bxView - viewMidX) * scale;
+    const y1 = screenCenterY - (byView - viewMidY) * scale;
     drawLine(
       rgba,
       width,

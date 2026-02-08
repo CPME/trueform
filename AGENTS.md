@@ -4,10 +4,11 @@ Make sure this is practical for use in a webapp (can it compile to opencascade.j
 ## Docs Pointers
 
 - Viewer helper (export/run/mesh schema): `tools/viewer/README.md`
-- Technical spec (IR, pipeline, backend): `aidocs/spec.md`
-- Overview and positioning: `aidocs/summary.md`
-- Functional tolerancing intent: `aidocs/functional-tolerancing-intent.md`
-- Documentation source-of-truth map: `aidocs/docs-map.md`
+- Technical spec (IR, pipeline, backend): `specs/spec.md`
+- Overview and positioning: `specs/summary.md`
+- Functional tolerancing intent: `specs/functional-tolerancing-intent.md`
+- Documentation source-of-truth map: `specs/docs-map.md`
+- Viewer dev server: `npm run viewer:serve`
 
 ## Tests
 

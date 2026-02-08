@@ -1,8 +1,11 @@
 import {
+  AxisSpec,
+  ExtrudeAxis,
   IntentFeature,
   Graph,
   ID,
   IntentPart,
+  PlaneRef,
   ProfileRef,
   Selector,
   RankRule,
@@ -32,11 +35,14 @@ export function buildDependencyGraph(part: IntentPart): Graph {
 
     const inferredDeps = new Set<ID>();
 
-    const profileDep = inferProfileDependency(feature, profileToFeature);
-    if (profileDep) inferredDeps.add(profileDep);
+    const profileDeps = inferProfileDependencies(feature, profileToFeature);
+    for (const dep of profileDeps) inferredDeps.add(dep);
 
     const patternDep = inferPatternDependency(feature, byId);
     if (patternDep) inferredDeps.add(patternDep);
+
+    const datumDeps = inferDatumDependencies(feature, byId);
+    for (const dep of datumDeps) inferredDeps.add(dep);
 
     const selectors = featureSelectors(feature);
     for (const selector of selectors) {
@@ -102,6 +108,10 @@ function featureResultName(feature: IntentFeature): string | undefined {
   switch (feature.kind) {
     case "feature.extrude":
     case "feature.revolve":
+    case "feature.loft":
+    case "feature.pipe":
+    case "feature.pipeSweep":
+    case "feature.hexTubeSweep":
     case "feature.boolean":
       return feature.result;
     default:
@@ -109,23 +119,31 @@ function featureResultName(feature: IntentFeature): string | undefined {
   }
 }
 
-function inferProfileDependency(
+function inferProfileDependencies(
   feature: IntentFeature,
   profileToFeature: Map<string, ID>
-): ID | null {
-  if (feature.kind !== "feature.extrude" && feature.kind !== "feature.revolve") {
-    return null;
+): Set<ID> {
+  const deps = new Set<ID>();
+  const refs: ProfileRef[] = [];
+  if (feature.kind === "feature.extrude" || feature.kind === "feature.revolve") {
+    refs.push(feature.profile as ProfileRef);
+  } else if (feature.kind === "feature.loft") {
+    refs.push(...(feature.profiles as ProfileRef[]));
+  } else {
+    return deps;
   }
-  const profile = feature.profile as ProfileRef;
-  if (profile.kind !== "profile.ref") return null;
-  const hit = profileToFeature.get(profile.name);
-  if (!hit) {
-    throw new CompileError(
-      "profile_missing",
-      `Feature ${feature.id} references missing profile ${profile.name}`
-    );
+  for (const profile of refs) {
+    if (!profile || profile.kind !== "profile.ref") continue;
+    const hit = profileToFeature.get(profile.name);
+    if (!hit) {
+      throw new CompileError(
+        "profile_missing",
+        `Feature ${feature.id} references missing profile ${profile.name}`
+      );
+    }
+    deps.add(hit);
   }
-  return hit;
+  return deps;
 }
 
 function inferPatternDependency(
@@ -144,12 +162,85 @@ function inferPatternDependency(
   return ref;
 }
 
+function inferDatumDependencies(
+  feature: IntentFeature,
+  byId: Map<ID, IntentFeature>
+): Set<ID> {
+  const deps = new Set<ID>();
+  switch (feature.kind) {
+    case "datum.plane":
+      addAxisSpecDep((feature as { normal?: AxisSpec }).normal, deps, byId);
+      addAxisSpecDep((feature as { xAxis?: AxisSpec }).xAxis, deps, byId);
+      break;
+    case "datum.axis":
+      addAxisSpecDep((feature as { direction?: AxisSpec }).direction, deps, byId);
+      break;
+    case "feature.sketch2d":
+      addPlaneRefDep((feature as { plane?: PlaneRef }).plane, deps, byId);
+      break;
+    case "feature.extrude":
+      addExtrudeAxisDep((feature as { axis?: ExtrudeAxis }).axis, deps, byId);
+      break;
+    default:
+      break;
+  }
+  return deps;
+}
+
+function addPlaneRefDep(
+  plane: PlaneRef | undefined,
+  deps: Set<ID>,
+  byId: Map<ID, IntentFeature>
+) {
+  if (!plane || isSelector(plane)) return;
+  if (plane.kind !== "plane.datum") return;
+  const hit = byId.get(plane.ref);
+  if (!hit || (hit.kind !== "datum.plane" && hit.kind !== "datum.frame")) {
+    throw new CompileError(
+      "datum_plane_missing",
+      `Missing datum plane/frame ${plane.ref}`
+    );
+  }
+  deps.add(plane.ref);
+}
+
+function addAxisSpecDep(
+  axis: AxisSpec | undefined,
+  deps: Set<ID>,
+  byId: Map<ID, IntentFeature>
+) {
+  if (!axis || typeof axis === "string") return;
+  if (axis.kind !== "axis.datum") return;
+  const hit = byId.get(axis.ref);
+  if (!hit || hit.kind !== "datum.axis") {
+    throw new CompileError(
+      "datum_axis_missing",
+      `Missing datum axis ${axis.ref}`
+    );
+  }
+  deps.add(axis.ref);
+}
+
+function addExtrudeAxisDep(
+  axis: ExtrudeAxis | undefined,
+  deps: Set<ID>,
+  byId: Map<ID, IntentFeature>
+) {
+  if (!axis || (typeof axis === "object" && axis.kind === "axis.sketch.normal")) {
+    return;
+  }
+  addAxisSpecDep(axis as AxisSpec, deps, byId);
+}
+
 function featureSelectors(feature: IntentFeature): Selector[] {
   switch (feature.kind) {
     case "datum.frame":
       return [feature.on];
     case "feature.sketch2d":
-      return feature.plane ? [feature.plane] : [];
+      if (feature.plane && isSelector(feature.plane)) {
+        return [feature.plane];
+      }
+      return [];
     case "feature.hole":
       return [feature.onFace];
     case "feature.fillet":
@@ -212,6 +303,17 @@ function selectorDependencies(
   }
 
   return { deps, anchored };
+}
+
+function isSelector(value: unknown): value is Selector {
+  if (!value || typeof value !== "object") return false;
+  const kind = (value as { kind?: string }).kind;
+  return (
+    kind === "selector.face" ||
+    kind === "selector.edge" ||
+    kind === "selector.solid" ||
+    kind === "selector.named"
+  );
 }
 
 export function topoSortDeterministic(features: IntentFeature[], graph: Graph): ID[] {

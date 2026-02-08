@@ -1,0 +1,68 @@
+import assert from "node:assert/strict";
+import * as core from "../dsl/core.js";
+import * as assembly from "../dsl/assembly.js";
+import * as geometry from "../dsl/geometry.js";
+import * as tolerancing from "../dsl/tolerancing.js";
+import { runTests } from "./occt_test_utils.js";
+
+const tests = [
+  {
+    name: "dsl modules: assembly + geometry helpers",
+    fn: async () => {
+      const transform = assembly.transform({
+        translation: [1, 2, 3],
+        rotation: [0, 0, 90],
+      });
+      assert.equal(transform.matrix?.length, 16);
+      assert.equal(transform.matrix?.[12], 1);
+
+      const instance = assembly.instance("inst-1", "part-1", transform);
+      assert.equal(instance.part, "part-1");
+
+      const ref = assembly.ref("inst-1", "conn-1");
+      assert.deepEqual(ref, { instance: "inst-1", connector: "conn-1" });
+
+      const mateFixed = assembly.mateFixed(ref, ref);
+      assert.equal(mateFixed.kind, "mate.fixed");
+
+      const output = assembly.output("out-1", [ref]);
+      assert.equal(output.refs.length, 1);
+
+      const asm = assembly.assembly("asm-1", [instance], {
+        mates: [mateFixed],
+        outputs: [output],
+      });
+      assert.equal(asm.outputs?.length, 1);
+
+      const selectorFace = geometry.selectorFace([geometry.predPlanar()]);
+      const connector = assembly.connector("conn-1", selectorFace, {
+        normal: "+Z",
+      });
+      assert.equal(connector.normal, "+Z");
+
+      const surface = tolerancing.refSurface(selectorFace);
+      const constraint = tolerancing.surfaceProfileConstraint(
+        "c-1",
+        surface,
+        0.02
+      );
+      assert.equal(constraint.kind, "constraint.surfaceProfile");
+
+      const part = core.part("part-1", []);
+      const doc = core.document("doc-1", [part], core.context(), [asm]);
+      assert.equal(doc.assemblies?.length, 1);
+
+      const extrude = geometry.extrude(
+        "extrude-1",
+        geometry.profileRect(2, 3),
+        5
+      );
+      assert.equal(extrude.kind, "feature.extrude");
+    },
+  },
+];
+
+runTests(tests).catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});

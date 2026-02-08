@@ -15,8 +15,22 @@ npm run viewer:export
 That writes `tools/viewer/assets/plate.mesh.json` from the DSL example, plus:
 - `tools/viewer/assets/plate.iso.png` (shaded isometric snapshot)
 - `tools/viewer/assets/plate.debug.json`
+- `tools/viewer/assets/plate.selectors.json` (selector metadata for debug overlay)
 - `tools/viewer/assets/plate.edges.*.svg` (orthographic edge projections)
 - `tools/viewer/assets/manifest.json` (asset picker list)
+- `tools/viewer/assets/topology.json` (face/edge/solid counts per part)
+
+Export is cached by default. To force a full rebuild, set:
+
+```bash
+TF_VIEWER_FORCE=1 npm run viewer:export
+```
+
+To export only specific parts, set `TF_VIEWER_ONLY` with a comma-separated list:
+
+```bash
+TF_VIEWER_ONLY=pipe_asm,bearing-housing npm run viewer:export
+```
 
 ## Mesh format
 
@@ -49,6 +63,9 @@ Notes:
 - Load a different mesh with `?file=./assets/your_part.mesh.json`.
 - The asset dropdown is populated from `tools/viewer/assets/manifest.json`.
 - Edge rendering: `?edges=brep` (default), `?edges=faces`, or `?edges=mesh`.
+- Selector overlay: `?selectors=1` (loads `*.selectors.json` if present).
+- Reference overlay: load an image in the HUD or use `?ref=./assets/drawing.png`.
+  Optional tuning params: `refOpacity` (0-1), `refScale`, `refX`, `refY`, `refRot`.
 - You can also load a local mesh JSON via the file picker in the HUD and download a PNG snapshot.
 
 ## Debug outputs

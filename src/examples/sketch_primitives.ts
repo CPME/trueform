@@ -1,47 +1,60 @@
-import { dsl } from "../dsl.js";
+import { exprLiteral, part } from "../dsl/core.js";
+import {
+  sketch2d,
+  sketchArc,
+  sketchCircle,
+  sketchEllipse,
+  sketchLine,
+  sketchPoint,
+  sketchPolygon,
+  sketchRectCenter,
+  sketchRectCorner,
+  sketchSlot,
+  sketchSpline,
+} from "../dsl/geometry.js";
 
-export const sketchPrimitivesPart = dsl.part("sketch-primitives", [
-  dsl.sketch2d("sketch-1", [], {
+export const sketchPrimitivesPart = part("sketch-primitives", [
+  sketch2d("sketch-1", [], {
     entities: [
-      dsl.sketchLine("line-1", [-40, -30], [40, -30]),
-      dsl.sketchArc("arc-1", [20, 0], [0, 20], [0, 0], "ccw"),
-      dsl.sketchCircle("circle-1", [0, 0], dsl.exprLiteral(12, "mm")),
-      dsl.sketchEllipse(
+      sketchLine("line-1", [-40, -30], [40, -30]),
+      sketchArc("arc-1", [20, 0], [0, 20], [0, 0], "ccw"),
+      sketchCircle("circle-1", [0, 0], exprLiteral(12, "mm")),
+      sketchEllipse(
         "ellipse-1",
         [30, 20],
-        dsl.exprLiteral(14, "mm"),
-        dsl.exprLiteral(6, "mm"),
-        { rotation: dsl.exprLiteral(25, "deg") }
+        exprLiteral(14, "mm"),
+        exprLiteral(6, "mm"),
+        { rotation: exprLiteral(25, "deg") }
       ),
-      dsl.sketchRectCenter(
+      sketchRectCenter(
         "rect-center",
         [-10, 15],
-        dsl.exprLiteral(30, "mm"),
-        dsl.exprLiteral(18, "mm"),
-        { rotation: dsl.exprLiteral(15, "deg") }
+        exprLiteral(30, "mm"),
+        exprLiteral(18, "mm"),
+        { rotation: exprLiteral(15, "deg") }
       ),
-      dsl.sketchRectCorner(
+      sketchRectCorner(
         "rect-corner",
         [15, -10],
-        dsl.exprLiteral(24, "mm"),
-        dsl.exprLiteral(12, "mm"),
-        { rotation: dsl.exprLiteral(-10, "deg") }
+        exprLiteral(24, "mm"),
+        exprLiteral(12, "mm"),
+        { rotation: exprLiteral(-10, "deg") }
       ),
-      dsl.sketchSlot(
+      sketchSlot(
         "slot-1",
         [-30, 20],
-        dsl.exprLiteral(28, "mm"),
-        dsl.exprLiteral(8, "mm"),
-        { rotation: dsl.exprLiteral(-20, "deg") }
+        exprLiteral(28, "mm"),
+        exprLiteral(8, "mm"),
+        { rotation: exprLiteral(-20, "deg") }
       ),
-      dsl.sketchPolygon(
+      sketchPolygon(
         "poly-1",
         [-30, -10],
-        dsl.exprLiteral(10, "mm"),
-        dsl.exprLiteral(6),
-        { rotation: dsl.exprLiteral(10, "deg") }
+        exprLiteral(10, "mm"),
+        exprLiteral(6),
+        { rotation: exprLiteral(10, "deg") }
       ),
-      dsl.sketchSpline(
+      sketchSpline(
         "spline-1",
         [
           [-10, -5],
@@ -51,8 +64,8 @@ export const sketchPrimitivesPart = dsl.part("sketch-primitives", [
         ],
         { closed: false }
       ),
-      dsl.sketchPoint("point-1", [5, 25]),
-      dsl.sketchLine("construction-1", [-40, 0], [40, 0], {
+      sketchPoint("point-1", [5, 25]),
+      sketchLine("construction-1", [-40, 0], [40, 0], {
         construction: true,
       }),
     ],

@@ -1,0 +1,81 @@
+{
+  "schema": "trueform.pmi.v1",
+  "partId": "example-tolerancing",
+  "constraints": [
+    {
+      "id": "profile-top",
+      "kind": "constraint.surfaceProfile",
+      "target": {
+        "kind": "ref.surface",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [
+            {
+              "kind": "pred.planar"
+            },
+            {
+              "kind": "pred.normal",
+              "value": "+Z"
+            }
+          ],
+          "rank": [
+            {
+              "kind": "rank.maxZ"
+            }
+          ]
+        }
+      },
+      "tolerance": 0.05,
+      "referenceFrame": {
+        "kind": "ref.frame",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [
+            {
+              "kind": "pred.planar"
+            },
+            {
+              "kind": "pred.normal",
+              "value": "+Z"
+            }
+          ],
+          "rank": [
+            {
+              "kind": "rank.maxZ"
+            }
+          ]
+        }
+      },
+      "capabilities": [
+        "mill-3axis"
+      ],
+      "requirement": "req-flatness-top"
+    },
+    {
+      "id": "profile-bottom",
+      "kind": "constraint.surfaceProfile",
+      "target": {
+        "kind": "ref.surface",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [
+            {
+              "kind": "pred.planar"
+            },
+            {
+              "kind": "pred.normal",
+              "value": "-Z"
+            }
+          ],
+          "rank": [
+            {
+              "kind": "rank.minZ"
+            }
+          ]
+        }
+      },
+      "tolerance": 0.1,
+      "requirement": "req-flatness-bottom"
+    }
+  ]
+}

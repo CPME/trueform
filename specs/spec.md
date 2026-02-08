@@ -2,7 +2,7 @@
 
 Build a **reusable TypeScript library for webapps** that lets agents author **declarative design intent** (features, datums, constraints, assertions) and **compile** it into geometry using OpenCascade.js (with a clean seam to add native Open CASCADE Technology later).
 
-Audience: implementers. For a high-level overview, see `aidocs/summary.md`.
+Audience: implementers. For a high-level overview, see `specs/summary.md`.
 
 ---
 
@@ -261,7 +261,7 @@ Backend implementation uses OpenCascade.js primitives (TopoDS_Shape, etc.) inter
 Implement these IR features + OpenCascade.js compilation:
 
 1. Datums: plane/axis/frame
-2. Sketch2D (procedural primitives; full constraint solver can come later)
+2. Sketch2D (procedural primitives + ordered loop profiles; full constraint solver can come later)
 3. Extrude (boss/cut)
 4. Revolve (boss/cut)
 5. Hole (semantic): simple + counterbore/countersink (optional), through/blind, axis from datum, position from frame or pattern
@@ -278,8 +278,53 @@ Every feature must fully constrain its DoF at compile time. Examples:
 
 * Hole requires: `onFace` + `axis` + `position` (frame coords or sketch constraints) + `size` + `depth`
 * Pattern requires: `origin frame` + `spacing` + `count` (or equivalent)
+* `profile.sketch` requires: ordered loop of sketch entity ids that form a closed wire; optional `holes` are additional closed loops
 
 If underconstrained: compiler error.
+
+---
+
+## Sketch Profiles (`profile.sketch`)
+
+Sketch2D supports **explicit loop-based profiles** for arbitrary closed sketches.
+This avoids implicit loop finding and keeps builds deterministic.
+
+IR shape:
+
+```ts
+{
+  kind: "profile.sketch",
+  loop: ["entity-1", "entity-2", "entity-3", ...],
+  holes?: [["hole-entity-1", "hole-entity-2", ...], ...]
+}
+```
+
+Rules:
+- `loop` is an **ordered** list of sketch entity ids that must form a **closed** wire.
+- `holes` are additional ordered closed loops (optional).
+- Entities live on the parent `Sketch2D` feature (`sketch.entities`).
+- `profile.sketch` must be consumed via `profileRef` (not inline) so the backend can access the sketch’s entities and plane.
+
+Supported entity kinds (v1):
+- `sketch.line`, `sketch.arc`, `sketch.circle`, `sketch.ellipse`
+- `sketch.rectangle`, `sketch.slot`, `sketch.polygon`, `sketch.spline`
+
+Usage (DSL):
+
+```ts
+const sketch = dsl.sketch2d("sketch-base", [
+  { name: "profile:loop", profile: dsl.profileSketchLoop(["line-1","line-2","line-3","line-4"]) },
+], {
+  entities: [
+    dsl.sketchLine("line-1", [0,0], [40,0]),
+    dsl.sketchLine("line-2", [40,0], [40,20]),
+    dsl.sketchLine("line-3", [40,20], [0,20]),
+    dsl.sketchLine("line-4", [0,20], [0,0]),
+  ],
+});
+
+dsl.extrude("sketch-extrude", dsl.profileRef("profile:loop"), 8, "body:main", ["sketch-base"]);
+```
 
 ---
 

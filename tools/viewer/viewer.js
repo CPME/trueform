@@ -9,6 +9,18 @@ const loadUrlBtn = document.querySelector("#load-url");
 const assetSelect = document.querySelector("#asset-select");
 const loadAssetBtn = document.querySelector("#load-asset");
 const downloadBtn = document.querySelector("#download-png");
+const selectorInfo = document.querySelector("#selector-info");
+const selectorPanel = document.querySelector("#selector-panel");
+const refOverlay = document.querySelector("#ref-overlay");
+const refInput = document.querySelector("#ref-input");
+const refUrlInput = document.querySelector("#ref-url");
+const loadRefBtn = document.querySelector("#load-ref");
+const clearRefBtn = document.querySelector("#clear-ref");
+const refOpacityInput = document.querySelector("#ref-opacity");
+const refScaleInput = document.querySelector("#ref-scale");
+const refOffsetXInput = document.querySelector("#ref-offset-x");
+const refOffsetYInput = document.querySelector("#ref-offset-y");
+const refRotationInput = document.querySelector("#ref-rotation");
 
 const renderer = new THREE.WebGLRenderer({
   canvas,
@@ -50,15 +62,32 @@ scene.add(fillLight);
 
 const modelGroup = new THREE.Group();
 scene.add(modelGroup);
+const selectorGroup = new THREE.Group();
+scene.add(selectorGroup);
 
 const params = new URLSearchParams(window.location.search);
 const fileParam = params.get("file");
 const debug = params.get("debug") === "1";
+const selectorsEnabled = params.get("selectors") === "1";
 const edgeSource = params.get("edges");
 const showHidden = params.get("hidden") === "1";
+const refParam = params.get("ref");
+const refOpacityParam = params.get("refOpacity");
+const refScaleParam = params.get("refScale");
+const refOffsetXParam = params.get("refX");
+const refOffsetYParam = params.get("refY");
+const refRotationParam = params.get("refRot");
 const filename = fileParam || "./assets/plate.mesh.json";
 let currentLabel = filename;
 if (fileUrlInput) fileUrlInput.value = filename;
+
+const overlayState = {
+  opacity: 0.4,
+  scale: 1,
+  offsetX: 0,
+  offsetY: 0,
+  rotation: 0,
+};
 
 loadMeshFromUrl(filename);
 loadAssetManifest();
@@ -123,6 +152,123 @@ if (assetSelect && loadAssetBtn) {
     updateUrlFileParam(choice);
   });
 }
+
+function applyOverlay() {
+  if (!refOverlay) return;
+  const tx = overlayState.offsetX;
+  const ty = overlayState.offsetY;
+  const scale = overlayState.scale;
+  const rot = overlayState.rotation;
+  refOverlay.style.opacity = String(overlayState.opacity);
+  refOverlay.style.transform = `translate(-50%, -50%) translate(${tx}px, ${ty}px) scale(${scale}) rotate(${rot}deg)`;
+}
+
+function setOverlaySource(src) {
+  if (!refOverlay) return;
+  if (!src) return;
+  refOverlay.src = src;
+  refOverlay.classList.remove("hidden");
+}
+
+function parseNumber(value, fallback) {
+  const n = Number.parseFloat(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function syncOverlayInputs() {
+  if (refOpacityInput) refOpacityInput.value = String(overlayState.opacity);
+  if (refScaleInput) refScaleInput.value = String(overlayState.scale);
+  if (refOffsetXInput) refOffsetXInput.value = String(overlayState.offsetX);
+  if (refOffsetYInput) refOffsetYInput.value = String(overlayState.offsetY);
+  if (refRotationInput) refRotationInput.value = String(overlayState.rotation);
+}
+
+function initOverlay() {
+  if (refOpacityParam) overlayState.opacity = parseNumber(refOpacityParam, 0.4);
+  if (refScaleParam) overlayState.scale = parseNumber(refScaleParam, 1);
+  if (refOffsetXParam) overlayState.offsetX = parseNumber(refOffsetXParam, 0);
+  if (refOffsetYParam) overlayState.offsetY = parseNumber(refOffsetYParam, 0);
+  if (refRotationParam) overlayState.rotation = parseNumber(refRotationParam, 0);
+  syncOverlayInputs();
+  applyOverlay();
+  if (refParam) {
+    if (refUrlInput) refUrlInput.value = refParam;
+    setOverlaySource(refParam);
+  }
+}
+
+if (refInput) {
+  refInput.addEventListener("change", (event) => {
+    const target = event.target;
+    const file = target?.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const src = String(reader.result ?? "");
+      setOverlaySource(src);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+if (loadRefBtn && refUrlInput) {
+  loadRefBtn.addEventListener("click", () => {
+    const src = refUrlInput.value?.trim();
+    if (!src) return;
+    setOverlaySource(src);
+  });
+}
+
+if (clearRefBtn) {
+  clearRefBtn.addEventListener("click", () => {
+    if (!refOverlay) return;
+    refOverlay.src = "";
+    refOverlay.classList.add("hidden");
+  });
+}
+
+if (refOpacityInput) {
+  refOpacityInput.addEventListener("input", (event) => {
+    overlayState.opacity = parseNumber(event.target?.value, overlayState.opacity);
+    applyOverlay();
+  });
+}
+
+if (refScaleInput) {
+  refScaleInput.addEventListener("input", (event) => {
+    overlayState.scale = parseNumber(event.target?.value, overlayState.scale);
+    applyOverlay();
+  });
+}
+
+if (refOffsetXInput) {
+  refOffsetXInput.addEventListener("change", (event) => {
+    overlayState.offsetX = parseNumber(event.target?.value, overlayState.offsetX);
+    applyOverlay();
+  });
+}
+
+if (refOffsetYInput) {
+  refOffsetYInput.addEventListener("change", (event) => {
+    overlayState.offsetY = parseNumber(event.target?.value, overlayState.offsetY);
+    applyOverlay();
+  });
+}
+
+if (refRotationInput) {
+  refRotationInput.addEventListener("change", (event) => {
+    overlayState.rotation = parseNumber(event.target?.value, overlayState.rotation);
+    applyOverlay();
+  });
+}
+
+if (refOverlay) {
+  refOverlay.addEventListener("load", () => {
+    applyOverlay();
+  });
+}
+
+initOverlay();
 
 function resize() {
   const { clientWidth, clientHeight } = renderer.domElement;
@@ -228,6 +374,18 @@ function loadMeshData(meshData, label) {
     const child = modelGroup.children.pop();
     if (child) modelGroup.remove(child);
   }
+  while (selectorGroup.children.length > 0) {
+    const child = selectorGroup.children.pop();
+    if (child) selectorGroup.remove(child);
+  }
+  if (selectorPanel) {
+    selectorPanel.style.display = selectorsEnabled ? "block" : "none";
+  }
+  if (selectorInfo) {
+    selectorInfo.textContent = selectorsEnabled
+      ? "Loading selectors…"
+      : "Selectors disabled. Add ?selectors=1";
+  }
 
   const geometry = buildGeometry(meshData);
   if (!geometry) {
@@ -321,6 +479,15 @@ function loadMeshData(meshData, label) {
   statusEl.textContent = `Viewing ${label} (verts: ${vertexCount}, r: ${radius.toFixed(
     2
   )})${glInfo}`;
+
+  if (selectorsEnabled) {
+    loadSelectors(meshData, label, center, radius).catch((err) => {
+      if (selectorInfo) {
+        selectorInfo.textContent = `Selectors unavailable: ${err.message || err}`;
+      }
+      console.error(err);
+    });
+  }
 
   if (vertexCount === 0) {
     const fallback = new THREE.Mesh(
@@ -446,4 +613,133 @@ function buildFaceBoundaryEdges(mesh) {
     new THREE.Float32BufferAttribute(linePositions, 3)
   );
   return geometry;
+}
+
+async function loadSelectors(meshData, label, center, radius) {
+  const directSelections = Array.isArray(meshData?.selections)
+    ? meshData.selections
+    : null;
+  if (directSelections) {
+    applySelectors(directSelections, center, radius);
+    return;
+  }
+
+  const selectorsUrl = selectorsUrlForLabel(label);
+  if (!selectorsUrl) {
+    if (selectorInfo) {
+      selectorInfo.textContent =
+        "Selectors not embedded and no selectors file found.";
+    }
+    return;
+  }
+
+  const res = await fetch(new URL(selectorsUrl, window.location.href).toString());
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status} for selectors`);
+  }
+  const data = await res.json();
+  const selections = Array.isArray(data?.selections)
+    ? data.selections
+    : Array.isArray(data)
+      ? data
+      : [];
+  applySelectors(selections, center, radius);
+}
+
+function selectorsUrlForLabel(label) {
+  if (typeof label !== "string") return null;
+  if (!label.includes(".mesh.json")) return null;
+  return label.replace(".mesh.json", ".selectors.json");
+}
+
+function applySelectors(selections, center, radius) {
+  if (!Array.isArray(selections)) selections = [];
+  const summary = summarizeSelections(selections);
+  if (selectorInfo) {
+    selectorInfo.textContent = formatSelectionSummary(summary, selections);
+  }
+
+  const baseSize = Math.max(radius * 0.02, 0.6);
+  const geometries = {
+    face: new THREE.SphereGeometry(baseSize, 10, 10),
+    edge: new THREE.SphereGeometry(baseSize * 0.7, 10, 10),
+    solid: new THREE.SphereGeometry(baseSize * 0.9, 10, 10),
+  };
+  const materials = {
+    face: new THREE.MeshBasicMaterial({ color: "#1fa3ff" }),
+    edge: new THREE.MeshBasicMaterial({ color: "#ff9f1a" }),
+    solid: new THREE.MeshBasicMaterial({ color: "#8b5cf6" }),
+  };
+
+  for (const selection of selections) {
+    if (!selection || typeof selection !== "object") continue;
+    const kind = selection.kind || "face";
+    const meta = selection.meta || {};
+    const point = Array.isArray(meta.center) ? meta.center : null;
+    if (!point || point.length < 3) continue;
+    const geom = geometries[kind] || geometries.face;
+    const mat = materials[kind] || materials.face;
+    const marker = new THREE.Mesh(geom, mat);
+    marker.position.set(
+      point[0] - center.x,
+      point[1] - center.y,
+      point[2] - center.z
+    );
+    marker.userData = { selection };
+    selectorGroup.add(marker);
+
+    if (kind === "face" && Array.isArray(meta.normalVec)) {
+      const [nx, ny, nz] = meta.normalVec;
+      const len = Math.max(baseSize * 2, 1.5);
+      const arrow = new THREE.ArrowHelper(
+        new THREE.Vector3(nx, ny, nz).normalize(),
+        new THREE.Vector3(
+          point[0] - center.x,
+          point[1] - center.y,
+          point[2] - center.z
+        ),
+        len,
+        0x2dd4bf
+      );
+      selectorGroup.add(arrow);
+    }
+  }
+}
+
+function summarizeSelections(selections) {
+  const summary = { total: 0, byKind: { face: 0, edge: 0, solid: 0 } };
+  for (const selection of selections) {
+    if (!selection) continue;
+    summary.total += 1;
+    const kind = selection.kind || "face";
+    summary.byKind[kind] = (summary.byKind[kind] || 0) + 1;
+  }
+  return summary;
+}
+
+function formatSelectionSummary(summary, selections) {
+  const lines = [];
+  lines.push(`Total: ${summary.total}`);
+  lines.push(
+    `Faces: ${summary.byKind.face || 0} | Edges: ${summary.byKind.edge || 0} | Solids: ${
+      summary.byKind.solid || 0
+    }`
+  );
+  lines.push("---");
+  const preview = selections.slice(0, 18);
+  for (const selection of preview) {
+    if (!selection || typeof selection !== "object") continue;
+    const meta = selection.meta || {};
+    const createdBy = meta.createdBy ? ` createdBy=${meta.createdBy}` : "";
+    const normal = meta.normal ? ` normal=${meta.normal}` : "";
+    const tags =
+      Array.isArray(meta.featureTags) && meta.featureTags.length > 0
+        ? ` tags=[${meta.featureTags.join(", ")}]`
+        : "";
+    lines.push(`${selection.id} (${selection.kind})${createdBy}${normal}${tags}`);
+  }
+  if (selections.length > preview.length) {
+    lines.push(`... ${selections.length - preview.length} more`);
+  }
+  return lines.join("\n");
 }

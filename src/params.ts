@@ -3,6 +3,7 @@ import {
   Expr,
   ID,
   LengthUnit,
+  Units,
   ParamDef,
   ParamType,
   Scalar,
@@ -21,6 +22,7 @@ type ParamEval = ParamValue & { fromUnitless: boolean };
 
 export type ParamContext = {
   values: Map<ID, ParamValue>;
+  units: Units;
 };
 
 const LENGTH_TO_MM: Record<LengthUnit, number> = {
@@ -37,7 +39,8 @@ const ANGLE_TO_RAD: Record<AngleUnit, number> = {
 
 export function buildParamContext(
   params: ParamDef[] | undefined,
-  overrides?: ParamOverrides
+  overrides?: ParamOverrides,
+  units: Units = "mm"
 ): ParamContext {
   const defs = new Map<ID, ParamDef>();
   for (const param of params ?? []) {
@@ -74,7 +77,7 @@ export function buildParamContext(
         : typeof override === "number"
           ? { kind: "expr.literal", value: override }
           : override;
-    const evaluated = evalExpr(expr, def.type, evalParam);
+    const evaluated = evalExpr(expr, def.type, evalParam, units);
     const normalized = coerceToExpected(def.type, evaluated, `param ${id}`);
     values.set(id, { type: def.type, value: normalized.value });
     visiting.delete(id);
@@ -85,7 +88,7 @@ export function buildParamContext(
     evalParam(id);
   }
 
-  return { values };
+  return { values, units };
 }
 
 export function normalizeScalar(
@@ -95,7 +98,7 @@ export function normalizeScalar(
 ): number {
   const expr: Expr =
     typeof value === "number" ? { kind: "expr.literal", value } : value;
-  const evaluated = evalExpr(expr, expectedType, (id) => resolveParam(ctx, id));
+  const evaluated = evalExpr(expr, expectedType, (id) => resolveParam(ctx, id), ctx.units);
   const normalized = coerceToExpected(expectedType, evaluated, "value");
   return normalized.value;
 }
@@ -111,26 +114,38 @@ function resolveParam(ctx: ParamContext, id: ID): ParamValue {
 function evalExpr(
   expr: Expr,
   expectedType: ParamType,
-  resolveParam: (id: ID) => ParamValue
+  resolveParam: (id: ID) => ParamValue,
+  units: Units
 ): ParamEval {
   switch (expr.kind) {
     case "expr.literal":
-      return evalLiteral(expr.value, expr.unit, expectedType);
+      return evalLiteral(expr.value, expr.unit, expectedType, units);
     case "expr.param": {
       const param = resolveParam(expr.id);
       return { ...param, fromUnitless: false };
     }
     case "expr.neg": {
-      const inner = evalExpr(expr.value, expectedType, resolveParam);
+      const inner = evalExpr(expr.value, expectedType, resolveParam, units);
       return { ...inner, value: -inner.value };
     }
     case "expr.binary":
-      return evalBinary(expr, expectedType, resolveParam);
+      return evalBinary(expr, expectedType, resolveParam, units);
   }
 }
 
-function evalLiteral(value: number, unit: Unit | undefined, expected: ParamType): ParamEval {
+function evalLiteral(
+  value: number,
+  unit: Unit | undefined,
+  expected: ParamType,
+  units: Units
+): ParamEval {
   if (unit === undefined) {
+    if (expected === "length") {
+      return { type: "length", value: value * LENGTH_TO_MM[units], fromUnitless: false };
+    }
+    if (expected === "angle") {
+      return { type: "angle", value, fromUnitless: false };
+    }
     return { type: "count", value, fromUnitless: true };
   }
   const type = unitType(unit);
@@ -150,10 +165,11 @@ function evalLiteral(value: number, unit: Unit | undefined, expected: ParamType)
 function evalBinary(
   expr: Extract<Expr, { kind: "expr.binary" }>,
   expectedType: ParamType,
-  resolveParam: (id: ID) => ParamValue
+  resolveParam: (id: ID) => ParamValue,
+  units: Units
 ): ParamEval {
-  const left = evalExpr(expr.left, expectedType, resolveParam);
-  const right = evalExpr(expr.right, expectedType, resolveParam);
+  const left = evalExpr(expr.left, expectedType, resolveParam, units);
+  const right = evalExpr(expr.right, expectedType, resolveParam, units);
 
   if (expr.op === "+" || expr.op === "-") {
     const coerced = coerceUnitlessForAdd(left, right);

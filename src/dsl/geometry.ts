@@ -1,0 +1,665 @@
+import type {
+  AxisDirection,
+  AxisSpec,
+  BooleanOp,
+  Chamfer,
+  DatumAxis,
+  DatumFrame,
+  DatumPlane,
+  EdgeQuery,
+  Extrude,
+  ExtrudeAxis,
+  FaceQuery,
+  Fillet,
+  Hole,
+  ID,
+  Loft,
+  NamedOutput,
+  Path3D,
+  PathSegment,
+  PatternCircular,
+  PatternLinear,
+  PatternRef,
+  Pipe,
+  PipeSweep,
+  HexTubeSweep,
+  PlaneRef,
+  Point2D,
+  Point3D,
+  Predicate,
+  Profile,
+  ProfileRef,
+  RankRule,
+  Revolve,
+  Scalar,
+  Selector,
+  Sketch2D,
+  SketchArc,
+  SketchCircle,
+  SketchEllipse,
+  SketchEntity,
+  SketchPoint,
+  SketchPolygon,
+  SketchProfile,
+  SketchProfileBundle,
+  SketchRectangle,
+  SketchSlot,
+  SketchSpline,
+  SketchLine,
+  SolidQuery,
+} from "../dsl.js";
+import { compact } from "./utils.js";
+
+export const datumPlane = (
+  id: ID,
+  normal: DatumPlane["normal"],
+  origin?: DatumPlane["origin"],
+  deps?: ID[],
+  opts?: { xAxis?: DatumPlane["xAxis"] }
+): DatumPlane =>
+  compact({
+    id,
+    kind: "datum.plane",
+    normal,
+    origin,
+    xAxis: opts?.xAxis,
+    deps,
+  });
+
+export const datumAxis = (
+  id: ID,
+  direction: DatumAxis["direction"],
+  origin?: DatumAxis["origin"],
+  deps?: ID[]
+): DatumAxis =>
+  compact({
+    id,
+    kind: "datum.axis",
+    direction,
+    origin,
+    deps,
+  });
+
+export const datumFrame = (id: ID, on: Selector, deps?: ID[]): DatumFrame =>
+  compact({ id, kind: "datum.frame", on, deps });
+
+export const sketch2d = (
+  id: ID,
+  profiles: SketchProfile[],
+  opts?: {
+    plane?: PlaneRef;
+    origin?: [number, number, number];
+    deps?: ID[];
+    entities?: SketchEntity[];
+  }
+): Sketch2D =>
+  compact({
+    id,
+    kind: "feature.sketch2d",
+    profiles,
+    plane: opts?.plane,
+    origin: opts?.origin,
+    deps: opts?.deps,
+    entities: opts?.entities,
+  });
+
+export const sketchLine = (
+  id: ID,
+  start: Point2D,
+  end: Point2D,
+  opts?: { construction?: boolean }
+): SketchLine =>
+  compact({
+    id,
+    kind: "sketch.line",
+    start,
+    end,
+    construction: opts?.construction,
+  });
+
+export const sketchArc = (
+  id: ID,
+  start: Point2D,
+  end: Point2D,
+  center: Point2D,
+  direction: SketchArc["direction"],
+  opts?: { construction?: boolean }
+): SketchArc =>
+  compact({
+    id,
+    kind: "sketch.arc",
+    start,
+    end,
+    center,
+    direction,
+    construction: opts?.construction,
+  });
+
+export const sketchCircle = (
+  id: ID,
+  center: Point2D,
+  radius: Scalar,
+  opts?: { construction?: boolean }
+): SketchCircle =>
+  compact({
+    id,
+    kind: "sketch.circle",
+    center,
+    radius,
+    construction: opts?.construction,
+  });
+
+export const sketchEllipse = (
+  id: ID,
+  center: Point2D,
+  radiusX: Scalar,
+  radiusY: Scalar,
+  opts?: { rotation?: Scalar; construction?: boolean }
+): SketchEllipse =>
+  compact({
+    id,
+    kind: "sketch.ellipse",
+    center,
+    radiusX,
+    radiusY,
+    rotation: opts?.rotation,
+    construction: opts?.construction,
+  });
+
+export const sketchRectCenter = (
+  id: ID,
+  center: Point2D,
+  width: Scalar,
+  height: Scalar,
+  opts?: { rotation?: Scalar; construction?: boolean }
+): SketchRectangle =>
+  compact({
+    id,
+    kind: "sketch.rectangle",
+    mode: "center",
+    center,
+    width,
+    height,
+    rotation: opts?.rotation,
+    construction: opts?.construction,
+  });
+
+export const sketchRectCorner = (
+  id: ID,
+  corner: Point2D,
+  width: Scalar,
+  height: Scalar,
+  opts?: { rotation?: Scalar; construction?: boolean }
+): SketchRectangle =>
+  compact({
+    id,
+    kind: "sketch.rectangle",
+    mode: "corner",
+    corner,
+    width,
+    height,
+    rotation: opts?.rotation,
+    construction: opts?.construction,
+  });
+
+export const sketchSlot = (
+  id: ID,
+  center: Point2D,
+  length: Scalar,
+  width: Scalar,
+  opts?: {
+    rotation?: Scalar;
+    endStyle?: SketchSlot["endStyle"];
+    construction?: boolean;
+  }
+): SketchSlot =>
+  compact({
+    id,
+    kind: "sketch.slot",
+    center,
+    length,
+    width,
+    rotation: opts?.rotation,
+    endStyle: opts?.endStyle,
+    construction: opts?.construction,
+  });
+
+export const sketchPolygon = (
+  id: ID,
+  center: Point2D,
+  radius: Scalar,
+  sides: Scalar,
+  opts?: { rotation?: Scalar; construction?: boolean }
+): SketchPolygon =>
+  compact({
+    id,
+    kind: "sketch.polygon",
+    center,
+    radius,
+    sides,
+    rotation: opts?.rotation,
+    construction: opts?.construction,
+  });
+
+export const sketchSpline = (
+  id: ID,
+  points: Point2D[],
+  opts?: { closed?: boolean; degree?: Scalar; construction?: boolean }
+): SketchSpline =>
+  compact({
+    id,
+    kind: "sketch.spline",
+    points,
+    closed: opts?.closed,
+    degree: opts?.degree,
+    construction: opts?.construction,
+  });
+
+export const sketchPoint = (
+  id: ID,
+  point: Point2D,
+  opts?: { construction?: boolean }
+): SketchPoint =>
+  compact({
+    id,
+    kind: "sketch.point",
+    point,
+    construction: opts?.construction,
+  });
+
+export const extrude = (
+  id: ID,
+  profile: ProfileRef,
+  depth: Extrude["depth"],
+  result?: string,
+  deps?: ID[],
+  opts?: { axis?: ExtrudeAxis }
+): Extrude =>
+  compact({
+    id,
+    kind: "feature.extrude",
+    profile,
+    depth,
+    result: result ?? `body:${id}`,
+    deps,
+    axis: opts?.axis,
+  });
+
+export const revolve = (
+  id: ID,
+  profile: ProfileRef,
+  axis: Revolve["axis"],
+  angle: Revolve["angle"],
+  result?: string,
+  opts?: { origin?: [number, number, number]; deps?: ID[] }
+): Revolve =>
+  compact({
+    id,
+    kind: "feature.revolve",
+    profile,
+    axis,
+    angle,
+    origin: opts?.origin,
+    result: result ?? `body:${id}`,
+    deps: opts?.deps,
+  });
+
+export const loft = (
+  id: ID,
+  profiles: ProfileRef[],
+  result?: string,
+  deps?: ID[]
+): Loft =>
+  compact({
+    id,
+    kind: "feature.loft",
+    profiles,
+    result: result ?? `body:${id}`,
+    deps,
+  });
+
+export const pipe = (
+  id: ID,
+  axis: AxisDirection,
+  length: Scalar,
+  outerDiameter: Scalar,
+  innerDiameter?: Scalar,
+  result?: string,
+  opts?: { origin?: Point3D; deps?: ID[] }
+): Pipe =>
+  compact({
+    id,
+    kind: "feature.pipe",
+    axis,
+    length,
+    outerDiameter,
+    innerDiameter,
+    origin: opts?.origin,
+    result: result ?? `body:${id}`,
+    deps: opts?.deps,
+  });
+
+export const pipeSweep = (
+  id: ID,
+  path: Path3D,
+  outerDiameter: Scalar,
+  innerDiameter?: Scalar,
+  result?: string,
+  opts?: { deps?: ID[] }
+): PipeSweep =>
+  compact({
+    id,
+    kind: "feature.pipeSweep",
+    path,
+    outerDiameter,
+    innerDiameter,
+    result: result ?? `body:${id}`,
+    deps: opts?.deps,
+  });
+
+export const hexTubeSweep = (
+  id: ID,
+  path: Path3D,
+  outerAcrossFlats: Scalar,
+  innerAcrossFlats?: Scalar,
+  result?: string,
+  opts?: { deps?: ID[] }
+): HexTubeSweep =>
+  compact({
+    id,
+    kind: "feature.hexTubeSweep",
+    path,
+    outerAcrossFlats,
+    innerAcrossFlats,
+    result: result ?? `body:${id}`,
+    deps: opts?.deps,
+  });
+
+export const hole = (
+  id: ID,
+  onFace: Selector,
+  axis: Hole["axis"],
+  diameter: number,
+  depth: Hole["depth"],
+  opts?: { pattern?: PatternRef; position?: Point2D; deps?: ID[] }
+): Hole =>
+  compact({
+    id,
+    kind: "feature.hole",
+    onFace,
+    axis,
+    diameter,
+    depth,
+    pattern: opts?.pattern,
+    position: opts?.position,
+    deps: opts?.deps,
+  });
+
+export const fillet = (
+  id: ID,
+  edges: Selector,
+  radius: number,
+  deps?: ID[]
+): Fillet =>
+  compact({
+    id,
+    kind: "feature.fillet",
+    edges,
+    radius,
+    deps,
+  });
+
+export const chamfer = (
+  id: ID,
+  edges: Selector,
+  distance: number,
+  deps?: ID[]
+): Chamfer =>
+  compact({
+    id,
+    kind: "feature.chamfer",
+    edges,
+    distance,
+    deps,
+  });
+
+export const booleanOp = (
+  id: ID,
+  op: BooleanOp["op"],
+  left: Selector,
+  right: Selector,
+  result?: string,
+  deps?: ID[]
+): BooleanOp =>
+  compact({
+    id,
+    kind: "feature.boolean",
+    op,
+    left,
+    right,
+    result: result ?? `body:${id}`,
+    deps,
+  });
+
+export const patternLinear = (
+  id: ID,
+  origin: Selector,
+  spacing: PatternLinear["spacing"],
+  count: PatternLinear["count"],
+  deps?: ID[]
+): PatternLinear =>
+  compact({
+    id,
+    kind: "pattern.linear",
+    origin,
+    spacing,
+    count,
+    deps,
+  });
+
+export const patternCircular = (
+  id: ID,
+  origin: Selector,
+  axis: PatternCircular["axis"],
+  count: Scalar,
+  deps?: ID[]
+): PatternCircular =>
+  compact({
+    id,
+    kind: "pattern.circular",
+    origin,
+    axis,
+    count,
+    deps,
+  });
+
+export const profileRect = (
+  width: Scalar,
+  height: Scalar,
+  center?: Point3D
+): Profile =>
+  compact({
+    kind: "profile.rectangle",
+    width,
+    height,
+    center,
+  });
+
+export const profileCircle = (
+  radius: Scalar,
+  center?: Point3D
+): Profile =>
+  compact({
+    kind: "profile.circle",
+    radius,
+    center,
+  });
+
+export const profilePoly = (
+  sides: Scalar,
+  radius: Scalar,
+  center?: Point3D,
+  rotation?: Scalar
+): Profile =>
+  compact({
+    kind: "profile.poly",
+    sides,
+    radius,
+    center,
+    rotation,
+  });
+
+export const profileSketchLoop = (
+  loop: ID[],
+  opts?: { holes?: ID[][]; open?: boolean }
+): Profile =>
+  compact({
+    kind: "profile.sketch",
+    loop,
+    holes: opts?.holes,
+    open: opts?.open,
+  });
+
+export const profileRef = (name: string): ProfileRef => ({
+  kind: "profile.ref",
+  name,
+});
+
+export const sketchProfileLoop = (
+  sketchId: ID,
+  profileName: string,
+  loop: ID[],
+  entities: SketchEntity[],
+  opts?: {
+    plane?: Selector;
+    origin?: [number, number, number];
+    deps?: ID[];
+    holes?: ID[][];
+    open?: boolean;
+  }
+): SketchProfileBundle => {
+  const profile = profileSketchLoop(loop, {
+    holes: opts?.holes,
+    open: opts?.open,
+  });
+  const sketch = sketch2d(sketchId, [{ name: profileName, profile }], {
+    plane: opts?.plane,
+    origin: opts?.origin,
+    deps: opts?.deps,
+    entities,
+  });
+  return { sketch, profile: profileRef(profileName) };
+};
+
+export const selectorFace = (
+  predicates: Predicate[],
+  rank: RankRule[] = []
+): FaceQuery => ({
+  kind: "selector.face",
+  predicates,
+  rank,
+});
+
+export const selectorEdge = (
+  predicates: Predicate[],
+  rank: RankRule[] = []
+): EdgeQuery => ({
+  kind: "selector.edge",
+  predicates,
+  rank,
+});
+
+export const selectorSolid = (
+  predicates: Predicate[],
+  rank: RankRule[] = []
+): SolidQuery => ({
+  kind: "selector.solid",
+  predicates,
+  rank,
+});
+
+export const selectorNamed = (name: string): NamedOutput => ({
+  kind: "selector.named",
+  name,
+});
+
+export const predNormal = (value: AxisDirection): Predicate => ({
+  kind: "pred.normal",
+  value,
+});
+
+export const predPlanar = (): Predicate => ({ kind: "pred.planar" });
+
+export const predCreatedBy = (featureId: ID): Predicate => ({
+  kind: "pred.createdBy",
+  featureId,
+});
+
+export const predRole = (value: string): Predicate => ({
+  kind: "pred.role",
+  value,
+});
+
+export const rankMaxArea = (): RankRule => ({ kind: "rank.maxArea" });
+
+export const rankMinZ = (): RankRule => ({ kind: "rank.minZ" });
+
+export const rankMaxZ = (): RankRule => ({ kind: "rank.maxZ" });
+
+export const rankClosestTo = (target: Selector): RankRule => ({
+  kind: "rank.closestTo",
+  target,
+});
+
+export const axisVector = (direction: Point3D): AxisSpec => ({
+  kind: "axis.vector",
+  direction,
+});
+
+export const axisDatum = (ref: ID): AxisSpec => ({
+  kind: "axis.datum",
+  ref,
+});
+
+export const axisSketchNormal = (): ExtrudeAxis => ({
+  kind: "axis.sketch.normal",
+});
+
+export const planeDatum = (ref: ID): PlaneRef => ({
+  kind: "plane.datum",
+  ref,
+});
+
+export const pathPolyline = (
+  points: Point3D[],
+  opts?: { closed?: boolean }
+): Path3D => compact({ kind: "path.polyline", points, closed: opts?.closed });
+
+export const pathSpline = (
+  points: Point3D[],
+  opts?: { closed?: boolean; degree?: Scalar }
+): Path3D =>
+  compact({
+    kind: "path.spline",
+    points,
+    closed: opts?.closed,
+    degree: opts?.degree,
+  });
+
+export const pathSegments = (segments: PathSegment[]): Path3D => ({
+  kind: "path.segments",
+  segments,
+});
+
+export const pathLine = (start: Point3D, end: Point3D): PathSegment => ({
+  kind: "path.line",
+  start,
+  end,
+});
+
+export const pathArc = (
+  start: Point3D,
+  end: Point3D,
+  center: Point3D,
+  direction?: "cw" | "ccw"
+): PathSegment => compact({ kind: "path.arc", start, end, center, direction });

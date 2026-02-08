@@ -1,6 +1,6 @@
 # Architecture
 
-This is a short overview of the core concepts. The full technical specification lives in `aidocs/spec.md`.
+This is a short overview of the core concepts. The full technical specification lives in `specs/spec.md`.
 
 ## Intent IR (Source of Truth)
 
@@ -28,6 +28,6 @@ This is a short overview of the core concepts. The full technical specification 
 - Kernel types remain backend-internal (OpenCascade.js in v1).
 
 For details, see:
-- `aidocs/spec.md`
-- `aidocs/functional-tolerancing-intent.md`
+- `specs/spec.md`
+- `specs/functional-tolerancing-intent.md`
 - `docs/reference/dsl.md`

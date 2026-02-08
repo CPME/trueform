@@ -40,6 +40,26 @@ const tests = [
       assert.throws(() => resolveSelector(selector, ctx), /metadata area/);
     },
   },
+  {
+    name: "selector: rank.closestTo selects nearest center",
+    fn: async () => {
+      const target = dsl.selectorFace([dsl.predRole("target")]);
+      const selector = dsl.selectorFace(
+        [dsl.predPlanar(), dsl.predRole("candidate")],
+        [dsl.rankClosestTo(target)]
+      );
+      const ctx = {
+        selections: [
+          { id: "t", kind: "face", meta: { planar: true, role: "target", center: [0, 0, 0] } },
+          { id: "f1", kind: "face", meta: { planar: true, role: "candidate", center: [10, 0, 0] } },
+          { id: "f2", kind: "face", meta: { planar: true, role: "candidate", center: [2, 0, 0] } },
+        ],
+        named: new Map(),
+      } satisfies ResolutionContext;
+      const hit = resolveSelector(selector, ctx);
+      assert.equal(hit.id, "f2");
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

@@ -28,6 +28,18 @@ export function countFaces(occt: any, shape: any): number {
   return faceCount;
 }
 
+export function countEdges(occt: any, shape: any): number {
+  const explorer = new occt.TopExp_Explorer_1();
+  explorer.Init(
+    shape,
+    occt.TopAbs_ShapeEnum.TopAbs_EDGE,
+    occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+  );
+  let edgeCount = 0;
+  for (; explorer.More(); explorer.Next()) edgeCount += 1;
+  return edgeCount;
+}
+
 export function countSolids(occt: any, shape: any): number {
   const explorer = new occt.TopExp_Explorer_1();
   explorer.Init(

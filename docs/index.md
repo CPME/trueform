@@ -4,6 +4,8 @@ TrueForm is a declarative, intent-first modeling layer on top of OpenCascade.js.
 
 The goal: hardware design that feels more like software. A single, digital definition is authored and released with rapid iteration, automated checks, and clean handoff to manufacturing.
 
+**GitHub:** [https://github.com/CPME/trueform](https://github.com/CPME/trueform)
+
 ## What It Is
 
 - A deterministic intent IR compiled into B-Rep geometry.
@@ -24,7 +26,8 @@ Current scope (v1) compiles a JSON-serializable IR and builds with an OpenCascad
 
 - [Getting Started](/guide/getting-started)
 - [Architecture](/reference/architecture)
+- [File Format (.tfc)](/reference/file-format)
 - [DSL Reference](/reference/dsl)
 - [API Reference](/reference/api)
 
-If you need deeper internal spec details, see the repo’s `aidocs/` folder.
+If you need deeper internal spec details, see the repo’s `specs/` folder.

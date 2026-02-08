@@ -28,15 +28,17 @@ npm run example
 ## Basic Usage
 
 ```ts
-import { dsl, buildPart } from "trueform";
+import { buildPart } from "trueform";
+import { part } from "trueform/dsl/core";
+import { extrude, profileRect, profileRef, sketch2d } from "trueform/dsl/geometry";
 
-const part = dsl.part("plate", [
-  dsl.sketch2d("sketch-base", [
-    { name: "profile:base", profile: dsl.profileRect(100, 60) },
+const plate = part("plate", [
+  sketch2d("sketch-base", [
+    { name: "profile:base", profile: profileRect(100, 60) },
   ]),
-  dsl.extrude(
+  extrude(
     "base-extrude",
-    dsl.profileRef("profile:base"),
+    profileRef("profile:base"),
     6,
     "body:main",
     ["sketch-base"]
@@ -45,7 +47,7 @@ const part = dsl.part("plate", [
 
 // Provide a backend (OpenCascade.js in v1).
 // const backend = ...;
-// const result = buildPart(part, backend);
+// const result = buildPart(plate, backend);
 ```
 
 `buildPart` returns a deterministic build result with the final outputs and per-feature steps. For a concrete example, see `src/examples/hello.ts`.

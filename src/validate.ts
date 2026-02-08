@@ -1,6 +1,8 @@
 import {
   AxisDirection,
+  AxisSpec,
   BuildContext,
+  ExtrudeAxis,
   Expr,
   ID,
   IntentAssembly,
@@ -11,10 +13,15 @@ import {
   AssemblyMate,
   AssemblyOutput,
   AssemblyRef,
+  MateConnector,
   ParamDef,
   ParamType,
   PatternRef,
+  Path3D,
+  PathSegment,
   Point2D,
+  Point3D,
+  PlaneRef,
   Predicate,
   Profile,
   ProfileRef,
@@ -58,6 +65,7 @@ export function validateDocument(doc: IntentDocument): void {
   validateContext(doc.context);
 
   const partIds = new Set<ID>();
+  const connectorIdsByPart = new Map<ID, Set<ID>>();
   for (const part of parts) {
     const id = ensureNonEmptyString(
       part?.id,
@@ -71,6 +79,15 @@ export function validateDocument(doc: IntentDocument): void {
       );
     }
     partIds.add(id);
+    if (part.connectors) {
+      const ids = new Set<ID>();
+      for (const connector of part.connectors) {
+        if (connector && typeof connector.id === "string") {
+          ids.add(connector.id);
+        }
+      }
+      connectorIdsByPart.set(id, ids);
+    }
   }
 
   if (doc.assemblies !== undefined) {
@@ -80,7 +97,7 @@ export function validateDocument(doc: IntentDocument): void {
       "Document assemblies must be an array"
     );
     for (const assembly of assemblies) {
-      validateAssembly(assembly, partIds);
+      validateAssembly(assembly, partIds, connectorIdsByPart);
     }
   }
 }
@@ -109,6 +126,31 @@ export function validatePart(part: IntentPart): void {
     }
     featureIds.add(id);
     validateFeature(feature);
+  }
+
+  if (part.connectors !== undefined) {
+    const connectors = ensureArray<MateConnector>(
+      part.connectors,
+      "validation_part_connectors",
+      "Part connectors must be an array"
+    );
+    const connectorIds = new Set<ID>();
+    for (const connector of connectors) {
+      validateConnector(connector);
+      if (connectorIds.has(connector.id)) {
+        throw new CompileError(
+          "validation_connector_duplicate",
+          `Duplicate connector id ${connector.id}`
+        );
+      }
+      if (featureIds.has(connector.id)) {
+        throw new CompileError(
+          "validation_connector_conflict",
+          `Connector id ${connector.id} conflicts with a feature id`
+        );
+      }
+      connectorIds.add(connector.id);
+    }
   }
 
   if (part.params !== undefined) {
@@ -173,7 +215,11 @@ function validateContext(ctx: BuildContext): void {
   }
 }
 
-function validateAssembly(assembly: IntentAssembly, partIds: Set<ID>): void {
+function validateAssembly(
+  assembly: IntentAssembly,
+  partIds: Set<ID>,
+  connectorIdsByPart: Map<ID, Set<ID>>
+): void {
   ensureObject(assembly, "validation_assembly", "Assembly must be an object");
   ensureNonEmptyString(
     assembly.id,
@@ -182,6 +228,7 @@ function validateAssembly(assembly: IntentAssembly, partIds: Set<ID>): void {
   );
 
   const instanceIds = new Set<ID>();
+  const instanceToPart = new Map<ID, ID>();
   const instances = ensureArray<AssemblyInstance>(
     assembly.instances,
     "validation_assembly_instances",
@@ -211,6 +258,7 @@ function validateAssembly(assembly: IntentAssembly, partIds: Set<ID>): void {
         `Assembly instance ${instance.id} references missing part ${instance.part}`
       );
     }
+    instanceToPart.set(id, instance.part);
     if (instance.transform !== undefined) {
       validateTransform(instance.transform);
     }
@@ -240,13 +288,33 @@ function validateAssembly(assembly: IntentAssembly, partIds: Set<ID>): void {
       ensureObject(mate, "validation_assembly_mate", "Mate must be an object");
       const kind = (mate as { kind?: string }).kind;
       if (kind === "mate.fixed" || kind === "mate.coaxial") {
-        validateAssemblyRef((mate as { a: any }).a, instanceIds);
-        validateAssemblyRef((mate as { b: any }).b, instanceIds);
+        validateAssemblyRef(
+          (mate as { a: any }).a,
+          instanceIds,
+          instanceToPart,
+          connectorIdsByPart
+        );
+        validateAssemblyRef(
+          (mate as { b: any }).b,
+          instanceIds,
+          instanceToPart,
+          connectorIdsByPart
+        );
         continue;
       }
       if (kind === "mate.planar") {
-        validateAssemblyRef((mate as { a: any }).a, instanceIds);
-        validateAssemblyRef((mate as { b: any }).b, instanceIds);
+        validateAssemblyRef(
+          (mate as { a: any }).a,
+          instanceIds,
+          instanceToPart,
+          connectorIdsByPart
+        );
+        validateAssemblyRef(
+          (mate as { b: any }).b,
+          instanceIds,
+          instanceToPart,
+          connectorIdsByPart
+        );
         const offset = (mate as { offset?: unknown }).offset;
         if (offset !== undefined) {
           ensureFiniteNumber(
@@ -282,13 +350,18 @@ function validateAssembly(assembly: IntentAssembly, partIds: Set<ID>): void {
         "Assembly output refs must be an array"
       );
       for (const ref of refs) {
-        validateAssemblyRef(ref, instanceIds);
+        validateAssemblyRef(ref, instanceIds, instanceToPart, connectorIdsByPart);
       }
     }
   }
 }
 
-function validateAssemblyRef(ref: unknown, instanceIds: Set<ID>): void {
+function validateAssemblyRef(
+  ref: unknown,
+  instanceIds: Set<ID>,
+  instanceToPart: Map<ID, ID>,
+  connectorIdsByPart: Map<ID, Set<ID>>
+): void {
   ensureObject(ref, "validation_assembly_ref", "Assembly ref must be an object");
   const instance = ensureNonEmptyString(
     (ref as { instance?: ID }).instance,
@@ -301,11 +374,65 @@ function validateAssemblyRef(ref: unknown, instanceIds: Set<ID>): void {
       `Assembly ref references missing instance ${instance}`
     );
   }
-  validateSelector((ref as { selector?: Selector }).selector);
+  const connector = ensureNonEmptyString(
+    (ref as { connector?: ID }).connector,
+    "validation_assembly_ref_connector",
+    "Assembly ref connector is required"
+  );
+  const partId = instanceToPart.get(instance);
+  if (!partId) {
+    throw new CompileError(
+      "validation_assembly_ref_instance_missing",
+      `Assembly ref references missing instance ${instance}`
+    );
+  }
+  const connectors = connectorIdsByPart.get(partId);
+  if (!connectors || !connectors.has(connector)) {
+    throw new CompileError(
+      "validation_assembly_ref_connector_missing",
+      `Assembly ref connector ${connector} not found on part ${partId}`
+    );
+  }
+}
+
+function validateConnector(connector: MateConnector): void {
+  ensureObject(connector, "validation_connector", "Connector must be an object");
+  ensureNonEmptyString(connector.id, "validation_connector_id", "Connector id is required");
+  validateSelector(connector.origin);
+  if (!selectorAnchored(connector.origin)) {
+    throw new CompileError(
+      "validation_connector_anchor",
+      `Connector ${connector.id} origin selector must be anchored`
+    );
+  }
+  if (connector.normal !== undefined) {
+    ensureAxis(connector.normal, "Connector normal is invalid");
+  }
+  if (connector.xAxis !== undefined) {
+    ensureAxis(connector.xAxis, "Connector xAxis is invalid");
+  }
+}
+
+function selectorAnchored(selector: Selector): boolean {
+  if (selector.kind === "selector.named") return true;
+  for (const predicate of selector.predicates as Predicate[]) {
+    if (predicate.kind === "pred.createdBy") return true;
+  }
+  for (const rule of selector.rank as RankRule[]) {
+    if (rule.kind !== "rank.closestTo") continue;
+    if (selectorAnchored(rule.target)) return true;
+  }
+  return false;
 }
 
 function validateTransform(transform: Transform): void {
   ensureObject(transform, "validation_transform", "Transform must be an object");
+  if (transform.matrix !== undefined && (transform.translation || transform.rotation)) {
+    throw new CompileError(
+      "validation_transform_conflict",
+      "Transform matrix cannot be combined with translation or rotation"
+    );
+  }
   if (transform.translation !== undefined) {
     validatePoint3(
       transform.translation,
@@ -373,23 +500,39 @@ function validateFeature(feature: IntentFeature): void {
       );
     }
   }
+  const rawTags = (feature as { tags?: unknown }).tags;
+  if (rawTags !== undefined) {
+    const tags = ensureArray<string>(
+      rawTags as string[],
+      "validation_feature_tags",
+      "Feature tags must be an array"
+    );
+    for (const tag of tags) {
+      ensureNonEmptyString(
+        tag,
+        "validation_feature_tag",
+        "Feature tag must be a string"
+      );
+    }
+  }
 
   switch (kind) {
     case "datum.plane": {
-      const normal = (feature as { normal?: AxisDirection }).normal;
-      ensureAxis(normal, "Datum plane normal is required");
-      const origin = (feature as { origin?: unknown }).origin;
-      if (origin !== undefined) {
-        validatePoint3(origin as number[], "validation_datum_origin", "Datum origin invalid");
+      const datum = feature as { normal?: AxisSpec; origin?: unknown; xAxis?: AxisSpec };
+      validateAxisSpec(datum.normal, "Datum plane normal is required");
+      if (datum.origin !== undefined) {
+        validatePoint3Scalar(datum.origin, "Datum plane origin");
+      }
+      if (datum.xAxis !== undefined) {
+        validateAxisSpec(datum.xAxis, "Datum plane xAxis is invalid");
       }
       return;
     }
     case "datum.axis": {
-      const direction = (feature as { direction?: AxisDirection }).direction;
-      ensureAxis(direction, "Datum axis direction is required");
-      const origin = (feature as { origin?: unknown }).origin;
-      if (origin !== undefined) {
-        validatePoint3(origin as number[], "validation_datum_origin", "Datum origin invalid");
+      const datum = feature as { direction?: AxisSpec; origin?: unknown };
+      validateAxisSpec(datum.direction, "Datum axis direction is required");
+      if (datum.origin !== undefined) {
+        validatePoint3Scalar(datum.origin, "Datum axis origin");
       }
       return;
     }
@@ -398,18 +541,16 @@ function validateFeature(feature: IntentFeature): void {
       return;
     }
     case "feature.sketch2d": {
-      const sketch = feature as { profiles?: SketchProfile[]; plane?: Selector; entities?: SketchEntity[] };
+      const sketch = feature as { profiles?: SketchProfile[]; plane?: PlaneRef; entities?: SketchEntity[] };
       const profiles = ensureArray<SketchProfile>(
         sketch.profiles,
         "validation_sketch_profiles",
         "Sketch profiles must be an array"
       );
-      for (const profile of profiles) {
-        validateSketchProfile(profile);
-      }
-      if (sketch.plane !== undefined) {
-        validateSelector(sketch.plane);
-      }
+      const needsEntities = profiles.some(
+        (profile) => profile.profile?.kind === "profile.sketch"
+      );
+      const entityMap = new Map<ID, SketchEntity>();
       if (sketch.entities !== undefined) {
         const entities = ensureArray<SketchEntity>(
           sketch.entities,
@@ -418,14 +559,46 @@ function validateFeature(feature: IntentFeature): void {
         );
         for (const entity of entities) {
           validateSketchEntity(entity);
+          if (entityMap.has(entity.id)) {
+            throw new CompileError(
+              "validation_sketch_entity_duplicate",
+              `Duplicate sketch entity id ${entity.id}`
+            );
+          }
+          entityMap.set(entity.id, entity);
         }
+      } else if (needsEntities) {
+        throw new CompileError(
+          "validation_sketch_entities_required",
+          "Sketch entities are required for profile.sketch"
+        );
+      }
+      for (const profile of profiles) {
+        validateSketchProfile(profile, entityMap);
+      }
+      if (sketch.plane !== undefined) {
+        validatePlaneRef(sketch.plane, "Sketch plane");
       }
       return;
     }
     case "feature.extrude": {
-      const extrude = feature as { profile?: ProfileRef; depth?: Scalar | "throughAll"; result?: string };
+      const extrude = feature as {
+        profile?: ProfileRef;
+        depth?: Scalar | "throughAll";
+        result?: string;
+        axis?: ExtrudeAxis;
+      };
       validateProfileRef(extrude.profile);
+      if (extrude.profile && (extrude.profile as Profile).kind === "profile.sketch") {
+        throw new CompileError(
+          "validation_profile_sketch_ref",
+          "profile.sketch must be referenced from a sketch via profileRef"
+        );
+      }
       validateDepth(extrude.depth);
+      if (extrude.axis !== undefined) {
+        validateExtrudeAxis(extrude.axis, "Extrude axis is invalid");
+      }
       ensureNonEmptyString(
         extrude.result,
         "validation_feature_result",
@@ -442,6 +615,12 @@ function validateFeature(feature: IntentFeature): void {
         origin?: unknown;
       };
       validateProfileRef(revolve.profile);
+      if (revolve.profile && (revolve.profile as Profile).kind === "profile.sketch") {
+        throw new CompileError(
+          "validation_profile_sketch_ref",
+          "profile.sketch must be referenced from a sketch via profileRef"
+        );
+      }
       ensureAxis(revolve.axis, "Revolve axis is required");
       if (revolve.angle !== undefined && revolve.angle !== "full") {
         validateScalar(revolve.angle, "Revolve angle");
@@ -460,6 +639,98 @@ function validateFeature(feature: IntentFeature): void {
       );
       return;
     }
+    case "feature.loft": {
+      const loft = feature as { profiles?: ProfileRef[]; result?: string };
+      const profiles = ensureArray<ProfileRef>(
+        loft.profiles as ProfileRef[],
+        "validation_loft_profiles",
+        "Loft profiles must be an array"
+      );
+      if (profiles.length !== 2) {
+        throw new CompileError(
+          "validation_loft_profiles",
+          "Loft requires exactly two profiles"
+        );
+      }
+      for (const profile of profiles) {
+        validateProfileRef(profile);
+        if (profile && (profile as Profile).kind === "profile.sketch") {
+          throw new CompileError(
+            "validation_profile_sketch_ref",
+            "profile.sketch must be referenced from a sketch via profileRef"
+          );
+        }
+      }
+      ensureNonEmptyString(
+        loft.result,
+        "validation_feature_result",
+        "Loft result is required"
+      );
+      return;
+    }
+    case "feature.pipe": {
+      const pipe = feature as {
+        axis?: AxisDirection;
+        origin?: unknown;
+        length?: Scalar;
+        outerDiameter?: Scalar;
+        innerDiameter?: Scalar;
+        result?: string;
+      };
+      ensureAxis(pipe.axis, "Pipe axis is required");
+      if (pipe.origin !== undefined) {
+        validatePoint3Scalar(pipe.origin, "Pipe origin");
+      }
+      validateScalar(pipe.length, "Pipe length");
+      validateScalar(pipe.outerDiameter, "Pipe outer diameter");
+      if (pipe.innerDiameter !== undefined) {
+        validateScalar(pipe.innerDiameter, "Pipe inner diameter");
+      }
+      ensureNonEmptyString(
+        pipe.result,
+        "validation_feature_result",
+        "Pipe result is required"
+      );
+      return;
+    }
+    case "feature.pipeSweep": {
+      const sweep = feature as {
+        path?: Path3D;
+        outerDiameter?: Scalar;
+        innerDiameter?: Scalar;
+        result?: string;
+      };
+      validatePath3D(sweep.path, "Pipe sweep path");
+      validateScalar(sweep.outerDiameter, "Pipe sweep outer diameter");
+      if (sweep.innerDiameter !== undefined) {
+        validateScalar(sweep.innerDiameter, "Pipe sweep inner diameter");
+      }
+      ensureNonEmptyString(
+        sweep.result,
+        "validation_feature_result",
+        "Pipe sweep result is required"
+      );
+      return;
+    }
+    case "feature.hexTubeSweep": {
+      const sweep = feature as {
+        path?: Path3D;
+        outerAcrossFlats?: Scalar;
+        innerAcrossFlats?: Scalar;
+        result?: string;
+      };
+      validatePath3D(sweep.path, "Hex tube sweep path");
+      validateScalar(sweep.outerAcrossFlats, "Hex tube sweep outer across flats");
+      if (sweep.innerAcrossFlats !== undefined) {
+        validateScalar(sweep.innerAcrossFlats, "Hex tube sweep inner across flats");
+      }
+      ensureNonEmptyString(
+        sweep.result,
+        "validation_feature_result",
+        "Hex tube sweep result is required"
+      );
+      return;
+    }
     case "feature.hole": {
       const hole = feature as {
         onFace?: Selector;
@@ -467,6 +738,7 @@ function validateFeature(feature: IntentFeature): void {
         diameter?: Scalar;
         depth?: Scalar | "throughAll";
         pattern?: PatternRef;
+        position?: Point2D;
       };
       validateSelector(hole.onFace);
       ensureAxis(hole.axis, "Hole axis is required");
@@ -474,6 +746,9 @@ function validateFeature(feature: IntentFeature): void {
       validateDepth(hole.depth);
       if (hole.pattern !== undefined) {
         validatePatternRef(hole.pattern);
+      }
+      if (hole.position !== undefined) {
+        validatePoint2(hole.position, "Hole position");
       }
       return;
     }
@@ -545,7 +820,10 @@ function validateFeature(feature: IntentFeature): void {
   }
 }
 
-function validateSketchProfile(profile: SketchProfile): void {
+function validateSketchProfile(
+  profile: SketchProfile,
+  entityMap?: Map<ID, SketchEntity>
+): void {
   ensureObject(profile, "validation_profile", "Sketch profile must be an object");
   ensureNonEmptyString(
     profile.name,
@@ -553,6 +831,87 @@ function validateSketchProfile(profile: SketchProfile): void {
     "Sketch profile name is required"
   );
   validateProfile(profile.profile);
+  if (profile.profile.kind === "profile.sketch") {
+    if (!entityMap || entityMap.size === 0) {
+      throw new CompileError(
+        "validation_sketch_profile_entities_missing",
+        "profile.sketch requires sketch entities"
+      );
+    }
+    const ids = new Set<ID>();
+    const loop = profile.profile.loop;
+    for (const id of loop) {
+      if (ids.has(id)) {
+        throw new CompileError(
+          "validation_sketch_profile_duplicate",
+          `profile.sketch loop id ${id} is duplicated`
+        );
+      }
+      ids.add(id);
+      const entity = entityMap.get(id);
+      if (!entity) {
+        throw new CompileError(
+          "validation_sketch_profile_missing_entity",
+          `profile.sketch references missing entity ${id}`
+        );
+      }
+      if (entity.construction) {
+        throw new CompileError(
+          "validation_sketch_profile_construction",
+          `profile.sketch entity ${id} is marked construction`
+        );
+      }
+      switch (entity.kind) {
+        case "sketch.line":
+        case "sketch.arc":
+        case "sketch.circle":
+        case "sketch.ellipse":
+        case "sketch.rectangle":
+        case "sketch.slot":
+        case "sketch.polygon":
+        case "sketch.spline":
+          break;
+        default:
+          throw new CompileError(
+            "validation_sketch_profile_entity_kind",
+            `profile.sketch entity ${id} kind ${entity.kind} is not supported`
+          );
+      }
+    }
+    for (const hole of profile.profile.holes ?? []) {
+      for (const id of hole) {
+        const entity = entityMap.get(id);
+        if (!entity) {
+          throw new CompileError(
+            "validation_sketch_profile_missing_entity",
+            `profile.sketch hole references missing entity ${id}`
+          );
+        }
+        if (entity.construction) {
+          throw new CompileError(
+            "validation_sketch_profile_construction",
+            `profile.sketch entity ${id} is marked construction`
+          );
+        }
+        switch (entity.kind) {
+          case "sketch.line":
+          case "sketch.arc":
+          case "sketch.circle":
+          case "sketch.ellipse":
+          case "sketch.rectangle":
+          case "sketch.slot":
+          case "sketch.polygon":
+          case "sketch.spline":
+            break;
+          default:
+            throw new CompileError(
+              "validation_sketch_profile_entity_kind",
+              `profile.sketch entity ${id} kind ${entity.kind} is not supported`
+            );
+        }
+      }
+    }
+  }
 }
 
 function validateSketchEntity(entity: SketchEntity): void {
@@ -727,6 +1086,80 @@ function validateProfile(profile: Profile): void {
         );
       }
       return;
+    case "profile.poly":
+      validateScalar(profile.sides, "Profile polygon sides");
+      validateScalar(profile.radius, "Profile polygon radius");
+      if (profile.center !== undefined) {
+        validatePoint3(
+          profile.center,
+          "validation_profile_center",
+          "Profile center must be a 3D point"
+        );
+      }
+      if (profile.rotation !== undefined) {
+        validateScalar(profile.rotation, "Profile polygon rotation");
+      }
+      return;
+    case "profile.sketch": {
+      if (profile.open !== undefined && typeof profile.open !== "boolean") {
+        throw new CompileError(
+          "validation_profile_sketch_open",
+          "profile.sketch open must be a boolean"
+        );
+      }
+      if (profile.open && profile.holes && profile.holes.length > 0) {
+        throw new CompileError(
+          "validation_profile_sketch_open_holes",
+          "profile.sketch open profiles cannot define holes"
+        );
+      }
+      const loop = ensureArray<ID>(
+        profile.loop,
+        "validation_profile_sketch_loop",
+        "Sketch profile loop must be an array"
+      );
+      if (loop.length === 0) {
+        throw new CompileError(
+          "validation_profile_sketch_loop",
+          "Sketch profile loop must not be empty"
+        );
+      }
+      for (const id of loop) {
+        ensureNonEmptyString(
+          id,
+          "validation_profile_sketch_loop_id",
+          "Sketch profile loop id must be a string"
+        );
+      }
+      if (profile.holes !== undefined) {
+        const holes = ensureArray<ID[]>(
+          profile.holes as ID[][],
+          "validation_profile_sketch_holes",
+          "Sketch profile holes must be an array"
+        );
+        for (const hole of holes) {
+          const loopIds = ensureArray<ID>(
+            hole,
+            "validation_profile_sketch_hole",
+            "Sketch profile hole must be an array"
+          );
+          if (loopIds.length === 0) {
+            throw new CompileError(
+              "validation_profile_sketch_hole",
+              "Sketch profile hole must not be empty"
+            );
+          }
+          for (const id of loopIds) {
+            ensureNonEmptyString(
+              id,
+              "validation_profile_sketch_hole_id",
+              "Sketch profile hole id must be a string"
+            );
+          }
+        }
+      }
+      return;
+    }
     default:
       throw new CompileError(
         "validation_profile_kind",
@@ -933,10 +1366,157 @@ function validatePoint3(value: unknown, code: string, message: string): void {
   }
 }
 
+function validatePoint3Scalar(value: unknown, label: string): void {
+  const point = ensureArray<Scalar>(
+    value,
+    "validation_point3",
+    `${label} must be a 3D point`
+  );
+  if (point.length !== 3) {
+    throw new CompileError(
+      "validation_point3_length",
+      `${label} must have 3 entries`
+    );
+  }
+  for (const entry of point) {
+    validateScalar(entry, label);
+  }
+}
+
+function validateAxisSpec(value: AxisSpec | undefined, message: string): void {
+  if (!value) {
+    throw new CompileError("validation_axis", message);
+  }
+  if (typeof value === "string") {
+    ensureAxis(value, message);
+    return;
+  }
+  if (value.kind === "axis.vector") {
+    validatePoint3Scalar(value.direction, message);
+    return;
+  }
+  if (value.kind === "axis.datum") {
+    ensureNonEmptyString(
+      value.ref,
+      "validation_axis_datum",
+      "Axis datum ref is required"
+    );
+    return;
+  }
+  throw new CompileError("validation_axis", message);
+}
+
+function validateExtrudeAxis(value: ExtrudeAxis, message: string): void {
+  if (typeof value === "object" && value.kind === "axis.sketch.normal") {
+    return;
+  }
+  validateAxisSpec(value as AxisSpec, message);
+}
+
+function validatePlaneRef(value: PlaneRef, label: string): void {
+  if (isSelector(value)) {
+    validateSelector(value);
+    return;
+  }
+  if (value && value.kind === "plane.datum") {
+    ensureNonEmptyString(
+      value.ref,
+      "validation_plane_datum",
+      `${label} datum ref is required`
+    );
+    return;
+  }
+  throw new CompileError("validation_plane_ref", `${label} is invalid`);
+}
+
+function validatePath3D(value: Path3D | undefined, label: string): void {
+  if (!value || typeof value !== "object") {
+    throw new CompileError("validation_path", `${label} must be a path`);
+  }
+  if (value.kind === "path.polyline") {
+    const points = ensureArray<Point3D>(
+      value.points,
+      "validation_path_points",
+      `${label} points must be an array`
+    );
+    if (points.length < 2) {
+      throw new CompileError("validation_path_points", `${label} needs at least 2 points`);
+    }
+    for (const point of points) {
+      validatePoint3Scalar(point, `${label} point`);
+    }
+    return;
+  }
+  if (value.kind === "path.spline") {
+    const points = ensureArray<Point3D>(
+      value.points,
+      "validation_path_points",
+      `${label} points must be an array`
+    );
+    if (points.length < 2) {
+      throw new CompileError("validation_path_points", `${label} needs at least 2 points`);
+    }
+    for (const point of points) {
+      validatePoint3Scalar(point, `${label} point`);
+    }
+    if (value.degree !== undefined) {
+      validateScalar(value.degree, `${label} spline degree`);
+    }
+    return;
+  }
+  if (value.kind === "path.segments") {
+    const segments = ensureArray<PathSegment>(
+      value.segments,
+      "validation_path_segments",
+      `${label} segments must be an array`
+    );
+    if (segments.length === 0) {
+      throw new CompileError("validation_path_segments", `${label} needs segments`);
+    }
+    for (const segment of segments) {
+      validatePathSegment(segment, label);
+    }
+    return;
+  }
+  throw new CompileError("validation_path", `${label} has unknown kind`);
+}
+
+function validatePathSegment(segment: PathSegment, label: string): void {
+  if (!segment || typeof segment !== "object") {
+    throw new CompileError("validation_path_segment", `${label} segment invalid`);
+  }
+  switch (segment.kind) {
+    case "path.line":
+      validatePoint3Scalar(segment.start, `${label} line start`);
+      validatePoint3Scalar(segment.end, `${label} line end`);
+      return;
+    case "path.arc":
+      validatePoint3Scalar(segment.start, `${label} arc start`);
+      validatePoint3Scalar(segment.end, `${label} arc end`);
+      validatePoint3Scalar(segment.center, `${label} arc center`);
+      if (segment.direction !== undefined && segment.direction !== "cw" && segment.direction !== "ccw") {
+        throw new CompileError("validation_path_direction", `${label} arc direction invalid`);
+      }
+      return;
+  }
+  throw new CompileError("validation_path_segment", `${label} segment kind invalid`);
+}
+
 function ensureAxis(value: AxisDirection | undefined, message: string): void {
   if (!value || !AXIS_DIRECTIONS.has(value)) {
     throw new CompileError("validation_axis", message);
   }
+}
+
+function isSelector(value: unknown): value is Selector {
+  if (!value || typeof value !== "object") return false;
+  const kind = (value as { kind?: string }).kind;
+  return (
+    kind === "selector.face" ||
+    kind === "selector.edge" ||
+    kind === "selector.solid" ||
+    kind === "selector.named"
+  );
 }
 
 function ensureUnit(value: Unit): void {

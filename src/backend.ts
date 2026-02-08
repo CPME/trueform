@@ -7,7 +7,7 @@ export type KernelResult = {
 
 export type KernelObject = {
   id: ID;
-  kind: "solid" | "face" | "edge" | "datum" | "profile" | "unknown";
+  kind: "solid" | "face" | "edge" | "datum" | "pattern" | "profile" | "unknown";
   meta: Record<string, unknown>;
 };
 
@@ -25,6 +25,22 @@ export type MeshOptions = {
   includeEdges?: boolean;
   edgeSegmentLength?: number;
   edgeMaxSegments?: number;
+};
+
+export type StepSchema = "AP203" | "AP214" | "AP242";
+export type StepUnit = "mm" | "cm" | "m" | "in";
+export type StepExportOptions = {
+  schema?: StepSchema;
+  unit?: StepUnit;
+  precision?: number;
+};
+
+export type StlFormat = "binary" | "ascii";
+export type StlExportOptions = {
+  format?: StlFormat;
+  linearDeflection?: number;
+  angularDeflection?: number;
+  relative?: boolean;
 };
 
 export type MeshData = {
@@ -45,4 +61,6 @@ export type ExecuteInput = {
 export interface Backend {
   execute(input: ExecuteInput): KernelResult;
   mesh(target: KernelObject, opts?: MeshOptions): MeshData;
+  exportStep(target: KernelObject, opts?: StepExportOptions): Uint8Array;
+  exportStl?(target: KernelObject, opts?: StlExportOptions): Uint8Array;
 }

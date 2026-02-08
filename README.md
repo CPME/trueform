@@ -1,5 +1,9 @@
 # TrueForm
 
+![Hex tube sweep](assets/hex-tube-sweep.png)
+
+Docs: [https://cpme.github.io/trueform/](https://cpme.github.io/trueform/)
+
 TrueForm is a declarative, intent-first modeling layer on top of OpenCascade.js. It lets agents and web apps describe what a part is (features, constraints, assertions) without scripting kernel steps.
 
 The goal: hardware design that feels more like software. A single, digital definition is authored and released with rapid iteration, automated checks, and clean handoff to manufacturing.
@@ -19,22 +23,24 @@ npm test
 
 **Minimal Example**
 ```ts
-import { dsl, buildPart } from "trueform";
+import { buildPart } from "trueform";
+import { part } from "trueform/dsl/core";
+import { extrude, profileRect, profileRef, sketch2d } from "trueform/dsl/geometry";
 
-const part = dsl.part("plate", [
-  dsl.sketch2d("sketch-base", [
-    { name: "profile:base", profile: dsl.profileRect(100, 60) },
+const plate = part("plate", [
+  sketch2d("sketch-base", [
+    { name: "profile:base", profile: profileRect(100, 60) },
   ]),
-  dsl.extrude(
+  extrude(
     "base-extrude",
-    dsl.profileRef("profile:base"),
+    profileRef("profile:base"),
     6,
     "body:main",
     ["sketch-base"]
   ),
 ]);
 
-// const result = buildPart(part, backend);
+// const result = buildPart(plate, backend);
 ```
 
 **Viewer (Verification Helper)**
@@ -46,11 +52,19 @@ Screenshot: generated from the DSL and viewed with the packaged viewer.
 npm run viewer:export
 ```
 
+One-command viewer (export + serve):
+
+```bash
+npm run viewer:serve
+```
+
+`viewer:serve` shuts down any prior viewer server on port 8001 before starting a new one.
+
 Viewer setup, mesh schema, and options: `tools/viewer/README.md`.
 
 **Docs**
-- Overview and positioning: `aidocs/summary.md`
-- Technical spec (IR, pipeline, backend boundary): `aidocs/spec.md`
-- Functional tolerancing intent: `aidocs/functional-tolerancing-intent.md`
+- Overview and positioning: `specs/summary.md`
+- Technical spec (IR, pipeline, backend boundary): `specs/spec.md`
+- Functional tolerancing intent: `specs/functional-tolerancing-intent.md`
 - Viewer helper + mesh schema: `tools/viewer/README.md`
-- Docs map (source-of-truth guide): `aidocs/docs-map.md`
+- Docs map (source-of-truth guide): `specs/docs-map.md`

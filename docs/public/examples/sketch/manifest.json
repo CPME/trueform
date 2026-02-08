@@ -1,0 +1,59 @@
+{
+  "examples": [
+    {
+      "id": "line",
+      "title": "Line",
+      "image": "/examples/sketch/line.svg"
+    },
+    {
+      "id": "arc",
+      "title": "Arc",
+      "image": "/examples/sketch/arc.svg"
+    },
+    {
+      "id": "circle",
+      "title": "Circle",
+      "image": "/examples/sketch/circle.svg"
+    },
+    {
+      "id": "ellipse",
+      "title": "Ellipse",
+      "image": "/examples/sketch/ellipse.svg"
+    },
+    {
+      "id": "rect-center",
+      "title": "Rectangle (Center)",
+      "image": "/examples/sketch/rect-center.svg"
+    },
+    {
+      "id": "rect-corner",
+      "title": "Rectangle (Corner)",
+      "image": "/examples/sketch/rect-corner.svg"
+    },
+    {
+      "id": "slot",
+      "title": "Slot",
+      "image": "/examples/sketch/slot.svg"
+    },
+    {
+      "id": "polygon",
+      "title": "Polygon",
+      "image": "/examples/sketch/polygon.svg"
+    },
+    {
+      "id": "spline",
+      "title": "Spline",
+      "image": "/examples/sketch/spline.svg"
+    },
+    {
+      "id": "point",
+      "title": "Point",
+      "image": "/examples/sketch/point.svg"
+    },
+    {
+      "id": "rect-array",
+      "title": "Rectangle Array",
+      "image": "/examples/sketch/rect-array.svg"
+    }
+  ]
+}

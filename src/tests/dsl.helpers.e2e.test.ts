@@ -31,9 +31,15 @@ const tests = [
       assert.equal("constraints" in part, false);
       assert.equal("assertions" in part, false);
 
+      const constraint = dsl.surfaceProfileConstraint(
+        "c1",
+        dsl.refSurface(dsl.selectorFace([dsl.predPlanar()])),
+        0.1
+      );
+
       const partWithOpts = dsl.part("part-2", [], {
         params: [dsl.paramLength("len", dsl.exprLiteral(5, "mm"))],
-        constraints: ["c1"],
+        constraints: [constraint],
         assertions: ["a1"],
       });
       assert.equal(partWithOpts.params?.length, 1);
@@ -42,7 +48,7 @@ const tests = [
 
       const doc = dsl.document("doc-1", [part], undefined, undefined, {
         capabilities: { process: "milling" },
-        constraints: ["c1"],
+        constraints: [constraint],
         assertions: ["a1"],
       });
       assert.equal(doc.id, "doc-1");
@@ -102,8 +108,10 @@ const tests = [
         translation: [1, 2, 3],
         rotation: [0, 0, 90],
       });
-      assert.deepEqual(transform.translation, [1, 2, 3]);
-      assert.deepEqual(transform.rotation, [0, 0, 90]);
+      assert.equal(transform.matrix?.length, 16);
+      assert.equal(transform.matrix?.[12], 1);
+      assert.equal(transform.matrix?.[13], 2);
+      assert.equal(transform.matrix?.[14], 3);
 
       const instance = dsl.assemblyInstance("inst-1", "part-1", transform, [
         "tag-1",
@@ -111,9 +119,8 @@ const tests = [
       assert.equal(instance.part, "part-1");
       assert.equal(instance.tags?.length, 1);
 
-      const selector = dsl.selectorNamed("body:main");
-      const ref = dsl.assemblyRef("inst-1", selector);
-      assert.deepEqual(ref, { instance: "inst-1", selector });
+      const ref = dsl.assemblyRef("inst-1", "conn-1");
+      assert.deepEqual(ref, { instance: "inst-1", connector: "conn-1" });
 
       const mateFixed = dsl.mateFixed(ref, ref);
       assert.equal(mateFixed.kind, "mate.fixed");
@@ -141,10 +148,26 @@ const tests = [
       const selectorFace = dsl.selectorFace([dsl.predPlanar()]);
       const selectorEdge = dsl.selectorEdge([dsl.predRole("edge")]);
 
+      const connector = dsl.mateConnector("conn-1", selectorFace, {
+        normal: "+Z",
+        xAxis: "+X",
+      });
+      assert.equal(connector.id, "conn-1");
+      assert.equal(connector.normal, "+Z");
+
       const datumPlane = dsl.datumPlane("datum-plane", "+Z");
       assert.equal(datumPlane.kind, "datum.plane");
       assert.equal(datumPlane.normal, "+Z");
       assert.equal("origin" in datumPlane, false);
+
+      const axisVec = dsl.axisVector([0, 1, 0]);
+      assert.equal((axisVec as { kind: string }).kind, "axis.vector");
+      const axisDatum = dsl.axisDatum("datum-axis");
+      assert.equal((axisDatum as { kind: string }).kind, "axis.datum");
+      const axisSketch = dsl.axisSketchNormal();
+      assert.equal((axisSketch as { kind: string }).kind, "axis.sketch.normal");
+      const planeDatum = dsl.planeDatum("datum-plane");
+      assert.equal((planeDatum as { kind: string }).kind, "plane.datum");
 
       const datumAxis = dsl.datumAxis("datum-axis", "+X", [0, 0, 0], [
         "dep-1",
@@ -161,6 +184,8 @@ const tests = [
       assert.equal(extrude.kind, "feature.extrude");
       assert.equal(extrude.result, "body:extrude-1");
       assert.equal("deps" in extrude, false);
+      const tagged = dsl.withTags(extrude, ["base-feature"]);
+      assert.deepEqual(tagged.tags, ["base-feature"]);
 
       const revolve = dsl.revolve(
         "revolve-1",
@@ -171,10 +196,24 @@ const tests = [
       assert.equal(revolve.kind, "feature.revolve");
       assert.equal(revolve.result, "body:revolve-1");
 
+      const polyProfile = dsl.profilePoly(6, 4);
+      assert.equal(polyProfile.kind, "profile.poly");
+
+      const loft = dsl.loft("loft-1", [dsl.profileCircle(2), polyProfile]);
+      assert.equal(loft.kind, "feature.loft");
+      assert.equal(loft.result, "body:loft-1");
+
       const hole = dsl.hole("hole-1", selectorFace, "+Z", 5, "throughAll");
       assert.equal(hole.kind, "feature.hole");
       assert.equal(hole.depth, "throughAll");
       assert.equal("pattern" in hole, false);
+
+      const holePatterned = dsl.hole("hole-2", selectorFace, "+Z", 5, 10, {
+        pattern: { kind: "pattern.linear", ref: "pattern-l" },
+        position: [2, 3],
+      });
+      assert.equal(holePatterned.kind, "feature.hole");
+      assert.deepEqual(holePatterned.position, [2, 3]);
 
       const fillet = dsl.fillet("fillet-1", selectorEdge, 1);
       assert.equal(fillet.kind, "feature.fillet");
@@ -190,6 +229,31 @@ const tests = [
       );
       assert.equal(booleanOp.kind, "feature.boolean");
       assert.equal(booleanOp.result, "body:bool-1");
+
+      const pipe = dsl.pipe("pipe-1", "+Z", 100, 40, 30);
+      assert.equal(pipe.kind, "feature.pipe");
+      assert.equal(pipe.axis, "+Z");
+      assert.equal(pipe.result, "body:pipe-1");
+
+      const pathSeg = dsl.pathLine([0, 0, 0], [10, 0, 0]);
+      const path = dsl.pathSegments([pathSeg]);
+      const poly = dsl.pathPolyline([
+        [0, 0, 0],
+        [5, 0, 0],
+      ]);
+      const spline = dsl.pathSpline([
+        [0, 0, 0],
+        [5, 2, 0],
+        [10, 0, 0],
+      ]);
+      assert.equal(poly.kind, "path.polyline");
+      assert.equal(spline.kind, "path.spline");
+      const pipeSweep = dsl.pipeSweep("pipe-sweep-1", path, 40, 30);
+      assert.equal(pipeSweep.kind, "feature.pipeSweep");
+      assert.equal(pipeSweep.result, "body:pipe-sweep-1");
+      const hexSweep = dsl.hexTubeSweep("hex-sweep-1", path, 40, 30);
+      assert.equal(hexSweep.kind, "feature.hexTubeSweep");
+      assert.equal(hexSweep.result, "body:hex-sweep-1");
 
       const patternLinear = dsl.patternLinear(
         "pattern-l",
@@ -209,6 +273,110 @@ const tests = [
     },
   },
   {
+    name: "dsl: generator helpers",
+    fn: async () => {
+      const cubes = dsl.featureArray(
+        { count: [2, 2], spacing: [10, 20], origin: [1, 2, 3] },
+        ({ index, offset }) =>
+          dsl.extrude(
+            `cube-${index}`,
+            dsl.profileRect(4, 4, offset),
+            6,
+            `body:cube-${index}`
+          )
+      );
+      assert.equal(cubes.length, 4);
+      const first = cubes[0];
+      if (!first || first.kind !== "feature.extrude") {
+        throw new Error("Expected extrude on first cube");
+      }
+      const firstProfile = first.profile;
+      if (firstProfile.kind !== "profile.rectangle") {
+        throw new Error("Expected rectangle profile on first cube");
+      }
+      assert.deepEqual(firstProfile.center, [1, 2, 3]);
+      const last = cubes[cubes.length - 1];
+      if (!last || last.kind !== "feature.extrude") {
+        throw new Error("Expected extrude on last cube");
+      }
+      const lastProfile = last.profile;
+      if (lastProfile.kind !== "profile.rectangle") {
+        throw new Error("Expected rectangle profile on last cube");
+      }
+      assert.deepEqual(lastProfile.center, [11, 22, 3]);
+
+      const rects = dsl.sketchArray(
+        { count: [3, 1], spacing: [5, 0], origin: [-5, 0] },
+        ({ index, offset }) =>
+          dsl.sketchRectCenter(`rect-${index}`, offset, 2, 1)
+      );
+      assert.equal(rects.length, 3);
+      const middle = rects[1];
+      if (!middle) {
+        throw new Error("Expected middle rectangle in sketch array");
+      }
+      if (middle.kind !== "sketch.rectangle" || middle.mode !== "center") {
+        throw new Error("Expected center rectangle in sketch array");
+      }
+      assert.deepEqual(middle.center, [0, 0]);
+
+      const circlePoints = dsl.sketchCircularArray(
+        { count: 4, radius: 10, units: "deg" },
+        ({ index, offset }) => dsl.sketchPoint(`p-${index}`, offset)
+      );
+      assert.equal(circlePoints.length, 4);
+      const p0 = circlePoints[0];
+      if (!p0 || p0.kind !== "sketch.point") {
+        throw new Error("Expected sketch point in circular array");
+      }
+      assert.deepEqual(p0.point, [10, 0]);
+      const p2 = circlePoints[2];
+      if (!p2 || p2.kind !== "sketch.point") {
+        throw new Error("Expected sketch point in circular array");
+      }
+      const p2x = p2.point[0];
+      const p2y = p2.point[1];
+      if (typeof p2x !== "number" || typeof p2y !== "number") {
+        throw new Error("Expected numeric sketch point in circular array");
+      }
+      assert.equal(p2x, -10);
+      assert.ok(Math.abs(p2y) < 1e-9);
+
+      const radialPoints = dsl.sketchRadialArray(
+        { count: [4, 2], radiusStep: 5, radiusStart: 5, angleStep: 90, units: "deg" },
+        ({ index, offset }) => dsl.sketchPoint(`r-${index}`, offset)
+      );
+      assert.equal(radialPoints.length, 8);
+      const r0 = radialPoints[0];
+      if (!r0 || r0.kind !== "sketch.point") {
+        throw new Error("Expected sketch point in radial array");
+      }
+      assert.deepEqual(r0.point, [5, 0]);
+      const r7 = radialPoints[7];
+      if (!r7 || r7.kind !== "sketch.point") {
+        throw new Error("Expected sketch point in radial array");
+      }
+      const r7x = r7.point[0];
+      const r7y = r7.point[1];
+      if (typeof r7x !== "number" || typeof r7y !== "number") {
+        throw new Error("Expected numeric sketch point in radial array");
+      }
+      assert.ok(Math.abs(r7x) < 1e-9);
+      assert.equal(r7y, -10);
+
+      const splinePoints = dsl.sketchArrayAlongSpline(
+        { points: [[0, 0], [10, 0], [20, 0]], count: 3, mode: "polyline" },
+        ({ index, offset }) => dsl.sketchPoint(`s-${index}`, offset)
+      );
+      assert.equal(splinePoints.length, 3);
+      const s1 = splinePoints[1];
+      if (!s1 || s1.kind !== "sketch.point") {
+        throw new Error("Expected sketch point in spline array");
+      }
+      assert.deepEqual(s1.point, [10, 0]);
+    },
+  },
+  {
     name: "dsl: sketch helpers + profiles",
     fn: async () => {
       const plane = dsl.selectorFace([dsl.predNormal("+Z")]);
@@ -223,6 +391,17 @@ const tests = [
       assert.equal(sketch.kind, "feature.sketch2d");
       assert.equal(sketch.profiles.length, 1);
       assert.equal(sketch.deps?.length, 1);
+
+      const bundle = dsl.sketchProfileLoop(
+        "sketch-loop",
+        "profile:loop",
+        ["line-a", "line-b"],
+        [dsl.sketchLine("line-a", [0, 0], [1, 0]), dsl.sketchLine("line-b", [1, 0], [0, 0])]
+      );
+      assert.equal(bundle.sketch.kind, "feature.sketch2d");
+      assert.equal(bundle.sketch.profiles[0]?.profile.kind, "profile.sketch");
+      assert.equal(bundle.profile.kind, "profile.ref");
+      assert.equal(bundle.profile.name, "profile:loop");
 
       const line = dsl.sketchLine("line-1", [0, 0], [1, 1]);
       assert.equal(line.kind, "sketch.line");

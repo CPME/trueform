@@ -52,6 +52,24 @@ const tests = [
     },
   },
   {
+    name: "params: unitless values respect document units",
+    fn: async () => {
+      const part = dsl.part("plate", [
+        dsl.extrude("base", dsl.profileRect(2, 3), 10, "body:main"),
+      ]);
+      const normalized = normalizePart(part, undefined, undefined, "cm");
+      const base = normalized.features[0] as ReturnType<typeof dsl.extrude>;
+      const profile = base.profile;
+      assert.equal(profile.kind, "profile.rectangle");
+      if (profile.kind !== "profile.rectangle") {
+        throw new Error("Expected rectangle profile");
+      }
+      assert.equal(profile.width as number, 20);
+      assert.equal(profile.height as number, 30);
+      assert.equal(base.depth, 100);
+    },
+  },
+  {
     name: "params: override values",
     fn: async () => {
       const part = dsl.part(

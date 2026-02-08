@@ -1,5 +1,19 @@
-import { dsl } from "../dsl.js";
+import { exprLiteral, part } from "../dsl/core.js";
 import type { IntentPart } from "../dsl.js";
+import {
+  sketch2d,
+  sketchArc,
+  sketchCircle,
+  sketchEllipse,
+  sketchLine,
+  sketchPoint,
+  sketchPolygon,
+  sketchRectCenter,
+  sketchRectCorner,
+  sketchSlot,
+  sketchSpline,
+} from "../dsl/geometry.js";
+import { sketchArray } from "../dsl/generators.js";
 
 export type SketchFeatureExample = {
   id: string;
@@ -11,38 +25,38 @@ export const sketchFeatureExamples: SketchFeatureExample[] = [
   {
     id: "line",
     title: "Line",
-    part: dsl.part("sketch-line", [
-      dsl.sketch2d("sketch-line", [], {
-        entities: [dsl.sketchLine("line-1", [-40, -20], [40, 20])],
+    part: part("sketch-line", [
+      sketch2d("sketch-line", [], {
+        entities: [sketchLine("line-1", [-40, -20], [40, 20])],
       }),
     ]),
   },
   {
     id: "arc",
     title: "Arc",
-    part: dsl.part("sketch-arc", [
-      dsl.sketch2d("sketch-arc", [], {
-        entities: [dsl.sketchArc("arc-1", [30, 0], [0, 30], [0, 0], "ccw")],
+    part: part("sketch-arc", [
+      sketch2d("sketch-arc", [], {
+        entities: [sketchArc("arc-1", [30, 0], [0, 30], [0, 0], "ccw")],
       }),
     ]),
   },
   {
     id: "circle",
     title: "Circle",
-    part: dsl.part("sketch-circle", [
-      dsl.sketch2d("sketch-circle", [], {
-        entities: [dsl.sketchCircle("circle-1", [0, 0], 22)],
+    part: part("sketch-circle", [
+      sketch2d("sketch-circle", [], {
+        entities: [sketchCircle("circle-1", [0, 0], 22)],
       }),
     ]),
   },
   {
     id: "ellipse",
     title: "Ellipse",
-    part: dsl.part("sketch-ellipse", [
-      dsl.sketch2d("sketch-ellipse", [], {
+    part: part("sketch-ellipse", [
+      sketch2d("sketch-ellipse", [], {
         entities: [
-          dsl.sketchEllipse("ellipse-1", [0, 0], 26, 12, {
-            rotation: dsl.exprLiteral(20, "deg"),
+          sketchEllipse("ellipse-1", [0, 0], 26, 12, {
+            rotation: exprLiteral(20, "deg"),
           }),
         ],
       }),
@@ -51,11 +65,11 @@ export const sketchFeatureExamples: SketchFeatureExample[] = [
   {
     id: "rect-center",
     title: "Rectangle (Center)",
-    part: dsl.part("sketch-rect-center", [
-      dsl.sketch2d("sketch-rect-center", [], {
+    part: part("sketch-rect-center", [
+      sketch2d("sketch-rect-center", [], {
         entities: [
-          dsl.sketchRectCenter("rect-center", [0, 0], 60, 32, {
-            rotation: dsl.exprLiteral(10, "deg"),
+          sketchRectCenter("rect-center", [0, 0], 60, 32, {
+            rotation: exprLiteral(10, "deg"),
           }),
         ],
       }),
@@ -64,11 +78,11 @@ export const sketchFeatureExamples: SketchFeatureExample[] = [
   {
     id: "rect-corner",
     title: "Rectangle (Corner)",
-    part: dsl.part("sketch-rect-corner", [
-      dsl.sketch2d("sketch-rect-corner", [], {
+    part: part("sketch-rect-corner", [
+      sketch2d("sketch-rect-corner", [], {
         entities: [
-          dsl.sketchRectCorner("rect-corner", [-25, -12], 60, 30, {
-            rotation: dsl.exprLiteral(-8, "deg"),
+          sketchRectCorner("rect-corner", [-25, -12], 60, 30, {
+            rotation: exprLiteral(-8, "deg"),
           }),
         ],
       }),
@@ -77,11 +91,11 @@ export const sketchFeatureExamples: SketchFeatureExample[] = [
   {
     id: "slot",
     title: "Slot",
-    part: dsl.part("sketch-slot", [
-      dsl.sketch2d("sketch-slot", [], {
+    part: part("sketch-slot", [
+      sketch2d("sketch-slot", [], {
         entities: [
-          dsl.sketchSlot("slot-1", [0, 0], 70, 16, {
-            rotation: dsl.exprLiteral(12, "deg"),
+          sketchSlot("slot-1", [0, 0], 70, 16, {
+            rotation: exprLiteral(12, "deg"),
           }),
         ],
       }),
@@ -90,19 +104,19 @@ export const sketchFeatureExamples: SketchFeatureExample[] = [
   {
     id: "polygon",
     title: "Polygon",
-    part: dsl.part("sketch-polygon", [
-      dsl.sketch2d("sketch-polygon", [], {
-        entities: [dsl.sketchPolygon("poly-1", [0, 0], 24, 6)],
+    part: part("sketch-polygon", [
+      sketch2d("sketch-polygon", [], {
+        entities: [sketchPolygon("poly-1", [0, 0], 24, 6)],
       }),
     ]),
   },
   {
     id: "spline",
     title: "Spline",
-    part: dsl.part("sketch-spline", [
-      dsl.sketch2d("sketch-spline", [], {
+    part: part("sketch-spline", [
+      sketch2d("sketch-spline", [], {
         entities: [
-          dsl.sketchSpline("spline-1", [
+          sketchSpline("spline-1", [
             [-30, -10],
             [-10, 20],
             [10, 10],
@@ -115,9 +129,22 @@ export const sketchFeatureExamples: SketchFeatureExample[] = [
   {
     id: "point",
     title: "Point",
-    part: dsl.part("sketch-point", [
-      dsl.sketch2d("sketch-point", [], {
-        entities: [dsl.sketchPoint("point-1", [0, 0])],
+    part: part("sketch-point", [
+      sketch2d("sketch-point", [], {
+        entities: [sketchPoint("point-1", [0, 0])],
+      }),
+    ]),
+  },
+  {
+    id: "rect-array",
+    title: "Rectangle Array",
+    part: part("sketch-rect-array", [
+      sketch2d("sketch-rect-array", [], {
+        entities: sketchArray(
+          { count: [3, 2], spacing: [28, 18], origin: [-28, -9] },
+          ({ index, offset }) =>
+            sketchRectCenter(`rect-${index}`, offset, 18, 10)
+        ),
       }),
     ]),
   },

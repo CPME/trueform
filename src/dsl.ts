@@ -1,3 +1,119 @@
+import {
+  context,
+  document,
+  exprAdd,
+  exprDiv,
+  exprLiteral,
+  exprMul,
+  exprNeg,
+  exprParam,
+  exprSub,
+  paramAngle,
+  paramCount,
+  paramLength,
+  part,
+  withTags,
+} from "./dsl/core.js";
+import {
+  assembly,
+  connector as mateConnector,
+  instance as assemblyInstance,
+  mateCoaxial,
+  mateFixed,
+  matePlanar,
+  output as assemblyOutput,
+  ref as assemblyRef,
+  transform,
+} from "./dsl/assembly.js";
+import {
+  axisDatum,
+  axisSketchNormal,
+  axisVector,
+  booleanOp,
+  chamfer,
+  datumAxis,
+  datumFrame,
+  datumPlane,
+  extrude,
+  fillet,
+  hole,
+  loft,
+  pathArc,
+  pathLine,
+  pathPolyline,
+  pathSpline,
+  pathSegments,
+  patternCircular,
+  patternLinear,
+  pipe,
+  pipeSweep,
+  hexTubeSweep,
+  planeDatum,
+  predCreatedBy,
+  predNormal,
+  predPlanar,
+  predRole,
+  profileCircle,
+  profilePoly,
+  profileRect,
+  profileRef,
+  profileSketchLoop,
+  rankClosestTo,
+  rankMaxArea,
+  rankMaxZ,
+  rankMinZ,
+  revolve,
+  selectorEdge,
+  selectorFace,
+  selectorNamed,
+  selectorSolid,
+  sketch2d,
+  sketchArc,
+  sketchCircle,
+  sketchEllipse,
+  sketchLine,
+  sketchPoint,
+  sketchPolygon,
+  sketchProfileLoop,
+  sketchRectCenter,
+  sketchRectCorner,
+  sketchSlot,
+  sketchSpline,
+} from "./dsl/geometry.js";
+import {
+  featureArray,
+  sketchArray,
+  featureCircularArray,
+  sketchCircularArray,
+  featureRadialArray,
+  sketchRadialArray,
+  featureArrayAlongSpline,
+  sketchArrayAlongSpline,
+} from "./dsl/generators.js";
+import type {
+  FeatureArrayItem,
+  FeatureArrayLayout,
+  CircularArrayItem2D,
+  CircularArrayItem3D,
+  CircularArrayLayout2D,
+  CircularArrayLayout3D,
+  RadialArrayItem2D,
+  RadialArrayItem3D,
+  RadialArrayLayout2D,
+  RadialArrayLayout3D,
+  SplineArrayItem2D,
+  SplineArrayItem3D,
+  SplineArrayLayout2D,
+  SplineArrayLayout3D,
+  SketchArrayItem,
+  SketchArrayLayout,
+} from "./dsl/generators.js";
+import {
+  refFrame,
+  refSurface,
+  surfaceProfileConstraint,
+} from "./dsl/tolerancing.js";
+
 export type ID = string;
 
 export type LengthUnit = "mm" | "cm" | "m" | "in";
@@ -17,6 +133,14 @@ export type Expr =
 
 export type Scalar = number | Expr;
 export type Point2D = [Scalar, Scalar];
+export type Point3D = [Scalar, Scalar, Scalar];
+
+export type AxisSpec =
+  | AxisDirection
+  | { kind: "axis.vector"; direction: Point3D }
+  | { kind: "axis.datum"; ref: ID };
+
+export type ExtrudeAxis = AxisSpec | { kind: "axis.sketch.normal" };
 
 export type ParamDef = {
   id: ID;
@@ -41,7 +165,7 @@ export type IntentDocument = {
   parts: IntentPart[];
   assemblies?: IntentAssembly[];
   capabilities?: Record<string, unknown>;
-  constraints?: unknown[];
+  constraints?: FTIConstraint[];
   assertions?: unknown[];
   context: BuildContext;
 };
@@ -50,7 +174,8 @@ export type IntentPart = {
   id: ID;
   features: IntentFeature[];
   params?: ParamDef[];
-  constraints?: unknown[];
+  connectors?: MateConnector[];
+  constraints?: FTIConstraint[];
   assertions?: unknown[];
 };
 
@@ -70,6 +195,7 @@ export type AssemblyInstance = {
 
 export type Transform = {
   translation?: [number, number, number];
+  // Rotation in degrees, applied in X/Y/Z order.
   rotation?: [number, number, number];
   // 4x4 column-major matrix, length 16 when provided.
   matrix?: number[];
@@ -77,7 +203,7 @@ export type Transform = {
 
 export type AssemblyRef = {
   instance: ID;
-  selector: Selector;
+  connector: ID;
 };
 
 export type AssemblyMate =
@@ -90,6 +216,13 @@ export type AssemblyOutput = {
   refs: AssemblyRef[];
 };
 
+export type MateConnector = {
+  id: ID;
+  origin: Selector;
+  normal?: AxisDirection;
+  xAxis?: AxisDirection;
+};
+
 export type IntentFeature =
   | DatumPlane
   | DatumAxis
@@ -97,6 +230,10 @@ export type IntentFeature =
   | Sketch2D
   | Extrude
   | Revolve
+  | Loft
+  | Pipe
+  | PipeSweep
+  | HexTubeSweep
   | Hole
   | Fillet
   | Chamfer
@@ -108,17 +245,19 @@ export type FeatureBase = {
   id: ID;
   kind: string;
   deps?: ID[];
+  tags?: string[];
 };
 
 export type DatumPlane = FeatureBase & {
   kind: "datum.plane";
-  normal: AxisDirection;
+  normal: AxisSpec;
   origin?: [number, number, number];
+  xAxis?: AxisSpec;
 };
 
 export type DatumAxis = FeatureBase & {
   kind: "datum.axis";
-  direction: AxisDirection;
+  direction: AxisSpec;
   origin?: [number, number, number];
 };
 
@@ -129,7 +268,7 @@ export type DatumFrame = FeatureBase & {
 
 export type Sketch2D = FeatureBase & {
   kind: "feature.sketch2d";
-  plane?: Selector;
+  plane?: PlaneRef;
   origin?: [number, number, number];
   entities?: SketchEntity[];
   profiles: SketchProfile[];
@@ -138,6 +277,11 @@ export type Sketch2D = FeatureBase & {
 export type SketchProfile = {
   name: string;
   profile: Profile;
+};
+
+export type SketchProfileBundle = {
+  sketch: Sketch2D;
+  profile: ProfileRef;
 };
 
 export type SketchEntityBase = {
@@ -232,11 +376,27 @@ export type SketchEntity =
   | SketchSpline
   | SketchPoint;
 
+export type PathSegment =
+  | { kind: "path.line"; start: Point3D; end: Point3D }
+  | {
+      kind: "path.arc";
+      start: Point3D;
+      end: Point3D;
+      center: Point3D;
+      direction?: "cw" | "ccw";
+    };
+
+export type Path3D =
+  | { kind: "path.polyline"; points: Point3D[]; closed?: boolean }
+  | { kind: "path.spline"; points: Point3D[]; closed?: boolean; degree?: Scalar }
+  | { kind: "path.segments"; segments: PathSegment[] };
+
 export type Extrude = FeatureBase & {
   kind: "feature.extrude";
   profile: ProfileRef;
   depth: Scalar | "throughAll";
   result: string;
+  axis?: ExtrudeAxis;
 };
 
 export type Revolve = FeatureBase & {
@@ -248,6 +408,38 @@ export type Revolve = FeatureBase & {
   result: string;
 };
 
+export type Loft = FeatureBase & {
+  kind: "feature.loft";
+  profiles: ProfileRef[];
+  result: string;
+};
+
+export type Pipe = FeatureBase & {
+  kind: "feature.pipe";
+  axis: AxisDirection;
+  origin?: Point3D;
+  length: Scalar;
+  outerDiameter: Scalar;
+  innerDiameter?: Scalar;
+  result: string;
+};
+
+export type PipeSweep = FeatureBase & {
+  kind: "feature.pipeSweep";
+  path: Path3D;
+  outerDiameter: Scalar;
+  innerDiameter?: Scalar;
+  result: string;
+};
+
+export type HexTubeSweep = FeatureBase & {
+  kind: "feature.hexTubeSweep";
+  path: Path3D;
+  outerAcrossFlats: Scalar;
+  innerAcrossFlats?: Scalar;
+  result: string;
+};
+
 export type Hole = FeatureBase & {
   kind: "feature.hole";
   onFace: Selector;
@@ -255,6 +447,7 @@ export type Hole = FeatureBase & {
   diameter: Scalar;
   depth: Scalar | "throughAll";
   pattern?: PatternRef;
+  position?: Point2D;
 };
 
 export type Fillet = FeatureBase & {
@@ -300,12 +493,25 @@ export type Profile =
       kind: "profile.rectangle";
       width: Scalar;
       height: Scalar;
-      center?: [number, number, number];
+      center?: Point3D;
     }
   | {
       kind: "profile.circle";
       radius: Scalar;
-      center?: [number, number, number];
+      center?: Point3D;
+    }
+  | {
+      kind: "profile.poly";
+      sides: Scalar;
+      radius: Scalar;
+      center?: Point3D;
+      rotation?: Scalar;
+    }
+  | {
+      kind: "profile.sketch";
+      loop: ID[];
+      holes?: ID[][];
+      open?: boolean;
     };
 
 export type ProfileRef =
@@ -316,6 +522,32 @@ export type ProfileRef =
     };
 
 export type Selector = FaceQuery | EdgeQuery | SolidQuery | NamedOutput;
+
+export type GeometryRef = RefSurface | RefFrame;
+
+export type RefSurface = {
+  kind: "ref.surface";
+  selector: Selector;
+};
+
+export type RefFrame = {
+  kind: "ref.frame";
+  selector: Selector;
+};
+
+export type SurfaceProfileConstraint = {
+  id: ID;
+  kind: "constraint.surfaceProfile";
+  target: RefSurface;
+  tolerance: Scalar;
+  referenceFrame?: RefFrame;
+  capabilities?: ID[];
+  requirement?: ID;
+};
+
+export type FTIConstraint = SurfaceProfileConstraint;
+
+export type PlaneRef = Selector | { kind: "plane.datum"; ref: ID };
 
 export type FaceQuery = {
   kind: "selector.face";
@@ -384,10 +616,13 @@ export type DslHelpers = {
     features: IntentFeature[],
     opts?: {
       params?: ParamDef[];
+      connectors?: MateConnector[];
       constraints?: IntentPart["constraints"];
       assertions?: IntentPart["assertions"];
     }
   ) => IntentPart;
+  /** Attach semantic tags to a feature. */
+  withTags: <T extends IntentFeature>(feature: T, tags: string[]) => T;
   /** Define a length parameter. */
   paramLength: (id: ID, value: Expr) => ParamDef;
   /** Define an angle parameter. */
@@ -421,10 +656,10 @@ export type DslHelpers = {
     transform?: Transform,
     tags?: string[]
   ) => AssemblyInstance;
-  /** Build a transform (translation, rotation, or matrix). */
+  /** Build a transform matrix (rotation in degrees, applied X/Y/Z). */
   transform: (opts?: Transform) => Transform;
-  /** Reference geometry in an assembly instance. */
-  assemblyRef: (instance: ID, selector: Selector) => AssemblyRef;
+  /** Reference a mate connector in an assembly instance. */
+  assemblyRef: (instance: ID, connector: ID) => AssemblyRef;
   /** Create a fixed mate between two assembly refs. */
   mateFixed: (a: AssemblyRef, b: AssemblyRef) => AssemblyMate;
   /** Create a coaxial mate between two assembly refs. */
@@ -433,12 +668,19 @@ export type DslHelpers = {
   matePlanar: (a: AssemblyRef, b: AssemblyRef, offset?: number) => AssemblyMate;
   /** Create a named assembly output. */
   assemblyOutput: (name: string, refs: AssemblyRef[]) => AssemblyOutput;
+  /** Create a mate connector from a selector. */
+  mateConnector: (
+    id: ID,
+    origin: Selector,
+    opts?: { normal?: AxisDirection; xAxis?: AxisDirection }
+  ) => MateConnector;
   /** Create a datum plane. */
   datumPlane: (
     id: ID,
     normal: DatumPlane["normal"],
     origin?: DatumPlane["origin"],
-    deps?: ID[]
+    deps?: ID[],
+    opts?: { xAxis?: DatumPlane["xAxis"] }
   ) => DatumPlane;
   /** Create a datum axis. */
   datumAxis: (
@@ -454,7 +696,7 @@ export type DslHelpers = {
     id: ID,
     profiles: SketchProfile[],
     opts?: {
-      plane?: Selector;
+      plane?: PlaneRef;
       origin?: [number, number, number];
       deps?: ID[];
       entities?: SketchEntity[];
@@ -535,13 +777,54 @@ export type DslHelpers = {
     point: Point2D,
     opts?: { construction?: boolean }
   ) => SketchPoint;
+  /** Generate a 2D grid of sketch entities or sketch profiles. */
+  sketchArray: <T extends SketchEntity | SketchProfile>(
+    layout: SketchArrayLayout,
+    make: (item: SketchArrayItem) => T | T[]
+  ) => T[];
+  /** Generate a 2D grid of features (constant Z from origin). */
+  featureArray: <T extends IntentFeature>(
+    layout: FeatureArrayLayout,
+    make: (item: FeatureArrayItem) => T | T[]
+  ) => T[];
+  /** Generate a circular array of sketch entities or sketch profiles. */
+  sketchCircularArray: <T extends SketchEntity | SketchProfile>(
+    layout: CircularArrayLayout2D,
+    make: (item: CircularArrayItem2D) => T | T[]
+  ) => T[];
+  /** Generate a circular array of features (constant Z from center). */
+  featureCircularArray: <T extends IntentFeature>(
+    layout: CircularArrayLayout3D,
+    make: (item: CircularArrayItem3D) => T | T[]
+  ) => T[];
+  /** Generate a radial array (angle + radius grid) of sketch entities or sketch profiles. */
+  sketchRadialArray: <T extends SketchEntity | SketchProfile>(
+    layout: RadialArrayLayout2D,
+    make: (item: RadialArrayItem2D) => T | T[]
+  ) => T[];
+  /** Generate a radial array (angle + radius grid) of features (constant Z from center). */
+  featureRadialArray: <T extends IntentFeature>(
+    layout: RadialArrayLayout3D,
+    make: (item: RadialArrayItem3D) => T | T[]
+  ) => T[];
+  /** Generate an array along a spline/polyline for sketch entities or profiles. */
+  sketchArrayAlongSpline: <T extends SketchEntity | SketchProfile>(
+    layout: SplineArrayLayout2D,
+    make: (item: SplineArrayItem2D) => T | T[]
+  ) => T[];
+  /** Generate an array along a spline/polyline for features. */
+  featureArrayAlongSpline: <T extends IntentFeature>(
+    layout: SplineArrayLayout3D,
+    make: (item: SplineArrayItem3D) => T | T[]
+  ) => T[];
   /** Extrude a profile into a solid or cut. */
   extrude: (
     id: ID,
     profile: ProfileRef,
     depth: Extrude["depth"],
     result?: string,
-    deps?: ID[]
+    deps?: ID[],
+    opts?: { axis?: ExtrudeAxis }
   ) => Extrude;
   /** Revolve a profile around an axis. */
   revolve: (
@@ -552,6 +835,23 @@ export type DslHelpers = {
     result?: string,
     opts?: { origin?: [number, number, number]; deps?: ID[] }
   ) => Revolve;
+  /** Loft between two profiles (solid for closed profiles, surface for open). */
+  loft: (
+    id: ID,
+    profiles: ProfileRef[],
+    result?: string,
+    deps?: ID[]
+  ) => Loft;
+  /** Create a straight pipe along an axis. */
+  pipe: (
+    id: ID,
+    axis: AxisDirection,
+    length: Scalar,
+    outerDiameter: Scalar,
+    innerDiameter?: Scalar,
+    result?: string,
+    opts?: { origin?: Point3D; deps?: ID[] }
+  ) => Pipe;
   /** Create a hole feature on a face with axis and depth. */
   hole: (
     id: ID,
@@ -559,7 +859,7 @@ export type DslHelpers = {
     axis: Hole["axis"],
     diameter: number,
     depth: Hole["depth"],
-    opts?: { pattern?: PatternRef; deps?: ID[] }
+    opts?: { pattern?: PatternRef; position?: Point2D; deps?: ID[] }
   ) => Hole;
   /** Apply a constant-radius fillet to selected edges. */
   fillet: (id: ID, edges: Selector, radius: number, deps?: ID[]) => Fillet;
@@ -594,10 +894,36 @@ export type DslHelpers = {
   profileRect: (
     width: Scalar,
     height: Scalar,
-    center?: [number, number, number]
+    center?: Point3D
   ) => Profile;
   /** Create a circle profile. */
-  profileCircle: (radius: Scalar, center?: [number, number, number]) => Profile;
+  profileCircle: (radius: Scalar, center?: Point3D) => Profile;
+  /** Create a regular polygon profile. */
+  profilePoly: (
+    sides: Scalar,
+    radius: Scalar,
+    center?: Point3D,
+    rotation?: Scalar
+  ) => Profile;
+  /** Create a profile from ordered sketch entity ids. */
+  profileSketchLoop: (
+    loop: ID[],
+    opts?: { holes?: ID[][]; open?: boolean }
+  ) => Profile;
+  /** Create a sketch + profileRef bundle for ordered sketch entity ids. */
+  sketchProfileLoop: (
+    sketchId: ID,
+    profileName: string,
+    loop: ID[],
+    entities: SketchEntity[],
+    opts?: {
+      plane?: Selector;
+      origin?: [number, number, number];
+      deps?: ID[];
+      holes?: ID[][];
+      open?: boolean;
+    }
+  ) => SketchProfileBundle;
   /** Reference a named profile from a sketch. */
   profileRef: (name: string) => ProfileRef;
   /** Create a face selector. */
@@ -608,6 +934,10 @@ export type DslHelpers = {
   selectorSolid: (predicates: Predicate[], rank?: RankRule[]) => SolidQuery;
   /** Reference a named output selector. */
   selectorNamed: (name: string) => NamedOutput;
+  /** Create a surface geometry reference for tolerancing. */
+  refSurface: (selector: Selector) => RefSurface;
+  /** Create a frame geometry reference for tolerancing. */
+  refFrame: (selector: Selector) => RefFrame;
   /** Predicate for face/edge normal. */
   predNormal: (value: AxisDirection) => Predicate;
   /** Predicate for planar faces. */
@@ -624,319 +954,68 @@ export type DslHelpers = {
   rankMaxZ: () => RankRule;
   /** Ranking rule by distance to a target selector. */
   rankClosestTo: (target: Selector) => RankRule;
+  /** Create an axis from a 3D direction vector. */
+  axisVector: (direction: Point3D) => AxisSpec;
+  /** Reference a datum axis for an axis spec. */
+  axisDatum: (ref: ID) => AxisSpec;
+  /** Use the sketch profile normal for extrude axis. */
+  axisSketchNormal: () => ExtrudeAxis;
+  /** Reference a datum plane for sketch placement. */
+  planeDatum: (ref: ID) => PlaneRef;
+  /** Create a polyline path. */
+  pathPolyline: (points: Point3D[], opts?: { closed?: boolean }) => Path3D;
+  /** Create a spline path from 3D points. */
+  pathSpline: (
+    points: Point3D[],
+    opts?: { closed?: boolean; degree?: Scalar }
+  ) => Path3D;
+  /** Create a path from explicit segments. */
+  pathSegments: (segments: PathSegment[]) => Path3D;
+  /** Create a line segment for a path. */
+  pathLine: (start: Point3D, end: Point3D) => PathSegment;
+  /** Create an arc segment for a path. */
+  pathArc: (
+    start: Point3D,
+    end: Point3D,
+    center: Point3D,
+    direction?: "cw" | "ccw"
+  ) => PathSegment;
+  /** Create a surface profile constraint. */
+  surfaceProfileConstraint: (
+    id: ID,
+    target: RefSurface,
+    tolerance: Scalar,
+    opts?: {
+      referenceFrame?: RefFrame;
+      capabilities?: ID[];
+      requirement?: ID;
+    }
+  ) => SurfaceProfileConstraint;
+  /** Sweep a hollow circular profile along a 3D path. */
+  pipeSweep: (
+    id: ID,
+    path: Path3D,
+    outerDiameter: Scalar,
+    innerDiameter?: Scalar,
+    result?: string,
+    opts?: { deps?: ID[] }
+  ) => PipeSweep;
+  /** Sweep a hollow hexagonal profile along a 3D path (across-flats dimensions). */
+  hexTubeSweep: (
+    id: ID,
+    path: Path3D,
+    outerAcrossFlats: Scalar,
+    innerAcrossFlats?: Scalar,
+    result?: string,
+    opts?: { deps?: ID[] }
+  ) => HexTubeSweep;
 };
-
-function compact<T extends Record<string, unknown>>(value: T): T {
-  const result: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    if (entry !== undefined) result[key] = entry;
-  }
-  return result as T;
-}
 
 export const dsl: DslHelpers = {
-  context: (overrides = {}) => ({
-    units: overrides.units ?? "mm",
-    kernel: {
-      name: overrides.kernel?.name ?? "opencascade.js",
-      version: overrides.kernel?.version ?? "unknown",
-    },
-    tolerance: {
-      linear: overrides.tolerance?.linear ?? 0.01,
-      angular: overrides.tolerance?.angular ?? 0.001,
-    },
-  }),
-  document: (id, parts, context, assemblies, opts) =>
-    compact({
-      id,
-      parts,
-      assemblies,
-      context: context ?? dsl.context(),
-      capabilities: opts?.capabilities,
-      constraints: opts?.constraints,
-      assertions: opts?.assertions,
-    }),
-  part: (id, features, opts) =>
-    compact({
-      id,
-      features,
-      params: opts?.params,
-      constraints: opts?.constraints,
-      assertions: opts?.assertions,
-    }),
-  paramLength: (id, value) => ({ id, type: "length", value }),
-  paramAngle: (id, value) => ({ id, type: "angle", value }),
-  paramCount: (id, value) => ({ id, type: "count", value }),
-  exprLiteral: (value, unit) => (unit ? { kind: "expr.literal", value, unit } : { kind: "expr.literal", value }),
-  exprParam: (id) => ({ kind: "expr.param", id }),
-  exprAdd: (left, right) => ({ kind: "expr.binary", op: "+", left, right }),
-  exprSub: (left, right) => ({ kind: "expr.binary", op: "-", left, right }),
-  exprMul: (left, right) => ({ kind: "expr.binary", op: "*", left, right }),
-  exprDiv: (left, right) => ({ kind: "expr.binary", op: "/", left, right }),
-  exprNeg: (value) => ({ kind: "expr.neg", value }),
-  assembly: (id, instances, opts) => ({
-    id,
-    instances,
-    mates: opts?.mates,
-    outputs: opts?.outputs,
-  }),
-  assemblyInstance: (id, part, transform, tags) => ({
-    id,
-    part,
-    transform,
-    tags,
-  }),
-  transform: (opts = {}) => ({
-    translation: opts.translation,
-    rotation: opts.rotation,
-    matrix: opts.matrix,
-  }),
-  assemblyRef: (instance, selector) => ({ instance, selector }),
-  mateFixed: (a, b) => ({ kind: "mate.fixed", a, b }),
-  mateCoaxial: (a, b) => ({ kind: "mate.coaxial", a, b }),
-  matePlanar: (a, b, offset) => ({ kind: "mate.planar", a, b, offset }),
-  assemblyOutput: (name, refs) => ({ name, refs }),
-  datumPlane: (id, normal, origin, deps) =>
-    compact({
-      id,
-      kind: "datum.plane",
-      normal,
-      origin,
-      deps,
-    }),
-  datumAxis: (id, direction, origin, deps) =>
-    compact({
-      id,
-      kind: "datum.axis",
-      direction,
-      origin,
-      deps,
-    }),
-  datumFrame: (id, on, deps) => compact({ id, kind: "datum.frame", on, deps }),
-  sketch2d: (id, profiles, opts) =>
-    compact({
-      id,
-      kind: "feature.sketch2d",
-      profiles,
-      plane: opts?.plane,
-      origin: opts?.origin,
-      deps: opts?.deps,
-      entities: opts?.entities,
-    }),
-  sketchLine: (id, start, end, opts) =>
-    compact({
-      id,
-      kind: "sketch.line",
-      start,
-      end,
-      construction: opts?.construction,
-    }),
-  sketchArc: (id, start, end, center, direction, opts) =>
-    compact({
-      id,
-      kind: "sketch.arc",
-      start,
-      end,
-      center,
-      direction,
-      construction: opts?.construction,
-    }),
-  sketchCircle: (id, center, radius, opts) =>
-    compact({
-      id,
-      kind: "sketch.circle",
-      center,
-      radius,
-      construction: opts?.construction,
-    }),
-  sketchEllipse: (id, center, radiusX, radiusY, opts) =>
-    compact({
-      id,
-      kind: "sketch.ellipse",
-      center,
-      radiusX,
-      radiusY,
-      rotation: opts?.rotation,
-      construction: opts?.construction,
-    }),
-  sketchRectCenter: (id, center, width, height, opts) =>
-    compact({
-      id,
-      kind: "sketch.rectangle",
-      mode: "center",
-      center,
-      width,
-      height,
-      rotation: opts?.rotation,
-      construction: opts?.construction,
-    }),
-  sketchRectCorner: (id, corner, width, height, opts) =>
-    compact({
-      id,
-      kind: "sketch.rectangle",
-      mode: "corner",
-      corner,
-      width,
-      height,
-      rotation: opts?.rotation,
-      construction: opts?.construction,
-    }),
-  sketchSlot: (id, center, length, width, opts) =>
-    compact({
-      id,
-      kind: "sketch.slot",
-      center,
-      length,
-      width,
-      rotation: opts?.rotation,
-      endStyle: opts?.endStyle,
-      construction: opts?.construction,
-    }),
-  sketchPolygon: (id, center, radius, sides, opts) =>
-    compact({
-      id,
-      kind: "sketch.polygon",
-      center,
-      radius,
-      sides,
-      rotation: opts?.rotation,
-      construction: opts?.construction,
-    }),
-  sketchSpline: (id, points, opts) =>
-    compact({
-      id,
-      kind: "sketch.spline",
-      points,
-      closed: opts?.closed,
-      degree: opts?.degree,
-      construction: opts?.construction,
-    }),
-  sketchPoint: (id, point, opts) =>
-    compact({
-      id,
-      kind: "sketch.point",
-      point,
-      construction: opts?.construction,
-    }),
-  extrude: (id, profile, depth, result, deps) =>
-    compact({
-      id,
-      kind: "feature.extrude",
-      profile,
-      depth,
-      result: result ?? `body:${id}`,
-      deps,
-    }),
-  revolve: (id, profile, axis, angle, result, opts) =>
-    compact({
-      id,
-      kind: "feature.revolve",
-      profile,
-      axis,
-      angle,
-      origin: opts?.origin,
-      result: result ?? `body:${id}`,
-      deps: opts?.deps,
-    }),
-  hole: (id, onFace, axis, diameter, depth, opts) =>
-    compact({
-      id,
-      kind: "feature.hole",
-      onFace,
-      axis,
-      diameter,
-      depth,
-      pattern: opts?.pattern,
-      deps: opts?.deps,
-    }),
-  fillet: (id, edges, radius, deps) =>
-    compact({
-      id,
-      kind: "feature.fillet",
-      edges,
-      radius,
-      deps,
-    }),
-  chamfer: (id, edges, distance, deps) =>
-    compact({
-      id,
-      kind: "feature.chamfer",
-      edges,
-      distance,
-      deps,
-    }),
-  booleanOp: (id, op, left, right, result, deps) =>
-    compact({
-      id,
-      kind: "feature.boolean",
-      op,
-      left,
-      right,
-      result: result ?? `body:${id}`,
-      deps,
-    }),
-  patternLinear: (id, origin, spacing, count, deps) =>
-    compact({
-      id,
-      kind: "pattern.linear",
-      origin,
-      spacing,
-      count,
-      deps,
-    }),
-  patternCircular: (id, origin, axis, count, deps) =>
-    compact({
-      id,
-      kind: "pattern.circular",
-      origin,
-      axis,
-      count,
-      deps,
-    }),
-  profileRect: (width, height, center) =>
-    compact({
-      kind: "profile.rectangle",
-      width,
-      height,
-      center,
-    }),
-  profileCircle: (radius, center) =>
-    compact({
-      kind: "profile.circle",
-      radius,
-      center,
-    }),
-  profileRef: (name) => ({ kind: "profile.ref", name }),
-  selectorFace: (predicates, rank = []) => ({
-    kind: "selector.face",
-    predicates,
-    rank,
-  }),
-  selectorEdge: (predicates, rank = []) => ({
-    kind: "selector.edge",
-    predicates,
-    rank,
-  }),
-  selectorSolid: (predicates, rank = []) => ({
-    kind: "selector.solid",
-    predicates,
-    rank,
-  }),
-  selectorNamed: (name) => ({ kind: "selector.named", name }),
-  predNormal: (value) => ({ kind: "pred.normal", value }),
-  predPlanar: () => ({ kind: "pred.planar" }),
-  predCreatedBy: (featureId) => ({ kind: "pred.createdBy", featureId }),
-  predRole: (value) => ({ kind: "pred.role", value }),
-  rankMaxArea: () => ({ kind: "rank.maxArea" }),
-  rankMinZ: () => ({ kind: "rank.minZ" }),
-  rankMaxZ: () => ({ kind: "rank.maxZ" }),
-  rankClosestTo: (target) => ({ kind: "rank.closestTo", target }),
-};
-
-export const {
   context,
   document,
   part,
+  withTags,
   paramLength,
   paramAngle,
   paramCount,
@@ -955,6 +1034,7 @@ export const {
   mateCoaxial,
   matePlanar,
   assemblyOutput,
+  mateConnector,
   datumPlane,
   datumAxis,
   datumFrame,
@@ -969,8 +1049,20 @@ export const {
   sketchPolygon,
   sketchSpline,
   sketchPoint,
+  sketchArray,
+  featureArray,
+  sketchCircularArray,
+  featureCircularArray,
+  sketchRadialArray,
+  featureRadialArray,
+  sketchArrayAlongSpline,
+  featureArrayAlongSpline,
   extrude,
   revolve,
+  loft,
+  pipe,
+  pipeSweep,
+  hexTubeSweep,
   hole,
   fillet,
   chamfer,
@@ -979,11 +1071,16 @@ export const {
   patternCircular,
   profileRect,
   profileCircle,
+  profilePoly,
+  profileSketchLoop,
+  sketchProfileLoop,
   profileRef,
   selectorFace,
   selectorEdge,
   selectorSolid,
   selectorNamed,
+  refSurface,
+  refFrame,
   predNormal,
   predPlanar,
   predCreatedBy,
@@ -992,4 +1089,125 @@ export const {
   rankMinZ,
   rankMaxZ,
   rankClosestTo,
-} = dsl;
+  axisVector,
+  axisDatum,
+  axisSketchNormal,
+  planeDatum,
+  pathPolyline,
+  pathSpline,
+  pathSegments,
+  pathLine,
+  pathArc,
+  surfaceProfileConstraint,
+};
+
+export type {
+  ArrayOrder,
+  ArrayDirection,
+  CircularArrayItem2D,
+  CircularArrayItem3D,
+  CircularArrayLayout2D,
+  CircularArrayLayout3D,
+  FeatureArrayItem,
+  FeatureArrayLayout,
+  RadialArrayItem2D,
+  RadialArrayItem3D,
+  RadialArrayLayout2D,
+  RadialArrayLayout3D,
+  SketchArrayItem,
+  SketchArrayLayout,
+  SplineArrayItem2D,
+  SplineArrayItem3D,
+  SplineArrayLayout2D,
+  SplineArrayLayout3D,
+} from "./dsl/generators.js";
+
+export {
+  context,
+  document,
+  part,
+  withTags,
+  paramLength,
+  paramAngle,
+  paramCount,
+  exprLiteral,
+  exprParam,
+  exprAdd,
+  exprSub,
+  exprMul,
+  exprDiv,
+  exprNeg,
+  assembly,
+  assemblyInstance,
+  transform,
+  assemblyRef,
+  mateFixed,
+  mateCoaxial,
+  matePlanar,
+  assemblyOutput,
+  mateConnector,
+  datumPlane,
+  datumAxis,
+  datumFrame,
+  sketch2d,
+  sketchLine,
+  sketchArc,
+  sketchCircle,
+  sketchEllipse,
+  sketchRectCenter,
+  sketchRectCorner,
+  sketchSlot,
+  sketchPolygon,
+  sketchSpline,
+  sketchPoint,
+  sketchArray,
+  featureArray,
+  sketchCircularArray,
+  featureCircularArray,
+  sketchRadialArray,
+  featureRadialArray,
+  sketchArrayAlongSpline,
+  featureArrayAlongSpline,
+  extrude,
+  revolve,
+  loft,
+  pipe,
+  pipeSweep,
+  hexTubeSweep,
+  hole,
+  fillet,
+  chamfer,
+  booleanOp,
+  patternLinear,
+  patternCircular,
+  profileRect,
+  profileCircle,
+  profilePoly,
+  profileSketchLoop,
+  sketchProfileLoop,
+  profileRef,
+  selectorFace,
+  selectorEdge,
+  selectorSolid,
+  selectorNamed,
+  refSurface,
+  refFrame,
+  predNormal,
+  predPlanar,
+  predCreatedBy,
+  predRole,
+  rankMaxArea,
+  rankMinZ,
+  rankMaxZ,
+  rankClosestTo,
+  axisVector,
+  axisDatum,
+  axisSketchNormal,
+  planeDatum,
+  pathPolyline,
+  pathSpline,
+  pathSegments,
+  pathLine,
+  pathArc,
+  surfaceProfileConstraint,
+};

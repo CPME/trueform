@@ -27,6 +27,9 @@ export class MockBackend implements Backend {
         return this.emitSketch(feature as Sketch2D);
       case "feature.extrude":
       case "feature.revolve":
+      case "feature.pipeSweep":
+      case "feature.hexTubeSweep":
+      case "feature.loft":
         return this.emitSolid(feature);
       case "feature.hole":
         return this.emitHole(feature, input.resolve, input.upstream);
@@ -35,14 +38,22 @@ export class MockBackend implements Backend {
       case "feature.boolean":
       case "pattern.linear":
       case "pattern.circular":
-        return this.emitGeneric(feature);
+        return this.emitPatternOrGeneric(feature);
       default:
-        return this.emitGeneric(feature);
+        return this.emitPatternOrGeneric(feature);
     }
   }
 
   mesh(_target: KernelObject, _opts?: MeshOptions): MeshData {
     return { positions: [], indices: [] };
+  }
+
+  exportStep(_target: KernelObject): Uint8Array {
+    return new Uint8Array();
+  }
+
+  exportStl(_target: KernelObject): Uint8Array {
+    return new Uint8Array();
   }
 
   private emitDatum(feature: IntentFeature): KernelResult {
@@ -58,8 +69,14 @@ export class MockBackend implements Backend {
       "result" in feature && typeof (feature as { result?: string }).result === "string"
         ? (feature as { result: string }).result
         : `body:${feature.id}`;
+    const ownerKey = resultName;
     const selections = [
-      this.makeSelection("solid", { createdBy: feature.id, role: "body" }),
+      this.makeSelection("solid", {
+        createdBy: feature.id,
+        role: "body",
+        ownerKey,
+        center: [0, 0, 3],
+      }),
       this.makeSelection("face", {
         createdBy: feature.id,
         role: "top",
@@ -67,6 +84,8 @@ export class MockBackend implements Backend {
         normal: "+Z",
         area: 100,
         centerZ: 6,
+        center: [0, 0, 6],
+        ownerKey,
       }),
       this.makeSelection("face", {
         createdBy: feature.id,
@@ -75,6 +94,8 @@ export class MockBackend implements Backend {
         normal: "-Z",
         area: 100,
         centerZ: 0,
+        center: [0, 0, 0],
+        ownerKey,
       }),
     ];
 
@@ -99,6 +120,12 @@ export class MockBackend implements Backend {
     upstream: KernelResult
   ): KernelResult {
     const target = resolve((feature as { onFace: Selector }).onFace, upstream);
+    const ownerKey =
+      typeof target.meta["ownerKey"] === "string" ? (target.meta["ownerKey"] as string) : undefined;
+    const center =
+      Array.isArray(target.meta["center"]) && target.meta["center"]?.length === 3
+        ? (target.meta["center"] as [number, number, number])
+        : [0, 0, 0];
     const selections = [
       this.makeSelection("face", {
         createdBy: feature.id,
@@ -107,12 +134,20 @@ export class MockBackend implements Backend {
         normal: target.meta["normal"],
         area: 10,
         centerZ: target.meta["centerZ"],
+        center,
+        ownerKey,
       }),
     ];
     return { outputs: new Map(), selections };
   }
 
-  private emitGeneric(feature: IntentFeature): KernelResult {
+  private emitPatternOrGeneric(feature: IntentFeature): KernelResult {
+    if (feature.kind === "pattern.linear" || feature.kind === "pattern.circular") {
+      return {
+        outputs: new Map([[`pattern:${feature.id}`, this.makeObj("pattern")]]),
+        selections: [],
+      };
+    }
     return {
       outputs: new Map([[`feat:${feature.id}`, this.makeObj("unknown")]]),
       selections: [],
@@ -120,7 +155,7 @@ export class MockBackend implements Backend {
   }
 
   private makeObj(
-    kind: "solid" | "face" | "edge" | "datum" | "profile" | "unknown",
+    kind: "solid" | "face" | "edge" | "datum" | "pattern" | "profile" | "unknown",
     id?: string,
     meta: Record<string, unknown> = {}
   ) {

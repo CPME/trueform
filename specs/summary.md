@@ -20,11 +20,11 @@ Non-promises:
 - IR-only source of truth (no kernel history stored)
 - JSON-serializable builders
 - PartIR only; `AssemblyIR` is data-only (compile warns)
-- Features: `Sketch2D`, `profile.rect/circle`, `Extrude`, `Revolve`
+- Features: `Sketch2D` (line/arc/circle/ellipse/rect/slot/polygon/spline/point), `profile.rect/circle/poly/sketch`, `Extrude`, `Revolve`, `Loft`, `Pipe`, `PipeSweep`, `HexTubeSweep`, `Hole` (linear/circular pattern layouts), `Fillet`, `Chamfer`, `Boolean`
 - Primary output: `body:main` (single-body v1)
 - Runtime target: Node + OpenCascade.js
 - Mesh export only via the viewer tool (no public export API yet)
-- Unsupported features must throw explicit errors in the OCJS backend
+- Unsupported features (e.g., shell/draft/rib, full feature/body patterns) must throw explicit errors in the OCJS backend
 
 ## What Problem It Solves
 
@@ -81,7 +81,7 @@ const part = dsl.part("plate", [
 
 ## Where To Look Next
 
-- Technical spec (IR, pipeline, backend boundary): `aidocs/spec.md`
-- Functional tolerancing intent: `aidocs/functional-tolerancing-intent.md`
-- Backend interface pointer: `aidocs/backend-interface.md`
-- Roadmap abstractions (future ideas): `aidocs/geometric-abstractions.md`
+- Technical spec (IR, pipeline, backend boundary): `specs/spec.md`
+- Functional tolerancing intent: `specs/functional-tolerancing-intent.md`
+- Backend interface pointer: `specs/backend-interface.md`
+- Roadmap abstractions (future ideas): `specs/geometric-abstractions.md`

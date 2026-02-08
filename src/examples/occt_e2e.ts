@@ -1,5 +1,6 @@
 import initOpenCascade from "opencascade.js/dist/node.js";
-import { dsl } from "../dsl.js";
+import { part } from "../dsl/core.js";
+import { extrude, profileRect } from "../dsl/geometry.js";
 import { OcctBackend } from "../backend_occt.js";
 import { buildPart } from "../executor.js";
 
@@ -7,11 +8,11 @@ try {
   const occt = await initOpenCascade();
   const backend = new OcctBackend({ occt });
 
-  const part = dsl.part("plate", [
-    dsl.extrude("base-extrude", dsl.profileRect(80, 40), 8, "body:main"),
+  const plate = part("plate", [
+    extrude("base-extrude", profileRect(80, 40), 8, "body:main"),
   ]);
 
-  const result = buildPart(part, backend);
+  const result = buildPart(plate, backend);
   const body = result.final.outputs.get("body:main");
   if (!body) {
     throw new Error("Missing body:main output");

@@ -56,7 +56,7 @@ export function resolveSelectorSet(
     throw new CompileError("selector_empty", "Selector matched 0 candidates");
   }
 
-  const ranked = applyRanking(candidates, selector.rank);
+  const ranked = applyRanking(candidates, selector.rank, ctx);
   if (ranked.length === 0) {
     throw new CompileError(
       "selector_empty_after_rank",
@@ -89,19 +89,39 @@ function predicateMatches(predicate: Predicate, selection: Selection): boolean {
   }
 }
 
-function applyRanking(candidates: Selection[], rank: RankRule[]): Selection[] {
+function applyRanking(
+  candidates: Selection[],
+  rank: RankRule[],
+  ctx: ResolutionContext
+): Selection[] {
   if (rank.length === 0) return candidates;
-  validateRankingMetadata(candidates, rank);
+  validateRankingMetadata(candidates, rank, ctx);
   let current = candidates.slice();
   for (const rule of rank) {
-    current = rankOnce(current, rule);
+    current = rankOnce(current, rule, ctx);
     if (current.length === 1) return current;
   }
   return current;
 }
 
-function rankOnce(candidates: Selection[], rule: RankRule): Selection[] {
+function rankOnce(
+  candidates: Selection[],
+  rule: RankRule,
+  ctx: ResolutionContext
+): Selection[] {
   if (candidates.length <= 1) return candidates;
+  if (rule.kind === "rank.closestTo") {
+    const target = resolveSelector(rule.target, ctx);
+    const targetCenter = selectionCenter(target);
+    const scored = candidates.map((c) => ({
+      c,
+      score: -distance(selectionCenter(c), targetCenter),
+    }));
+    scored.sort((a, b) => b.score - a.score);
+    const best = scored[0];
+    if (!best) return [];
+    return scored.filter((s) => s.score === best.score).map((s) => s.c);
+  }
   const scored = candidates.map((c) => ({ c, score: scoreForRule(c, rule) }));
   scored.sort((a, b) => b.score - a.score);
   const best = scored[0];
@@ -117,15 +137,25 @@ function scoreForRule(selection: Selection, rule: RankRule): number {
       return -requireNumber(selection, "centerZ");
     case "rank.maxZ":
       return requireNumber(selection, "centerZ");
-    case "rank.closestTo":
-      return -requireNumber(selection, "distanceTo");
     default:
       return 0;
   }
 }
 
-function validateRankingMetadata(candidates: Selection[], rank: RankRule[]) {
+function validateRankingMetadata(
+  candidates: Selection[],
+  rank: RankRule[],
+  ctx: ResolutionContext
+): void {
   for (const rule of rank) {
+    if (rule.kind === "rank.closestTo") {
+      const target = resolveSelector(rule.target, ctx);
+      selectionCenter(target);
+      for (const candidate of candidates) {
+        selectionCenter(candidate);
+      }
+      continue;
+    }
     for (const candidate of candidates) {
       void scoreForRule(candidate, rule);
     }
@@ -163,6 +193,31 @@ function requireBool(selection: Selection, key: string): boolean {
     );
   }
   return value;
+}
+
+function selectionCenter(selection: Selection): [number, number, number] {
+  const value = selection.meta["center"];
+  if (
+    !Array.isArray(value) ||
+    value.length !== 3 ||
+    value.some((entry) => typeof entry !== "number")
+  ) {
+    throw new CompileError(
+      "selector_meta_missing",
+      "Selector requires center metadata"
+    );
+  }
+  return value as [number, number, number];
+}
+
+function distance(
+  a: [number, number, number],
+  b: [number, number, number]
+): number {
+  const dx = a[0] - b[0];
+  const dy = a[1] - b[1];
+  const dz = a[2] - b[2];
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
 export function normalizeSelector(selector: Selector): Selector {

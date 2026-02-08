@@ -1,14 +1,20 @@
 import {
   CompileResult,
+  AxisSpec,
+  ExtrudeAxis,
   IntentDocument,
   IntentFeature,
   IntentPart,
+  Path3D,
+  PathSegment,
   Point2D,
+  Point3D,
   Profile,
   ProfileRef,
   SketchEntity,
   Scalar,
   Selector,
+  Units,
 } from "./dsl.js";
 import { buildDependencyGraph, topoSortDeterministic } from "./graph.js";
 import { buildParamContext, normalizeScalar, ParamOverrides } from "./params.js";
@@ -30,24 +36,26 @@ export function compileDocument(
   if (shouldValidate(options)) validateDocument(doc);
   warnPlaceholders(doc);
   return doc.parts.map((part) =>
-    compilePart(part, overrides?.[part.id], options)
+    compilePart(part, overrides?.[part.id], options, doc.context?.units)
   );
 }
 
 export function compilePart(
   part: IntentPart,
   overrides?: ParamOverrides,
-  options?: ValidationOptions
+  options?: ValidationOptions,
+  units?: Units
 ): CompileResult {
-  const normalized = normalizePart(part, overrides, options);
+  const normalized = normalizePart(part, overrides, options, units);
   return compileNormalizedPart(normalized);
 }
 
 export function compilePartWithHashes(
   part: IntentPart,
-  options?: ValidationOptions
+  options?: ValidationOptions,
+  units?: Units
 ): CompiledPart {
-  const normalized = normalizePart(part, undefined, options);
+  const normalized = normalizePart(part, undefined, options, units);
   const graph = buildDependencyGraph({ ...normalized, features: normalized.features });
   const order = topoSortDeterministic(normalized.features, graph);
   const hashes = new Map<string, string>();
@@ -61,7 +69,8 @@ export function compilePartWithHashes(
 export function normalizePart(
   part: IntentPart,
   overrides?: ParamOverrides,
-  options?: ValidationOptions
+  options?: ValidationOptions,
+  units?: Units
 ): IntentPart {
   if (shouldValidate(options)) validatePart(part);
   if (part.constraints && part.constraints.length > 0) {
@@ -74,9 +83,13 @@ export function normalizePart(
       `TrueForm: Part assertions are a data-only placeholder in v1; assertions are not evaluated (part ${part.id}).`
     );
   }
-  const ctx = buildParamContext(part.params, overrides);
+  const ctx = buildParamContext(part.params, overrides, units ?? "mm");
   const features = part.features.map((feature) => normalizeFeature(feature, ctx));
-  return { ...part, features };
+  const connectors = part.connectors?.map((connector) => ({
+    ...connector,
+    origin: normalizeSelector(connector.origin),
+  }));
+  return { ...part, features, connectors };
 }
 
 export function compileNormalizedPart(part: IntentPart): CompileResult {
@@ -117,6 +130,21 @@ function normalizeFeature(
   }
 
   switch (clone.kind) {
+    case "datum.plane":
+      clone.normal = normalizeAxisSpec(clone.normal, ctx);
+      if (clone.origin !== undefined) {
+        clone.origin = normalizePoint3(clone.origin, ctx);
+      }
+      if (clone.xAxis !== undefined) {
+        clone.xAxis = normalizeAxisSpec(clone.xAxis, ctx);
+      }
+      break;
+    case "datum.axis":
+      clone.direction = normalizeAxisSpec(clone.direction, ctx);
+      if (clone.origin !== undefined) {
+        clone.origin = normalizePoint3(clone.origin, ctx);
+      }
+      break;
     case "feature.sketch2d":
       clone.profiles = clone.profiles.map((entry) => ({
         ...entry,
@@ -125,18 +153,56 @@ function normalizeFeature(
       if (clone.entities) {
         clone.entities = clone.entities.map((entity) => normalizeSketchEntity(entity, ctx));
       }
+      if (clone.origin !== undefined) {
+        clone.origin = normalizePoint3(clone.origin, ctx);
+      }
       break;
     case "feature.extrude":
       clone.profile = normalizeProfileRef(clone.profile, ctx);
       clone.depth = normalizeDepth(clone.depth, ctx);
+      if (clone.axis !== undefined) {
+        clone.axis = normalizeExtrudeAxis(clone.axis, ctx);
+      }
       break;
     case "feature.revolve":
       clone.profile = normalizeProfileRef(clone.profile, ctx);
       clone.angle = normalizeAngle(clone.angle, ctx);
       break;
+    case "feature.loft":
+      clone.profiles = clone.profiles.map((profile: ProfileRef) =>
+        normalizeProfileRef(profile, ctx)
+      );
+      break;
+    case "feature.pipe":
+      clone.length = normalizeScalar(clone.length, "length", ctx);
+      clone.outerDiameter = normalizeScalar(clone.outerDiameter, "length", ctx);
+      if (clone.innerDiameter !== undefined) {
+        clone.innerDiameter = normalizeScalar(clone.innerDiameter, "length", ctx);
+      }
+      if (clone.origin !== undefined) {
+        clone.origin = normalizePoint3(clone.origin, ctx);
+      }
+      break;
+    case "feature.pipeSweep":
+      clone.path = normalizePath3D(clone.path, ctx);
+      clone.outerDiameter = normalizeScalar(clone.outerDiameter, "length", ctx);
+      if (clone.innerDiameter !== undefined) {
+        clone.innerDiameter = normalizeScalar(clone.innerDiameter, "length", ctx);
+      }
+      break;
+    case "feature.hexTubeSweep":
+      clone.path = normalizePath3D(clone.path, ctx);
+      clone.outerAcrossFlats = normalizeScalar(clone.outerAcrossFlats, "length", ctx);
+      if (clone.innerAcrossFlats !== undefined) {
+        clone.innerAcrossFlats = normalizeScalar(clone.innerAcrossFlats, "length", ctx);
+      }
+      break;
     case "feature.hole":
       clone.diameter = normalizeScalar(clone.diameter, "length", ctx);
       clone.depth = normalizeDepth(clone.depth, ctx);
+      if (clone.position !== undefined) {
+        clone.position = normalizePoint2(clone.position, ctx);
+      }
       break;
     case "feature.fillet":
       clone.radius = normalizeScalar(clone.radius, "length", ctx);
@@ -171,11 +237,37 @@ function normalizeProfile(profile: Profile, ctx: ReturnType<typeof buildParamCon
         ...profile,
         width: normalizeScalar(profile.width, "length", ctx),
         height: normalizeScalar(profile.height, "length", ctx),
+        center:
+          profile.center !== undefined
+            ? normalizePoint3(profile.center, ctx)
+            : profile.center,
       };
     case "profile.circle":
       return {
         ...profile,
         radius: normalizeScalar(profile.radius, "length", ctx),
+        center:
+          profile.center !== undefined
+            ? normalizePoint3(profile.center, ctx)
+            : profile.center,
+      };
+    case "profile.poly":
+      return {
+        ...profile,
+        sides: normalizeScalar(profile.sides, "count", ctx),
+        radius: normalizeScalar(profile.radius, "length", ctx),
+        center:
+          profile.center !== undefined
+            ? normalizePoint3(profile.center, ctx)
+            : profile.center,
+        rotation:
+          profile.rotation !== undefined
+            ? normalizeScalar(profile.rotation, "angle", ctx)
+            : profile.rotation,
+      };
+    case "profile.sketch":
+      return {
+        ...profile,
       };
   }
 }
@@ -188,6 +280,84 @@ function normalizePoint2(
     normalizeScalar(point[0], "length", ctx),
     normalizeScalar(point[1], "length", ctx),
   ];
+}
+
+function normalizePoint3(
+  point: Point3D,
+  ctx: ReturnType<typeof buildParamContext>
+): [number, number, number] {
+  return [
+    normalizeScalar(point[0], "length", ctx),
+    normalizeScalar(point[1], "length", ctx),
+    normalizeScalar(point[2], "length", ctx),
+  ];
+}
+
+function normalizeAxisSpec(
+  axis: AxisSpec,
+  ctx: ReturnType<typeof buildParamContext>
+): AxisSpec {
+  if (typeof axis === "string") return axis;
+  if (axis.kind === "axis.vector") {
+    return { ...axis, direction: normalizePoint3(axis.direction, ctx) };
+  }
+  return axis;
+}
+
+function normalizeExtrudeAxis(
+  axis: ExtrudeAxis,
+  ctx: ReturnType<typeof buildParamContext>
+): ExtrudeAxis {
+  if (typeof axis === "object" && axis.kind === "axis.sketch.normal") return axis;
+  return normalizeAxisSpec(axis as AxisSpec, ctx);
+}
+
+function normalizePath3D(
+  path: Path3D,
+  ctx: ReturnType<typeof buildParamContext>
+): Path3D {
+  if (path.kind === "path.polyline") {
+    return {
+      ...path,
+      points: path.points.map((point) => normalizePoint3(point, ctx)),
+    };
+  }
+  if (path.kind === "path.spline") {
+    return {
+      ...path,
+      points: path.points.map((point) => normalizePoint3(point, ctx)),
+      degree:
+        path.degree === undefined
+          ? undefined
+          : normalizeScalar(path.degree, "count", ctx),
+    };
+  }
+  return {
+    ...path,
+    segments: path.segments.map((segment) => normalizePathSegment(segment, ctx)),
+  };
+}
+
+function normalizePathSegment(
+  segment: PathSegment,
+  ctx: ReturnType<typeof buildParamContext>
+): PathSegment {
+  switch (segment.kind) {
+    case "path.line":
+      return {
+        ...segment,
+        start: normalizePoint3(segment.start, ctx),
+        end: normalizePoint3(segment.end, ctx),
+      };
+    case "path.arc":
+      return {
+        ...segment,
+        start: normalizePoint3(segment.start, ctx),
+        end: normalizePoint3(segment.end, ctx),
+        center: normalizePoint3(segment.center, ctx),
+      };
+  }
+  return segment;
 }
 
 function normalizeSketchEntity(
@@ -330,5 +500,12 @@ function warnPlaceholders(doc: IntentDocument) {
 }
 
 function isSelector(value: unknown): value is Selector {
-  return Boolean(value) && typeof value === "object" && "kind" in (value as object);
+  if (!value || typeof value !== "object") return false;
+  const kind = (value as { kind?: string }).kind;
+  return (
+    kind === "selector.face" ||
+    kind === "selector.edge" ||
+    kind === "selector.solid" ||
+    kind === "selector.named"
+  );
 }
