@@ -220,10 +220,14 @@ function svgFromEdges(edgePositions, axisA, axisB) {
   let d = "";
 
   for (let i = 0; i + 5 < edgePositions.length; i += 6) {
-    const ax = edgePositions[i + ia];
-    const ay = -edgePositions[i + ib];
-    const bx = edgePositions[i + 3 + ia];
-    const by = -edgePositions[i + 3 + ib];
+    const ax = Number(edgePositions[i + ia]);
+    const ay = -Number(edgePositions[i + ib]);
+    const bx = Number(edgePositions[i + 3 + ia]);
+    const by = -Number(edgePositions[i + 3 + ib]);
+
+    if (![ax, ay, bx, by].every((value) => Number.isFinite(value))) {
+      continue;
+    }
 
     if (ax < minX) minX = ax;
     if (ay < minY) minY = ay;

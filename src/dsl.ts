@@ -110,8 +110,18 @@ import type {
   SketchArrayLayout,
 } from "./dsl/generators.js";
 import {
+  datumFeature,
+  datumRef,
+  flatnessConstraint,
+  parallelismConstraint,
+  perpendicularityConstraint,
+  positionConstraint,
+  refAxis,
+  refEdge,
   refFrame,
+  refPoint,
   refSurface,
+  sizeConstraint,
   surfaceProfileConstraint,
 } from "./dsl/tolerancing.js";
 
@@ -177,6 +187,7 @@ export type IntentPart = {
   features: IntentFeature[];
   params?: ParamDef[];
   connectors?: MateConnector[];
+  datums?: FTIDatum[];
   constraints?: FTIConstraint[];
   assertions?: unknown[];
 };
@@ -545,7 +556,7 @@ export type ProfileRef =
 
 export type Selector = FaceQuery | EdgeQuery | SolidQuery | NamedOutput;
 
-export type GeometryRef = RefSurface | RefFrame;
+export type GeometryRef = RefSurface | RefFrame | RefEdge | RefAxis | RefPoint;
 
 export type RefSurface = {
   kind: "ref.surface";
@@ -555,6 +566,48 @@ export type RefSurface = {
 export type RefFrame = {
   kind: "ref.frame";
   selector: Selector;
+};
+
+export type RefEdge = {
+  kind: "ref.edge";
+  selector: Selector;
+};
+
+export type RefAxis = {
+  kind: "ref.axis";
+  selector: Selector;
+};
+
+export type RefPoint = {
+  kind: "ref.point";
+  selector: Selector;
+};
+
+export type DatumModifier = "MMB" | "LMB" | "RMB";
+
+export type ToleranceModifier =
+  | "MMC"
+  | "LMC"
+  | "RFS"
+  | "PROJECTED"
+  | "FREE_STATE"
+  | "TANGENT_PLANE"
+  | "STATISTICAL";
+
+export type DatumRef = {
+  kind: "datum.ref";
+  datum: ID;
+  modifiers?: DatumModifier[];
+};
+
+export type FTIDatum = {
+  id: ID;
+  kind: "datum.feature";
+  label: string;
+  target: GeometryRef;
+  modifiers?: DatumModifier[];
+  capabilities?: ID[];
+  requirement?: ID;
 };
 
 export type SurfaceProfileConstraint = {
@@ -567,7 +620,69 @@ export type SurfaceProfileConstraint = {
   requirement?: ID;
 };
 
-export type FTIConstraint = SurfaceProfileConstraint;
+export type FlatnessConstraint = {
+  id: ID;
+  kind: "constraint.flatness";
+  target: RefSurface;
+  tolerance: Scalar;
+  capabilities?: ID[];
+  requirement?: ID;
+};
+
+export type ParallelismConstraint = {
+  id: ID;
+  kind: "constraint.parallelism";
+  target: RefSurface;
+  tolerance: Scalar;
+  datum: DatumRef[];
+  modifiers?: ToleranceModifier[];
+  capabilities?: ID[];
+  requirement?: ID;
+};
+
+export type PerpendicularityConstraint = {
+  id: ID;
+  kind: "constraint.perpendicularity";
+  target: RefSurface;
+  tolerance: Scalar;
+  datum: DatumRef[];
+  modifiers?: ToleranceModifier[];
+  capabilities?: ID[];
+  requirement?: ID;
+};
+
+export type PositionConstraint = {
+  id: ID;
+  kind: "constraint.position";
+  target: GeometryRef;
+  tolerance: Scalar;
+  datum: DatumRef[];
+  modifiers?: ToleranceModifier[];
+  capabilities?: ID[];
+  requirement?: ID;
+  zone?: "diameter" | "cartesian";
+};
+
+export type SizeConstraint = {
+  id: ID;
+  kind: "constraint.size";
+  target: GeometryRef;
+  nominal?: Scalar;
+  tolerance?: Scalar;
+  min?: Scalar;
+  max?: Scalar;
+  modifiers?: ToleranceModifier[];
+  capabilities?: ID[];
+  requirement?: ID;
+};
+
+export type FTIConstraint =
+  | SurfaceProfileConstraint
+  | FlatnessConstraint
+  | ParallelismConstraint
+  | PerpendicularityConstraint
+  | PositionConstraint
+  | SizeConstraint;
 
 export type PlaneRef = Selector | { kind: "plane.datum"; ref: ID };
 
@@ -639,6 +754,7 @@ export type DslHelpers = {
     opts?: {
       params?: ParamDef[];
       connectors?: MateConnector[];
+      datums?: IntentPart["datums"];
       constraints?: IntentPart["constraints"];
       assertions?: IntentPart["assertions"];
     }
@@ -1026,6 +1142,71 @@ export type DslHelpers = {
       requirement?: ID;
     }
   ) => SurfaceProfileConstraint;
+  /** Create a datum feature for PMI. */
+  datumFeature: (
+    id: ID,
+    label: string,
+    target: GeometryRef,
+    opts?: { modifiers?: DatumModifier[]; capabilities?: ID[]; requirement?: ID }
+  ) => FTIDatum;
+  /** Reference a datum by id (with optional modifiers). */
+  datumRef: (datum: ID, modifiers?: DatumModifier[]) => DatumRef;
+  /** Create an axis geometry reference. */
+  refAxis: (selector: Selector) => RefAxis;
+  /** Create an edge geometry reference. */
+  refEdge: (selector: Selector) => RefEdge;
+  /** Create a point geometry reference. */
+  refPoint: (selector: Selector) => RefPoint;
+  /** Create a flatness constraint. */
+  flatnessConstraint: (
+    id: ID,
+    target: RefSurface,
+    tolerance: Scalar,
+    opts?: { capabilities?: ID[]; requirement?: ID }
+  ) => FlatnessConstraint;
+  /** Create a parallelism constraint. */
+  parallelismConstraint: (
+    id: ID,
+    target: RefSurface,
+    tolerance: Scalar,
+    datum: DatumRef[],
+    opts?: { modifiers?: ToleranceModifier[]; capabilities?: ID[]; requirement?: ID }
+  ) => ParallelismConstraint;
+  /** Create a perpendicularity constraint. */
+  perpendicularityConstraint: (
+    id: ID,
+    target: RefSurface,
+    tolerance: Scalar,
+    datum: DatumRef[],
+    opts?: { modifiers?: ToleranceModifier[]; capabilities?: ID[]; requirement?: ID }
+  ) => PerpendicularityConstraint;
+  /** Create a position constraint. */
+  positionConstraint: (
+    id: ID,
+    target: GeometryRef,
+    tolerance: Scalar,
+    datum: DatumRef[],
+    opts?: {
+      modifiers?: ToleranceModifier[];
+      capabilities?: ID[];
+      requirement?: ID;
+      zone?: PositionConstraint["zone"];
+    }
+  ) => PositionConstraint;
+  /** Create a size constraint. */
+  sizeConstraint: (
+    id: ID,
+    target: GeometryRef,
+    opts: {
+      nominal?: Scalar;
+      tolerance?: Scalar;
+      min?: Scalar;
+      max?: Scalar;
+      modifiers?: ToleranceModifier[];
+      capabilities?: ID[];
+      requirement?: ID;
+    }
+  ) => SizeConstraint;
   /** Sweep a hollow circular profile along a 3D path. */
   pipeSweep: (
     id: ID,
@@ -1115,6 +1296,9 @@ export const dsl: DslHelpers = {
   selectorEdge,
   selectorSolid,
   selectorNamed,
+  refAxis,
+  refEdge,
+  refPoint,
   refSurface,
   refFrame,
   predNormal,
@@ -1135,6 +1319,13 @@ export const dsl: DslHelpers = {
   pathLine,
   pathArc,
   surfaceProfileConstraint,
+  datumFeature,
+  datumRef,
+  flatnessConstraint,
+  parallelismConstraint,
+  perpendicularityConstraint,
+  positionConstraint,
+  sizeConstraint,
 };
 
 export type {
@@ -1226,6 +1417,9 @@ export {
   selectorEdge,
   selectorSolid,
   selectorNamed,
+  refAxis,
+  refEdge,
+  refPoint,
   refSurface,
   refFrame,
   predNormal,
@@ -1246,4 +1440,11 @@ export {
   pathLine,
   pathArc,
   surfaceProfileConstraint,
+  datumFeature,
+  datumRef,
+  flatnessConstraint,
+  parallelismConstraint,
+  perpendicularityConstraint,
+  positionConstraint,
+  sizeConstraint,
 };

@@ -1,7 +1,201 @@
 {
   "schema": "trueform.pmi.v1",
   "partId": "example-tolerancing",
+  "datums": [
+    {
+      "id": "datum-A",
+      "kind": "datum.feature",
+      "label": "A",
+      "target": {
+        "kind": "ref.surface",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [
+            {
+              "kind": "pred.planar"
+            },
+            {
+              "kind": "pred.normal",
+              "value": "-Z"
+            }
+          ],
+          "rank": [
+            {
+              "kind": "rank.minZ"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "datum-B",
+      "kind": "datum.feature",
+      "label": "B",
+      "target": {
+        "kind": "ref.surface",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [
+            {
+              "kind": "pred.planar"
+            },
+            {
+              "kind": "pred.normal",
+              "value": "+X"
+            }
+          ],
+          "rank": []
+        }
+      }
+    }
+  ],
   "constraints": [
+    {
+      "id": "flat-top",
+      "kind": "constraint.flatness",
+      "target": {
+        "kind": "ref.surface",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [
+            {
+              "kind": "pred.planar"
+            },
+            {
+              "kind": "pred.normal",
+              "value": "+Z"
+            }
+          ],
+          "rank": [
+            {
+              "kind": "rank.maxZ"
+            }
+          ]
+        }
+      },
+      "tolerance": 0.05,
+      "requirement": "req-flat-top"
+    },
+    {
+      "id": "parallel-top",
+      "kind": "constraint.parallelism",
+      "target": {
+        "kind": "ref.surface",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [
+            {
+              "kind": "pred.planar"
+            },
+            {
+              "kind": "pred.normal",
+              "value": "+Z"
+            }
+          ],
+          "rank": [
+            {
+              "kind": "rank.maxZ"
+            }
+          ]
+        }
+      },
+      "tolerance": 0.08,
+      "datum": [
+        {
+          "kind": "datum.ref",
+          "datum": "datum-A"
+        }
+      ]
+    },
+    {
+      "id": "perp-side",
+      "kind": "constraint.perpendicularity",
+      "target": {
+        "kind": "ref.surface",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [
+            {
+              "kind": "pred.planar"
+            },
+            {
+              "kind": "pred.normal",
+              "value": "+X"
+            }
+          ],
+          "rank": []
+        }
+      },
+      "tolerance": 0.1,
+      "datum": [
+        {
+          "kind": "datum.ref",
+          "datum": "datum-A"
+        }
+      ]
+    },
+    {
+      "id": "pos-hole",
+      "kind": "constraint.position",
+      "target": {
+        "kind": "ref.axis",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [
+            {
+              "kind": "pred.createdBy",
+              "featureId": "hole-1"
+            }
+          ],
+          "rank": [
+            {
+              "kind": "rank.maxArea"
+            }
+          ]
+        }
+      },
+      "tolerance": 0.2,
+      "datum": [
+        {
+          "kind": "datum.ref",
+          "datum": "datum-A"
+        },
+        {
+          "kind": "datum.ref",
+          "datum": "datum-B"
+        }
+      ],
+      "modifiers": [
+        "MMC"
+      ],
+      "zone": "diameter"
+    },
+    {
+      "id": "size-hole",
+      "kind": "constraint.size",
+      "target": {
+        "kind": "ref.axis",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [
+            {
+              "kind": "pred.createdBy",
+              "featureId": "hole-1"
+            }
+          ],
+          "rank": [
+            {
+              "kind": "rank.maxArea"
+            }
+          ]
+        }
+      },
+      "nominal": 10,
+      "tolerance": 0.1,
+      "modifiers": [
+        "MMC"
+      ]
+    },
     {
       "id": "profile-top",
       "kind": "constraint.surfaceProfile",
@@ -25,7 +219,7 @@
           ]
         }
       },
-      "tolerance": 0.05,
+      "tolerance": 0.03,
       "referenceFrame": {
         "kind": "ref.frame",
         "selector": {
@@ -49,33 +243,7 @@
       "capabilities": [
         "mill-3axis"
       ],
-      "requirement": "req-flatness-top"
-    },
-    {
-      "id": "profile-bottom",
-      "kind": "constraint.surfaceProfile",
-      "target": {
-        "kind": "ref.surface",
-        "selector": {
-          "kind": "selector.face",
-          "predicates": [
-            {
-              "kind": "pred.planar"
-            },
-            {
-              "kind": "pred.normal",
-              "value": "-Z"
-            }
-          ],
-          "rank": [
-            {
-              "kind": "rank.minZ"
-            }
-          ]
-        }
-      },
-      "tolerance": 0.1,
-      "requirement": "req-flatness-bottom"
+      "requirement": "req-profile-top"
     }
   ]
 }

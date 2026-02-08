@@ -51,6 +51,7 @@ export const part = (
   opts?: {
     params?: ParamDef[];
     connectors?: MateConnector[];
+    datums?: IntentPart["datums"];
     constraints?: IntentPart["constraints"];
     assertions?: IntentPart["assertions"];
   }
@@ -60,6 +61,7 @@ export const part = (
     features,
     params: opts?.params,
     connectors: opts?.connectors,
+    datums: opts?.datums,
     constraints: opts?.constraints,
     assertions: opts?.assertions,
   });

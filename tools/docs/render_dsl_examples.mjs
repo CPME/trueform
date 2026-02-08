@@ -42,7 +42,9 @@ try {
       image: `/examples/dsl/${filename}`,
     });
 
-    if (example.part.constraints && example.part.constraints.length > 0) {
+    const hasDatums = example.part.datums && example.part.datums.length > 0;
+    const hasConstraints = example.part.constraints && example.part.constraints.length > 0;
+    if (hasDatums || hasConstraints) {
       const payload = buildPmiPayload(example.part);
       const pmiPath = path.join(pmiDir, `${example.id}.pmi.json`);
       await fs.writeFile(pmiPath, JSON.stringify(payload, null, 2));

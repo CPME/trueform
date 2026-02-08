@@ -15,12 +15,25 @@ import {
   profileRect,
   rankMinZ,
   rankMaxZ,
+  rankMaxArea,
   revolve,
   selectorEdge,
   selectorFace,
   selectorNamed,
 } from "../dsl/geometry.js";
-import { refFrame, refSurface, surfaceProfileConstraint } from "../dsl/tolerancing.js";
+import {
+  datumFeature,
+  datumRef,
+  flatnessConstraint,
+  parallelismConstraint,
+  perpendicularityConstraint,
+  positionConstraint,
+  refAxis,
+  refFrame,
+  refSurface,
+  sizeConstraint,
+  surfaceProfileConstraint,
+} from "../dsl/tolerancing.js";
 import {
   featureArray,
   featureArrayAlongSpline,
@@ -219,40 +232,60 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         12,
         "body:main"
       );
-      const topFace = selectorFace(
-        [predPlanar(), predNormal("+Z")],
-        [rankMaxZ()]
+      const topFace = selectorFace([predPlanar(), predNormal("+Z")], [rankMaxZ()]);
+      const bottomFace = selectorFace([predPlanar(), predNormal("-Z")], [rankMinZ()]);
+      const sideFace = selectorFace([predPlanar(), predNormal("+X")]);
+
+      const holeTool = hole(
+        "hole-1",
+        topFace,
+        "-Z",
+        10,
+        "throughAll",
+        { deps: ["base"] }
       );
-      const bottomFace = selectorFace(
-        [predPlanar(), predNormal("-Z")],
-        [rankMinZ()]
-      );
-      return part(
-        "example-tolerancing",
-        [base],
-        {
-          constraints: [
-            surfaceProfileConstraint(
-              "profile-top",
-              refSurface(topFace),
-              0.05,
-              {
-                referenceFrame: refFrame(topFace),
-                requirement: "req-flatness-top",
-                capabilities: ["mill-3axis"],
-              }
-            ),
-            surfaceProfileConstraint(
-              "profile-bottom",
-              refSurface(bottomFace),
-              0.1,
-              {
-                requirement: "req-flatness-bottom",
-              }
-            ),
-          ],
-        }
-      );
+      const holeFace = selectorFace([predCreatedBy("hole-1")], [rankMaxArea()]);
+
+      return part("example-tolerancing", [base, holeTool], {
+        datums: [
+          datumFeature("datum-A", "A", refSurface(bottomFace)),
+          datumFeature("datum-B", "B", refSurface(sideFace)),
+        ],
+        constraints: [
+          flatnessConstraint("flat-top", refSurface(topFace), 0.05, {
+            requirement: "req-flat-top",
+          }),
+          parallelismConstraint(
+            "parallel-top",
+            refSurface(topFace),
+            0.08,
+            [datumRef("datum-A")]
+          ),
+          perpendicularityConstraint(
+            "perp-side",
+            refSurface(sideFace),
+            0.1,
+            [datumRef("datum-A")]
+          ),
+          positionConstraint(
+            "pos-hole",
+            refAxis(holeFace),
+            0.2,
+            [datumRef("datum-A"), datumRef("datum-B")],
+            { zone: "diameter", modifiers: ["MMC"] }
+          ),
+          sizeConstraint("size-hole", refAxis(holeFace), {
+            nominal: 10,
+            tolerance: 0.1,
+            modifiers: ["MMC"],
+          }),
+          surfaceProfileConstraint("profile-top", refSurface(topFace), 0.03, {
+            referenceFrame: refFrame(topFace),
+            requirement: "req-profile-top",
+            capabilities: ["mill-3axis"],
+          }),
+        ],
+      });
     })(),
   },
   {

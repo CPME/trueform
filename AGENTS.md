@@ -1,6 +1,18 @@
 ## Performance
 Make sure this is practical for use in a webapp (can it compile to opencascade.js, and then wasm, without footguns). Avoid choices that block complex assemblies or responsive rotation later.
 
+## Webapp Footguns (avoid these)
+
+- Do not leak B-Rep objects to the browser. Keep OCCT shapes in the backend and stream meshes.
+- Do not require synchronous backend calls for long operations. Plan for async build/mesh/export.
+- Do not assume stable face/edge IDs. Use selectors + datums and re-resolve each rebuild.
+- Do not rely on OCCT features that are missing or diverge in occt.js unless you provide a fallback or explicit error.
+- Do not mesh at export quality for interactive view. Use mesh profiles and progressive refinement.
+- Do not regenerate meshes or recompute booleans when inputs are unchanged. Cache per-feature and per-part by build context.
+- Do not duplicate geometry for repeated parts. Use instance transforms.
+- Do not block the main thread for meshing or selection resolution in the webapp. Use workers where possible.
+- Do not make selector semantics backend-specific. Keep deterministic, cross-backend selector rules.
+
 ## Docs Pointers
 
 - Viewer helper (export/run/mesh schema): `tools/viewer/README.md`
@@ -22,3 +34,34 @@ Run all tests (build + e2e):
 cd /home/eveber/code/trueform
 npm test
 ```
+
+## Agent Guide (E2E Feature Workflow)
+
+Use this when adding a new feature end-to-end to avoid digging:
+
+1. Update the DSL surface
+   - Types: `src/dsl.ts` (feature types + intent union).
+   - Helpers: `src/dsl/geometry.ts` (builder function + options).
+
+2. Compiler + validation
+   - Normalize new scalars: `src/compiler.ts`.
+   - Validate shape + invariants: `src/validate.ts`.
+
+3. Backend execution
+   - Implement OCCT behavior: `src/backend_occt.ts`.
+   - Prefer primitives that exist in `opencascade.js` and reuse helpers like
+     `makeCylinder`, `makeCone`, `makeBoolean`, `splitByTools`.
+
+4. Examples + docs
+   - Add/extend DSL example: `src/examples/dsl_feature_examples.ts`.
+   - Update docs: `docs/reference/dsl.md`.
+   - Render PNGs + manifest: `npm run docs:examples` (writes to `docs/public/examples/dsl/`).
+
+5. Tests (per-feature)
+   - Add a new e2e test in `src/tests/*.e2e.test.ts`.
+   - Run only the impacted test: `npm run build -- --pretty false` then
+     `node dist/tests/<test>.js`.
+
+6. Optional viewer asset
+   - If you need viewer assets: `npm run viewer:export`
+   - Filter with `TF_VIEWER_ONLY=part-a,part-b`.

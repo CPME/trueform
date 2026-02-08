@@ -16,6 +16,7 @@ const tests = [
         "pmi-plate",
         [dsl.extrude("base", dsl.profileRect(40, 20), 8, "body:main")],
         {
+          datums: [dsl.datumFeature("datum-A", "A", target)],
           constraints: [dsl.surfaceProfileConstraint("c1", target, 0.05)],
         }
       );
@@ -29,6 +30,7 @@ const tests = [
       assert.ok(step.byteLength > 0, "STEP output should be non-empty");
       assert.ok(pmi, "PMI JSON should be returned");
       assert.ok(pmi?.includes("constraint.surfaceProfile"), "PMI JSON missing constraint");
+      assert.ok(pmi?.includes("datum.feature"), "PMI JSON missing datum");
     },
   },
 ];

@@ -2,8 +2,14 @@ import {
   AxisDirection,
   AxisSpec,
   BuildContext,
+  DatumModifier,
+  DatumRef,
   ExtrudeAxis,
   Expr,
+  FTIConstraint,
+  FTIDatum,
+  FlatnessConstraint,
+  GeometryRef,
   ID,
   IntentAssembly,
   IntentDocument,
@@ -16,21 +22,28 @@ import {
   MateConnector,
   ParamDef,
   ParamType,
+  ParallelismConstraint,
   PatternRef,
   Path3D,
   PathSegment,
+  PerpendicularityConstraint,
   Point2D,
   Point3D,
   PlaneRef,
+  PositionConstraint,
   Predicate,
   Profile,
   ProfileRef,
   RankRule,
+  RefFrame,
+  RefSurface,
   Scalar,
   Selector,
+  SizeConstraint,
   SketchEntity,
   SketchProfile,
   Transform,
+  ToleranceModifier,
   Unit,
 } from "./dsl.js";
 import { CompileError } from "./errors.js";
@@ -49,6 +62,20 @@ const AXIS_DIRECTIONS = new Set<AxisDirection>([
 
 const LENGTH_UNITS = new Set<Unit>(["mm", "cm", "m", "in"]);
 const ANGLE_UNITS = new Set<Unit>(["rad", "deg"]);
+const DATUM_MODIFIERS = new Set<DatumModifier>(["MMB", "LMB", "RMB"]);
+const TOLERANCE_MODIFIERS = new Set<ToleranceModifier>([
+  "MMC",
+  "LMC",
+  "RFS",
+  "PROJECTED",
+  "FREE_STATE",
+  "TANGENT_PLANE",
+  "STATISTICAL",
+]);
+const POSITION_ZONES = new Set<PositionConstraint["zone"]>([
+  "diameter",
+  "cartesian",
+]);
 
 export function shouldValidate(opts?: ValidationOptions): boolean {
   return opts?.validate !== "none";
@@ -169,6 +196,44 @@ export function validatePart(part: IntentPart): void {
         );
       }
       paramIds.add(param.id);
+    }
+  }
+
+  const datumIds = new Set<ID>();
+  const datumLabels = new Set<string>();
+  if (part.datums !== undefined) {
+    const datums = ensureArray<FTIDatum>(
+      part.datums,
+      "validation_part_datums",
+      "Part datums must be an array"
+    );
+    for (const datum of datums) {
+      validateDatum(datum);
+      if (datumIds.has(datum.id)) {
+        throw new CompileError(
+          "validation_datum_duplicate",
+          `Duplicate datum id ${datum.id}`
+        );
+      }
+      if (datumLabels.has(datum.label)) {
+        throw new CompileError(
+          "validation_datum_label_duplicate",
+          `Duplicate datum label ${datum.label}`
+        );
+      }
+      datumIds.add(datum.id);
+      datumLabels.add(datum.label);
+    }
+  }
+
+  if (part.constraints !== undefined) {
+    const constraints = ensureArray<FTIConstraint>(
+      part.constraints,
+      "validation_part_constraints",
+      "Part constraints must be an array"
+    );
+    for (const constraint of constraints) {
+      validateConstraint(constraint, datumIds);
     }
   }
 }
@@ -867,6 +932,341 @@ function validateFeature(feature: IntentFeature): void {
         `Unknown feature kind ${String(kind)}`
       );
   }
+}
+
+function validateDatum(datum: FTIDatum): void {
+  ensureObject(datum, "validation_datum", "Datum must be an object");
+  ensureNonEmptyString(datum.id, "validation_datum_id", "Datum id is required");
+  ensureNonEmptyString(
+    datum.label,
+    "validation_datum_label",
+    "Datum label is required"
+  );
+  validateGeometryRef(datum.target, "Datum target");
+  if (datum.modifiers !== undefined) {
+    validateDatumModifiers(datum.modifiers, "Datum modifiers");
+  }
+  if (datum.capabilities !== undefined) {
+    validateIdArray(datum.capabilities, "Datum capabilities");
+  }
+  if (datum.requirement !== undefined) {
+    ensureNonEmptyString(
+      datum.requirement,
+      "validation_datum_requirement",
+      "Datum requirement must be a string"
+    );
+  }
+}
+
+function validateConstraint(constraint: FTIConstraint, datumIds: Set<ID>): void {
+  ensureObject(constraint, "validation_constraint", "Constraint must be an object");
+  const kind = (constraint as { kind?: string }).kind;
+  ensureNonEmptyString(
+    kind,
+    "validation_constraint_kind",
+    "Constraint kind is required"
+  );
+  ensureNonEmptyString(
+    (constraint as { id?: ID }).id,
+    "validation_constraint_id",
+    "Constraint id is required"
+  );
+
+  switch (kind) {
+    case "constraint.surfaceProfile": {
+      const entry = constraint as {
+        target?: RefSurface;
+        tolerance?: Scalar;
+        referenceFrame?: RefFrame;
+        capabilities?: ID[];
+        requirement?: ID;
+      };
+      validateRefSurface(entry.target, "Surface profile target");
+      validatePositiveScalar(entry.tolerance, "Surface profile tolerance");
+      if (entry.referenceFrame !== undefined) {
+        validateRefFrame(entry.referenceFrame, "Surface profile reference frame");
+      }
+      if (entry.capabilities !== undefined) {
+        validateIdArray(entry.capabilities, "Surface profile capabilities");
+      }
+      if (entry.requirement !== undefined) {
+        ensureNonEmptyString(
+          entry.requirement,
+          "validation_constraint_requirement",
+          "Surface profile requirement must be a string"
+        );
+      }
+      return;
+    }
+    case "constraint.flatness": {
+      const entry = constraint as FlatnessConstraint;
+      validateRefSurface(entry.target, "Flatness target");
+      validatePositiveScalar(entry.tolerance, "Flatness tolerance");
+      if (entry.capabilities !== undefined) {
+        validateIdArray(entry.capabilities, "Flatness capabilities");
+      }
+      if (entry.requirement !== undefined) {
+        ensureNonEmptyString(
+          entry.requirement,
+          "validation_constraint_requirement",
+          "Flatness requirement must be a string"
+        );
+      }
+      return;
+    }
+    case "constraint.parallelism": {
+      const entry = constraint as ParallelismConstraint;
+      validateRefSurface(entry.target, "Parallelism target");
+      validatePositiveScalar(entry.tolerance, "Parallelism tolerance");
+      validateDatumRefs(entry.datum, datumIds, "Parallelism datum refs");
+      if (entry.modifiers !== undefined) {
+        validateToleranceModifiers(entry.modifiers, "Parallelism modifiers");
+      }
+      if (entry.capabilities !== undefined) {
+        validateIdArray(entry.capabilities, "Parallelism capabilities");
+      }
+      if (entry.requirement !== undefined) {
+        ensureNonEmptyString(
+          entry.requirement,
+          "validation_constraint_requirement",
+          "Parallelism requirement must be a string"
+        );
+      }
+      return;
+    }
+    case "constraint.perpendicularity": {
+      const entry = constraint as PerpendicularityConstraint;
+      validateRefSurface(entry.target, "Perpendicularity target");
+      validatePositiveScalar(entry.tolerance, "Perpendicularity tolerance");
+      validateDatumRefs(entry.datum, datumIds, "Perpendicularity datum refs");
+      if (entry.modifiers !== undefined) {
+        validateToleranceModifiers(entry.modifiers, "Perpendicularity modifiers");
+      }
+      if (entry.capabilities !== undefined) {
+        validateIdArray(entry.capabilities, "Perpendicularity capabilities");
+      }
+      if (entry.requirement !== undefined) {
+        ensureNonEmptyString(
+          entry.requirement,
+          "validation_constraint_requirement",
+          "Perpendicularity requirement must be a string"
+        );
+      }
+      return;
+    }
+    case "constraint.position": {
+      const entry = constraint as PositionConstraint;
+      validateGeometryRef(entry.target, "Position target");
+      validatePositiveScalar(entry.tolerance, "Position tolerance");
+      validateDatumRefs(entry.datum, datumIds, "Position datum refs");
+      if (entry.modifiers !== undefined) {
+        validateToleranceModifiers(entry.modifiers, "Position modifiers");
+      }
+      if (entry.capabilities !== undefined) {
+        validateIdArray(entry.capabilities, "Position capabilities");
+      }
+      if (entry.requirement !== undefined) {
+        ensureNonEmptyString(
+          entry.requirement,
+          "validation_constraint_requirement",
+          "Position requirement must be a string"
+        );
+      }
+      if (entry.zone !== undefined && !POSITION_ZONES.has(entry.zone)) {
+        throw new CompileError(
+          "validation_constraint_zone",
+          `Unsupported position zone ${String(entry.zone)}`
+        );
+      }
+      return;
+    }
+    case "constraint.size": {
+      const entry = constraint as SizeConstraint;
+      validateGeometryRef(entry.target, "Size target");
+      const hasNominal = entry.nominal !== undefined || entry.tolerance !== undefined;
+      const hasLimits = entry.min !== undefined || entry.max !== undefined;
+      if (!hasNominal && !hasLimits) {
+        throw new CompileError(
+          "validation_constraint_size",
+          "Size constraint must include nominal+tolerance or min+max"
+        );
+      }
+      if (hasNominal) {
+        validateScalar(entry.nominal, "Size nominal");
+        validatePositiveScalar(entry.tolerance, "Size tolerance");
+      }
+      if (hasLimits) {
+        validateScalar(entry.min, "Size min");
+        validateScalar(entry.max, "Size max");
+        const minVal = scalarLiteral(entry.min);
+        const maxVal = scalarLiteral(entry.max);
+        if (minVal !== null && maxVal !== null && minVal > maxVal) {
+          throw new CompileError(
+            "validation_constraint_size_limits",
+            "Size min must be <= max"
+          );
+        }
+      }
+      if (entry.modifiers !== undefined) {
+        validateToleranceModifiers(entry.modifiers, "Size modifiers");
+      }
+      if (entry.capabilities !== undefined) {
+        validateIdArray(entry.capabilities, "Size capabilities");
+      }
+      if (entry.requirement !== undefined) {
+        ensureNonEmptyString(
+          entry.requirement,
+          "validation_constraint_requirement",
+          "Size requirement must be a string"
+        );
+      }
+      return;
+    }
+    default:
+      throw new CompileError(
+        "validation_constraint_kind",
+        `Unknown constraint kind ${String(kind)}`
+      );
+  }
+}
+
+function validateGeometryRef(ref: GeometryRef, label: string): void {
+  ensureObject(ref, "validation_ref", `${label} must be an object`);
+  switch (ref.kind) {
+    case "ref.surface":
+    case "ref.frame":
+    case "ref.edge":
+    case "ref.axis":
+    case "ref.point":
+      validateSelector(ref.selector);
+      return;
+    default:
+      throw new CompileError(
+        "validation_ref_kind",
+        `Unknown geometry ref kind ${String((ref as { kind?: string }).kind)}`
+      );
+  }
+}
+
+function validateRefSurface(ref: RefSurface | undefined, label: string): void {
+  if (!ref) {
+    throw new CompileError("validation_ref_surface", `${label} is required`);
+  }
+  if (ref.kind !== "ref.surface") {
+    throw new CompileError("validation_ref_surface", `${label} must be ref.surface`);
+  }
+  validateSelector(ref.selector);
+}
+
+function validateRefFrame(ref: RefFrame, label: string): void {
+  if (!ref || ref.kind !== "ref.frame") {
+    throw new CompileError("validation_ref_frame", `${label} must be ref.frame`);
+  }
+  validateSelector(ref.selector);
+}
+
+function validateDatumRefs(refs: DatumRef[], datumIds: Set<ID>, label: string): void {
+  if (!Array.isArray(refs) || refs.length === 0) {
+    throw new CompileError(
+      "validation_constraint_datum_required",
+      `${label} must include at least one datum`
+    );
+  }
+  if (datumIds.size === 0) {
+    throw new CompileError(
+      "validation_constraint_datum_missing",
+      `${label} references datums but none are defined on the part`
+    );
+  }
+  for (const ref of refs) {
+    validateDatumRef(ref, datumIds);
+  }
+}
+
+function validateDatumRef(ref: DatumRef, datumIds: Set<ID>): void {
+  ensureObject(ref, "validation_datum_ref", "Datum ref must be an object");
+  if (ref.kind !== "datum.ref") {
+    throw new CompileError("validation_datum_ref", "Datum ref kind must be datum.ref");
+  }
+  ensureNonEmptyString(
+    ref.datum,
+    "validation_datum_ref_id",
+    "Datum ref id is required"
+  );
+  if (datumIds.size > 0 && !datumIds.has(ref.datum)) {
+    throw new CompileError(
+      "validation_datum_ref_missing",
+      `Datum ref ${ref.datum} not found`
+    );
+  }
+  if (ref.modifiers !== undefined) {
+    validateDatumModifiers(ref.modifiers, "Datum ref modifiers");
+  }
+}
+
+function validateDatumModifiers(modifiers: DatumModifier[], label: string): void {
+  const list = ensureArray<DatumModifier>(
+    modifiers,
+    "validation_datum_modifiers",
+    `${label} must be an array`
+  );
+  for (const mod of list) {
+    if (!DATUM_MODIFIERS.has(mod)) {
+      throw new CompileError(
+        "validation_datum_modifier",
+        `Unknown datum modifier ${String(mod)}`
+      );
+    }
+  }
+}
+
+function validateToleranceModifiers(
+  modifiers: ToleranceModifier[],
+  label: string
+): void {
+  const list = ensureArray<ToleranceModifier>(
+    modifiers,
+    "validation_tolerance_modifiers",
+    `${label} must be an array`
+  );
+  for (const mod of list) {
+    if (!TOLERANCE_MODIFIERS.has(mod)) {
+      throw new CompileError(
+        "validation_tolerance_modifier",
+        `Unknown tolerance modifier ${String(mod)}`
+      );
+    }
+  }
+}
+
+function validateIdArray(values: ID[], label: string): void {
+  const list = ensureArray<ID>(
+    values,
+    "validation_id_array",
+    `${label} must be an array`
+  );
+  for (const value of list) {
+    ensureNonEmptyString(value, "validation_id_array_item", `${label} must be strings`);
+  }
+}
+
+function validatePositiveScalar(value: Scalar | undefined, label: string): void {
+  validateScalar(value, label);
+  const literal = scalarLiteral(value);
+  if (literal !== null && literal <= 0) {
+    throw new CompileError(
+      "validation_scalar_positive",
+      `${label} must be > 0`
+    );
+  }
+}
+
+function scalarLiteral(value: Scalar | undefined): number | null {
+  if (typeof value === "number") return value;
+  if (value && typeof value === "object" && value.kind === "expr.literal") {
+    return typeof value.value === "number" ? value.value : null;
+  }
+  return null;
 }
 
 function validateSketchProfile(

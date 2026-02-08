@@ -6,7 +6,7 @@ This page documents the current DSL helpers exported from `trueform`. The API is
 
 ```ts
 import { context, document, part, exprLiteral } from "trueform/dsl/core";
-import { sketch2d, extrude, profileRect, profileRef } from "trueform/dsl/geometry";
+import { sketch2d, extrude, surface, profileRect, profileRef } from "trueform/dsl/geometry";
 import { assembly, instance, mateFixed } from "trueform/dsl/assembly";
 import { refFrame, refSurface, surfaceProfileConstraint } from "trueform/dsl/tolerancing";
 import { featureArray, sketchArray } from "trueform/dsl/generators";
@@ -49,14 +49,24 @@ If you prefer a single namespace, the `dsl` export is still available from `true
 
 - `refSurface(selector) -> RefSurface`
 - `refFrame(selector) -> RefFrame`
+- `refEdge(selector) -> RefEdge`
+- `refAxis(selector) -> RefAxis`
+- `refPoint(selector) -> RefPoint`
+- `datumFeature(id, label, target, opts?) -> FTIDatum`
+- `datumRef(datumId, modifiers?) -> DatumRef`
 - `surfaceProfileConstraint(id, target, tolerance, opts?) -> SurfaceProfileConstraint`
+- `flatnessConstraint(id, target, tolerance, opts?) -> FlatnessConstraint`
+- `parallelismConstraint(id, target, tolerance, datumRefs, opts?) -> ParallelismConstraint`
+- `perpendicularityConstraint(id, target, tolerance, datumRefs, opts?) -> PerpendicularityConstraint`
+- `positionConstraint(id, target, tolerance, datumRefs, opts?) -> PositionConstraint`
+- `sizeConstraint(id, target, opts) -> SizeConstraint`
 
 ### Tolerancing Example (PMI Sidecar)
 
-The example below attaches two surface profile constraints to a simple plate.
-The top surface is tighter and uses itself as the reference frame; the bottom
-surface is looser. `requirement` and `capabilities` are included to show how
-PMI metadata can travel with the constraints.
+The example below defines datum features and applies a small set of basic
+tolerances (flatness, parallelism, perpendicularity, position, size) plus a
+surface profile constraint. This is data-only in v1 but is intended to flow
+from DSL → IR → PMI export (AP242 sidecar today).
 
 ```ts
 import { dsl, buildPart, exportStepAp242WithPmi } from "trueform";
@@ -70,30 +80,62 @@ const bottomFace = dsl.selectorFace(
   [dsl.rankMinZ()]
 );
 
-const part = dsl.part(
-  "example-tolerancing",
-  [dsl.extrude("base", dsl.profileRect(120, 70), 12, "body:main")],
-  {
-    constraints: [
-      dsl.surfaceProfileConstraint(
-        "profile-top",
-        dsl.refSurface(topFace),
-        0.05,
-        {
-          referenceFrame: dsl.refFrame(topFace),
-          requirement: "req-flatness-top",
-          capabilities: ["mill-3axis"],
-        }
-      ),
-      dsl.surfaceProfileConstraint(
-        "profile-bottom",
-        dsl.refSurface(bottomFace),
-        0.1,
-        { requirement: "req-flatness-bottom" }
-      ),
-    ],
-  }
+const sideFace = dsl.selectorFace([dsl.predPlanar(), dsl.predNormal("+X")]);
+
+const base = dsl.extrude(
+  "base",
+  dsl.profileRect(120, 70),
+  12,
+  "body:main"
 );
+const hole = dsl.hole("hole-1", topFace, "-Z", 10, "throughAll", {
+  deps: ["base"],
+});
+const holeFace = dsl.selectorFace(
+  [dsl.predCreatedBy("hole-1")],
+  [dsl.rankMaxArea()]
+);
+
+const part = dsl.part("example-tolerancing", [base, hole], {
+  datums: [
+    dsl.datumFeature("datum-A", "A", dsl.refSurface(bottomFace)),
+    dsl.datumFeature("datum-B", "B", dsl.refSurface(sideFace)),
+  ],
+  constraints: [
+    dsl.flatnessConstraint("flat-top", dsl.refSurface(topFace), 0.05, {
+      requirement: "req-flat-top",
+    }),
+    dsl.parallelismConstraint(
+      "parallel-top",
+      dsl.refSurface(topFace),
+      0.08,
+      [dsl.datumRef("datum-A")]
+    ),
+    dsl.perpendicularityConstraint(
+      "perp-side",
+      dsl.refSurface(sideFace),
+      0.1,
+      [dsl.datumRef("datum-A")]
+    ),
+    dsl.positionConstraint(
+      "pos-hole",
+      dsl.refAxis(holeFace),
+      0.2,
+      [dsl.datumRef("datum-A"), dsl.datumRef("datum-B")],
+      { zone: "diameter", modifiers: ["MMC"] }
+    ),
+    dsl.sizeConstraint("size-hole", dsl.refAxis(holeFace), {
+      nominal: 10,
+      tolerance: 0.1,
+      modifiers: ["MMC"],
+    }),
+    dsl.surfaceProfileConstraint("profile-top", dsl.refSurface(topFace), 0.03, {
+      referenceFrame: dsl.refFrame(topFace),
+      requirement: "req-profile-top",
+      capabilities: ["mill-3axis"],
+    }),
+  ],
+});
 
 // After building with a backend:
 // const { step, pmi } = exportStepAp242WithPmi(backend, body, part, { schema: "AP242" });
@@ -107,7 +149,94 @@ Example PMI JSON (sidecar emitted alongside AP242 STEP):
 {
   "schema": "trueform.pmi.v1",
   "partId": "example-tolerancing",
+  "datums": [
+    {
+      "id": "datum-A",
+      "kind": "datum.feature",
+      "label": "A",
+      "target": {
+        "kind": "ref.surface",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [
+            { "kind": "pred.planar" },
+            { "kind": "pred.normal", "value": "-Z" }
+          ],
+          "rank": [{ "kind": "rank.minZ" }]
+        }
+      }
+    },
+    {
+      "id": "datum-B",
+      "kind": "datum.feature",
+      "label": "B",
+      "target": {
+        "kind": "ref.surface",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [
+            { "kind": "pred.planar" },
+            { "kind": "pred.normal", "value": "+X" }
+          ],
+          "rank": []
+        }
+      }
+    }
+  ],
   "constraints": [
+    {
+      "id": "flat-top",
+      "kind": "constraint.flatness",
+      "target": {
+        "kind": "ref.surface",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [
+            { "kind": "pred.planar" },
+            { "kind": "pred.normal", "value": "+Z" }
+          ],
+          "rank": [{ "kind": "rank.maxZ" }]
+        }
+      },
+      "tolerance": 0.05,
+      "requirement": "req-flat-top"
+    },
+    {
+      "id": "parallel-top",
+      "kind": "constraint.parallelism",
+      "target": {
+        "kind": "ref.surface",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [
+            { "kind": "pred.planar" },
+            { "kind": "pred.normal", "value": "+Z" }
+          ],
+          "rank": [{ "kind": "rank.maxZ" }]
+        }
+      },
+      "tolerance": 0.08,
+      "datum": [{ "kind": "datum.ref", "datum": "datum-A" }]
+    },
+    {
+      "id": "pos-hole",
+      "kind": "constraint.position",
+      "target": {
+        "kind": "ref.axis",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [{ "kind": "pred.createdBy", "featureId": "hole-1" }],
+          "rank": [{ "kind": "rank.maxArea" }]
+        }
+      },
+      "tolerance": 0.2,
+      "datum": [
+        { "kind": "datum.ref", "datum": "datum-A" },
+        { "kind": "datum.ref", "datum": "datum-B" }
+      ],
+      "modifiers": ["MMC"],
+      "zone": "diameter"
+    },
     {
       "id": "profile-top",
       "kind": "constraint.surfaceProfile",
@@ -122,7 +251,7 @@ Example PMI JSON (sidecar emitted alongside AP242 STEP):
           "rank": [{ "kind": "rank.maxZ" }]
         }
       },
-      "tolerance": 0.05,
+      "tolerance": 0.03,
       "referenceFrame": {
         "kind": "ref.frame",
         "selector": {
@@ -134,25 +263,8 @@ Example PMI JSON (sidecar emitted alongside AP242 STEP):
           "rank": [{ "kind": "rank.maxZ" }]
         }
       },
-      "requirement": "req-flatness-top",
+      "requirement": "req-profile-top",
       "capabilities": ["mill-3axis"]
-    },
-    {
-      "id": "profile-bottom",
-      "kind": "constraint.surfaceProfile",
-      "target": {
-        "kind": "ref.surface",
-        "selector": {
-          "kind": "selector.face",
-          "predicates": [
-            { "kind": "pred.planar" },
-            { "kind": "pred.normal", "value": "-Z" }
-          ],
-          "rank": [{ "kind": "rank.minZ" }]
-        }
-      },
-      "tolerance": 0.1,
-      "requirement": "req-flatness-bottom"
     }
   ]
 }
@@ -281,7 +393,8 @@ sketchPoint("point-1", [0, 0]);
 
 ## Features
 
-- `extrude(id, profile, depth, result?, deps?) -> Extrude`
+- `extrude(id, profile, depth, result?, deps?, opts?) -> Extrude`
+- `surface(id, profile, result?, deps?) -> Surface`
 - `revolve(id, profile, axis, angle, result?, opts?) -> Revolve`
 - `loft(id, profiles, result?, deps?) -> Loft`
 - `hole(id, onFace, axis, diameter, depth, opts?) -> Hole`
@@ -303,6 +416,26 @@ const examplePart = part("example-extrude", [
 ```
 
 ![Extrude example](/examples/dsl/extrude.iso.png)
+
+Notes:
+- Default output is `body:*` (mode `solid`).
+- Use `extrude(..., { mode: "surface" })` to extrude a wire/profile into a surface output (`kind: "face"`).
+
+### Surface
+
+```ts
+const rect = sketchRectCorner("rect-1", [0, 0], 40, 20);
+const sketch = sketch2d(
+  "sketch-face",
+  [{ name: "profile:rect", profile: profileSketchLoop(["rect-1"]) }],
+  { entities: [rect] }
+);
+
+const examplePart = part("example-surface", [
+  sketch,
+  surface("face-1", profileRef("profile:rect"), "surface:main"),
+]);
+```
 
 ### Revolve
 
