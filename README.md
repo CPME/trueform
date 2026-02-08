@@ -4,9 +4,13 @@
 
 Docs: [https://cpme.github.io/trueform/](https://cpme.github.io/trueform/)
 
-TrueForm is a declarative, intent-first modeling layer on top of OpenCascade.js. It lets agents and web apps describe what a part is (features, constraints, assertions) without scripting kernel steps.
+For decades, enterprise CAD software companies have intentially obfuscated their files to create "vendor lock-in". Engineers hate their CAD systems, but can only dream of migration to better systems, that they will once again be locked into. While software has broadly seen explosive advancement, CAD has stagnated. Legacy file formats (STEP, IGES, OBJ, etc) are insufficient for reconstructing feature trees, and the CAD native file format remains locked behind closed doors. Hence we are stuck exchanging pdf drawings, and other lossy compressions of the rich machine readable detail embedded in the CAD native format. 
 
-The goal: hardware design that feels more like software. A single, digital definition is authored and released with rapid iteration, automated checks, and clean handoff to manufacturing.
+TrueForm aims to change that, by creating an open DSL (domain specific language) with rich abstractions that mirror the tools you are used to in enterprise CAD, and then some. Critically, it provides an intermediate representation and compiler (currently supports OpenCascade.js).
+
+TrueForm is a declarative, intent-first modeling layer on top of OpenCascade.js. It lets agents and web apps describe **what** a part is (features, constraints, assertions) without scripting kernel steps.
+
+The goal: hardware design that feels more like software. A single, digital definition is authored that retains the information needed to produce all the digital assets required in the product development lifecycle.
 
 **Status**
 - V1 compiles a JSON-serializable IR and builds with an OpenCascade.js backend.
