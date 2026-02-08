@@ -3,9 +3,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import initOpenCascade from "opencascade.js/dist/node.js";
 import { OcctBackend } from "../../dist/backend_occt.js";
-import { dsl } from "../../dist/index.js";
+import { buildAssembly, dsl } from "../../dist/index.js";
 import { createTfContainer } from "../../dist/tf/container.js";
 import { buildPart } from "../../dist/executor.js";
+import { assemblySimple } from "../../dist/examples/assembly_simple.js";
 import { mechanicalCollection } from "../../dist/examples/mechanical_collection.js";
 import { viewerPart } from "../../dist/examples/viewer_part.js";
 import { renderIsometricPng } from "../../dist/viewer/isometric_renderer.js";
@@ -21,6 +22,12 @@ const forceExport =
   process.env.TF_VIEWER_FORCE &&
   process.env.TF_VIEWER_FORCE !== "0" &&
   process.env.TF_VIEWER_FORCE !== "false";
+
+const assemblyParts = assemblySimple.parts.map((part) => ({
+  name: part.id,
+  part,
+  sourcePath: assemblySimple.sourcePath,
+}));
 
 const parts = [
   {
@@ -39,6 +46,7 @@ const parts = [
       diffuse: 0.7,
     },
   },
+  ...assemblyParts,
   ...mechanicalCollection.map((entry) => ({
     name: entry.id,
     part: entry.part,
@@ -53,6 +61,16 @@ const parts = [
   })),
 ];
 
+const assemblies = [
+  {
+    name: assemblySimple.id,
+    title: assemblySimple.title,
+    sourcePath: assemblySimple.sourcePath,
+    assembly: assemblySimple.assembly,
+    parts: assemblySimple.parts,
+  },
+];
+
 const onlyEnv = process.env.TF_VIEWER_ONLY;
 const only = onlyEnv
   ? onlyEnv
@@ -60,8 +78,17 @@ const only = onlyEnv
       .map((entry) => entry.trim())
       .filter(Boolean)
   : null;
+const selectedAssemblies = only
+  ? assemblies.filter((entry) => only.includes(entry.name))
+  : assemblies;
 const selectedParts = only
-  ? parts.filter((entry) => only.includes(entry.name))
+  ? parts.filter((entry) => {
+      if (only.includes(entry.name)) return true;
+      for (const asm of selectedAssemblies) {
+        if (asm.parts.some((part) => part.id === entry.part.id)) return true;
+      }
+      return false;
+    })
   : parts;
 
 const axisIndex = { x: 0, y: 1, z: 2 };
@@ -482,12 +509,59 @@ try {
     });
   }
 
-  const needsExport = entryStates.some((state) => !state.upToDate);
+  const meshPathByPartId = new Map();
+  for (const state of entryStates) {
+    meshPathByPartId.set(state.entry.part.id, {
+      outPath: state.outPath,
+      assetPath: `./assets/${state.entry.name}.mesh.json`,
+    });
+  }
+
+  const assemblyStates = [];
+  for (const entry of selectedAssemblies) {
+    const outPath = path.join(outDir, `${entry.name}.assembly.json`);
+    const sourceAbs = entry.sourcePath
+      ? path.join(repoRoot, entry.sourcePath)
+      : null;
+    const sourceMtime = sourceAbs ? await statMtime(sourceAbs) : null;
+    let missingMesh = false;
+    let meshLatest = 0;
+    for (const part of entry.parts) {
+      const meshPath =
+        meshPathByPartId.get(part.id)?.outPath ??
+        path.join(outDir, `${part.id}.mesh.json`);
+      const mtime = await statMtime(meshPath);
+      if (!mtime) {
+        missingMesh = true;
+        continue;
+      }
+      if (mtime > meshLatest) meshLatest = mtime;
+    }
+    const inputMtime = Math.max(coreMtime, sourceMtime ?? 0, meshLatest);
+    const outputMtime = await statMtime(outPath);
+    const upToDate =
+      !forceExport &&
+      !missingMesh &&
+      outputMtime !== null &&
+      outputMtime >= inputMtime;
+    assemblyStates.push({
+      entry,
+      outPath,
+      sourceAbs,
+      sourceMtime,
+      upToDate,
+    });
+  }
+
+  const needsExport =
+    entryStates.some((state) => !state.upToDate) ||
+    assemblyStates.some((state) => !state.upToDate);
   const occt = needsExport ? await initOpenCascade() : null;
   const backend = occt ? new OcctBackend({ occt }) : null;
 
   const results = [];
   const topology = {};
+  const builtParts = new Map();
 
   for (const state of entryStates) {
     const {
@@ -533,6 +607,7 @@ try {
     }
 
     const result = buildPart(entry.part, backend);
+    builtParts.set(entry.part.id, result);
     const body = result.final.outputs.get("body:main");
     if (!body) {
       throw new Error(`Missing body:main output for ${entry.name}`);
@@ -679,6 +754,69 @@ try {
       tfc: tfcPath,
       source: sourceOut ?? undefined,
       vertices: mesh.positions.length / 3,
+    });
+  }
+
+  const meshByPartId = new Map();
+  for (const [partId, paths] of meshPathByPartId.entries()) {
+    meshByPartId.set(partId, paths.assetPath);
+  }
+
+  for (const state of assemblyStates) {
+    const { entry, outPath, upToDate } = state;
+
+    if (upToDate) {
+      results.push({
+        name: entry.name,
+        assembly: outPath,
+      });
+      continue;
+    }
+
+    if (!backend) {
+      throw new Error("OpenCascade backend unavailable for assembly export.");
+    }
+
+    const partResults = entry.parts.map((part) => {
+      const cached = builtParts.get(part.id);
+      if (cached) return cached;
+      const built = buildPart(part, backend);
+      builtParts.set(part.id, built);
+      return built;
+    });
+
+    const solved = buildAssembly(entry.assembly, partResults);
+    const palette = ["#c7a884", "#7aa6c2", "#d0b48a", "#9fb6c9"];
+    const instances = solved.instances.map((inst, idx) => {
+      const mesh = meshByPartId.get(inst.part);
+      if (!mesh) {
+        throw new Error(`Missing mesh asset for assembly part ${inst.part}`);
+      }
+      return {
+        id: inst.id,
+        part: inst.part,
+        mesh,
+        transform: inst.transform,
+        color: palette[idx % palette.length],
+      };
+    });
+
+    const payload = {
+      kind: "assembly",
+      id: entry.assembly?.id ?? entry.name,
+      title: entry.title,
+      converged: solved.converged,
+      iterations: solved.iterations,
+      residual: solved.residual,
+      instances,
+    };
+
+    await fs.writeFile(outPath, JSON.stringify(payload, null, 2));
+    results.push({
+      name: entry.name,
+      assembly: outPath,
+      instances: instances.length,
+      converged: solved.converged,
     });
   }
 

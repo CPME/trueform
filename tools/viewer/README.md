@@ -16,6 +16,7 @@ That writes `tools/viewer/assets/plate.mesh.json` from the DSL example, plus:
 - `tools/viewer/assets/plate.iso.png` (shaded isometric snapshot)
 - `tools/viewer/assets/plate.debug.json`
 - `tools/viewer/assets/plate.selectors.json` (selector metadata for debug overlay)
+- `tools/viewer/assets/plate-peg.assembly.json` (simple assembly manifest)
 - `tools/viewer/assets/plate.edges.*.svg` (orthographic edge projections)
 - `tools/viewer/assets/manifest.json` (asset picker list)
 - `tools/viewer/assets/topology.json` (face/edge/solid counts per part)
@@ -40,6 +41,15 @@ The viewer expects a JSON payload with:
 - `normals`: flat xyz array per vertex (optional; viewer will compute if missing).
 - `edgePositions`: flat xyz array for line segments (optional, CAD-style edges).
 
+## Assembly manifest format
+
+Assemblies load a lightweight JSON manifest:
+- `kind`: `"assembly"`.
+- `id`: assembly id.
+- `instances`: list of `{ id, part, mesh, transform, color? }`.
+  - `mesh` points to a `*.mesh.json` asset.
+  - `transform` is a 4x4 column-major matrix (length 16).
+
 ## View it
 
 Install the viewer dependency (local, no CDN required):
@@ -61,6 +71,7 @@ Notes:
 - Use `?debug=1` to show axes/grid/debug helpers: `http://localhost:8001/?debug=1`.
 - Use `?hidden=1` to show hidden edges (disable depth test).
 - Load a different mesh with `?file=./assets/your_part.mesh.json`.
+- Load an assembly with `?file=./assets/plate-peg.assembly.json`.
 - The asset dropdown is populated from `tools/viewer/assets/manifest.json`.
 - Edge rendering: `?edges=brep` (default), `?edges=faces`, or `?edges=mesh`.
 - Selector overlay: `?selectors=1` (loads `*.selectors.json` if present).

@@ -205,7 +205,8 @@ Avoid fragile face indexing.
 * “Outer cylindrical surface”
 * Semantic tags on faces/features
 
-Selectors that can match multiple candidates must define explicit ranking or ordering rules.
+Selectors should define explicit ranking rules; if omitted, the resolver applies a
+deterministic fallback ordering (area → centerZ → centerY → centerX) to pick one.
 
 ---
 

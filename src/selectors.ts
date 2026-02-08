@@ -21,20 +21,22 @@ export type ResolutionContext = {
 
 export function resolveSelector(selector: Selector, ctx: ResolutionContext): Selection {
   const ranked = resolveSelectorSet(selector, ctx);
-  if (ranked.length !== 1) {
-    throw new CompileError(
-      "selector_ambiguous",
-      "Selector ambiguity: add ranking or tighten predicates"
-    );
+  if (ranked.length === 1) {
+    const single = ranked[0];
+    if (!single) {
+      throw new CompileError(
+        "selector_empty_after_rank",
+        "Selector ranking produced no candidates"
+      );
+    }
+    return single;
   }
-  const single = ranked[0];
-  if (!single) {
-    throw new CompileError(
-      "selector_empty_after_rank",
-      "Selector ranking produced no candidates"
-    );
-  }
-  return single;
+  const preferred = pickBestCandidate(ranked);
+  if (preferred) return preferred;
+  throw new CompileError(
+    "selector_ambiguous",
+    "Selector ambiguity: add ranking or tighten predicates"
+  );
 }
 
 export function resolveSelectorSet(
@@ -208,6 +210,52 @@ function selectionCenter(selection: Selection): [number, number, number] {
     );
   }
   return value as [number, number, number];
+}
+
+function pickBestCandidate(candidates: Selection[]): Selection | undefined {
+  if (candidates.length === 0) return undefined;
+  let best = candidates[0];
+  if (!best) return undefined;
+  for (let i = 1; i < candidates.length; i += 1) {
+    const next = candidates[i];
+    if (!next) continue;
+    if (compareCandidates(next, best) > 0) {
+      best = next;
+    }
+  }
+  return best;
+}
+
+function compareCandidates(a: Selection, b: Selection): number {
+  const aKey = candidateKey(a);
+  const bKey = candidateKey(b);
+  if (aKey.area !== bKey.area) return aKey.area - bKey.area;
+  if (aKey.center[2] !== bKey.center[2]) return aKey.center[2] - bKey.center[2];
+  if (aKey.center[1] !== bKey.center[1]) return aKey.center[1] - bKey.center[1];
+  if (aKey.center[0] !== bKey.center[0]) return aKey.center[0] - bKey.center[0];
+  return String(a.id).localeCompare(String(b.id));
+}
+
+function candidateKey(selection: Selection): { area: number; center: [number, number, number] } {
+  const area =
+    selection.kind === "face" ? safeNumber(selection.meta["area"], 0) : 0;
+  const center = safeCenter(selection.meta["center"]);
+  return { area, center };
+}
+
+function safeCenter(value: unknown): [number, number, number] {
+  if (
+    Array.isArray(value) &&
+    value.length === 3 &&
+    value.every((entry) => typeof entry === "number" && Number.isFinite(entry))
+  ) {
+    return value as [number, number, number];
+  }
+  return [0, 0, 0];
+}
+
+function safeNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function distance(

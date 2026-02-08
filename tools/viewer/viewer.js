@@ -64,6 +64,7 @@ const modelGroup = new THREE.Group();
 scene.add(modelGroup);
 const selectorGroup = new THREE.Group();
 scene.add(selectorGroup);
+const geometryCache = new Map();
 
 const params = new URLSearchParams(window.location.search);
 const fileParam = params.get("file");
@@ -89,14 +90,14 @@ const overlayState = {
   rotation: 0,
 };
 
-loadMeshFromUrl(filename);
+loadAssetFromUrl(filename);
 loadAssetManifest();
 
 if (loadUrlBtn) {
   loadUrlBtn.addEventListener("click", () => {
     const nextFile = fileUrlInput?.value?.trim();
     if (!nextFile) return;
-    loadMeshFromUrl(nextFile);
+    loadAssetFromUrl(nextFile);
     updateUrlFileParam(nextFile);
   });
 }
@@ -141,14 +142,14 @@ if (assetSelect && loadAssetBtn) {
     const choice = assetSelect.value;
     if (!choice) return;
     if (fileUrlInput) fileUrlInput.value = choice;
-    loadMeshFromUrl(choice);
+    loadAssetFromUrl(choice);
     updateUrlFileParam(choice);
   });
   assetSelect.addEventListener("change", () => {
     const choice = assetSelect.value;
     if (!choice) return;
     if (fileUrlInput) fileUrlInput.value = choice;
-    loadMeshFromUrl(choice);
+    loadAssetFromUrl(choice);
     updateUrlFileParam(choice);
   });
 }
@@ -293,7 +294,7 @@ function animate() {
 
 animate();
 
-function loadMeshFromUrl(source) {
+function loadAssetFromUrl(source) {
   currentLabel = source;
   statusEl.textContent = `Loading ${source}`;
   const fileUrl = new URL(source, window.location.href).toString();
@@ -302,8 +303,12 @@ function loadMeshFromUrl(source) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     })
-    .then((meshData) => {
-      loadMeshData(meshData, source);
+    .then((data) => {
+      if (isAssemblyData(data)) {
+        return loadAssemblyData(data, source);
+      }
+      loadMeshData(data, source);
+      return null;
     })
     .catch((err) => {
       statusEl.textContent = `Failed to load ${source}`;
@@ -315,6 +320,26 @@ function updateUrlFileParam(source) {
   const url = new URL(window.location.href);
   url.searchParams.set("file", source);
   window.history.replaceState({}, "", url.toString());
+}
+
+function resetScene() {
+  while (modelGroup.children.length > 0) {
+    const child = modelGroup.children.pop();
+    if (child) modelGroup.remove(child);
+  }
+  while (selectorGroup.children.length > 0) {
+    const child = selectorGroup.children.pop();
+    if (child) selectorGroup.remove(child);
+  }
+  modelGroup.position.set(0, 0, 0);
+  selectorGroup.position.set(0, 0, 0);
+}
+
+function isAssemblyData(data) {
+  if (!data || typeof data !== "object") return false;
+  if (data.kind === "assembly") return true;
+  if (Array.isArray(data.instances)) return true;
+  return false;
 }
 
 function loadAssetManifest() {
@@ -370,14 +395,7 @@ function loadAssetManifest() {
 
 function loadMeshData(meshData, label) {
   currentLabel = label;
-  while (modelGroup.children.length > 0) {
-    const child = modelGroup.children.pop();
-    if (child) modelGroup.remove(child);
-  }
-  while (selectorGroup.children.length > 0) {
-    const child = selectorGroup.children.pop();
-    if (child) selectorGroup.remove(child);
-  }
+  resetScene();
   if (selectorPanel) {
     selectorPanel.style.display = selectorsEnabled ? "block" : "none";
   }
@@ -500,6 +518,134 @@ function loadMeshData(meshData, label) {
   }
 }
 
+async function loadAssemblyData(assemblyData, label) {
+  currentLabel = label;
+  resetScene();
+  if (selectorPanel) {
+    selectorPanel.style.display = selectorsEnabled ? "block" : "none";
+  }
+  if (selectorInfo) {
+    selectorInfo.textContent = selectorsEnabled
+      ? "Selectors not supported for assemblies yet."
+      : "Selectors disabled. Add ?selectors=1";
+  }
+
+  const instances = Array.isArray(assemblyData?.instances)
+    ? assemblyData.instances
+    : [];
+  if (instances.length === 0) {
+    statusEl.textContent = "Assembly contains no instances.";
+    return;
+  }
+
+  const baseColor = "#c7a884";
+  const linesMaterial = new THREE.LineBasicMaterial({
+    color: debug ? "#ffd400" : "#1f1a14",
+    linewidth: 1,
+  });
+  linesMaterial.depthTest = !showHidden;
+  linesMaterial.depthWrite = false;
+  if (!showHidden) {
+    linesMaterial.polygonOffset = true;
+    linesMaterial.polygonOffsetFactor = -1;
+    linesMaterial.polygonOffsetUnits = -1;
+  }
+  linesMaterial.transparent = true;
+  linesMaterial.opacity = debug ? 1 : 0.9;
+
+  const overallBox = new THREE.Box3();
+  let hasBounds = false;
+  let totalVertices = 0;
+
+  await Promise.all(
+    instances.map(async (instance) => {
+      const meshRef = instance?.mesh;
+      if (!meshRef || typeof meshRef !== "string") return;
+      const meshUrl = resolveInstanceMeshUrl(meshRef, label);
+      if (!meshUrl) return;
+      const asset = await loadMeshAsset(meshUrl);
+      if (!asset?.geometry) return;
+      totalVertices += asset.vertexCount || 0;
+
+      const material = debug
+        ? new THREE.MeshNormalMaterial({ side: THREE.DoubleSide })
+        : new THREE.MeshStandardMaterial({
+            color: instance?.color || baseColor,
+            metalness: 0.05,
+            roughness: 0.35,
+            side: THREE.DoubleSide,
+          });
+
+      const matrix = matrixFromInstance(instance);
+      const mesh = new THREE.Mesh(asset.geometry, material);
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.copy(matrix);
+      mesh.updateMatrixWorld(true);
+      modelGroup.add(mesh);
+
+      if (asset.edgeGeometry) {
+        const lines = new THREE.LineSegments(asset.edgeGeometry, linesMaterial);
+        lines.matrixAutoUpdate = false;
+        lines.matrix.copy(matrix);
+        lines.updateMatrixWorld(true);
+        modelGroup.add(lines);
+      }
+
+      const bbox = asset.geometry.boundingBox;
+      if (bbox) {
+        const worldBox = bbox.clone().applyMatrix4(matrix);
+        if (!hasBounds) {
+          overallBox.copy(worldBox);
+          hasBounds = true;
+        } else {
+          overallBox.union(worldBox);
+        }
+      }
+    })
+  );
+
+  if (!hasBounds) {
+    statusEl.textContent = "Assembly loaded but bounds were unavailable.";
+    return;
+  }
+
+  const center = overallBox.getCenter(new THREE.Vector3());
+  modelGroup.position.set(-center.x, -center.y, -center.z);
+  selectorGroup.position.set(-center.x, -center.y, -center.z);
+
+  const sphere = overallBox.getBoundingSphere(new THREE.Sphere());
+  const radius = Math.max(sphere.radius || 0, 1);
+  const distance = Math.max(radius * 2.4, 10);
+  camera.position.set(distance, distance * 0.85, distance);
+  controls.target.set(0, 0, 0);
+  controls.update();
+
+  const uniqueParts = new Set(
+    instances
+      .map((instance) => instance?.part)
+      .filter((value) => typeof value === "string")
+  );
+  statusEl.textContent = `Viewing ${label} (instances: ${instances.length}, parts: ${
+    uniqueParts.size
+  }, verts: ${totalVertices})`;
+}
+
+function resolveInstanceMeshUrl(meshRef, assemblyLabel) {
+  if (!meshRef || typeof meshRef !== "string") return null;
+  if (meshRef.startsWith("http://") || meshRef.startsWith("https://")) return meshRef;
+  if (meshRef.startsWith("/")) {
+    return new URL(meshRef, window.location.href).toString();
+  }
+  if (meshRef.startsWith("./")) {
+    return new URL(meshRef, window.location.href).toString();
+  }
+  if (meshRef.startsWith("assets/")) {
+    return new URL(`./${meshRef}`, window.location.href).toString();
+  }
+  const baseUrl = new URL(assemblyLabel, window.location.href);
+  return new URL(meshRef, baseUrl).toString();
+}
+
 function buildGeometry(mesh) {
   if (!mesh || !Array.isArray(mesh.positions)) return null;
   const geometry = new THREE.BufferGeometry();
@@ -517,6 +663,38 @@ function buildGeometry(mesh) {
     geometry.setIndex(mesh.indices);
   }
   return geometry;
+}
+
+async function loadMeshAsset(meshUrl) {
+  const cached = geometryCache.get(meshUrl);
+  if (cached) return cached;
+  const fileUrl = new URL(meshUrl, window.location.href).toString();
+  const res = await fetch(fileUrl);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status} for ${meshUrl}`);
+  }
+  const meshData = await res.json();
+  const geometry = buildGeometry(meshData);
+  if (!geometry) {
+    throw new Error(`Mesh missing position data: ${meshUrl}`);
+  }
+  if (!geometry.attributes.normal) geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  const edgeGeometry = buildEdgeGeometry(meshData, geometry, debug, edgeSource, null);
+  const vertexCount = geometry.attributes.position?.count ?? 0;
+  const asset = { meshData, geometry, edgeGeometry, vertexCount };
+  geometryCache.set(meshUrl, asset);
+  return asset;
+}
+
+function matrixFromInstance(instance) {
+  const matrix = new THREE.Matrix4();
+  const raw = instance?.transform;
+  if (Array.isArray(raw) && raw.length === 16) {
+    matrix.fromArray(raw);
+  }
+  return matrix;
 }
 
 function buildEdgeGeometry(mesh, meshGeometry, debug, edgeSource, center) {

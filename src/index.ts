@@ -1,5 +1,5 @@
 export * from "./dsl.js";
-export { buildPart } from "./executor.js";
+export { buildPart, buildPartAsync } from "./executor.js";
 export { compileDocument, compilePart } from "./compiler.js";
 export { buildAssembly, solveAssembly } from "./assembly.js";
 export * from "./export/index.js";
@@ -13,6 +13,7 @@ export type {
 } from "./assembly.js";
 export type {
   Backend,
+  BackendAsync,
   ExecuteInput,
   KernelObject,
   KernelResult,
@@ -25,5 +26,24 @@ export type {
   StepSchema,
   StepUnit,
 } from "./backend.js";
+export { backendToAsync } from "./backend_async.js";
+export { MockBackend } from "./mock_backend.js";
+export type {
+  NativeOcctTransport,
+  NativeKernelObject,
+  NativeKernelSelection,
+  NativeKernelResult,
+  OcctNativeBackendOptions,
+} from "./backend_occt_native.js";
+export { OcctNativeBackend } from "./backend_occt_native.js";
+export {
+  LocalOcctTransport,
+  type LocalOcctTransportOptions,
+} from "./backend_occt_native_local.js";
+export {
+  HttpOcctTransport,
+  type HttpOcctTransportOptions,
+  type FetchLike,
+} from "./backend_occt_native_http.js";
 export type { ParamOverrides } from "./params.js";
 export type { ValidationMode, ValidationOptions } from "./validate.js";

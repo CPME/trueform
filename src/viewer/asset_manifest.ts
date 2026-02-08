@@ -4,7 +4,8 @@ export function collectMeshAssets(files: string[]): string[] {
     if (typeof entry !== "string") continue;
     const name = entry.trim();
     if (!name) continue;
-    if (!name.toLowerCase().endsWith(".mesh.json")) continue;
+    const lower = name.toLowerCase();
+    if (!lower.endsWith(".mesh.json") && !lower.endsWith(".assembly.json")) continue;
     seen.add(name);
   }
   return Array.from(seen).sort((a, b) => a.localeCompare(b));
