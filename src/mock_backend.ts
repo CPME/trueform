@@ -26,6 +26,12 @@ export class MockBackend implements Backend {
       case "feature.sketch2d":
         return this.emitSketch(feature as Sketch2D);
       case "feature.extrude":
+        if ((feature as { mode?: string }).mode === "surface") {
+          return this.emitSurface(feature);
+        }
+        return this.emitSolid(feature);
+      case "feature.surface":
+        return this.emitSurface(feature);
       case "feature.revolve":
       case "feature.pipeSweep":
       case "feature.hexTubeSweep":
@@ -100,6 +106,28 @@ export class MockBackend implements Backend {
     ];
 
     const outputs = new Map([[resultName, this.makeObj("solid", solidId)]]);
+    return { outputs, selections };
+  }
+
+  private emitSurface(feature: IntentFeature): KernelResult {
+    const resultName =
+      "result" in feature && typeof (feature as { result?: string }).result === "string"
+        ? (feature as { result: string }).result
+        : `surface:${feature.id}`;
+    const ownerKey = resultName;
+    const selections = [
+      this.makeSelection("face", {
+        createdBy: feature.id,
+        role: "surface",
+        planar: true,
+        normal: "+Z",
+        area: 50,
+        centerZ: 0,
+        center: [0, 0, 0],
+        ownerKey,
+      }),
+    ];
+    const outputs = new Map([[resultName, this.makeObj("face")]]);
     return { outputs, selections };
   }
 

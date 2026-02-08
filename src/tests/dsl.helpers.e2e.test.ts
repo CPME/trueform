@@ -184,6 +184,19 @@ const tests = [
       assert.equal(extrude.kind, "feature.extrude");
       assert.equal(extrude.result, "body:extrude-1");
       assert.equal("deps" in extrude, false);
+      const surface = dsl.surface("surface-1", dsl.profileRect(2, 3));
+      assert.equal(surface.kind, "feature.surface");
+      assert.equal(surface.result, "surface:surface-1");
+      const extrudeSurface = dsl.extrude(
+        "extrude-surface",
+        dsl.profileRect(2, 3),
+        5,
+        undefined,
+        undefined,
+        { mode: "surface" }
+      );
+      assert.equal(extrudeSurface.mode, "surface");
+      assert.equal(extrudeSurface.result, "surface:extrude-surface");
       const tagged = dsl.withTags(extrude, ["base-feature"]);
       assert.deepEqual(tagged.tags, ["base-feature"]);
 

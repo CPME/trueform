@@ -107,6 +107,7 @@ function buildOutputIndex(part: IntentPart): Map<string, ID> {
 function featureResultName(feature: IntentFeature): string | undefined {
   switch (feature.kind) {
     case "feature.extrude":
+    case "feature.surface":
     case "feature.revolve":
     case "feature.loft":
     case "feature.pipe":
@@ -125,7 +126,11 @@ function inferProfileDependencies(
 ): Set<ID> {
   const deps = new Set<ID>();
   const refs: ProfileRef[] = [];
-  if (feature.kind === "feature.extrude" || feature.kind === "feature.revolve") {
+  if (
+    feature.kind === "feature.extrude" ||
+    feature.kind === "feature.surface" ||
+    feature.kind === "feature.revolve"
+  ) {
     refs.push(feature.profile as ProfileRef);
   } else if (feature.kind === "feature.loft") {
     refs.push(...(feature.profiles as ProfileRef[]));
