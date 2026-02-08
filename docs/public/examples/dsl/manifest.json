@@ -21,6 +21,11 @@
       "image": "/examples/dsl/hole.iso.png"
     },
     {
+      "id": "hole-advanced",
+      "title": "Hole (Counterbore + Countersink)",
+      "image": "/examples/dsl/hole-advanced.iso.png"
+    },
+    {
       "id": "fillet",
       "title": "Fillet",
       "image": "/examples/dsl/fillet.iso.png"

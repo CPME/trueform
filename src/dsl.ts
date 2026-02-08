@@ -35,6 +35,7 @@ import {
   datumFrame,
   datumPlane,
   extrude,
+  surface,
   fillet,
   hole,
   loft,
@@ -141,6 +142,7 @@ export type AxisSpec =
   | { kind: "axis.datum"; ref: ID };
 
 export type ExtrudeAxis = AxisSpec | { kind: "axis.sketch.normal" };
+export type ExtrudeMode = "solid" | "surface";
 
 export type ParamDef = {
   id: ID;
@@ -229,6 +231,7 @@ export type IntentFeature =
   | DatumFrame
   | Sketch2D
   | Extrude
+  | Surface
   | Revolve
   | Loft
   | Pipe
@@ -397,6 +400,13 @@ export type Extrude = FeatureBase & {
   depth: Scalar | "throughAll";
   result: string;
   axis?: ExtrudeAxis;
+  mode?: ExtrudeMode;
+};
+
+export type Surface = FeatureBase & {
+  kind: "feature.surface";
+  profile: ProfileRef;
+  result: string;
 };
 
 export type Revolve = FeatureBase & {
@@ -440,6 +450,16 @@ export type HexTubeSweep = FeatureBase & {
   result: string;
 };
 
+export type HoleCounterbore = {
+  diameter: Scalar;
+  depth: Scalar;
+};
+
+export type HoleCountersink = {
+  diameter: Scalar;
+  angle: Scalar;
+};
+
 export type Hole = FeatureBase & {
   kind: "feature.hole";
   onFace: Selector;
@@ -448,6 +468,8 @@ export type Hole = FeatureBase & {
   depth: Scalar | "throughAll";
   pattern?: PatternRef;
   position?: Point2D;
+  counterbore?: HoleCounterbore;
+  countersink?: HoleCountersink;
 };
 
 export type Fillet = FeatureBase & {
@@ -817,15 +839,22 @@ export type DslHelpers = {
     layout: SplineArrayLayout3D,
     make: (item: SplineArrayItem3D) => T | T[]
   ) => T[];
-  /** Extrude a profile into a solid or cut. */
+  /** Extrude a profile into a solid or surface. */
   extrude: (
     id: ID,
     profile: ProfileRef,
     depth: Extrude["depth"],
     result?: string,
     deps?: ID[],
-    opts?: { axis?: ExtrudeAxis }
+    opts?: { axis?: ExtrudeAxis; mode?: ExtrudeMode }
   ) => Extrude;
+  /** Create a face (surface) from a closed profile. */
+  surface: (
+    id: ID,
+    profile: ProfileRef,
+    result?: string,
+    deps?: ID[]
+  ) => Surface;
   /** Revolve a profile around an axis. */
   revolve: (
     id: ID,
@@ -859,7 +888,13 @@ export type DslHelpers = {
     axis: Hole["axis"],
     diameter: number,
     depth: Hole["depth"],
-    opts?: { pattern?: PatternRef; position?: Point2D; deps?: ID[] }
+    opts?: {
+      pattern?: PatternRef;
+      position?: Point2D;
+      counterbore?: HoleCounterbore;
+      countersink?: HoleCountersink;
+      deps?: ID[];
+    }
   ) => Hole;
   /** Apply a constant-radius fillet to selected edges. */
   fillet: (id: ID, edges: Selector, radius: number, deps?: ID[]) => Fillet;
@@ -1058,6 +1093,7 @@ export const dsl: DslHelpers = {
   sketchArrayAlongSpline,
   featureArrayAlongSpline,
   extrude,
+  surface,
   revolve,
   loft,
   pipe,

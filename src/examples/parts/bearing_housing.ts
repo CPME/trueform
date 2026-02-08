@@ -56,25 +56,17 @@ export const bearingHousing: PartDefinition = {
     ),
     withTags(
       hole(
-        "counterbore",
-        selectorFace([predPlanar()], [rankMaxArea()]),
-        "+X",
-        18,
-        6,
-        { deps: ["housing-revolve"] }
-      ),
-      ["counterbore"]
-    ),
-    withTags(
-      hole(
         "bearing-bore",
         selectorFace([predPlanar()], [rankMaxArea()]),
         "+X",
         10,
         "throughAll",
-        { deps: ["counterbore"] }
+        {
+          counterbore: { diameter: 18, depth: 6 },
+          deps: ["housing-revolve"],
+        }
       ),
-      ["bearing-seat"]
+      ["counterbore", "bearing-seat"]
     ),
   ]),
 };

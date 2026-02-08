@@ -587,6 +587,7 @@ function validateFeature(feature: IntentFeature): void {
         depth?: Scalar | "throughAll";
         result?: string;
         axis?: ExtrudeAxis;
+        mode?: unknown;
       };
       validateProfileRef(extrude.profile);
       if (extrude.profile && (extrude.profile as Profile).kind === "profile.sketch") {
@@ -599,10 +600,32 @@ function validateFeature(feature: IntentFeature): void {
       if (extrude.axis !== undefined) {
         validateExtrudeAxis(extrude.axis, "Extrude axis is invalid");
       }
+      if (extrude.mode !== undefined) {
+        validateExtrudeMode(extrude.mode);
+      }
       ensureNonEmptyString(
         extrude.result,
         "validation_feature_result",
         "Extrude result is required"
+      );
+      return;
+    }
+    case "feature.surface": {
+      const surface = feature as {
+        profile?: ProfileRef;
+        result?: string;
+      };
+      validateProfileRef(surface.profile);
+      if (surface.profile && (surface.profile as Profile).kind === "profile.sketch") {
+        throw new CompileError(
+          "validation_profile_sketch_ref",
+          "profile.sketch must be referenced from a sketch via profileRef"
+        );
+      }
+      ensureNonEmptyString(
+        surface.result,
+        "validation_feature_result",
+        "Surface result is required"
       );
       return;
     }
@@ -739,6 +762,8 @@ function validateFeature(feature: IntentFeature): void {
         depth?: Scalar | "throughAll";
         pattern?: PatternRef;
         position?: Point2D;
+        counterbore?: { diameter?: Scalar; depth?: Scalar };
+        countersink?: { diameter?: Scalar; angle?: Scalar };
       };
       validateSelector(hole.onFace);
       ensureAxis(hole.axis, "Hole axis is required");
@@ -749,6 +774,30 @@ function validateFeature(feature: IntentFeature): void {
       }
       if (hole.position !== undefined) {
         validatePoint2(hole.position, "Hole position");
+      }
+      if (hole.counterbore !== undefined && hole.countersink !== undefined) {
+        throw new CompileError(
+          "validation_hole_counterbore_countersink",
+          "Hole cannot define both counterbore and countersink"
+        );
+      }
+      if (hole.counterbore !== undefined) {
+        ensureObject(
+          hole.counterbore,
+          "validation_hole_counterbore",
+          "Hole counterbore must be an object"
+        );
+        validateScalar(hole.counterbore.diameter, "Hole counterbore diameter");
+        validateScalar(hole.counterbore.depth, "Hole counterbore depth");
+      }
+      if (hole.countersink !== undefined) {
+        ensureObject(
+          hole.countersink,
+          "validation_hole_countersink",
+          "Hole countersink must be an object"
+        );
+        validateScalar(hole.countersink.diameter, "Hole countersink diameter");
+        validateScalar(hole.countersink.angle, "Hole countersink angle");
       }
       return;
     }
@@ -1411,6 +1460,14 @@ function validateExtrudeAxis(value: ExtrudeAxis, message: string): void {
     return;
   }
   validateAxisSpec(value as AxisSpec, message);
+}
+
+function validateExtrudeMode(mode: unknown): void {
+  if (mode === "solid" || mode === "surface") return;
+  throw new CompileError(
+    "validation_extrude_mode",
+    "Extrude mode must be \"solid\" or \"surface\""
+  );
 }
 
 function validatePlaneRef(value: PlaneRef, label: string): void {

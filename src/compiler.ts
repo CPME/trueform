@@ -164,6 +164,9 @@ function normalizeFeature(
         clone.axis = normalizeExtrudeAxis(clone.axis, ctx);
       }
       break;
+    case "feature.surface":
+      clone.profile = normalizeProfileRef(clone.profile, ctx);
+      break;
     case "feature.revolve":
       clone.profile = normalizeProfileRef(clone.profile, ctx);
       clone.angle = normalizeAngle(clone.angle, ctx);
@@ -202,6 +205,18 @@ function normalizeFeature(
       clone.depth = normalizeDepth(clone.depth, ctx);
       if (clone.position !== undefined) {
         clone.position = normalizePoint2(clone.position, ctx);
+      }
+      if (clone.counterbore !== undefined) {
+        clone.counterbore = {
+          diameter: normalizeScalar(clone.counterbore.diameter, "length", ctx),
+          depth: normalizeScalar(clone.counterbore.depth, "length", ctx),
+        };
+      }
+      if (clone.countersink !== undefined) {
+        clone.countersink = {
+          diameter: normalizeScalar(clone.countersink.diameter, "length", ctx),
+          angle: normalizeScalar(clone.countersink.angle, "angle", ctx),
+        };
       }
       break;
     case "feature.fillet":

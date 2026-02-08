@@ -39,6 +39,7 @@ import {
   Selector,
   Sketch2D,
   SketchEntity,
+  Surface,
 } from "./dsl.js";
 
 export type OcctModule = {
@@ -100,6 +101,8 @@ export class OcctBackend implements Backend {
         );
       case "feature.extrude":
         return this.execExtrude(input.feature as Extrude, input.upstream);
+      case "feature.surface":
+        return this.execSurface(input.feature as Surface, input.upstream);
       case "feature.revolve":
         return this.execRevolve(input.feature as Revolve, input.upstream);
       case "feature.loft":
@@ -329,6 +332,14 @@ export class OcctBackend implements Backend {
     }
     const depth = feature.depth;
     const profile = this.resolveProfile(feature.profile, upstream);
+    const mode = feature.mode ?? "solid";
+    if (
+      mode === "solid" &&
+      profile.profile.kind === "profile.sketch" &&
+      profile.profile.open
+    ) {
+      throw new Error("OCCT backend: extrude solid requires a closed sketch profile");
+    }
     const axis = this.resolveExtrudeAxis(feature.axis, profile, upstream);
     const [ax, ay, az] = axis;
     const vec: [number, number, number] = [
@@ -336,6 +347,33 @@ export class OcctBackend implements Backend {
       (ay ?? 0) * depth,
       (az ?? 0) * depth,
     ];
+    if (mode === "surface") {
+      const section = this.buildProfileWire(profile);
+      const prism = this.makePrism(
+        section.wire,
+        this.makeVec(vec[0], vec[1], vec[2])
+      );
+      const shape = this.readShape(prism);
+      const outputs = new Map([
+        [
+          feature.result,
+          {
+            id: `${feature.id}:surface`,
+            kind: "face" as const,
+            meta: { shape },
+          },
+        ],
+      ]);
+      const selections = this.collectSelections(
+        shape,
+        feature.id,
+        feature.result,
+        feature.tags,
+        { rootKind: "face" }
+      );
+      return { outputs, selections };
+    }
+
     const solid = this.buildSolidFromProfile(profile, vec);
     const outputs = new Map([
       [
@@ -352,6 +390,29 @@ export class OcctBackend implements Backend {
       feature.id,
       feature.result,
       feature.tags
+    );
+    return { outputs, selections };
+  }
+
+  private execSurface(feature: Surface, upstream: KernelResult): KernelResult {
+    const profile = this.resolveProfile(feature.profile, upstream);
+    const face = this.buildProfileFace(profile);
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:face`,
+          kind: "face" as const,
+          meta: { shape: face },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      face,
+      feature.id,
+      feature.result,
+      feature.tags,
+      { rootKind: "face" }
     );
     return { outputs, selections };
   }
@@ -783,20 +844,99 @@ export class OcctBackend implements Backend {
       feature.depth === "throughAll"
         ? this.throughAllDepth(owner, axisDir)
         : expectNumber(feature.depth, "feature.depth");
+    if (feature.counterbore && feature.countersink) {
+      throw new Error("OCCT backend: hole cannot define both counterbore and countersink");
+    }
+    let counterboreRadius: number | null = null;
+    let counterboreDepth = 0;
+    if (feature.counterbore) {
+      const cbDiameter = expectNumber(
+        feature.counterbore.diameter,
+        "feature.counterbore.diameter"
+      );
+      const cbDepth = expectNumber(
+        feature.counterbore.depth,
+        "feature.counterbore.depth"
+      );
+      counterboreRadius = cbDiameter / 2;
+      counterboreDepth = cbDepth;
+      if (counterboreRadius <= radius) {
+        throw new Error(
+          "OCCT backend: counterbore diameter must be larger than hole diameter"
+        );
+      }
+      if (counterboreDepth <= 0) {
+        throw new Error("OCCT backend: counterbore depth must be positive");
+      }
+      if (feature.depth !== "throughAll" && counterboreDepth > length) {
+        throw new Error("OCCT backend: counterbore depth exceeds hole depth");
+      }
+    }
+    let countersinkRadius: number | null = null;
+    let countersinkDepth = 0;
+    if (feature.countersink) {
+      const csDiameter = expectNumber(
+        feature.countersink.diameter,
+        "feature.countersink.diameter"
+      );
+      const csAngle = expectNumber(
+        feature.countersink.angle,
+        "feature.countersink.angle"
+      );
+      countersinkRadius = csDiameter / 2;
+      if (countersinkRadius <= radius) {
+        throw new Error(
+          "OCCT backend: countersink diameter must be larger than hole diameter"
+        );
+      }
+      if (csAngle <= 0 || csAngle >= Math.PI) {
+        throw new Error("OCCT backend: countersink angle must be between 0 and PI");
+      }
+      const tanHalf = Math.tan(csAngle / 2);
+      if (tanHalf <= 0) {
+        throw new Error("OCCT backend: countersink angle is too small");
+      }
+      countersinkDepth = (countersinkRadius - radius) / tanHalf;
+      if (!Number.isFinite(countersinkDepth) || countersinkDepth <= 0) {
+        throw new Error("OCCT backend: countersink depth must be positive");
+      }
+      if (feature.depth !== "throughAll" && countersinkDepth > length) {
+        throw new Error("OCCT backend: countersink depth exceeds hole depth");
+      }
+    }
     const centers = feature.pattern
       ? this.patternCenters(feature.pattern.ref, position2, plane, upstream)
       : [this.addVec(faceCenter, positionOffset)];
 
     let solid = owner;
+    const applyCut = (current: any, tool: any) => {
+      const base = current;
+      const cut = this.makeBoolean("cut", base, tool);
+      let next = this.readShape(cut);
+      next = this.splitByTools(next, [base, tool]);
+      return this.normalizeSolid(next);
+    };
     for (const origin of centers) {
-      const cylinder = this.readShape(
-        this.makeCylinder(radius, length, axisDir, origin)
-      );
-      const base = solid;
-      const cut = this.makeBoolean("cut", base, cylinder);
-      solid = this.readShape(cut);
-      solid = this.splitByTools(solid, [base, cylinder]);
-      solid = this.normalizeSolid(solid);
+      const tools = [
+        this.readShape(this.makeCylinder(radius, length, axisDir, origin)),
+      ];
+      if (counterboreRadius !== null) {
+        tools.push(
+          this.readShape(
+            this.makeCylinder(counterboreRadius, counterboreDepth, axisDir, origin)
+          )
+        );
+      }
+      if (countersinkRadius !== null) {
+        tools.push(
+          this.readShape(
+            this.makeCone(countersinkRadius, radius, countersinkDepth, axisDir, origin)
+          )
+        );
+      }
+      for (const tool of tools) {
+        solid = applyCut(solid, tool);
+      }
     }
 
     const outputs = new Map([
@@ -1398,6 +1538,37 @@ export class OcctBackend implements Backend {
       }
     }
     throw new Error("OCCT backend: failed to construct cylinder");
+  }
+
+  private makeCone(
+    radius1: number,
+    radius2: number,
+    height: number,
+    axisDir: [number, number, number],
+    origin: [number, number, number]
+  ) {
+    const pnt = this.makePnt(origin[0], origin[1], origin[2]);
+    const dir = this.makeDir(axisDir[0], axisDir[1], axisDir[2]);
+    const ax2 = this.makeAx2(pnt, dir);
+    const occt = this.occt as Record<string, any>;
+    const ctorWithAxis = occt.BRepPrimAPI_MakeCone_3;
+    if (typeof ctorWithAxis === "function") {
+      return new ctorWithAxis(ax2, radius1, radius2, height);
+    }
+    const candidates: Array<unknown[]> = [
+      [ax2, radius1, radius2, height],
+      [ax2, radius1, radius2, height, 0],
+      [radius1, radius2, height],
+      [radius1, radius2, height, 0],
+    ];
+    for (const args of candidates) {
+      try {
+        return this.newOcct("BRepPrimAPI_MakeCone", ...args);
+      } catch {
+        continue;
+      }
+    }
+    throw new Error("OCCT backend: failed to construct cone");
   }
 
   private makeFilletBuilder(shape: any) {

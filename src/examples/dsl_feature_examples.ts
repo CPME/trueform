@@ -85,6 +85,37 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     ]),
   },
   {
+    id: "hole-advanced",
+    title: "Hole (Counterbore + Countersink)",
+    part: part("example-hole-advanced", [
+      extrude("base", profileRect(120, 50), 12, "body:main"),
+      hole(
+        "hole-counterbore",
+        selectorFace([predPlanar()], [rankMaxZ()]),
+        "-Z",
+        8,
+        "throughAll",
+        {
+          counterbore: { diameter: 16, depth: 4 },
+          position: [-30, 0],
+          deps: ["base"],
+        }
+      ),
+      hole(
+        "hole-countersink",
+        selectorFace([predPlanar()], [rankMaxZ()]),
+        "-Z",
+        8,
+        "throughAll",
+        {
+          countersink: { diameter: 18, angle: Math.PI / 2 },
+          position: [30, 0],
+          deps: ["hole-counterbore"],
+        }
+      ),
+    ]),
+  },
+  {
     id: "fillet",
     title: "Fillet",
     part: part("example-fillet", [

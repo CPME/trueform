@@ -358,6 +358,42 @@ const examplePart = part("example-hole", [
 
 ![Hole example](/examples/dsl/hole.iso.png)
 
+Counterbores and countersinks are optional via `counterbore` / `countersink`
+in the options object (they are mutually exclusive). `countersink.angle` uses
+radians; use `exprLiteral(82, "deg")` if you prefer degrees.
+
+```ts
+const examplePart = part("example-hole-advanced", [
+  extrude("base", profileRect(120, 50), 12, "body:main"),
+  hole(
+    "hole-counterbore",
+    selectorFace([predPlanar()], [rankMaxZ()]),
+    "-Z",
+    8,
+    "throughAll",
+    {
+      counterbore: { diameter: 16, depth: 4 },
+      position: [-30, 0],
+      deps: ["base"],
+    }
+  ),
+  hole(
+    "hole-countersink",
+    selectorFace([predPlanar()], [rankMaxZ()]),
+    "-Z",
+    8,
+    "throughAll",
+    {
+      countersink: { diameter: 18, angle: Math.PI / 2 },
+      position: [30, 0],
+      deps: ["hole-counterbore"],
+    }
+  ),
+]);
+```
+
+![Hole counterbore/countersink example](/examples/dsl/hole-advanced.iso.png)
+
 ### Fillet
 
 ```ts

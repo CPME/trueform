@@ -47,6 +47,7 @@ import type {
   SketchSpline,
   SketchLine,
   SolidQuery,
+  Surface,
 } from "../dsl.js";
 import { compact } from "./utils.js";
 
@@ -273,16 +274,31 @@ export const extrude = (
   depth: Extrude["depth"],
   result?: string,
   deps?: ID[],
-  opts?: { axis?: ExtrudeAxis }
+  opts?: { axis?: ExtrudeAxis; mode?: Extrude["mode"] }
 ): Extrude =>
   compact({
     id,
     kind: "feature.extrude",
     profile,
     depth,
-    result: result ?? `body:${id}`,
+    result: result ?? (opts?.mode === "surface" ? `surface:${id}` : `body:${id}`),
     deps,
     axis: opts?.axis,
+    mode: opts?.mode,
+  });
+
+export const surface = (
+  id: ID,
+  profile: ProfileRef,
+  result?: string,
+  deps?: ID[]
+): Surface =>
+  compact({
+    id,
+    kind: "feature.surface",
+    profile,
+    result: result ?? `surface:${id}`,
+    deps,
   });
 
 export const revolve = (
@@ -381,7 +397,13 @@ export const hole = (
   axis: Hole["axis"],
   diameter: number,
   depth: Hole["depth"],
-  opts?: { pattern?: PatternRef; position?: Point2D; deps?: ID[] }
+  opts?: {
+    pattern?: PatternRef;
+    position?: Point2D;
+    counterbore?: Hole["counterbore"];
+    countersink?: Hole["countersink"];
+    deps?: ID[];
+  }
 ): Hole =>
   compact({
     id,
@@ -392,6 +414,8 @@ export const hole = (
     depth,
     pattern: opts?.pattern,
     position: opts?.position,
+    counterbore: opts?.counterbore,
+    countersink: opts?.countersink,
     deps: opts?.deps,
   });
 
