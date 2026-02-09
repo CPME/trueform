@@ -70,6 +70,13 @@ It is the **single authoritative IR** for geometry, semantic references, functio
   * `mate.fixed`
   * `mate.coaxial`
   * `mate.planar` (optional offset)
+  * `mate.distance` (optional distance)
+  * `mate.angle` (optional angle)
+  * `mate.parallel`
+  * `mate.perpendicular`
+  * `mate.insert` (optional offset)
+  * `mate.slider`
+  * `mate.hinge` (optional offset)
 * `outputs?`: named selection sets using `AssemblyRef`
 
 Types:

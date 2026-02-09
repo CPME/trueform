@@ -68,6 +68,71 @@ export const matePlanar = (
   offset,
 });
 
+export const mateDistance = (
+  a: AssemblyRef,
+  b: AssemblyRef,
+  distance?: number
+): AssemblyMate => ({
+  kind: "mate.distance",
+  a,
+  b,
+  distance,
+});
+
+export const mateAngle = (
+  a: AssemblyRef,
+  b: AssemblyRef,
+  angle?: number
+): AssemblyMate => ({
+  kind: "mate.angle",
+  a,
+  b,
+  angle,
+});
+
+export const mateParallel = (a: AssemblyRef, b: AssemblyRef): AssemblyMate => ({
+  kind: "mate.parallel",
+  a,
+  b,
+});
+
+export const matePerpendicular = (
+  a: AssemblyRef,
+  b: AssemblyRef
+): AssemblyMate => ({
+  kind: "mate.perpendicular",
+  a,
+  b,
+});
+
+export const mateInsert = (
+  a: AssemblyRef,
+  b: AssemblyRef,
+  offset?: number
+): AssemblyMate => ({
+  kind: "mate.insert",
+  a,
+  b,
+  offset,
+});
+
+export const mateSlider = (a: AssemblyRef, b: AssemblyRef): AssemblyMate => ({
+  kind: "mate.slider",
+  a,
+  b,
+});
+
+export const mateHinge = (
+  a: AssemblyRef,
+  b: AssemblyRef,
+  offset?: number
+): AssemblyMate => ({
+  kind: "mate.hinge",
+  a,
+  b,
+  offset,
+});
+
 export const output = (name: string, refs: AssemblyRef[]): AssemblyOutput => ({
   name,
   refs,

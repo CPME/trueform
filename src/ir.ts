@@ -32,6 +32,8 @@ export type AxisSpec =
 
 export type ExtrudeAxis = AxisSpec | { kind: "axis.sketch.normal" };
 export type ExtrudeMode = "solid" | "surface";
+export type ThickenDirection = "normal" | "reverse";
+export type ThreadHandedness = "right" | "left";
 
 export type ParamDef = {
   id: ID;
@@ -59,7 +61,7 @@ export type IntentDocument = {
   assemblies?: IntentAssembly[];
   capabilities?: Record<string, unknown>;
   constraints?: FTIConstraint[];
-  assertions?: unknown[];
+  assertions?: IntentAssertion[];
   context: BuildContext;
 };
 
@@ -70,7 +72,8 @@ export type IntentPart = {
   connectors?: MateConnector[];
   datums?: FTIDatum[];
   constraints?: FTIConstraint[];
-  assertions?: unknown[];
+  cosmeticThreads?: CosmeticThread[];
+  assertions?: IntentAssertion[];
 };
 
 export type IntentAssembly = {
@@ -103,7 +106,14 @@ export type AssemblyRef = {
 export type AssemblyMate =
   | { kind: "mate.fixed"; a: AssemblyRef; b: AssemblyRef }
   | { kind: "mate.coaxial"; a: AssemblyRef; b: AssemblyRef }
-  | { kind: "mate.planar"; a: AssemblyRef; b: AssemblyRef; offset?: number };
+  | { kind: "mate.planar"; a: AssemblyRef; b: AssemblyRef; offset?: number }
+  | { kind: "mate.distance"; a: AssemblyRef; b: AssemblyRef; distance?: number }
+  | { kind: "mate.angle"; a: AssemblyRef; b: AssemblyRef; angle?: number }
+  | { kind: "mate.parallel"; a: AssemblyRef; b: AssemblyRef }
+  | { kind: "mate.perpendicular"; a: AssemblyRef; b: AssemblyRef }
+  | { kind: "mate.insert"; a: AssemblyRef; b: AssemblyRef; offset?: number }
+  | { kind: "mate.slider"; a: AssemblyRef; b: AssemblyRef }
+  | { kind: "mate.hinge"; a: AssemblyRef; b: AssemblyRef; offset?: number };
 
 export type AssemblyOutput = {
   name: string;
@@ -129,6 +139,9 @@ export type IntentFeature =
   | Pipe
   | PipeSweep
   | HexTubeSweep
+  | Mirror
+  | Thicken
+  | Thread
   | Hole
   | Fillet
   | Chamfer
@@ -308,6 +321,7 @@ export type Revolve = FeatureBase & {
   angle?: Scalar | "full";
   origin?: [number, number, number];
   result: string;
+  mode?: ExtrudeMode;
 };
 
 export type Loft = FeatureBase & {
@@ -332,6 +346,7 @@ export type PipeSweep = FeatureBase & {
   outerDiameter: Scalar;
   innerDiameter?: Scalar;
   result: string;
+  mode?: ExtrudeMode;
 };
 
 export type HexTubeSweep = FeatureBase & {
@@ -340,6 +355,55 @@ export type HexTubeSweep = FeatureBase & {
   outerAcrossFlats: Scalar;
   innerAcrossFlats?: Scalar;
   result: string;
+  mode?: ExtrudeMode;
+};
+
+export type Mirror = FeatureBase & {
+  kind: "feature.mirror";
+  source: Selector;
+  plane: PlaneRef;
+  result: string;
+};
+
+export type Thicken = FeatureBase & {
+  kind: "feature.thicken";
+  surface: Selector;
+  thickness: Scalar;
+  direction?: ThickenDirection;
+  result: string;
+};
+
+export type Thread = FeatureBase & {
+  kind: "feature.thread";
+  axis: AxisSpec;
+  origin?: Point3D;
+  length: Scalar;
+  majorDiameter: Scalar;
+  minorDiameter?: Scalar;
+  pitch: Scalar;
+  handedness?: ThreadHandedness;
+  segmentsPerTurn?: Scalar;
+  result: string;
+};
+
+export type CosmeticThread = {
+  id: ID;
+  kind: "thread.cosmetic";
+  target: GeometryRef;
+  designation?: string;
+  standard?: string;
+  series?: string;
+  class?: string;
+  handedness?: ThreadHandedness;
+  internal?: boolean;
+  majorDiameter?: Scalar;
+  minorDiameter?: Scalar;
+  pitch?: Scalar;
+  length?: Scalar;
+  depth?: Scalar;
+  notes?: string[];
+  capabilities?: ID[];
+  requirement?: ID;
 };
 
 export type HoleCounterbore = {
@@ -564,6 +628,21 @@ export type FTIConstraint =
   | PerpendicularityConstraint
   | PositionConstraint
   | SizeConstraint;
+
+export type AssertionBrepValid = {
+  id: ID;
+  kind: "assert.brepValid";
+  target?: Selector;
+};
+
+export type AssertionMinEdgeLength = {
+  id: ID;
+  kind: "assert.minEdgeLength";
+  min: Scalar;
+  target?: Selector;
+};
+
+export type IntentAssertion = AssertionBrepValid | AssertionMinEdgeLength;
 
 export type PlaneRef = Selector | { kind: "plane.datum"; ref: ID };
 

@@ -33,6 +33,26 @@ To export only specific parts, set `TF_VIEWER_ONLY` with a comma-separated list:
 TF_VIEWER_ONLY=pipe_asm,bearing-housing npm run viewer:export
 ```
 
+## Constraint sweeps (slider)
+
+Generate a solver-validated slider sweep (no UI needed):
+
+```bash
+npm run viewer:slider-sweep
+```
+
+This solves each frame (seed + solve) and renders a looping GIF plus per-frame
+metadata:
+- `tools/viewer/assets/sweeps/slider-mate/slider-mate.gif`
+- `tools/viewer/assets/sweeps/slider-mate/frames/` (PNG sequence)
+- `tools/viewer/assets/sweeps/slider-mate/metadata.json`
+
+Tuning (optional):
+
+```bash
+TF_SWEEP_X_MIN=0 TF_SWEEP_X_MAX=10 TF_SWEEP_FRAMES=48 TF_SWEEP_FPS=24 npm run viewer:slider-sweep
+```
+
 ## Mesh format
 
 The viewer expects a JSON payload with:

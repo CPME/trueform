@@ -37,10 +37,11 @@ const tests = [
         0.1
       );
 
+      const assertion = dsl.assertBrepValid("a1");
       const partWithOpts = dsl.part("part-2", [], {
         params: [dsl.paramLength("len", dsl.exprLiteral(5, "mm"))],
         constraints: [constraint],
-        assertions: ["a1"],
+        assertions: [assertion],
       });
       assert.equal(partWithOpts.params?.length, 1);
       assert.equal(partWithOpts.constraints?.length, 1);
@@ -49,7 +50,7 @@ const tests = [
       const doc = dsl.document("doc-1", [part], undefined, undefined, {
         capabilities: { process: "milling" },
         constraints: [constraint],
-        assertions: ["a1"],
+        assertions: [assertion],
       });
       assert.equal(doc.id, "doc-1");
       assert.equal(doc.context.units, "mm");
@@ -129,16 +130,45 @@ const tests = [
       const matePlanar = dsl.matePlanar(ref, ref, 2);
       assert.equal(matePlanar.kind, "mate.planar");
       assert.equal(matePlanar.offset, 2);
+      const mateDistance = dsl.mateDistance(ref, ref, 5);
+      assert.equal(mateDistance.kind, "mate.distance");
+      assert.equal(mateDistance.distance, 5);
+      const mateAngle = dsl.mateAngle(ref, ref, 45);
+      assert.equal(mateAngle.kind, "mate.angle");
+      assert.equal(mateAngle.angle, 45);
+      const mateParallel = dsl.mateParallel(ref, ref);
+      assert.equal(mateParallel.kind, "mate.parallel");
+      const matePerpendicular = dsl.matePerpendicular(ref, ref);
+      assert.equal(matePerpendicular.kind, "mate.perpendicular");
+      const mateInsert = dsl.mateInsert(ref, ref, 1.5);
+      assert.equal(mateInsert.kind, "mate.insert");
+      assert.equal(mateInsert.offset, 1.5);
+      const mateSlider = dsl.mateSlider(ref, ref);
+      assert.equal(mateSlider.kind, "mate.slider");
+      const mateHinge = dsl.mateHinge(ref, ref, 0.25);
+      assert.equal(mateHinge.kind, "mate.hinge");
+      assert.equal(mateHinge.offset, 0.25);
 
       const output = dsl.assemblyOutput("out-1", [ref]);
       assert.equal(output.refs.length, 1);
 
       const assembly = dsl.assembly("asm-1", [instance], {
-        mates: [mateFixed, mateCoaxial, matePlanar],
+        mates: [
+          mateFixed,
+          mateCoaxial,
+          matePlanar,
+          mateDistance,
+          mateAngle,
+          mateParallel,
+          matePerpendicular,
+          mateInsert,
+          mateSlider,
+          mateHinge,
+        ],
         outputs: [output],
       });
       assert.equal(assembly.instances.length, 1);
-      assert.equal(assembly.mates?.length, 3);
+      assert.equal(assembly.mates?.length, 10);
       assert.equal(assembly.outputs?.length, 1);
     },
   },
@@ -208,6 +238,29 @@ const tests = [
       );
       assert.equal(revolve.kind, "feature.revolve");
       assert.equal(revolve.result, "body:revolve-1");
+      const revolveSurface = dsl.revolve(
+        "revolve-surface",
+        dsl.profileCircle(2),
+        "+Z",
+        "full",
+        undefined,
+        { mode: "surface" }
+      );
+      assert.equal(revolveSurface.mode, "surface");
+      assert.equal(revolveSurface.result, "surface:revolve-surface");
+
+      const mirror = dsl.mirror(
+        "mirror-1",
+        selectorFace,
+        planeDatum
+      );
+      assert.equal(mirror.kind, "feature.mirror");
+
+      const thicken = dsl.thicken("thicken-1", selectorFace, 2);
+      assert.equal(thicken.kind, "feature.thicken");
+
+      const thread = dsl.thread("thread-1", "+Z", 10, 6, 1.5);
+      assert.equal(thread.kind, "feature.thread");
 
       const polyProfile = dsl.profilePoly(6, 4);
       assert.equal(polyProfile.kind, "profile.poly");

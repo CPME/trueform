@@ -24,12 +24,35 @@ const tests = [
 
       const mateFixed = assembly.mateFixed(ref, ref);
       assert.equal(mateFixed.kind, "mate.fixed");
+      const mateDistance = assembly.mateDistance(ref, ref, 4);
+      assert.equal(mateDistance.kind, "mate.distance");
+      const mateAngle = assembly.mateAngle(ref, ref, 15);
+      assert.equal(mateAngle.kind, "mate.angle");
+      const mateParallel = assembly.mateParallel(ref, ref);
+      assert.equal(mateParallel.kind, "mate.parallel");
+      const matePerpendicular = assembly.matePerpendicular(ref, ref);
+      assert.equal(matePerpendicular.kind, "mate.perpendicular");
+      const mateInsert = assembly.mateInsert(ref, ref, 2);
+      assert.equal(mateInsert.kind, "mate.insert");
+      const mateSlider = assembly.mateSlider(ref, ref);
+      assert.equal(mateSlider.kind, "mate.slider");
+      const mateHinge = assembly.mateHinge(ref, ref, 1);
+      assert.equal(mateHinge.kind, "mate.hinge");
 
       const output = assembly.output("out-1", [ref]);
       assert.equal(output.refs.length, 1);
 
       const asm = assembly.assembly("asm-1", [instance], {
-        mates: [mateFixed],
+        mates: [
+          mateFixed,
+          mateDistance,
+          mateAngle,
+          mateParallel,
+          matePerpendicular,
+          mateInsert,
+          mateSlider,
+          mateHinge,
+        ],
         outputs: [output],
       });
       assert.equal(asm.outputs?.length, 1);

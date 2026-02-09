@@ -8,7 +8,7 @@ This page documents the current DSL helpers exported from `trueform`. The API is
 import { context, document, part, exprLiteral } from "trueform/dsl/core";
 import { sketch2d, extrude, surface, profileRect, profileRef } from "trueform/dsl/geometry";
 import { assembly, instance, mateFixed } from "trueform/dsl/assembly";
-import { refFrame, refSurface, surfaceProfileConstraint } from "trueform/dsl/tolerancing";
+import { refFrame, refSurface, cosmeticThread, surfaceProfileConstraint } from "trueform/dsl/tolerancing";
 import { featureArray, sketchArray } from "trueform/dsl/generators";
 ```
 
@@ -42,11 +42,19 @@ If you prefer a single namespace, the `dsl` export is still available from `true
 - `mateFixed(a, b) -> AssemblyMate`
 - `mateCoaxial(a, b) -> AssemblyMate`
 - `matePlanar(a, b, offset?) -> AssemblyMate`
+- `mateDistance(a, b, distance?) -> AssemblyMate`
+- `mateAngle(a, b, angle?) -> AssemblyMate`
+- `mateParallel(a, b) -> AssemblyMate`
+- `matePerpendicular(a, b) -> AssemblyMate`
+- `mateInsert(a, b, offset?) -> AssemblyMate`
+- `mateSlider(a, b) -> AssemblyMate`
+- `mateHinge(a, b, offset?) -> AssemblyMate`
 - `output(name, refs) -> AssemblyOutput`
 - `connector(id, origin, opts?) -> MateConnector`
 
 Assembly data remains the authoritative source, but `buildAssembly`/`solveAssembly`
-can solve basic mates for now (fixed, coaxial, planar).
+can solve basic mates for now (fixed, coaxial, planar, distance, angle, parallel,
+perpendicular, insert, slider, hinge).
 
 ### Assembly Example
 
@@ -131,6 +139,28 @@ const solved = buildAssembly(assembly, [plateBuilt, pegBuilt]);
 - `perpendicularityConstraint(id, target, tolerance, datumRefs, opts?) -> PerpendicularityConstraint`
 - `positionConstraint(id, target, tolerance, datumRefs, opts?) -> PositionConstraint`
 - `sizeConstraint(id, target, opts) -> SizeConstraint`
+- `cosmeticThread(id, target, opts?) -> CosmeticThread`
+
+### Cosmetic Thread
+
+```ts
+const target = refSurface(selectorFace([predCreatedBy("base")], [rankMaxArea()]));
+
+const examplePart = part("example-thread-cosmetic", [
+  extrude("base", profileCircle(10), 24, "body:main"),
+], {
+  cosmeticThreads: [
+    cosmeticThread("thread-1", target, {
+      designation: "M8x1.25-6H",
+      internal: true,
+      length: 12,
+    }),
+  ],
+});
+```
+
+Notes:
+- Cosmetic threads are preferred for most cases; they propagate to PMI and STEP AP242.
 
 ### Tolerancing Example (PMI Sidecar)
 
@@ -462,7 +492,7 @@ sketchSpline("spline-1", [
 - `loft(id, profiles, result?, deps?) -> Loft`
 - `mirror(id, source, plane, result?, deps?) -> Mirror`
 - `thicken(id, surface, thickness, result?, deps?, opts?) -> Thicken`
-- `thread(id, axis, length, majorDiameter, pitch, result?, deps?, opts?) -> Thread`
+- `thread(id, axis, length, majorDiameter, pitch, result?, deps?, opts?) -> Thread` (modelled)
 - `hole(id, onFace, axis, diameter, depth, opts?) -> Hole`
 - `fillet(id, edges, radius, deps?) -> Fillet`
 - `chamfer(id, edges, distance, deps?) -> Chamfer`
@@ -544,9 +574,21 @@ Notes:
 
 ### Mirror
 
+![Mirror example](/examples/dsl/mirror.iso.png)
+
 ```ts
+const rect = sketchRectCenter("rect-1", [26, 0], 60, 10, {
+  rotation: Math.PI / 5,
+});
+const sketch = sketch2d(
+  "sketch-v",
+  [{ name: "profile:bar", profile: profileSketchLoop(["rect-1"]) }],
+  { entities: [rect] }
+);
+
 const examplePart = part("example-mirror", [
-  extrude("base", profileRect(40, 20), 6, "body:base"),
+  sketch,
+  extrude("bar", profileRef("profile:bar"), 6, "body:base"),
   datumPlane("mirror-plane", "+X"),
   mirror(
     "mirror-1",
@@ -554,10 +596,19 @@ const examplePart = part("example-mirror", [
     planeDatum("mirror-plane"),
     "body:mirror"
   ),
+  booleanOp(
+    "union-1",
+    "union",
+    selectorNamed("body:base"),
+    selectorNamed("body:mirror"),
+    "body:main"
+  ),
 ]);
 ```
 
 ### Thicken
+
+![Thicken example](/examples/dsl/thicken.iso.png)
 
 ```ts
 const rect = sketchRectCorner("rect-1", [0, 0], 40, 20);
@@ -578,19 +629,42 @@ Notes:
 - `thicken` currently expects a planar face.
 - Use `{ direction: "reverse" }` to thicken opposite the face normal.
 
-### Thread
+### Modelled Thread
+
+![Modelled thread example](/examples/dsl/thread.iso.png)
 
 ```ts
 const examplePart = part("example-thread", [
-  thread("thread-1", "+Z", 12, 8, 1.5, "body:main", undefined, {
-    minorDiameter: 6.5,
-    segmentsPerTurn: 16,
+  thread("thread-1", "+Z", 24, 22, 3.5, "body:main", undefined, {
+    minorDiameter: 14,
+    segmentsPerTurn: 24,
   }),
 ]);
 ```
 
 Notes:
 - Use `booleanOp(..., "subtract", ...)` with a thread solid to cut internal threads.
+- Prefer `cosmeticThread` unless you need explicit thread geometry.
+
+### Cosmetic Thread
+
+![Cosmetic thread example](/examples/dsl/thread-cosmetic.iso.png)
+
+```ts
+const target = refSurface(selectorFace([predCreatedBy("base")], [rankMaxArea()]));
+
+const examplePart = part("example-thread-cosmetic", [
+  extrude("base", profileCircle(10), 24, "body:main"),
+], {
+  cosmeticThreads: [
+    cosmeticThread("thread-1", target, {
+      designation: "M8x1.25-6H",
+      internal: true,
+      length: 12,
+    }),
+  ],
+});
+```
 
 ### Hole
 

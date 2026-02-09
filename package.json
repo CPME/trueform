@@ -26,6 +26,7 @@
     "viewer:export": "npm run build -- --pretty false && node tools/viewer/export.mjs",
     "viewer:serve": "node tools/viewer/serve.mjs",
     "viewer:sweep": "npm run build -- --pretty false && node tools/viewer/param_sweep.mjs",
+    "viewer:slider-sweep": "npm run build -- --pretty false && node tools/viewer/slider_sweep.mjs",
     "sketch:export": "npm run build -- --pretty false && node tools/sketch/export.mjs",
     "docs:examples": "npm run build -- --pretty false && node tools/docs/render_dsl_examples.mjs && node tools/docs/render_sketch_examples.mjs",
     "docs:dev": "vitepress dev docs",
