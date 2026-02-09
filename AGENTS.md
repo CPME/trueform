@@ -35,6 +35,20 @@ cd /home/eveber/code/trueform
 npm test
 ```
 
+Native HTTP transport e2e (live local server):
+
+```bash
+cd /home/eveber/code/trueform
+TF_HTTP_E2E_SERVER=1 node dist/tests/occt_native_http.e2e.test.js
+```
+
+Native OCCT server PMI e2e (requires built `native/occt_server`):
+
+```bash
+cd /home/eveber/code/trueform
+TF_NATIVE_SERVER=1 node dist/tests/occt_native_server_pmi.e2e.test.js
+```
+
 ## Agent Guide (E2E Feature Workflow)
 
 Use this when adding a new feature end-to-end to avoid digging:

@@ -1,4 +1,4 @@
-import { Backend, KernelResult, KernelSelection } from "./backend.js";
+import { Backend, BackendAsync, KernelResult, KernelSelection } from "./backend.js";
 import { compileNormalizedPart, normalizePart } from "./compiler.js";
 import { IntentPart, Selector, Units } from "./dsl.js";
 import { resolveConnectors, type ConnectorFrame } from "./connectors.js";
@@ -38,6 +38,44 @@ export function buildPart(
     if (!feature) throw new Error(`Missing feature ${id}`);
 
     const result = backend.execute({
+      feature,
+      upstream: current,
+      resolve: (selector: Selector, upstream: KernelResult) =>
+        resolveSelector(selector, toResolutionContext(upstream)),
+    });
+
+    current = mergeResults(current, result);
+    steps.push({ featureId: id, result });
+  }
+
+  return {
+    partId: compiled.partId,
+    order: compiled.featureOrder,
+    final: current,
+    steps,
+    connectors: resolveConnectors(normalized.connectors, current),
+  };
+}
+
+export async function buildPartAsync(
+  part: IntentPart,
+  backend: BackendAsync,
+  overrides?: ParamOverrides,
+  options?: ValidationOptions,
+  units?: Units
+): Promise<BuildResult> {
+  const normalized = normalizePart(part, overrides, options, units);
+  const compiled = compileNormalizedPart(normalized);
+  const byId = new Map(normalized.features.map((f) => [f.id, f]));
+
+  let current: KernelResult = { outputs: new Map(), selections: [] };
+  const steps: FeatureStep[] = [];
+
+  for (const id of compiled.featureOrder) {
+    const feature = byId.get(id);
+    if (!feature) throw new Error(`Missing feature ${id}`);
+
+    const result = await backend.execute({
       feature,
       upstream: current,
       resolve: (selector: Selector, upstream: KernelResult) =>

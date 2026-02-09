@@ -16,6 +16,7 @@ The goal: hardware design that feels more like software. A single, digital defin
 - V1 compiles a JSON-serializable IR and builds with an OpenCascade.js backend.
 - Current runtime target is Node + OpenCascade.js.
 - Assemblies are data-only for now (compile warns).
+- Experimental native OCCT backend is available for server-side CAD compute, including AP242 STEP export with XCAF PMI embedding via the native HTTP server.
 
 **Quickstart**
 ```bash
@@ -71,4 +72,5 @@ Viewer setup, mesh schema, and options: `tools/viewer/README.md`.
 - Technical spec (IR, pipeline, backend boundary): `specs/spec.md`
 - Functional tolerancing intent: `specs/functional-tolerancing-intent.md`
 - Viewer helper + mesh schema: `tools/viewer/README.md`
+- Native OCCT server (experimental): `native/occt_server/README.md`
 - Docs map (source-of-truth guide): `specs/docs-map.md`

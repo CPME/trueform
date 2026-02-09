@@ -1,4 +1,5 @@
 import { IntentFeature, ID, Selector } from "./dsl.js";
+import type { PmiPayload } from "./pmi.js";
 
 export type KernelResult = {
   outputs: Map<string, KernelObject>;
@@ -62,5 +63,22 @@ export interface Backend {
   execute(input: ExecuteInput): KernelResult;
   mesh(target: KernelObject, opts?: MeshOptions): MeshData;
   exportStep(target: KernelObject, opts?: StepExportOptions): Uint8Array;
+  exportStepWithPmi?(
+    target: KernelObject,
+    pmi: PmiPayload,
+    opts?: StepExportOptions
+  ): Uint8Array;
   exportStl?(target: KernelObject, opts?: StlExportOptions): Uint8Array;
+}
+
+export interface BackendAsync {
+  execute(input: ExecuteInput): Promise<KernelResult>;
+  mesh(target: KernelObject, opts?: MeshOptions): Promise<MeshData>;
+  exportStep(target: KernelObject, opts?: StepExportOptions): Promise<Uint8Array>;
+  exportStepWithPmi?(
+    target: KernelObject,
+    pmi: PmiPayload,
+    opts?: StepExportOptions
+  ): Promise<Uint8Array>;
+  exportStl?(target: KernelObject, opts?: StlExportOptions): Promise<Uint8Array>;
 }

@@ -11,3 +11,4 @@ tools/sketch/assets/
 docs/public/api/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+temp/
