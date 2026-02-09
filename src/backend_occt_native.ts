@@ -9,7 +9,7 @@ import type {
   StepExportOptions,
   StlExportOptions,
 } from "./backend.js";
-import type { IntentFeature } from "./dsl.js";
+import type { IntentFeature } from "./ir.js";
 import type { PmiPayload } from "./pmi.js";
 
 export type NativeShapeHandle = string;

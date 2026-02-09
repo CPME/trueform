@@ -1,6 +1,6 @@
 import { Backend, BackendAsync, KernelResult, KernelSelection } from "./backend.js";
 import { compileNormalizedPart, normalizePart } from "./compiler.js";
-import { IntentPart, Selector, Units } from "./dsl.js";
+import { IntentPart, Selector, Units } from "./ir.js";
 import { resolveConnectors, type ConnectorFrame } from "./connectors.js";
 import { ParamOverrides } from "./params.js";
 import { resolveSelector } from "./selectors.js";

@@ -7,7 +7,7 @@ import {
   MeshOptions,
   KernelObject,
 } from "./backend.js";
-import { IntentFeature, Sketch2D, Selector } from "./dsl.js";
+import { IntentFeature, Sketch2D, Selector } from "./ir.js";
 
 export class MockBackend implements Backend {
   private seq = 0;

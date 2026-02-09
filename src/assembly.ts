@@ -1,4 +1,4 @@
-import type { AssemblyMate, ID, IntentAssembly } from "./dsl.js";
+import type { AssemblyMate, ID, IntentAssembly } from "./ir.js";
 import type { BuildResult } from "./executor.js";
 import type { ConnectorFrame } from "./connectors.js";
 import { Matrix4, matrixFromTranslationRotation, multiplyMatrices, normalizeTransform } from "./transform.js";

@@ -1,8 +1,9 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import type { IntentDocument } from "../dsl.js";
+import { TF_IR_SCHEMA } from "../ir.js";
+import type { IntentDocument } from "../ir.js";
 
 export const TF_CONTAINER_SCHEMA = "trueform.container.v1";
-export const TF_DOCUMENT_SCHEMA = "trueform.document.v1";
+export const TF_DOCUMENT_SCHEMA = TF_IR_SCHEMA;
 
 export type TfBuildContext = {
   kernel: { name: string; version: string };

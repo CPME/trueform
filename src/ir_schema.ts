@@ -1,0 +1,1382 @@
+import { TF_IR_SCHEMA, TF_IR_VERSION } from "./ir.js";
+
+export const IR_SCHEMA = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: TF_IR_SCHEMA,
+  title: "TrueForm IR v1",
+  type: "object",
+  required: ["id", "schema", "irVersion", "parts", "context"],
+  properties: {
+    id: { $ref: "#/$defs/ID" },
+    schema: { const: TF_IR_SCHEMA },
+    irVersion: { const: TF_IR_VERSION },
+    parts: {
+      type: "array",
+      items: { $ref: "#/$defs/IntentPart" },
+    },
+    assemblies: {
+      type: "array",
+      items: { $ref: "#/$defs/IntentAssembly" },
+    },
+    capabilities: { type: "object", additionalProperties: true },
+    constraints: {
+      type: "array",
+      items: { $ref: "#/$defs/FTIConstraint" },
+    },
+    assertions: { type: "array" },
+    context: { $ref: "#/$defs/BuildContext" },
+  },
+  additionalProperties: false,
+  $defs: {
+    ID: { type: "string", minLength: 1 },
+    LengthUnit: { enum: ["mm", "cm", "m", "in"] },
+    AngleUnit: { enum: ["rad", "deg"] },
+    Unit: { enum: ["mm", "cm", "m", "in", "rad", "deg"] },
+    Units: { enum: ["mm", "cm", "m", "in"] },
+    AxisDirection: { enum: ["+X", "-X", "+Y", "-Y", "+Z", "-Z"] },
+    ParamType: { enum: ["length", "angle", "count"] },
+
+    ExprLiteral: {
+      type: "object",
+      required: ["kind", "value"],
+      properties: {
+        kind: { const: "expr.literal" },
+        value: { type: "number" },
+        unit: { $ref: "#/$defs/Unit" },
+      },
+      additionalProperties: false,
+    },
+    ExprParam: {
+      type: "object",
+      required: ["kind", "id"],
+      properties: {
+        kind: { const: "expr.param" },
+        id: { $ref: "#/$defs/ID" },
+      },
+      additionalProperties: false,
+    },
+    ExprBinary: {
+      type: "object",
+      required: ["kind", "op", "left", "right"],
+      properties: {
+        kind: { const: "expr.binary" },
+        op: { enum: ["+", "-", "*", "/"] },
+        left: { $ref: "#/$defs/Expr" },
+        right: { $ref: "#/$defs/Expr" },
+      },
+      additionalProperties: false,
+    },
+    ExprNeg: {
+      type: "object",
+      required: ["kind", "value"],
+      properties: {
+        kind: { const: "expr.neg" },
+        value: { $ref: "#/$defs/Expr" },
+      },
+      additionalProperties: false,
+    },
+    Expr: {
+      anyOf: [
+        { $ref: "#/$defs/ExprLiteral" },
+        { $ref: "#/$defs/ExprParam" },
+        { $ref: "#/$defs/ExprBinary" },
+        { $ref: "#/$defs/ExprNeg" },
+      ],
+    },
+
+    Scalar: {
+      anyOf: [{ type: "number" }, { $ref: "#/$defs/Expr" }],
+    },
+    Point2D: {
+      type: "array",
+      minItems: 2,
+      maxItems: 2,
+      items: { $ref: "#/$defs/Scalar" },
+    },
+    Point3D: {
+      type: "array",
+      minItems: 3,
+      maxItems: 3,
+      items: { $ref: "#/$defs/Scalar" },
+    },
+
+    AxisVector: {
+      type: "object",
+      required: ["kind", "direction"],
+      properties: {
+        kind: { const: "axis.vector" },
+        direction: { $ref: "#/$defs/Point3D" },
+      },
+      additionalProperties: false,
+    },
+    AxisDatum: {
+      type: "object",
+      required: ["kind", "ref"],
+      properties: {
+        kind: { const: "axis.datum" },
+        ref: { $ref: "#/$defs/ID" },
+      },
+      additionalProperties: false,
+    },
+    AxisSpec: {
+      anyOf: [
+        { $ref: "#/$defs/AxisDirection" },
+        { $ref: "#/$defs/AxisVector" },
+        { $ref: "#/$defs/AxisDatum" },
+      ],
+    },
+    ExtrudeAxis: {
+      anyOf: [
+        { $ref: "#/$defs/AxisSpec" },
+        {
+          type: "object",
+          required: ["kind"],
+          properties: { kind: { const: "axis.sketch.normal" } },
+          additionalProperties: false,
+        },
+      ],
+    },
+    ExtrudeMode: { enum: ["solid", "surface"] },
+
+    ParamDef: {
+      type: "object",
+      required: ["id", "type", "value"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        type: { $ref: "#/$defs/ParamType" },
+        value: { $ref: "#/$defs/Expr" },
+      },
+      additionalProperties: false,
+    },
+
+    BuildContext: {
+      type: "object",
+      required: ["units", "kernel", "tolerance"],
+      properties: {
+        units: { $ref: "#/$defs/Units" },
+        kernel: {
+          type: "object",
+          required: ["name", "version"],
+          properties: {
+            name: { type: "string" },
+            version: { type: "string" },
+          },
+          additionalProperties: false,
+        },
+        tolerance: {
+          type: "object",
+          required: ["linear", "angular"],
+          properties: {
+            linear: { type: "number" },
+            angular: { type: "number" },
+          },
+          additionalProperties: false,
+        },
+      },
+      additionalProperties: false,
+    },
+
+    IntentPart: {
+      type: "object",
+      required: ["id", "features"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        features: {
+          type: "array",
+          items: { $ref: "#/$defs/IntentFeature" },
+        },
+        params: {
+          type: "array",
+          items: { $ref: "#/$defs/ParamDef" },
+        },
+        connectors: {
+          type: "array",
+          items: { $ref: "#/$defs/MateConnector" },
+        },
+        datums: {
+          type: "array",
+          items: { $ref: "#/$defs/FTIDatum" },
+        },
+        constraints: {
+          type: "array",
+          items: { $ref: "#/$defs/FTIConstraint" },
+        },
+        assertions: { type: "array" },
+      },
+      additionalProperties: false,
+    },
+
+    IntentAssembly: {
+      type: "object",
+      required: ["id", "instances"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        instances: {
+          type: "array",
+          items: { $ref: "#/$defs/AssemblyInstance" },
+        },
+        mates: {
+          type: "array",
+          items: { $ref: "#/$defs/AssemblyMate" },
+        },
+        outputs: {
+          type: "array",
+          items: { $ref: "#/$defs/AssemblyOutput" },
+        },
+      },
+      additionalProperties: false,
+    },
+
+    AssemblyInstance: {
+      type: "object",
+      required: ["id", "part"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        part: { $ref: "#/$defs/ID" },
+        transform: { $ref: "#/$defs/Transform" },
+        tags: { type: "array", items: { type: "string" } },
+      },
+      additionalProperties: false,
+    },
+
+    Transform: {
+      type: "object",
+      properties: {
+        translation: {
+          type: "array",
+          minItems: 3,
+          maxItems: 3,
+          items: { type: "number" },
+        },
+        rotation: {
+          type: "array",
+          minItems: 3,
+          maxItems: 3,
+          items: { type: "number" },
+        },
+        matrix: {
+          type: "array",
+          minItems: 16,
+          maxItems: 16,
+          items: { type: "number" },
+        },
+      },
+      additionalProperties: false,
+    },
+
+    AssemblyRef: {
+      type: "object",
+      required: ["instance", "connector"],
+      properties: {
+        instance: { $ref: "#/$defs/ID" },
+        connector: { $ref: "#/$defs/ID" },
+      },
+      additionalProperties: false,
+    },
+
+    AssemblyMateFixed: {
+      type: "object",
+      required: ["kind", "a", "b"],
+      properties: {
+        kind: { const: "mate.fixed" },
+        a: { $ref: "#/$defs/AssemblyRef" },
+        b: { $ref: "#/$defs/AssemblyRef" },
+      },
+      additionalProperties: false,
+    },
+    AssemblyMateCoaxial: {
+      type: "object",
+      required: ["kind", "a", "b"],
+      properties: {
+        kind: { const: "mate.coaxial" },
+        a: { $ref: "#/$defs/AssemblyRef" },
+        b: { $ref: "#/$defs/AssemblyRef" },
+      },
+      additionalProperties: false,
+    },
+    AssemblyMatePlanar: {
+      type: "object",
+      required: ["kind", "a", "b"],
+      properties: {
+        kind: { const: "mate.planar" },
+        a: { $ref: "#/$defs/AssemblyRef" },
+        b: { $ref: "#/$defs/AssemblyRef" },
+        offset: { type: "number" },
+      },
+      additionalProperties: false,
+    },
+    AssemblyMate: {
+      anyOf: [
+        { $ref: "#/$defs/AssemblyMateFixed" },
+        { $ref: "#/$defs/AssemblyMateCoaxial" },
+        { $ref: "#/$defs/AssemblyMatePlanar" },
+      ],
+    },
+
+    AssemblyOutput: {
+      type: "object",
+      required: ["name", "refs"],
+      properties: {
+        name: { type: "string" },
+        refs: {
+          type: "array",
+          items: { $ref: "#/$defs/AssemblyRef" },
+        },
+      },
+      additionalProperties: false,
+    },
+
+    MateConnector: {
+      type: "object",
+      required: ["id", "origin"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        origin: { $ref: "#/$defs/Selector" },
+        normal: { $ref: "#/$defs/AxisDirection" },
+        xAxis: { $ref: "#/$defs/AxisDirection" },
+      },
+      additionalProperties: false,
+    },
+
+    SketchProfile: {
+      type: "object",
+      required: ["name", "profile"],
+      properties: {
+        name: { type: "string" },
+        profile: { $ref: "#/$defs/Profile" },
+      },
+      additionalProperties: false,
+    },
+
+    SketchEntityBase: {
+      type: "object",
+      required: ["id", "kind"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { type: "string" },
+        construction: { type: "boolean" },
+      },
+    },
+
+    SketchLine: {
+      type: "object",
+      required: ["id", "kind", "start", "end"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.line" },
+        construction: { type: "boolean" },
+        start: { $ref: "#/$defs/Point2D" },
+        end: { $ref: "#/$defs/Point2D" },
+      },
+      additionalProperties: false,
+    },
+    SketchArc: {
+      type: "object",
+      required: ["id", "kind", "start", "end", "center", "direction"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.arc" },
+        construction: { type: "boolean" },
+        start: { $ref: "#/$defs/Point2D" },
+        end: { $ref: "#/$defs/Point2D" },
+        center: { $ref: "#/$defs/Point2D" },
+        direction: { enum: ["cw", "ccw"] },
+      },
+      additionalProperties: false,
+    },
+    SketchCircle: {
+      type: "object",
+      required: ["id", "kind", "center", "radius"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.circle" },
+        construction: { type: "boolean" },
+        center: { $ref: "#/$defs/Point2D" },
+        radius: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
+    SketchEllipse: {
+      type: "object",
+      required: ["id", "kind", "center", "radiusX", "radiusY"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.ellipse" },
+        construction: { type: "boolean" },
+        center: { $ref: "#/$defs/Point2D" },
+        radiusX: { $ref: "#/$defs/Scalar" },
+        radiusY: { $ref: "#/$defs/Scalar" },
+        rotation: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
+    SketchRectangleCenter: {
+      type: "object",
+      required: ["id", "kind", "mode", "center", "width", "height"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.rectangle" },
+        mode: { const: "center" },
+        construction: { type: "boolean" },
+        center: { $ref: "#/$defs/Point2D" },
+        width: { $ref: "#/$defs/Scalar" },
+        height: { $ref: "#/$defs/Scalar" },
+        rotation: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
+    SketchRectangleCorner: {
+      type: "object",
+      required: ["id", "kind", "mode", "corner", "width", "height"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.rectangle" },
+        mode: { const: "corner" },
+        construction: { type: "boolean" },
+        corner: { $ref: "#/$defs/Point2D" },
+        width: { $ref: "#/$defs/Scalar" },
+        height: { $ref: "#/$defs/Scalar" },
+        rotation: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
+    SketchSlot: {
+      type: "object",
+      required: ["id", "kind", "center", "length", "width"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.slot" },
+        construction: { type: "boolean" },
+        center: { $ref: "#/$defs/Point2D" },
+        length: { $ref: "#/$defs/Scalar" },
+        width: { $ref: "#/$defs/Scalar" },
+        rotation: { $ref: "#/$defs/Scalar" },
+        endStyle: { enum: ["arc", "straight"] },
+      },
+      additionalProperties: false,
+    },
+    SketchPolygon: {
+      type: "object",
+      required: ["id", "kind", "center", "radius", "sides"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.polygon" },
+        construction: { type: "boolean" },
+        center: { $ref: "#/$defs/Point2D" },
+        radius: { $ref: "#/$defs/Scalar" },
+        sides: { $ref: "#/$defs/Scalar" },
+        rotation: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
+    SketchSpline: {
+      type: "object",
+      required: ["id", "kind", "points"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.spline" },
+        construction: { type: "boolean" },
+        points: { type: "array", items: { $ref: "#/$defs/Point2D" } },
+        closed: { type: "boolean" },
+        degree: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
+    SketchPoint: {
+      type: "object",
+      required: ["id", "kind", "point"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.point" },
+        construction: { type: "boolean" },
+        point: { $ref: "#/$defs/Point2D" },
+      },
+      additionalProperties: false,
+    },
+    SketchEntity: {
+      anyOf: [
+        { $ref: "#/$defs/SketchLine" },
+        { $ref: "#/$defs/SketchArc" },
+        { $ref: "#/$defs/SketchCircle" },
+        { $ref: "#/$defs/SketchEllipse" },
+        { $ref: "#/$defs/SketchRectangleCenter" },
+        { $ref: "#/$defs/SketchRectangleCorner" },
+        { $ref: "#/$defs/SketchSlot" },
+        { $ref: "#/$defs/SketchPolygon" },
+        { $ref: "#/$defs/SketchSpline" },
+        { $ref: "#/$defs/SketchPoint" },
+      ],
+    },
+
+    PathSegmentLine: {
+      type: "object",
+      required: ["kind", "start", "end"],
+      properties: {
+        kind: { const: "path.line" },
+        start: { $ref: "#/$defs/Point3D" },
+        end: { $ref: "#/$defs/Point3D" },
+      },
+      additionalProperties: false,
+    },
+    PathSegmentArc: {
+      type: "object",
+      required: ["kind", "start", "end", "center"],
+      properties: {
+        kind: { const: "path.arc" },
+        start: { $ref: "#/$defs/Point3D" },
+        end: { $ref: "#/$defs/Point3D" },
+        center: { $ref: "#/$defs/Point3D" },
+        direction: { enum: ["cw", "ccw"] },
+      },
+      additionalProperties: false,
+    },
+    PathSegment: {
+      anyOf: [
+        { $ref: "#/$defs/PathSegmentLine" },
+        { $ref: "#/$defs/PathSegmentArc" },
+      ],
+    },
+
+    Path3DPolyline: {
+      type: "object",
+      required: ["kind", "points"],
+      properties: {
+        kind: { const: "path.polyline" },
+        points: { type: "array", items: { $ref: "#/$defs/Point3D" } },
+        closed: { type: "boolean" },
+      },
+      additionalProperties: false,
+    },
+    Path3DSpline: {
+      type: "object",
+      required: ["kind", "points"],
+      properties: {
+        kind: { const: "path.spline" },
+        points: { type: "array", items: { $ref: "#/$defs/Point3D" } },
+        closed: { type: "boolean" },
+        degree: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
+    Path3DSegments: {
+      type: "object",
+      required: ["kind", "segments"],
+      properties: {
+        kind: { const: "path.segments" },
+        segments: { type: "array", items: { $ref: "#/$defs/PathSegment" } },
+      },
+      additionalProperties: false,
+    },
+    Path3D: {
+      anyOf: [
+        { $ref: "#/$defs/Path3DPolyline" },
+        { $ref: "#/$defs/Path3DSpline" },
+        { $ref: "#/$defs/Path3DSegments" },
+      ],
+    },
+
+    ProfileRectangle: {
+      type: "object",
+      required: ["kind", "width", "height"],
+      properties: {
+        kind: { const: "profile.rectangle" },
+        width: { $ref: "#/$defs/Scalar" },
+        height: { $ref: "#/$defs/Scalar" },
+        center: { $ref: "#/$defs/Point3D" },
+      },
+      additionalProperties: false,
+    },
+    ProfileCircle: {
+      type: "object",
+      required: ["kind", "radius"],
+      properties: {
+        kind: { const: "profile.circle" },
+        radius: { $ref: "#/$defs/Scalar" },
+        center: { $ref: "#/$defs/Point3D" },
+      },
+      additionalProperties: false,
+    },
+    ProfilePoly: {
+      type: "object",
+      required: ["kind", "sides", "radius"],
+      properties: {
+        kind: { const: "profile.poly" },
+        sides: { $ref: "#/$defs/Scalar" },
+        radius: { $ref: "#/$defs/Scalar" },
+        center: { $ref: "#/$defs/Point3D" },
+        rotation: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
+    ProfileSketch: {
+      type: "object",
+      required: ["kind", "loop"],
+      properties: {
+        kind: { const: "profile.sketch" },
+        loop: {
+          type: "array",
+          items: { $ref: "#/$defs/ID" },
+        },
+        holes: {
+          type: "array",
+          items: {
+            type: "array",
+            items: { $ref: "#/$defs/ID" },
+          },
+        },
+        open: { type: "boolean" },
+      },
+      additionalProperties: false,
+    },
+    Profile: {
+      anyOf: [
+        { $ref: "#/$defs/ProfileRectangle" },
+        { $ref: "#/$defs/ProfileCircle" },
+        { $ref: "#/$defs/ProfilePoly" },
+        { $ref: "#/$defs/ProfileSketch" },
+      ],
+    },
+    ProfileRef: {
+      anyOf: [
+        { $ref: "#/$defs/Profile" },
+        {
+          type: "object",
+          required: ["kind", "name"],
+          properties: {
+            kind: { const: "profile.ref" },
+            name: { type: "string" },
+          },
+          additionalProperties: false,
+        },
+      ],
+    },
+
+    NamedOutput: {
+      type: "object",
+      required: ["kind", "name"],
+      properties: {
+        kind: { const: "selector.named" },
+        name: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    FaceQuery: {
+      type: "object",
+      required: ["kind", "predicates", "rank"],
+      properties: {
+        kind: { const: "selector.face" },
+        predicates: { type: "array", items: { $ref: "#/$defs/Predicate" } },
+        rank: { type: "array", items: { $ref: "#/$defs/RankRule" } },
+      },
+      additionalProperties: false,
+    },
+    EdgeQuery: {
+      type: "object",
+      required: ["kind", "predicates", "rank"],
+      properties: {
+        kind: { const: "selector.edge" },
+        predicates: { type: "array", items: { $ref: "#/$defs/Predicate" } },
+        rank: { type: "array", items: { $ref: "#/$defs/RankRule" } },
+      },
+      additionalProperties: false,
+    },
+    SolidQuery: {
+      type: "object",
+      required: ["kind", "predicates", "rank"],
+      properties: {
+        kind: { const: "selector.solid" },
+        predicates: { type: "array", items: { $ref: "#/$defs/Predicate" } },
+        rank: { type: "array", items: { $ref: "#/$defs/RankRule" } },
+      },
+      additionalProperties: false,
+    },
+    Selector: {
+      anyOf: [
+        { $ref: "#/$defs/FaceQuery" },
+        { $ref: "#/$defs/EdgeQuery" },
+        { $ref: "#/$defs/SolidQuery" },
+        { $ref: "#/$defs/NamedOutput" },
+      ],
+    },
+
+    PredicateNormal: {
+      type: "object",
+      required: ["kind", "value"],
+      properties: {
+        kind: { const: "pred.normal" },
+        value: { $ref: "#/$defs/AxisDirection" },
+      },
+      additionalProperties: false,
+    },
+    PredicatePlanar: {
+      type: "object",
+      required: ["kind"],
+      properties: {
+        kind: { const: "pred.planar" },
+      },
+      additionalProperties: false,
+    },
+    PredicateCreatedBy: {
+      type: "object",
+      required: ["kind", "featureId"],
+      properties: {
+        kind: { const: "pred.createdBy" },
+        featureId: { $ref: "#/$defs/ID" },
+      },
+      additionalProperties: false,
+    },
+    PredicateRole: {
+      type: "object",
+      required: ["kind", "value"],
+      properties: {
+        kind: { const: "pred.role" },
+        value: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    Predicate: {
+      anyOf: [
+        { $ref: "#/$defs/PredicateNormal" },
+        { $ref: "#/$defs/PredicatePlanar" },
+        { $ref: "#/$defs/PredicateCreatedBy" },
+        { $ref: "#/$defs/PredicateRole" },
+      ],
+    },
+
+    RankMaxArea: {
+      type: "object",
+      required: ["kind"],
+      properties: {
+        kind: { const: "rank.maxArea" },
+      },
+      additionalProperties: false,
+    },
+    RankMinZ: {
+      type: "object",
+      required: ["kind"],
+      properties: {
+        kind: { const: "rank.minZ" },
+      },
+      additionalProperties: false,
+    },
+    RankMaxZ: {
+      type: "object",
+      required: ["kind"],
+      properties: {
+        kind: { const: "rank.maxZ" },
+      },
+      additionalProperties: false,
+    },
+    RankClosestTo: {
+      type: "object",
+      required: ["kind", "target"],
+      properties: {
+        kind: { const: "rank.closestTo" },
+        target: { $ref: "#/$defs/Selector" },
+      },
+      additionalProperties: false,
+    },
+    RankRule: {
+      anyOf: [
+        { $ref: "#/$defs/RankMaxArea" },
+        { $ref: "#/$defs/RankMinZ" },
+        { $ref: "#/$defs/RankMaxZ" },
+        { $ref: "#/$defs/RankClosestTo" },
+      ],
+    },
+
+    PlaneRef: {
+      anyOf: [
+        { $ref: "#/$defs/Selector" },
+        {
+          type: "object",
+          required: ["kind", "ref"],
+          properties: {
+            kind: { const: "plane.datum" },
+            ref: { $ref: "#/$defs/ID" },
+          },
+          additionalProperties: false,
+        },
+      ],
+    },
+
+    RefSurface: {
+      type: "object",
+      required: ["kind", "selector"],
+      properties: {
+        kind: { const: "ref.surface" },
+        selector: { $ref: "#/$defs/Selector" },
+      },
+      additionalProperties: false,
+    },
+    RefFrame: {
+      type: "object",
+      required: ["kind", "selector"],
+      properties: {
+        kind: { const: "ref.frame" },
+        selector: { $ref: "#/$defs/Selector" },
+      },
+      additionalProperties: false,
+    },
+    RefEdge: {
+      type: "object",
+      required: ["kind", "selector"],
+      properties: {
+        kind: { const: "ref.edge" },
+        selector: { $ref: "#/$defs/Selector" },
+      },
+      additionalProperties: false,
+    },
+    RefAxis: {
+      type: "object",
+      required: ["kind", "selector"],
+      properties: {
+        kind: { const: "ref.axis" },
+        selector: { $ref: "#/$defs/Selector" },
+      },
+      additionalProperties: false,
+    },
+    RefPoint: {
+      type: "object",
+      required: ["kind", "selector"],
+      properties: {
+        kind: { const: "ref.point" },
+        selector: { $ref: "#/$defs/Selector" },
+      },
+      additionalProperties: false,
+    },
+    GeometryRef: {
+      anyOf: [
+        { $ref: "#/$defs/RefSurface" },
+        { $ref: "#/$defs/RefFrame" },
+        { $ref: "#/$defs/RefEdge" },
+        { $ref: "#/$defs/RefAxis" },
+        { $ref: "#/$defs/RefPoint" },
+      ],
+    },
+
+    DatumModifier: { enum: ["MMB", "LMB", "RMB"] },
+    ToleranceModifier: {
+      enum: [
+        "MMC",
+        "LMC",
+        "RFS",
+        "PROJECTED",
+        "FREE_STATE",
+        "TANGENT_PLANE",
+        "STATISTICAL",
+      ],
+    },
+
+    DatumRef: {
+      type: "object",
+      required: ["kind", "datum"],
+      properties: {
+        kind: { const: "datum.ref" },
+        datum: { $ref: "#/$defs/ID" },
+        modifiers: { type: "array", items: { $ref: "#/$defs/DatumModifier" } },
+      },
+      additionalProperties: false,
+    },
+
+    FTIDatum: {
+      type: "object",
+      required: ["id", "kind", "label", "target"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "datum.feature" },
+        label: { type: "string" },
+        target: { $ref: "#/$defs/GeometryRef" },
+        modifiers: { type: "array", items: { $ref: "#/$defs/DatumModifier" } },
+        capabilities: { type: "array", items: { $ref: "#/$defs/ID" } },
+        requirement: { $ref: "#/$defs/ID" },
+      },
+      additionalProperties: false,
+    },
+
+    SurfaceProfileConstraint: {
+      type: "object",
+      required: ["id", "kind", "target", "tolerance"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "constraint.surfaceProfile" },
+        target: { $ref: "#/$defs/RefSurface" },
+        tolerance: { $ref: "#/$defs/Scalar" },
+        referenceFrame: { $ref: "#/$defs/RefFrame" },
+        capabilities: { type: "array", items: { $ref: "#/$defs/ID" } },
+        requirement: { $ref: "#/$defs/ID" },
+      },
+      additionalProperties: false,
+    },
+    FlatnessConstraint: {
+      type: "object",
+      required: ["id", "kind", "target", "tolerance"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "constraint.flatness" },
+        target: { $ref: "#/$defs/RefSurface" },
+        tolerance: { $ref: "#/$defs/Scalar" },
+        capabilities: { type: "array", items: { $ref: "#/$defs/ID" } },
+        requirement: { $ref: "#/$defs/ID" },
+      },
+      additionalProperties: false,
+    },
+    ParallelismConstraint: {
+      type: "object",
+      required: ["id", "kind", "target", "tolerance", "datum"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "constraint.parallelism" },
+        target: { $ref: "#/$defs/RefSurface" },
+        tolerance: { $ref: "#/$defs/Scalar" },
+        datum: { type: "array", items: { $ref: "#/$defs/DatumRef" } },
+        modifiers: { type: "array", items: { $ref: "#/$defs/ToleranceModifier" } },
+        capabilities: { type: "array", items: { $ref: "#/$defs/ID" } },
+        requirement: { $ref: "#/$defs/ID" },
+      },
+      additionalProperties: false,
+    },
+    PerpendicularityConstraint: {
+      type: "object",
+      required: ["id", "kind", "target", "tolerance", "datum"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "constraint.perpendicularity" },
+        target: { $ref: "#/$defs/RefSurface" },
+        tolerance: { $ref: "#/$defs/Scalar" },
+        datum: { type: "array", items: { $ref: "#/$defs/DatumRef" } },
+        modifiers: { type: "array", items: { $ref: "#/$defs/ToleranceModifier" } },
+        capabilities: { type: "array", items: { $ref: "#/$defs/ID" } },
+        requirement: { $ref: "#/$defs/ID" },
+      },
+      additionalProperties: false,
+    },
+    PositionConstraint: {
+      type: "object",
+      required: ["id", "kind", "target", "tolerance", "datum"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "constraint.position" },
+        target: { $ref: "#/$defs/GeometryRef" },
+        tolerance: { $ref: "#/$defs/Scalar" },
+        datum: { type: "array", items: { $ref: "#/$defs/DatumRef" } },
+        modifiers: { type: "array", items: { $ref: "#/$defs/ToleranceModifier" } },
+        capabilities: { type: "array", items: { $ref: "#/$defs/ID" } },
+        requirement: { $ref: "#/$defs/ID" },
+        zone: { enum: ["diameter", "cartesian"] },
+      },
+      additionalProperties: false,
+    },
+    SizeConstraint: {
+      type: "object",
+      required: ["id", "kind", "target"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "constraint.size" },
+        target: { $ref: "#/$defs/GeometryRef" },
+        nominal: { $ref: "#/$defs/Scalar" },
+        tolerance: { $ref: "#/$defs/Scalar" },
+        min: { $ref: "#/$defs/Scalar" },
+        max: { $ref: "#/$defs/Scalar" },
+        modifiers: { type: "array", items: { $ref: "#/$defs/ToleranceModifier" } },
+        capabilities: { type: "array", items: { $ref: "#/$defs/ID" } },
+        requirement: { $ref: "#/$defs/ID" },
+      },
+      additionalProperties: false,
+    },
+    FTIConstraint: {
+      anyOf: [
+        { $ref: "#/$defs/SurfaceProfileConstraint" },
+        { $ref: "#/$defs/FlatnessConstraint" },
+        { $ref: "#/$defs/ParallelismConstraint" },
+        { $ref: "#/$defs/PerpendicularityConstraint" },
+        { $ref: "#/$defs/PositionConstraint" },
+        { $ref: "#/$defs/SizeConstraint" },
+      ],
+    },
+
+    DatumPlane: {
+      type: "object",
+      required: ["id", "kind", "normal"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "datum.plane" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        normal: { $ref: "#/$defs/AxisSpec" },
+        origin: {
+          type: "array",
+          minItems: 3,
+          maxItems: 3,
+          items: { type: "number" },
+        },
+        xAxis: { $ref: "#/$defs/AxisSpec" },
+      },
+      additionalProperties: false,
+    },
+    DatumAxis: {
+      type: "object",
+      required: ["id", "kind", "direction"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "datum.axis" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        direction: { $ref: "#/$defs/AxisSpec" },
+        origin: {
+          type: "array",
+          minItems: 3,
+          maxItems: 3,
+          items: { type: "number" },
+        },
+      },
+      additionalProperties: false,
+    },
+    DatumFrame: {
+      type: "object",
+      required: ["id", "kind", "on"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "datum.frame" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        on: { $ref: "#/$defs/Selector" },
+      },
+      additionalProperties: false,
+    },
+    Sketch2D: {
+      type: "object",
+      required: ["id", "kind", "profiles"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "feature.sketch2d" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        plane: { $ref: "#/$defs/PlaneRef" },
+        origin: {
+          type: "array",
+          minItems: 3,
+          maxItems: 3,
+          items: { type: "number" },
+        },
+        entities: { type: "array", items: { $ref: "#/$defs/SketchEntity" } },
+        profiles: { type: "array", items: { $ref: "#/$defs/SketchProfile" } },
+      },
+      additionalProperties: false,
+    },
+
+    Extrude: {
+      type: "object",
+      required: ["id", "kind", "profile", "depth", "result"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "feature.extrude" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        profile: { $ref: "#/$defs/ProfileRef" },
+        depth: {
+          anyOf: [
+            { $ref: "#/$defs/Scalar" },
+            { const: "throughAll" },
+          ],
+        },
+        result: { type: "string" },
+        axis: { $ref: "#/$defs/ExtrudeAxis" },
+        mode: { $ref: "#/$defs/ExtrudeMode" },
+      },
+      additionalProperties: false,
+    },
+    Surface: {
+      type: "object",
+      required: ["id", "kind", "profile", "result"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "feature.surface" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        profile: { $ref: "#/$defs/ProfileRef" },
+        result: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    Revolve: {
+      type: "object",
+      required: ["id", "kind", "profile", "axis", "result"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "feature.revolve" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        profile: { $ref: "#/$defs/ProfileRef" },
+        axis: { $ref: "#/$defs/AxisDirection" },
+        angle: { anyOf: [{ $ref: "#/$defs/Scalar" }, { const: "full" }] },
+        origin: {
+          type: "array",
+          minItems: 3,
+          maxItems: 3,
+          items: { type: "number" },
+        },
+        result: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    Loft: {
+      type: "object",
+      required: ["id", "kind", "profiles", "result"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "feature.loft" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        profiles: { type: "array", items: { $ref: "#/$defs/ProfileRef" } },
+        result: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    Pipe: {
+      type: "object",
+      required: ["id", "kind", "axis", "length", "outerDiameter", "result"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "feature.pipe" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        axis: { $ref: "#/$defs/AxisDirection" },
+        origin: { $ref: "#/$defs/Point3D" },
+        length: { $ref: "#/$defs/Scalar" },
+        outerDiameter: { $ref: "#/$defs/Scalar" },
+        innerDiameter: { $ref: "#/$defs/Scalar" },
+        result: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    PipeSweep: {
+      type: "object",
+      required: ["id", "kind", "path", "outerDiameter", "result"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "feature.pipeSweep" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        path: { $ref: "#/$defs/Path3D" },
+        outerDiameter: { $ref: "#/$defs/Scalar" },
+        innerDiameter: { $ref: "#/$defs/Scalar" },
+        result: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    HexTubeSweep: {
+      type: "object",
+      required: ["id", "kind", "path", "outerAcrossFlats", "result"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "feature.hexTubeSweep" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        path: { $ref: "#/$defs/Path3D" },
+        outerAcrossFlats: { $ref: "#/$defs/Scalar" },
+        innerAcrossFlats: { $ref: "#/$defs/Scalar" },
+        result: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    HoleCounterbore: {
+      type: "object",
+      required: ["diameter", "depth"],
+      properties: {
+        diameter: { $ref: "#/$defs/Scalar" },
+        depth: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
+    HoleCountersink: {
+      type: "object",
+      required: ["diameter", "angle"],
+      properties: {
+        diameter: { $ref: "#/$defs/Scalar" },
+        angle: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
+    Hole: {
+      type: "object",
+      required: ["id", "kind", "onFace", "axis", "diameter", "depth"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "feature.hole" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        onFace: { $ref: "#/$defs/Selector" },
+        axis: { $ref: "#/$defs/AxisDirection" },
+        diameter: { $ref: "#/$defs/Scalar" },
+        depth: {
+          anyOf: [
+            { $ref: "#/$defs/Scalar" },
+            { const: "throughAll" },
+          ],
+        },
+        pattern: { $ref: "#/$defs/PatternRef" },
+        position: { $ref: "#/$defs/Point2D" },
+        counterbore: { $ref: "#/$defs/HoleCounterbore" },
+        countersink: { $ref: "#/$defs/HoleCountersink" },
+      },
+      additionalProperties: false,
+    },
+    Fillet: {
+      type: "object",
+      required: ["id", "kind", "edges", "radius"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "feature.fillet" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        edges: { $ref: "#/$defs/Selector" },
+        radius: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
+    Chamfer: {
+      type: "object",
+      required: ["id", "kind", "edges", "distance"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "feature.chamfer" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        edges: { $ref: "#/$defs/Selector" },
+        distance: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
+    BooleanOp: {
+      type: "object",
+      required: ["id", "kind", "op", "left", "right", "result"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "feature.boolean" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        op: { enum: ["union", "subtract", "intersect"] },
+        left: { $ref: "#/$defs/Selector" },
+        right: { $ref: "#/$defs/Selector" },
+        result: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    PatternLinear: {
+      type: "object",
+      required: ["id", "kind", "origin", "spacing", "count"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "pattern.linear" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        origin: { $ref: "#/$defs/Selector" },
+        spacing: {
+          type: "array",
+          minItems: 2,
+          maxItems: 2,
+          items: { $ref: "#/$defs/Scalar" },
+        },
+        count: {
+          type: "array",
+          minItems: 2,
+          maxItems: 2,
+          items: { $ref: "#/$defs/Scalar" },
+        },
+      },
+      additionalProperties: false,
+    },
+    PatternCircular: {
+      type: "object",
+      required: ["id", "kind", "origin", "axis", "count"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "pattern.circular" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        origin: { $ref: "#/$defs/Selector" },
+        axis: { $ref: "#/$defs/AxisDirection" },
+        count: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
+    PatternRef: {
+      anyOf: [
+        {
+          type: "object",
+          required: ["kind", "ref"],
+          properties: {
+            kind: { const: "pattern.linear" },
+            ref: { $ref: "#/$defs/ID" },
+          },
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          required: ["kind", "ref"],
+          properties: {
+            kind: { const: "pattern.circular" },
+            ref: { $ref: "#/$defs/ID" },
+          },
+          additionalProperties: false,
+        },
+      ],
+    },
+
+    IntentFeature: {
+      anyOf: [
+        { $ref: "#/$defs/DatumPlane" },
+        { $ref: "#/$defs/DatumAxis" },
+        { $ref: "#/$defs/DatumFrame" },
+        { $ref: "#/$defs/Sketch2D" },
+        { $ref: "#/$defs/Extrude" },
+        { $ref: "#/$defs/Surface" },
+        { $ref: "#/$defs/Revolve" },
+        { $ref: "#/$defs/Loft" },
+        { $ref: "#/$defs/Pipe" },
+        { $ref: "#/$defs/PipeSweep" },
+        { $ref: "#/$defs/HexTubeSweep" },
+        { $ref: "#/$defs/Hole" },
+        { $ref: "#/$defs/Fillet" },
+        { $ref: "#/$defs/Chamfer" },
+        { $ref: "#/$defs/BooleanOp" },
+        { $ref: "#/$defs/PatternLinear" },
+        { $ref: "#/$defs/PatternCircular" },
+      ],
+    },
+
+    Graph: {
+      type: "object",
+      required: ["nodes", "edges"],
+      properties: {
+        nodes: { type: "array", items: { $ref: "#/$defs/ID" } },
+        edges: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["from", "to"],
+            properties: {
+              from: { $ref: "#/$defs/ID" },
+              to: { $ref: "#/$defs/ID" },
+            },
+            additionalProperties: false,
+          },
+        },
+      },
+      additionalProperties: false,
+    },
+    CompileResult: {
+      type: "object",
+      required: ["partId", "featureOrder", "graph"],
+      properties: {
+        partId: { $ref: "#/$defs/ID" },
+        featureOrder: { type: "array", items: { $ref: "#/$defs/ID" } },
+        graph: { $ref: "#/$defs/Graph" },
+      },
+      additionalProperties: false,
+    },
+  },
+} as const;
+
+export type IrJsonSchema = typeof IR_SCHEMA;

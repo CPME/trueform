@@ -1,3 +1,4 @@
+import { TF_IR_SCHEMA, TF_IR_VERSION } from "../ir.js";
 import type {
   BuildContext,
   Expr,
@@ -9,7 +10,7 @@ import type {
   MateConnector,
   ParamDef,
   Unit,
-} from "../dsl.js";
+} from "../ir.js";
 import { compact } from "./utils.js";
 
 export const context = (overrides: Partial<BuildContext> = {}): BuildContext => ({
@@ -37,6 +38,8 @@ export const document = (
 ): IntentDocument =>
   compact({
     id,
+    schema: TF_IR_SCHEMA,
+    irVersion: TF_IR_VERSION,
     parts,
     assemblies,
     context: ctx ?? context(),

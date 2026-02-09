@@ -45,7 +45,9 @@ import {
   Transform,
   ToleranceModifier,
   Unit,
-} from "./dsl.js";
+  TF_IR_SCHEMA,
+  TF_IR_VERSION,
+} from "./ir.js";
 import { CompileError } from "./errors.js";
 
 export type ValidationMode = "strict" | "none";
@@ -84,6 +86,18 @@ export function shouldValidate(opts?: ValidationOptions): boolean {
 export function validateDocument(doc: IntentDocument): void {
   ensureObject(doc, "validation_document", "Document must be an object");
   ensureNonEmptyString(doc.id, "validation_document_id", "Document id is required");
+  if (doc.schema !== TF_IR_SCHEMA) {
+    throw new CompileError(
+      "validation_document_schema",
+      `Unsupported IR schema ${String(doc.schema)}`
+    );
+  }
+  if (doc.irVersion !== TF_IR_VERSION) {
+    throw new CompileError(
+      "validation_document_ir_version",
+      `Unsupported IR version ${String(doc.irVersion)}`
+    );
+  }
   const parts = ensureArray<IntentPart>(
     doc.parts,
     "validation_document_parts",

@@ -1,4 +1,4 @@
-import { IntentFeature, ID, Selector } from "./dsl.js";
+import { IntentFeature, ID, Selector } from "./ir.js";
 import type { PmiPayload } from "./pmi.js";
 
 export type KernelResult = {

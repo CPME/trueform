@@ -40,7 +40,7 @@ import {
   Sketch2D,
   SketchEntity,
   Surface,
-} from "./dsl.js";
+} from "./ir.js";
 
 export type OcctModule = {
   // Placeholder for OpenCascade.js module type.

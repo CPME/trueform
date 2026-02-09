@@ -1,4 +1,4 @@
-import type { SketchEntity } from "../dsl.js";
+import type { SketchEntity } from "../ir.js";
 
 export type SketchDxfOptions = {
   unit?: "mm" | "cm" | "m" | "in";

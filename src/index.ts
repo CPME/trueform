@@ -1,6 +1,9 @@
+export * from "./ir.js";
 export * from "./dsl.js";
+export { IR_SCHEMA } from "./ir_schema.js";
+export type { IrJsonSchema } from "./ir_schema.js";
 export { buildPart, buildPartAsync } from "./executor.js";
-export { compileDocument, compilePart } from "./compiler.js";
+export { compileDocument, compilePart, emitIrDocument, emitIrPart } from "./compiler.js";
 export { buildAssembly, solveAssembly } from "./assembly.js";
 export * from "./export/index.js";
 export { TF_PMI_SCHEMA, buildPmiPayload, buildPmiJson } from "./pmi.js";

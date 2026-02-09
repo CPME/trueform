@@ -1,5 +1,5 @@
 import type { MeshData } from "../backend.js";
-import type { Transform } from "../dsl.js";
+import type { Transform } from "../ir.js";
 import { normalizeTransform } from "../transform.js";
 
 export type GlbMeshInput = {

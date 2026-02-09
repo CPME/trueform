@@ -1,4 +1,4 @@
-import { IntentFeature } from "./dsl.js";
+import { IntentFeature } from "./ir.js";
 
 export function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);

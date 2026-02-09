@@ -9,7 +9,7 @@ import type {
   MateConnector,
   Selector,
   Transform,
-} from "../dsl.js";
+} from "../ir.js";
 import { normalizeTransform } from "../transform.js";
 import { compact } from "./utils.js";
 

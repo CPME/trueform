@@ -10,7 +10,7 @@ import {
   Selector,
   RankRule,
   Predicate,
-} from "./dsl.js";
+} from "./ir.js";
 import { CompileError } from "./errors.js";
 
 export { CompileError } from "./errors.js";

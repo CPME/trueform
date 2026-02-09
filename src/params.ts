@@ -8,7 +8,7 @@ import {
   ParamType,
   Scalar,
   Unit,
-} from "./dsl.js";
+} from "./ir.js";
 import { CompileError } from "./errors.js";
 
 export type ParamOverrides = Record<ID, Scalar>;

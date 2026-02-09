@@ -7,7 +7,7 @@ import type {
   Scalar,
   SketchEntity,
   SketchProfile,
-} from "../dsl.js";
+} from "../ir.js";
 import { exprAdd, exprLiteral, exprMul } from "./core.js";
 
 export type ArrayOrder = "row-major" | "column-major";

@@ -48,7 +48,7 @@ import type {
   SketchLine,
   SolidQuery,
   Surface,
-} from "../dsl.js";
+} from "../ir.js";
 import { compact } from "./utils.js";
 
 export const datumPlane = (

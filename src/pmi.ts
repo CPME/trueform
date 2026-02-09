@@ -1,4 +1,4 @@
-import type { BuildContext, FTIConstraint, FTIDatum, ID, IntentPart } from "./dsl.js";
+import type { BuildContext, FTIConstraint, FTIDatum, ID, IntentPart } from "./ir.js";
 
 export const TF_PMI_SCHEMA = "trueform.pmi.v1";
 

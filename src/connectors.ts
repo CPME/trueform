@@ -1,4 +1,4 @@
-import { AxisDirection, ID, MateConnector, Selector } from "./dsl.js";
+import { AxisDirection, ID, MateConnector, Selector } from "./ir.js";
 import { KernelResult } from "./backend.js";
 import { resolveSelector, type Selection } from "./selectors.js";
 

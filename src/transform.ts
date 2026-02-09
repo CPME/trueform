@@ -1,4 +1,4 @@
-import type { Transform } from "./dsl.js";
+import type { Transform } from "./ir.js";
 
 export type Matrix4 = number[];
 

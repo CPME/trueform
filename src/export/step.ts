@@ -4,7 +4,7 @@ import type {
   KernelObject,
   StepExportOptions,
 } from "../backend.js";
-import type { BuildContext, IntentPart } from "../dsl.js";
+import type { BuildContext, IntentPart } from "../ir.js";
 import { buildPmiPayload } from "../pmi.js";
 
 export type StepWithPmiResult = {

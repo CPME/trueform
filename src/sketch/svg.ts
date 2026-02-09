@@ -1,4 +1,4 @@
-import type { SketchEntity } from "../dsl.js";
+import type { SketchEntity } from "../ir.js";
 
 export type SketchSvgTheme = {
   background?: string | null;
