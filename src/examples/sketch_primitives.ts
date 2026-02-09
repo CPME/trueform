@@ -5,7 +5,6 @@ import {
   sketchCircle,
   sketchEllipse,
   sketchLine,
-  sketchPoint,
   sketchPolygon,
   sketchRectCenter,
   sketchRectCorner,
@@ -64,7 +63,6 @@ export const sketchPrimitivesPart = part("sketch-primitives", [
         ],
         { closed: false }
       ),
-      sketchPoint("point-1", [5, 25]),
       sketchLine("construction-1", [-40, 0], [40, 0], {
         construction: true,
       }),

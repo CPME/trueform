@@ -139,6 +139,8 @@ tolerances (flatness, parallelism, perpendicularity, position, size) plus a
 surface profile constraint. This is data-only in v1 but is intended to flow
 from DSL → IR → PMI export (AP242 sidecar today).
 
+![Tolerancing example](/examples/dsl/tolerancing.iso.png)
+
 ```ts
 import { dsl, buildPart, exportStepAp242WithPmi } from "trueform";
 
@@ -211,8 +213,6 @@ const part = dsl.part("example-tolerancing", [base, hole], {
 // After building with a backend:
 // const { step, pmi } = exportStepAp242WithPmi(backend, body, part, { schema: "AP242" });
 ```
-
-![Tolerancing example](/examples/dsl/tolerancing.iso.png)
 
 Example PMI JSON (sidecar emitted alongside AP242 STEP):
 
@@ -371,69 +371,71 @@ transparent backgrounds with light strokes for dark docs themes.
 
 #### Line
 
+![Line sketch](/examples/sketch/line.svg)
+
 ```ts
 sketchLine("line-1", [-40, -20], [40, 20]);
 ```
 
-![Line sketch](/examples/sketch/line.svg)
-
 #### Arc
+
+![Arc sketch](/examples/sketch/arc.svg)
 
 ```ts
 sketchArc("arc-1", [30, 0], [0, 30], [0, 0], "ccw");
 ```
 
-![Arc sketch](/examples/sketch/arc.svg)
-
 #### Circle
+
+![Circle sketch](/examples/sketch/circle.svg)
 
 ```ts
 sketchCircle("circle-1", [0, 0], 22);
 ```
 
-![Circle sketch](/examples/sketch/circle.svg)
-
 #### Ellipse
+
+![Ellipse sketch](/examples/sketch/ellipse.svg)
 
 ```ts
 sketchEllipse("ellipse-1", [0, 0], 26, 12, { rotation: exprLiteral(20, "deg") });
 ```
 
-![Ellipse sketch](/examples/sketch/ellipse.svg)
-
 #### Rectangle (Center)
+
+![Center rectangle sketch](/examples/sketch/rect-center.svg)
 
 ```ts
 sketchRectCenter("rect-center", [0, 0], 60, 32, { rotation: exprLiteral(10, "deg") });
 ```
 
-![Center rectangle sketch](/examples/sketch/rect-center.svg)
-
 #### Rectangle (Corner)
+
+![Corner rectangle sketch](/examples/sketch/rect-corner.svg)
 
 ```ts
 sketchRectCorner("rect-corner", [-25, -12], 60, 30, { rotation: exprLiteral(-8, "deg") });
 ```
 
-![Corner rectangle sketch](/examples/sketch/rect-corner.svg)
-
 #### Slot
+
+![Slot sketch](/examples/sketch/slot.svg)
 
 ```ts
 sketchSlot("slot-1", [0, 0], 70, 16, { rotation: exprLiteral(12, "deg") });
 ```
 
-![Slot sketch](/examples/sketch/slot.svg)
-
 #### Polygon
+
+![Polygon sketch](/examples/sketch/polygon.svg)
 
 ```ts
 sketchPolygon("poly-1", [0, 0], 24, 6);
 ```
 
-![Polygon sketch](/examples/sketch/polygon.svg)
-
 #### Spline
+
+![Spline sketch](/examples/sketch/spline.svg)
 
 ```ts
 sketchSpline("spline-1", [
@@ -443,16 +445,6 @@ sketchSpline("spline-1", [
   [30, -15],
 ]);
 ```
-
-![Spline sketch](/examples/sketch/spline.svg)
-
-#### Point
-
-```ts
-sketchPoint("point-1", [0, 0]);
-```
-
-![Point sketch](/examples/sketch/point.svg)
 
 ## Profiles
 
@@ -468,6 +460,9 @@ sketchPoint("point-1", [0, 0]);
 - `surface(id, profile, result?, deps?) -> Surface`
 - `revolve(id, profile, axis, angle, result?, opts?) -> Revolve`
 - `loft(id, profiles, result?, deps?) -> Loft`
+- `mirror(id, source, plane, result?, deps?) -> Mirror`
+- `thicken(id, surface, thickness, result?, deps?, opts?) -> Thicken`
+- `thread(id, axis, length, majorDiameter, pitch, result?, deps?, opts?) -> Thread`
 - `hole(id, onFace, axis, diameter, depth, opts?) -> Hole`
 - `fillet(id, edges, radius, deps?) -> Fillet`
 - `chamfer(id, edges, distance, deps?) -> Chamfer`
@@ -480,13 +475,13 @@ The examples below are rendered from OpenCascade.js output via
 
 ### Extrude
 
+![Extrude example](/examples/dsl/extrude.iso.png)
+
 ```ts
 const examplePart = part("example-extrude", [
   extrude("base", profileRect(80, 50), 12, "body:main"),
 ]);
 ```
-
-![Extrude example](/examples/dsl/extrude.iso.png)
 
 Notes:
 - Default output is `body:*` (mode `solid`).
@@ -510,6 +505,8 @@ const examplePart = part("example-surface", [
 
 ### Revolve
 
+![Revolve example](/examples/dsl/revolve.iso.png)
+
 ```ts
 const examplePart = part("example-revolve", [
   revolve(
@@ -522,9 +519,12 @@ const examplePart = part("example-revolve", [
 ]);
 ```
 
-![Revolve example](/examples/dsl/revolve.iso.png)
+Notes:
+- Use `revolve(..., { mode: "surface" })` to revolve a wire/profile into a surface output (`kind: "face"`).
 
 ### Loft
+
+![Loft example](/examples/dsl/loft.iso.png)
 
 ```ts
 const examplePart = part("example-loft", [
@@ -539,12 +539,62 @@ const examplePart = part("example-loft", [
 ]);
 ```
 
-![Loft example](/examples/dsl/loft.iso.png)
-
 Notes:
 - If either profile is an open sketch (e.g., `profileSketchLoop(..., { open: true })`), the loft outputs a surface (kind `face`) instead of a solid.
 
+### Mirror
+
+```ts
+const examplePart = part("example-mirror", [
+  extrude("base", profileRect(40, 20), 6, "body:base"),
+  datumPlane("mirror-plane", "+X"),
+  mirror(
+    "mirror-1",
+    selectorNamed("body:base"),
+    planeDatum("mirror-plane"),
+    "body:mirror"
+  ),
+]);
+```
+
+### Thicken
+
+```ts
+const rect = sketchRectCorner("rect-1", [0, 0], 40, 20);
+const sketch = sketch2d(
+  "sketch-face",
+  [{ name: "profile:rect", profile: profileSketchLoop(["rect-1"]) }],
+  { entities: [rect] }
+);
+
+const examplePart = part("example-thicken", [
+  sketch,
+  surface("face-1", profileRef("profile:rect"), "surface:main"),
+  thicken("thicken-1", selectorNamed("surface:main"), 4, "body:main"),
+]);
+```
+
+Notes:
+- `thicken` currently expects a planar face.
+- Use `{ direction: "reverse" }` to thicken opposite the face normal.
+
+### Thread
+
+```ts
+const examplePart = part("example-thread", [
+  thread("thread-1", "+Z", 12, 8, 1.5, "body:main", undefined, {
+    minorDiameter: 6.5,
+    segmentsPerTurn: 16,
+  }),
+]);
+```
+
+Notes:
+- Use `booleanOp(..., "subtract", ...)` with a thread solid to cut internal threads.
+
 ### Hole
+
+![Hole example](/examples/dsl/hole.iso.png)
 
 ```ts
 const examplePart = part("example-hole", [
@@ -560,11 +610,11 @@ const examplePart = part("example-hole", [
 ]);
 ```
 
-![Hole example](/examples/dsl/hole.iso.png)
-
 Counterbores and countersinks are optional via `counterbore` / `countersink`
 in the options object (they are mutually exclusive). `countersink.angle` uses
 radians; use `exprLiteral(82, "deg")` if you prefer degrees.
+
+![Hole counterbore/countersink example](/examples/dsl/hole-advanced.iso.png)
 
 ```ts
 const examplePart = part("example-hole-advanced", [
@@ -596,9 +646,9 @@ const examplePart = part("example-hole-advanced", [
 ]);
 ```
 
-![Hole counterbore/countersink example](/examples/dsl/hole-advanced.iso.png)
-
 ### Fillet
+
+![Fillet example](/examples/dsl/fillet.iso.png)
 
 ```ts
 const examplePart = part("example-fillet", [
@@ -612,9 +662,9 @@ const examplePart = part("example-fillet", [
 ]);
 ```
 
-![Fillet example](/examples/dsl/fillet.iso.png)
-
 ### Chamfer
+
+![Chamfer example](/examples/dsl/chamfer.iso.png)
 
 ```ts
 const examplePart = part("example-chamfer", [
@@ -628,9 +678,9 @@ const examplePart = part("example-chamfer", [
 ]);
 ```
 
-![Chamfer example](/examples/dsl/chamfer.iso.png)
-
 ### Boolean Union
+
+![Boolean example](/examples/dsl/boolean.iso.png)
 
 ```ts
 const examplePart = part("example-boolean", [
@@ -651,8 +701,6 @@ const examplePart = part("example-boolean", [
   ),
 ]);
 ```
-
-![Boolean example](/examples/dsl/boolean.iso.png)
 
 ## Patterns
 
@@ -678,6 +726,8 @@ layouts require numeric angles and radius values because trigonometry is evaluat
 immediately.
 
 ### Feature Array
+
+![Feature array example](/examples/dsl/feature-array.iso.png)
 
 ```ts
 const baseThickness = 6;
@@ -721,9 +771,9 @@ for (let i = 0; i < cubes.length; i++) {
 const examplePart = part("example-feature-array", [base, ...cubes, ...unions]);
 ```
 
-![Feature array example](/examples/dsl/feature-array.iso.png)
-
 ### Sketch Array
+
+![Sketch array example](/examples/sketch/rect-array.svg)
 
 ```ts
 const exampleSketch = sketch2d("sketch-rect-array", [], {
@@ -734,9 +784,9 @@ const exampleSketch = sketch2d("sketch-rect-array", [], {
 });
 ```
 
-![Sketch array example](/examples/sketch/rect-array.svg)
-
 ### Circular Array
+
+![Circular array example](/examples/dsl/circular-array.iso.png)
 
 ```ts
 const baseThickness = 6;
@@ -780,9 +830,9 @@ for (let i = 0; i < bosses.length; i++) {
 const examplePart = part("example-circular-array", [base, ...bosses, ...unions]);
 ```
 
-![Circular array example](/examples/dsl/circular-array.iso.png)
-
 ### Radial Array
+
+![Radial array example](/examples/dsl/radial-array.iso.png)
 
 ```ts
 const baseThickness = 6;
@@ -833,9 +883,9 @@ for (let i = 0; i < bosses.length; i++) {
 const examplePart = part("example-radial-array", [base, ...bosses, ...unions]);
 ```
 
-![Radial array example](/examples/dsl/radial-array.iso.png)
-
 ### Spline Array
+
+![Spline array example](/examples/dsl/spline-array.iso.png)
 
 ```ts
 const baseThickness = 6;
@@ -887,8 +937,6 @@ for (let i = 0; i < bosses.length; i++) {
 
 const examplePart = part("example-spline-array", [base, ...bosses, ...unions]);
 ```
-
-![Spline array example](/examples/dsl/spline-array.iso.png)
 
 ## Selectors, Predicates, Ranking
 
