@@ -25,7 +25,7 @@ jobs:
           enablement: true
       - run: npm ci
       - run: npm run docs:api
-      - run: npm run docs:examples
+      - run: TF_DOCS_SKIP_EXAMPLES=1 npm run docs:examples
       - run: npm run docs:build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

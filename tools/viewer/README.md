@@ -99,6 +99,22 @@ Notes:
   Optional tuning params: `refOpacity` (0-1), `refScale`, `refX`, `refY`, `refRot`.
 - You can also load a local mesh JSON via the file picker in the HUD and download a PNG snapshot.
 
+## Runtime API (experimental)
+
+The viewer can now request builds from the runtime server (async) and load the resulting mesh.
+
+Start the runtime server:
+
+```bash
+npm run runtime:serve
+```
+
+Then launch the viewer and either click `Build via API` or open:
+
+```text
+http://localhost:8001/?runtime=1&api=http://127.0.0.1:8080
+```
+
 ## Debug outputs
 
 `npm run viewer:export` also writes:

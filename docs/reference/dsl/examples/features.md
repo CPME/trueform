@@ -15,7 +15,7 @@ const examplePart = part("example-extrude", [
 
 Notes:
 - Default output is `body:*` (mode `solid`).
-- Use `extrude(..., { mode: "surface" })` to extrude a wire/profile into a surface output (`kind: "face"`).
+- Use `extrude(..., { mode: "surface" })` to extrude a wire/profile into a surface output (`kind: "surface"`).
 
 ## Surface
 
@@ -50,7 +50,7 @@ const examplePart = part("example-revolve", [
 ```
 
 Notes:
-- Use `revolve(..., { mode: "surface" })` to revolve a wire/profile into a surface output (`kind: "face"`).
+- Use `revolve(..., { mode: "surface" })` to revolve a wire/profile into a surface output (`kind: "surface"`).
 
 ## Loft
 
@@ -72,7 +72,7 @@ const examplePart = part("example-loft", [
 Notes:
 - Loft supports 2+ profiles.
 - If either profile is an open sketch (e.g., `profileSketchLoop(..., { open: true })`),
-  the loft outputs a surface (kind `face`) instead of a solid.
+  the loft outputs a surface (kind `surface`) instead of a solid.
 - Use `loft(..., { mode: "surface" })` to force a surface even when profiles are closed.
 
 ## Sweep
@@ -173,16 +173,24 @@ const examplePart = part("example-mirror", [
 ![Thicken example](/examples/dsl/thicken.iso.png)
 
 ```ts
-const rect = sketchRectCorner("rect-1", [0, 0], 40, 20);
+const line = sketchLine("line-1", [10, 0], [10, 16]);
 const sketch = sketch2d(
-  "sketch-face",
-  [{ name: "profile:rect", profile: profileSketchLoop(["rect-1"]) }],
-  { entities: [rect] }
+  "sketch-thicken",
+  [{ name: "profile:open", profile: profileSketchLoop(["line-1"], { open: true }) }],
+  { plane: planeDatum("sketch-plane"), entities: [line] }
 );
 
 const examplePart = part("example-thicken", [
+  datumPlane("sketch-plane", "+Y"),
   sketch,
-  surface("face-1", profileRef("profile:rect"), "surface:main"),
+  revolve(
+    "surface-revolve",
+    profileRef("profile:open"),
+    "+Z",
+    "full",
+    "surface:main",
+    { mode: "surface" }
+  ),
   thicken("thicken-1", selectorNamed("surface:main"), 4, "body:main"),
 ]);
 ```
@@ -190,8 +198,7 @@ const examplePart = part("example-thicken", [
 Notes:
 - `thicken` supports planar faces and can offset curved faces.
 - Use `{ direction: "reverse" }` to thicken opposite the face normal.
-- Curved thicken works best on closed surfaces (e.g., torus-like faces); open
-  curved surfaces may require `shell` instead.
+- For thin-walled solids built from a closed solid, use `shell` instead.
 
 ## Modelled Thread
 

@@ -168,6 +168,18 @@
             />
             <button id="load-url" type="button">Load</button>
           </div>
+          <div class="overlay-block">
+            <div class="overlay-title">Runtime API</div>
+            <label>
+              API Base URL
+              <input
+                type="text"
+                id="api-url"
+                placeholder="http://127.0.0.1:8080"
+              />
+            </label>
+            <button id="build-api" type="button">Build via API</button>
+          </div>
           <button id="download-png" type="button">Download PNG</button>
           <div class="overlay-block">
             <div class="overlay-title">Reference Overlay</div>
@@ -214,7 +226,8 @@
       {
         "imports": {
           "three": "./node_modules/three/build/three.module.js",
-          "three/examples/jsm/": "./node_modules/three/examples/jsm/"
+          "three/examples/jsm/": "./node_modules/three/examples/jsm/",
+          "fflate": "./node_modules/fflate/esm/browser.js"
         }
       }
     </script>

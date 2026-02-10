@@ -16,6 +16,11 @@
       "image": "/examples/dsl/loft.iso.png"
     },
     {
+      "id": "sweep",
+      "title": "Sweep (Surface)",
+      "image": "/examples/dsl/sweep.iso.png"
+    },
+    {
       "id": "hole",
       "title": "Hole",
       "image": "/examples/dsl/hole.iso.png"
@@ -64,6 +69,41 @@
       "id": "radial-array",
       "title": "Radial Array",
       "image": "/examples/dsl/radial-array.iso.png"
+    },
+    {
+      "id": "mirror",
+      "title": "Mirror",
+      "image": "/examples/dsl/mirror.iso.png"
+    },
+    {
+      "id": "thicken",
+      "title": "Thicken",
+      "image": "/examples/dsl/thicken.iso.png"
+    },
+    {
+      "id": "shell-before",
+      "title": "Shell (Before)",
+      "image": "/examples/dsl/shell-before.iso.png"
+    },
+    {
+      "id": "shell-after",
+      "title": "Shell (After)",
+      "image": "/examples/dsl/shell-after.iso.png"
+    },
+    {
+      "id": "shell",
+      "title": "Shell",
+      "image": "/examples/dsl/shell.iso.png"
+    },
+    {
+      "id": "thread",
+      "title": "Thread",
+      "image": "/examples/dsl/thread.iso.png"
+    },
+    {
+      "id": "thread-cosmetic",
+      "title": "Cosmetic Thread",
+      "image": "/examples/dsl/thread-cosmetic.iso.png"
     }
   ]
 }

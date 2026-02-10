@@ -245,5 +245,6 @@
       ],
       "requirement": "req-profile-top"
     }
-  ]
+  ],
+  "cosmeticThreads": []
 }

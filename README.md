@@ -19,14 +19,14 @@ feel more like software: a single source of truth that can produce all downstrea
 
 ```mermaid
 flowchart LR
-  DSL[DSL Authoring] --> IR[IR (JSON)]
-  IR --> Compiler[Compiler + Validation]
-  Compiler -->|build| Backend[Backend]
-  Backend --> OCCTJS[OpenCascade.js]
-  Backend --> OCCTNative[Native OCCT Server]
-  OCCTJS --> Meshes[Meshes + View Data]
-  OCCTNative --> STEP[STEP/AP242 + PMI]
-  Meshes --> Viewer[Web Viewer]
+  DSL[DSL Authoring] --> IR[IR (JSON)];
+  IR --> Compiler[Compiler + Validation];
+  Compiler -->|build| Backend[Backend];
+  Backend --> OCCTJS[OpenCascade.js];
+  Backend --> OCCTNative[Native OCCT Server];
+  OCCTJS --> Meshes[Meshes + View Data];
+  OCCTNative --> STEP[STEP/AP242 + PMI];
+  Meshes --> Viewer[Web Viewer];
 ```
 
 ## Status

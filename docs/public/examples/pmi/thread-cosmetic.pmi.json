@@ -1,0 +1,32 @@
+{
+  "schema": "trueform.pmi.v1",
+  "partId": "example-thread-cosmetic",
+  "datums": [],
+  "constraints": [],
+  "cosmeticThreads": [
+    {
+      "id": "thread-1",
+      "kind": "thread.cosmetic",
+      "target": {
+        "kind": "ref.surface",
+        "selector": {
+          "kind": "selector.face",
+          "predicates": [
+            {
+              "kind": "pred.createdBy",
+              "featureId": "base"
+            }
+          ],
+          "rank": [
+            {
+              "kind": "rank.maxArea"
+            }
+          ]
+        }
+      },
+      "designation": "M8x1.25-6H",
+      "internal": true,
+      "length": 12
+    }
+  ]
+}

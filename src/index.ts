@@ -2,6 +2,9 @@ export * from "./ir.js";
 export * from "./dsl.js";
 export { IR_SCHEMA } from "./ir_schema.js";
 export type { IrJsonSchema } from "./ir_schema.js";
+export * from "./assertions.js";
+export * from "./build_cache.js";
+export * from "./mesh_profiles.js";
 export { buildPart, buildPartAsync } from "./executor.js";
 export { compileDocument, compilePart, emitIrDocument, emitIrPart } from "./compiler.js";
 export { buildAssembly, solveAssembly } from "./assembly.js";
@@ -31,6 +34,9 @@ export type {
 } from "./backend.js";
 export { backendToAsync } from "./backend_async.js";
 export { MockBackend } from "./mock_backend.js";
+export { InMemoryJobQueue } from "./job_queue.js";
+export type { JobRecord, JobState, JobError } from "./job_queue.js";
+export { OcctBackend } from "./backend_occt.js";
 export type {
   NativeOcctTransport,
   NativeKernelObject,
