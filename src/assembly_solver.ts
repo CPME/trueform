@@ -316,6 +316,15 @@ function residualsFor(
   return residuals;
 }
 
+// Exposed for test harnesses that need Jacobian rank checks.
+export function residualsForTesting(
+  mates: AssemblyMate[],
+  instances: AssemblyInstanceState[],
+  partConnectors: Map<ID, Map<ID, ConnectorFrame>>
+): number[] {
+  return residualsFor(mates, instances, partConnectors);
+}
+
 function resolveFrame(
   instance: AssemblyInstanceState,
   connectorId: ID,

@@ -31,7 +31,7 @@ are for the remaining instance.
 | Mate | Expected DOF | Allowed motion (intuitive) |
 | --- | --- | --- |
 | `mate.fixed` | 0 | None |
-| `mate.insert` | 0 | None |
+| `mate.insert` | 1 | Rotation about connector Z |
 | `mate.hinge` | 1 | Rotation about connector Z |
 | `mate.slider` | 1 | Translation along connector Z |
 | `mate.coaxial` | 2 | Translate along Z, rotate about Z |
