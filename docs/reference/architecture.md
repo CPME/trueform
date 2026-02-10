@@ -30,4 +30,4 @@ This is a short overview of the core concepts. The full technical specification 
 For details, see:
 - `specs/spec.md`
 - `specs/functional-tolerancing-intent.md`
-- `docs/reference/dsl.md`
+- `docs/reference/dsl/index.md`

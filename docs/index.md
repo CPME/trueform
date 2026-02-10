@@ -30,8 +30,8 @@ Current scope (v1) compiles a JSON-serializable IR and builds with an OpenCascad
 
 - [Getting Started](/guide/getting-started)
 - [Architecture](/reference/architecture)
-- [File Format (.tfc)](/reference/file-format)
-- [DSL Reference](/reference/dsl)
+- [File Format (.tfp)](/reference/file-format)
+- [DSL Reference](/reference/dsl/)
 - [API Reference](/reference/api)
 
 If you need deeper internal spec details, see the repo’s `specs/` folder.
