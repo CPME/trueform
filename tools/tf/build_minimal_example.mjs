@@ -1,10 +1,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 
-const ONE_BY_ONE_PNG_BASE64 =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/aklR3sAAAAASUVORK5CYII=";
-
 const { dsl } = await import("../../dist/index.js");
 const { createTfContainer } = await import("../../dist/tf/container.js");
+
+const ONE_BY_ONE_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/aklR3sAAAAASUVORK5CYII=";
 
 const part = dsl.part("plate", [
   dsl.sketch2d("sketch-base", [
@@ -34,18 +34,14 @@ const bytes = await createTfContainer(
   document,
   [
     {
-      type: "thumbnail",
-      path: "artifacts/preview.png",
-      data: previewBytes,
-    },
-    {
       type: "mesh",
       path: "artifacts/part.mesh.json",
       data: meshJson,
-      build: {
-        kernel: { name: "ocjs", version: "0.0.0-test" },
-        tolerance: { linear: 1e-6, angular: 1e-6 },
-      },
+    },
+    {
+      type: "preview",
+      path: "artifacts/preview.png",
+      data: previewBytes,
     },
   ],
   { createdAt: "2026-02-07T00:00:00Z" }
@@ -53,4 +49,4 @@ const bytes = await createTfContainer(
 
 const outDir = new URL("./examples/", import.meta.url);
 await mkdir(outDir, { recursive: true });
-await writeFile(new URL("./examples/minimal.tfc", import.meta.url), bytes);
+await writeFile(new URL("./examples/minimal.tfp", import.meta.url), bytes);

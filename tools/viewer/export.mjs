@@ -11,6 +11,10 @@ import { mechanicalCollection } from "../../dist/examples/mechanical_collection.
 import { viewerPart } from "../../dist/examples/viewer_part.js";
 import { renderIsometricPng } from "../../dist/viewer/isometric_renderer.js";
 import { collectMeshAssets } from "../../dist/viewer/asset_manifest.js";
+import {
+  appendCosmeticThreadEdges,
+  buildResolutionContext,
+} from "../../dist/viewer/cosmetic_threads.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../..");
@@ -466,7 +470,7 @@ try {
     const debugPath = path.join(outDir, `${entry.name}.debug.json`);
     const isoPath = path.join(outDir, `${entry.name}.iso.png`);
     const selectorsPath = path.join(outDir, `${entry.name}.selectors.json`);
-    const tfcPath = path.join(outDir, `${entry.name}.tfc`);
+    const tfpPath = path.join(outDir, `${entry.name}.tfp`);
     const sourceOut = entry.sourcePath
       ? path.join(sourcesDir, `${entry.name}.ts`)
       : null;
@@ -484,7 +488,7 @@ try {
       debugPath,
       isoPath,
       selectorsPath,
-      tfcPath,
+      tfpPath,
       ...(sourceOut ? [sourceOut] : []),
       ...(pathSvgXY ? [pathSvgXY, pathSvgXZ, pathSvgYZ] : []),
     ];
@@ -498,7 +502,7 @@ try {
       debugPath,
       isoPath,
       selectorsPath,
-      tfcPath,
+      tfpPath,
       sweepPath,
       pathSvgXY,
       pathSvgXZ,
@@ -570,7 +574,7 @@ try {
       debugPath,
       isoPath,
       selectorsPath,
-      tfcPath,
+      tfpPath,
       sweepPath,
       pathSvgXY,
       pathSvgXZ,
@@ -595,7 +599,7 @@ try {
         iso: isoPath,
         debug: debugPath,
         selectors: selectorsPath,
-        tfc: tfcPath,
+        tfp: tfpPath,
         source: sourceOut ?? undefined,
         vertices: cachedDebug?.mesh?.vertices ?? undefined,
       });
@@ -619,10 +623,17 @@ try {
       parallel: true,
       ...(entry.mesh ?? {}),
     });
+    const resolution = buildResolutionContext(result.final);
+    const meshWithThreads = appendCosmeticThreadEdges(
+      mesh,
+      entry.part,
+      resolution,
+      occt
+    );
 
-    const meshJson = JSON.stringify(mesh);
+    const meshJson = JSON.stringify(meshWithThreads);
     await fs.writeFile(outPath, meshJson);
-    const isoPng = renderIsometricPng(mesh, {
+    const isoPng = renderIsometricPng(meshWithThreads, {
       width: 1400,
       height: 1000,
       ...(entry.render ?? {}),
@@ -710,40 +721,26 @@ try {
       if (pathYZ) await fs.writeFile(pathSvgYZ, pathYZ);
     }
 
-    const artifacts = [
-      {
-        type: "mesh",
-        path: `artifacts/${entry.name}.mesh.json`,
-        data: meshJson,
-        build: {
-          kernel: { name: "opencascade.js", version: "unknown" },
-          tolerance: { linear: 0.01, angular: 0.001 },
-        },
-      },
-      {
-        type: "preview",
-        path: `artifacts/${entry.name}.iso.png`,
-        data: isoPng,
-      },
-      {
-        type: "debug",
-        path: `artifacts/${entry.name}.debug.json`,
-        data: debugJson,
-      },
-      {
-        type: "selectors",
-        path: `artifacts/${entry.name}.selectors.json`,
-        data: selectorsJson,
-      },
-    ];
     if (sourceAbs && sourceOut) {
       const sourceText = await fs.readFile(sourceAbs, "utf8");
       await fs.writeFile(sourceOut, sourceText);
     }
 
+    const artifacts = [
+      {
+        type: "mesh",
+        path: "artifacts/part.mesh.json",
+        data: meshJson,
+      },
+      {
+        type: "preview",
+        path: "artifacts/preview.png",
+        data: isoPng,
+      },
+    ];
     const document = dsl.document(`${entry.name}-doc`, [entry.part], dsl.context());
     const tfBytes = await createTfContainer(document, artifacts);
-    await fs.writeFile(tfcPath, tfBytes);
+    await fs.writeFile(tfpPath, tfBytes);
 
     results.push({
       name: entry.name,
@@ -751,7 +748,7 @@ try {
       iso: isoPath,
       debug: debugPath,
       selectors: selectorsPath,
-      tfc: tfcPath,
+      tfp: tfpPath,
       source: sourceOut ?? undefined,
       vertices: mesh.positions.length / 3,
     });

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { unzipSync, strFromU8 } from "fflate";
 
 const canvas = document.querySelector("#viewport");
 const statusEl = document.querySelector("#status");
@@ -9,6 +10,8 @@ const loadUrlBtn = document.querySelector("#load-url");
 const assetSelect = document.querySelector("#asset-select");
 const loadAssetBtn = document.querySelector("#load-asset");
 const downloadBtn = document.querySelector("#download-png");
+const apiUrlInput = document.querySelector("#api-url");
+const buildApiBtn = document.querySelector("#build-api");
 const selectorInfo = document.querySelector("#selector-info");
 const selectorPanel = document.querySelector("#selector-panel");
 const refOverlay = document.querySelector("#ref-overlay");
@@ -78,9 +81,12 @@ const refScaleParam = params.get("refScale");
 const refOffsetXParam = params.get("refX");
 const refOffsetYParam = params.get("refY");
 const refRotationParam = params.get("refRot");
+const apiParam = params.get("api");
+const runtimeParam = params.get("runtime");
 const filename = fileParam || "./assets/plate.mesh.json";
 let currentLabel = filename;
 if (fileUrlInput) fileUrlInput.value = filename;
+if (apiUrlInput) apiUrlInput.value = apiParam || "http://127.0.0.1:8080";
 
 const overlayState = {
   opacity: 0.4,
@@ -92,6 +98,28 @@ const overlayState = {
 
 loadAssetFromUrl(filename);
 loadAssetManifest();
+
+if (buildApiBtn) {
+  buildApiBtn.addEventListener("click", () => {
+    const source = currentAssetUrl();
+    if (!source) return;
+    buildViaApi(source).catch((err) => {
+      statusEl.textContent = `Runtime build failed: ${err.message || err}`;
+      console.error(err);
+    });
+  });
+}
+
+if (runtimeParam === "1") {
+  queueMicrotask(() => {
+    const source = currentAssetUrl();
+    if (!source) return;
+    buildViaApi(source).catch((err) => {
+      statusEl.textContent = `Runtime build failed: ${err.message || err}`;
+      console.error(err);
+    });
+  });
+}
 
 if (loadUrlBtn) {
   loadUrlBtn.addEventListener("click", () => {
@@ -322,6 +350,14 @@ function updateUrlFileParam(source) {
   window.history.replaceState({}, "", url.toString());
 }
 
+function currentAssetUrl() {
+  const selected = assetSelect?.value;
+  if (selected) return selected;
+  const typed = fileUrlInput?.value?.trim();
+  if (typed) return typed;
+  return null;
+}
+
 function resetScene() {
   while (modelGroup.children.length > 0) {
     const child = modelGroup.children.pop();
@@ -391,6 +427,117 @@ function loadAssetManifest() {
       assetSelect.appendChild(opt);
       assetSelect.disabled = true;
     });
+}
+
+async function buildViaApi(source) {
+  const apiBase = apiUrlInput?.value?.trim();
+  if (!apiBase) {
+    statusEl.textContent = "Runtime API URL is missing.";
+    return;
+  }
+  const tfpUrl = tfpUrlForMesh(source);
+  if (!tfpUrl) {
+    statusEl.textContent = "Runtime build requires a .tfp file alongside the mesh.";
+    return;
+  }
+
+  statusEl.textContent = `Loading ${tfpUrl}`;
+  const document = await loadTfpDocument(tfpUrl);
+  statusEl.textContent = "Submitting build job…";
+
+  const buildResponse = await fetch(`${apiBase.replace(/\/+$/, "")}/v1/build`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      irVersion: document?.irVersion ?? 1,
+      document,
+      units: document?.context?.units ?? "mm",
+      options: { meshProfile: "interactive" },
+    }),
+  });
+  if (!buildResponse.ok) {
+    throw new Error(`Build request failed (HTTP ${buildResponse.status})`);
+  }
+  const buildJob = await buildResponse.json();
+  if (!buildJob?.jobId) {
+    throw new Error("Build response missing jobId");
+  }
+
+  const job = await pollJob(apiBase, buildJob.jobId);
+  if (job.state !== "succeeded") {
+    const message = job.error?.message || `Job ${job.state}`;
+    throw new Error(message);
+  }
+  const meshUrl = job.result?.mesh?.asset?.url;
+  if (!meshUrl) {
+    throw new Error("Build job did not return a mesh asset");
+  }
+  const resolved = resolveApiAssetUrl(apiBase, meshUrl);
+  statusEl.textContent = "Loading mesh from runtime…";
+  const meshData = await fetchJson(resolved);
+  loadMeshData(meshData, `${source} (runtime)`);
+}
+
+function tfpUrlForMesh(source) {
+  if (typeof source !== "string") return null;
+  if (!source.endsWith(".mesh.json")) return null;
+  return source.replace(".mesh.json", ".tfp");
+}
+
+async function loadTfpDocument(url) {
+  const fileUrl = new URL(url, window.location.href).toString();
+  const res = await fetch(fileUrl);
+  if (!res.ok) {
+    throw new Error(`Failed to load ${url} (HTTP ${res.status})`);
+  }
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const files = unzipSync(bytes);
+  const docBytes = files["document.json"];
+  if (!docBytes) {
+    throw new Error("document.json missing from .tfp container");
+  }
+  const payload = JSON.parse(strFromU8(docBytes));
+  return payload.document ?? payload;
+}
+
+async function pollJob(apiBase, jobId) {
+  const base = apiBase.replace(/\/+$/, "");
+  for (let i = 0; i < 120; i += 1) {
+    const res = await fetch(`${base}/v1/jobs/${jobId}`);
+    if (!res.ok) {
+      throw new Error(`Job poll failed (HTTP ${res.status})`);
+    }
+    const data = await res.json();
+    if (
+      data.state === "succeeded" ||
+      data.state === "failed" ||
+      data.state === "canceled"
+    ) {
+      return data;
+    }
+    statusEl.textContent = `Build progress: ${Math.round(
+      (data.progress || 0) * 100
+    )}%`;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error("Job polling timed out");
+}
+
+function resolveApiAssetUrl(apiBase, assetUrl) {
+  if (assetUrl.startsWith("http://") || assetUrl.startsWith("https://")) {
+    return assetUrl;
+  }
+  const base = apiBase.replace(/\/+$/, "");
+  if (assetUrl.startsWith("/")) return `${base}${assetUrl}`;
+  return `${base}/${assetUrl}`;
+}
+
+async function fetchJson(url) {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status} for ${url}`);
+  }
+  return res.json();
 }
 
 function loadMeshData(meshData, label) {

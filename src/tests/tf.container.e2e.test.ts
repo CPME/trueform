@@ -13,7 +13,7 @@ const ONE_BY_ONE_PNG_BASE64 =
 
 const tests = [
   {
-    name: "tf: container round-trip preserves document + artifacts",
+    name: "tf: container round-trip preserves document + preview artifacts",
     fn: async () => {
       const part = dsl.part("plate", [
         dsl.sketch2d("sketch-base", [
@@ -41,18 +41,14 @@ const tests = [
         document,
         [
           {
-            type: "thumbnail",
-            path: "artifacts/preview.png",
-            data: previewBytes,
-          },
-          {
             type: "mesh",
             path: "artifacts/part.mesh.json",
             data: meshJson,
-            build: {
-              kernel: { name: "ocjs", version: "0.0.0-test" },
-              tolerance: { linear: 1e-6, angular: 1e-6 },
-            },
+          },
+          {
+            type: "preview",
+            path: "artifacts/preview.png",
+            data: previewBytes,
           },
         ],
         { createdAt: "2026-02-07T00:00:00Z" }
@@ -65,16 +61,24 @@ const tests = [
       assert.equal(result.document.id, document.id);
       assert.deepEqual(result.document, document);
 
+      const manifestArtifacts = result.manifest.artifacts ?? [];
+      assert.equal(manifestArtifacts.length, 2);
+      const artifactPaths = new Set(
+        manifestArtifacts.map((artifact) => artifact.path)
+      );
+      assert.ok(artifactPaths.has("artifacts/part.mesh.json"));
+      assert.ok(artifactPaths.has("artifacts/preview.png"));
+
+      const meshRoundTrip = result.artifacts.get("artifacts/part.mesh.json");
+      assert.ok(meshRoundTrip);
+      assert.equal(Buffer.from(meshRoundTrip).toString("utf8"), meshJson);
+
       const previewRoundTrip = result.artifacts.get("artifacts/preview.png");
       assert.ok(previewRoundTrip);
       assert.equal(
         Buffer.compare(Buffer.from(previewRoundTrip), previewBytes),
         0
       );
-
-      const meshRoundTrip = result.artifacts.get("artifacts/part.mesh.json");
-      assert.ok(meshRoundTrip);
-      assert.equal(Buffer.from(meshRoundTrip).toString("utf8"), meshJson);
 
     },
   },

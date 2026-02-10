@@ -38,7 +38,7 @@ export type TfManifest = {
   schema: typeof TF_CONTAINER_SCHEMA;
   createdAt: string;
   document: TfManifestDocument;
-  artifacts: TfManifestArtifact[];
+  artifacts?: TfManifestArtifact[];
 };
 
 export type TfDocumentFile = {
@@ -104,7 +104,7 @@ export async function createTfContainer(
       hash: documentHash,
       bytes: documentBytes.byteLength,
     },
-    artifacts: manifestArtifacts,
+    artifacts: manifestArtifacts.length ? manifestArtifacts : undefined,
   };
 
   const manifestJson = stableStringify(manifest);
@@ -121,10 +121,10 @@ export async function readTfContainer(
   const documentBytes = files["document.json"];
 
   if (!manifestBytes) {
-    throw new Error("Missing manifest.json in .tfc container");
+    throw new Error("Missing manifest.json in .tfp container");
   }
   if (!documentBytes) {
-    throw new Error("Missing document.json in .tfc container");
+    throw new Error("Missing document.json in .tfp container");
   }
 
   const manifest = parseJson<TfManifest>(manifestBytes, "manifest.json");
@@ -149,11 +149,12 @@ export async function readTfContainer(
   }
 
   const artifacts = new Map<string, Uint8Array>();
-  for (const artifact of manifest.artifacts) {
+  const manifestArtifacts = manifest.artifacts ?? [];
+  for (const artifact of manifestArtifacts) {
     assertRelativePath(artifact.path, "artifact path");
     const data = files[artifact.path];
     if (!data) {
-      throw new Error(`Missing artifact ${artifact.path} in .tfc container`);
+      throw new Error(`Missing artifact ${artifact.path} in .tfp container`);
     }
     const hash = await sha256Hex(data);
     if (hash !== artifact.hash) {
