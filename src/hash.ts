@@ -10,7 +10,11 @@ export function stableStringify(value: unknown): string {
 }
 
 export function hashFeature(feature: IntentFeature): string {
-  const normalized = stableStringify(feature);
+  return hashValue(feature);
+}
+
+export function hashValue(value: unknown): string {
+  const normalized = stableStringify(value);
   let hash = 0;
   for (let i = 0; i < normalized.length; i += 1) {
     const chr = normalized.charCodeAt(i);

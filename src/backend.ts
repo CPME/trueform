@@ -8,14 +8,33 @@ export type KernelResult = {
 
 export type KernelObject = {
   id: ID;
-  kind: "solid" | "face" | "edge" | "datum" | "pattern" | "profile" | "unknown";
+  kind:
+    | "solid"
+    | "surface"
+    | "face"
+    | "edge"
+    | "datum"
+    | "pattern"
+    | "profile"
+    | "unknown";
   meta: Record<string, unknown>;
 };
 
 export type KernelSelection = {
   id: ID;
-  kind: "face" | "edge" | "solid";
+  kind: "face" | "edge" | "solid" | "surface";
   meta: Record<string, unknown>;
+};
+
+export type BackendCapabilities = {
+  name?: string;
+  featureKinds?: string[];
+  mesh?: boolean;
+  exports?: {
+    step?: boolean;
+    stl?: boolean;
+  };
+  assertions?: string[];
 };
 
 export type MeshOptions = {
@@ -60,9 +79,11 @@ export type ExecuteInput = {
 };
 
 export interface Backend {
+  capabilities?(): BackendCapabilities;
   execute(input: ExecuteInput): KernelResult;
   mesh(target: KernelObject, opts?: MeshOptions): MeshData;
   exportStep(target: KernelObject, opts?: StepExportOptions): Uint8Array;
+  checkValid?(target: KernelObject): boolean;
   exportStepWithPmi?(
     target: KernelObject,
     pmi: PmiPayload,
@@ -72,9 +93,11 @@ export interface Backend {
 }
 
 export interface BackendAsync {
+  capabilities?(): Promise<BackendCapabilities> | BackendCapabilities;
   execute(input: ExecuteInput): Promise<KernelResult>;
   mesh(target: KernelObject, opts?: MeshOptions): Promise<MeshData>;
   exportStep(target: KernelObject, opts?: StepExportOptions): Promise<Uint8Array>;
+  checkValid?(target: KernelObject): Promise<boolean> | boolean;
   exportStepWithPmi?(
     target: KernelObject,
     pmi: PmiPayload,
