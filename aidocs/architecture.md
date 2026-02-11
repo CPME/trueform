@@ -102,4 +102,4 @@ Completed since initial draft:
   container document hash/schema behavior.
 
 Next item:
-- Define package split execution details (naming + phased migration PR breakdown).
+- Start packaging split PR 2 (core module extraction with compatibility facade).
