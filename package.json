@@ -43,6 +43,7 @@
     "guardrails:docs": "node tools/ci/check-docs-drift.mjs",
     "guardrails:boundaries": "node tools/ci/check-boundaries.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:tf-core": "tsc -p packages/tf-core/tsconfig.json",
     "example": "npm run build -- --pretty false && node dist/examples/hello.js",
     "occt:e2e": "npm run build -- --pretty false && node dist/examples/occt_e2e.js",
     "test": "npm run guardrails && npm run build -- --pretty false && node tools/run-tests.mjs",

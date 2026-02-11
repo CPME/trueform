@@ -85,6 +85,8 @@ PR 2: extract stable core modules.
 - PR 2c in progress: initial package-local module files added (`ir`, `dsl`,
   `compiler`, `executor`, `pmi`, and utility facades) and wired through the
   local package index.
+- PR 2d started: package-level `tf-core` typecheck added as a gate for future
+  source ownership moves.
 
 PR 3: extract DSL package.
 - Move DSL helpers/types to `packages/tf-dsl`.
