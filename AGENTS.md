@@ -1,3 +1,10 @@
+# Vision
+To create the open sourced CAD tools and standards that enables the world of hardware design to flourish as the world of software has, by creating:
+1. DSL: A high level authoring language with rich abstractions for humans and agents.
+1. IR: An interchange layer used by tools.
+1. Kernel: Leverage existing CAD kernels to interact with computers and machine tools.
+1. API: A broader set of tools exposed for application builders.
+
 ## Performance
 Make sure this is practical for use in a webapp (can it compile to opencascade.js, and then wasm, without footguns). Avoid choices that block complex assemblies or responsive rotation later.
 

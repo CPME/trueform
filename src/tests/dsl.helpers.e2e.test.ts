@@ -249,6 +249,68 @@ const tests = [
       assert.equal(revolveSurface.mode, "surface");
       assert.equal(revolveSurface.result, "surface:revolve-surface");
 
+      const loftSurface = dsl.loft(
+        "loft-surface",
+        [dsl.profileCircle(2), dsl.profileCircle(3, [0, 0, 5])],
+        undefined,
+        undefined,
+        { mode: "surface" }
+      );
+      assert.equal(loftSurface.mode, "surface");
+      assert.equal(loftSurface.result, "surface:loft-surface");
+
+      const sweep = dsl.sweep(
+        "sweep-1",
+        dsl.profileRect(2, 3),
+        dsl.pathPolyline([
+          [0, 0, 0],
+          [0, 0, 5],
+          [5, 0, 10],
+        ])
+      );
+      assert.equal(sweep.kind, "feature.sweep");
+      assert.equal(sweep.result, "body:sweep-1");
+      const sweepSurface = dsl.sweep(
+        "sweep-surface",
+        dsl.profileRect(2, 3),
+        dsl.pathPolyline([
+          [0, 0, 0],
+          [0, 0, 5],
+          [5, 0, 10],
+        ]),
+        undefined,
+        undefined,
+        { mode: "surface" }
+      );
+      assert.equal(sweepSurface.mode, "surface");
+      assert.equal(sweepSurface.result, "surface:sweep-surface");
+      const sweepFrenet = dsl.sweep(
+        "sweep-frenet",
+        dsl.profileRect(2, 3),
+        dsl.pathPolyline([
+          [0, 0, 0],
+          [0, 0, 5],
+          [5, 0, 10],
+        ]),
+        undefined,
+        undefined,
+        { orientation: "frenet" }
+      );
+      assert.equal(sweepFrenet.orientation, "frenet");
+      const sweepFrame = dsl.sweep(
+        "sweep-frame",
+        dsl.profileRect(2, 3),
+        dsl.pathPolyline([
+          [0, 0, 0],
+          [0, 0, 5],
+          [5, 0, 10],
+        ]),
+        undefined,
+        undefined,
+        { frame: planeDatum }
+      );
+      assert.equal((sweepFrame.frame as { kind: string }).kind, "plane.datum");
+
       const mirror = dsl.mirror(
         "mirror-1",
         selectorFace,
@@ -258,6 +320,9 @@ const tests = [
 
       const thicken = dsl.thicken("thicken-1", selectorFace, 2);
       assert.equal(thicken.kind, "feature.thicken");
+
+      const shell = dsl.shell("shell-1", dsl.selectorNamed("body:base"), 2);
+      assert.equal(shell.kind, "feature.shell");
 
       const thread = dsl.thread("thread-1", "+Z", 10, 6, 1.5);
       assert.equal(thread.kind, "feature.thread");

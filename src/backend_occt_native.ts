@@ -10,6 +10,7 @@ import type {
   StlExportOptions,
 } from "./backend.js";
 import type { IntentFeature } from "./ir.js";
+import { BackendError } from "./errors.js";
 import type { PmiPayload } from "./pmi.js";
 
 export type NativeShapeHandle = string;
@@ -133,7 +134,10 @@ export class OcctNativeBackend implements BackendAsync {
     opts?: StlExportOptions
   ): Promise<Uint8Array> {
     if (!this.transport.exportStl) {
-      throw new Error("Native OCCT transport does not support STL export");
+      throw new BackendError(
+        "backend_missing_capability",
+        "Native OCCT transport does not support STL export"
+      );
     }
     const handle = requireHandle(target);
     return this.transport.exportStl(

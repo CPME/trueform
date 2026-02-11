@@ -801,16 +801,20 @@ function validateFeature(feature: IntentFeature): void {
       return;
     }
     case "feature.loft": {
-      const loft = feature as { profiles?: ProfileRef[]; result?: string };
+      const loft = feature as {
+        profiles?: ProfileRef[];
+        result?: string;
+        mode?: unknown;
+      };
       const profiles = ensureArray<ProfileRef>(
         loft.profiles as ProfileRef[],
         "validation_loft_profiles",
         "Loft profiles must be an array"
       );
-      if (profiles.length !== 2) {
+      if (profiles.length < 2) {
         throw new CompileError(
           "validation_loft_profiles",
-          "Loft requires exactly two profiles"
+          "Loft requires at least two profiles"
         );
       }
       for (const profile of profiles) {
@@ -822,10 +826,83 @@ function validateFeature(feature: IntentFeature): void {
           );
         }
       }
+      if (loft.mode !== undefined) {
+        validateExtrudeMode(loft.mode);
+      }
       ensureNonEmptyString(
         loft.result,
         "validation_feature_result",
         "Loft result is required"
+      );
+      return;
+    }
+    case "feature.sweep": {
+      const sweep = feature as {
+        profile?: ProfileRef;
+        path?: Path3D;
+        result?: string;
+        mode?: unknown;
+        frame?: PlaneRef;
+        orientation?: unknown;
+      };
+      validateProfileRef(sweep.profile);
+      if (sweep.profile && (sweep.profile as Profile).kind === "profile.sketch") {
+        throw new CompileError(
+          "validation_profile_sketch_ref",
+          "profile.sketch must be referenced from a sketch via profileRef"
+        );
+      }
+      validatePath3D(sweep.path, "Sweep path");
+      if (sweep.frame !== undefined) {
+        validatePlaneRef(sweep.frame, "Sweep frame");
+      }
+      if (sweep.mode !== undefined) {
+        validateExtrudeMode(sweep.mode);
+      }
+      if (sweep.orientation !== undefined) {
+        validateSweepOrientation(sweep.orientation);
+      }
+      if (sweep.frame !== undefined && sweep.orientation === "frenet") {
+        throw new CompileError(
+          "validation_sweep_orientation",
+          "Sweep orientation cannot be \"frenet\" when a frame is provided"
+        );
+      }
+      ensureNonEmptyString(
+        sweep.result,
+        "validation_feature_result",
+        "Sweep result is required"
+      );
+      return;
+    }
+    case "feature.shell": {
+      const shell = feature as {
+        source?: Selector;
+        thickness?: Scalar;
+        direction?: unknown;
+        openFaces?: Selector[];
+        result?: string;
+      };
+      validateSelector(shell.source);
+      validateScalar(shell.thickness, "Shell thickness");
+      if (shell.direction !== undefined) {
+        validateShellDirection(shell.direction);
+      }
+      if (shell.openFaces !== undefined) {
+        if (!Array.isArray(shell.openFaces)) {
+          throw new CompileError(
+            "validation_shell_open_faces",
+            "Shell openFaces must be an array"
+          );
+        }
+        for (const face of shell.openFaces) {
+          validateSelector(face);
+        }
+      }
+      ensureNonEmptyString(
+        shell.result,
+        "validation_feature_result",
+        "Shell result is required"
       );
       return;
     }
@@ -940,6 +1017,9 @@ function validateFeature(feature: IntentFeature): void {
         pitch?: Scalar;
         handedness?: unknown;
         segmentsPerTurn?: Scalar;
+        profileAngle?: Scalar;
+        crestFlat?: Scalar;
+        rootFlat?: Scalar;
         result?: string;
       };
       validateAxisSpec(thread.axis, "Thread axis is required");
@@ -957,6 +1037,15 @@ function validateFeature(feature: IntentFeature): void {
       }
       if (thread.segmentsPerTurn !== undefined) {
         validateScalar(thread.segmentsPerTurn, "Thread segments per turn");
+      }
+      if (thread.profileAngle !== undefined) {
+        validateScalar(thread.profileAngle, "Thread profile angle");
+      }
+      if (thread.crestFlat !== undefined) {
+        validateScalar(thread.crestFlat, "Thread crest flat");
+      }
+      if (thread.rootFlat !== undefined) {
+        validateScalar(thread.rootFlat, "Thread root flat");
       }
       ensureNonEmptyString(
         thread.result,
@@ -2125,11 +2214,27 @@ function validateExtrudeMode(mode: unknown): void {
   );
 }
 
+function validateSweepOrientation(orientation: unknown): void {
+  if (orientation === "frenet" || orientation === "fixed") return;
+  throw new CompileError(
+    "validation_sweep_orientation",
+    "Sweep orientation must be \"frenet\" or \"fixed\""
+  );
+}
+
 function validateThickenDirection(direction: unknown): void {
   if (direction === "normal" || direction === "reverse") return;
   throw new CompileError(
     "validation_thicken_direction",
     "Thicken direction must be \"normal\" or \"reverse\""
+  );
+}
+
+function validateShellDirection(direction: unknown): void {
+  if (direction === "inside" || direction === "outside") return;
+  throw new CompileError(
+    "validation_shell_direction",
+    "Shell direction must be \"inside\" or \"outside\""
   );
 }
 

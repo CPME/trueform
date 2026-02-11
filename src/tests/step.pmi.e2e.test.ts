@@ -33,6 +33,38 @@ const tests = [
       assert.ok(pmi?.includes("datum.feature"), "PMI JSON missing datum");
     },
   },
+  {
+    name: "step ap242 pmi: emits cosmetic thread callout without constraints",
+    fn: async () => {
+      const { backend } = await getBackendContext();
+      const target = dsl.refSurface(
+        dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxArea()])
+      );
+      const part = dsl.part(
+        "pmi-thread",
+        [dsl.extrude("base", dsl.profileRect(40, 20), 8, "body:main")],
+        {
+          cosmeticThreads: [
+            dsl.cosmeticThread("thread-1", target, {
+              designation: "M8x1.25-6H",
+              internal: true,
+              length: 12,
+            }),
+          ],
+        }
+      );
+      const result = buildPart(part, backend);
+      const body = result.final.outputs.get("body:main");
+      assert.ok(body, "missing body:main output");
+
+      const { step, pmi } = exportStepAp242WithPmi(backend, body, part, {
+        schema: "AP242",
+      });
+      assert.ok(step.byteLength > 0, "STEP output should be non-empty");
+      assert.ok(pmi, "PMI JSON should be returned");
+      assert.ok(pmi?.includes("thread.cosmetic"), "PMI JSON missing cosmetic thread");
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

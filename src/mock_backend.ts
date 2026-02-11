@@ -1,5 +1,6 @@
 import {
   Backend,
+  BackendCapabilities,
   ExecuteInput,
   KernelResult,
   KernelSelection,
@@ -11,6 +12,36 @@ import { IntentFeature, Sketch2D, Selector } from "./ir.js";
 
 export class MockBackend implements Backend {
   private seq = 0;
+
+  capabilities(): BackendCapabilities {
+    return {
+      name: "mock",
+      featureKinds: [
+        "datum.plane",
+        "datum.axis",
+        "datum.frame",
+        "feature.sketch2d",
+        "feature.extrude",
+        "feature.surface",
+        "feature.revolve",
+        "feature.pipeSweep",
+        "feature.hexTubeSweep",
+        "feature.loft",
+        "feature.sweep",
+        "feature.shell",
+        "feature.pipe",
+        "feature.hole",
+        "feature.fillet",
+        "feature.chamfer",
+        "feature.boolean",
+        "pattern.linear",
+        "pattern.circular",
+      ],
+      mesh: true,
+      exports: { step: true, stl: true },
+      assertions: ["assert.brepValid", "assert.minEdgeLength"],
+    };
+  }
 
   reset(): void {
     this.seq = 0;
@@ -27,15 +58,44 @@ export class MockBackend implements Backend {
         return this.emitSketch(feature as Sketch2D);
       case "feature.extrude":
         if ((feature as { mode?: string }).mode === "surface") {
-          return this.emitSurface(feature);
+          return this.emitSurface(feature, "surface");
         }
         return this.emitSolid(feature);
       case "feature.surface":
-        return this.emitSurface(feature);
+        return this.emitSurface(feature, "face");
       case "feature.revolve":
+        if ((feature as { mode?: string }).mode === "surface") {
+          return this.emitSurface(feature, "surface");
+        }
+        return this.emitSolid(feature);
       case "feature.pipeSweep":
       case "feature.hexTubeSweep":
+        if ((feature as { mode?: string }).mode === "surface") {
+          return this.emitSurface(feature, "surface");
+        }
+        return this.emitSolid(feature);
       case "feature.loft":
+        if ((feature as { mode?: string }).mode === "surface") {
+          return this.emitSurface(feature, "surface");
+        }
+        return this.emitSolid(feature);
+      case "feature.sweep":
+        if ((feature as { mode?: string }).mode === "surface") {
+          return this.emitSurface(feature, "surface");
+        }
+        return this.emitSolid(feature);
+      case "feature.mirror": {
+        const source = (feature as { source?: Selector }).source;
+        if (source) {
+          const target = input.resolve(source, input.upstream);
+          if (target.kind === "face") return this.emitSurface(feature, "face");
+          if (target.kind === "surface") return this.emitSurface(feature, "surface");
+        }
+        return this.emitSolid(feature);
+      }
+      case "feature.shell":
+      case "feature.thicken":
+      case "feature.thread":
         return this.emitSolid(feature);
       case "feature.hole":
         return this.emitHole(feature, input.resolve, input.upstream);
@@ -60,6 +120,10 @@ export class MockBackend implements Backend {
 
   exportStl(_target: KernelObject): Uint8Array {
     return new Uint8Array();
+  }
+
+  checkValid(_target: KernelObject): boolean {
+    return true;
   }
 
   private emitDatum(feature: IntentFeature): KernelResult {
@@ -109,7 +173,10 @@ export class MockBackend implements Backend {
     return { outputs, selections };
   }
 
-  private emitSurface(feature: IntentFeature): KernelResult {
+  private emitSurface(
+    feature: IntentFeature,
+    outputKind: "face" | "surface"
+  ): KernelResult {
     const resultName =
       "result" in feature && typeof (feature as { result?: string }).result === "string"
         ? (feature as { result: string }).result
@@ -127,7 +194,7 @@ export class MockBackend implements Backend {
         ownerKey,
       }),
     ];
-    const outputs = new Map([[resultName, this.makeObj("face")]]);
+    const outputs = new Map([[resultName, this.makeObj(outputKind)]]);
     return { outputs, selections };
   }
 
@@ -183,7 +250,15 @@ export class MockBackend implements Backend {
   }
 
   private makeObj(
-    kind: "solid" | "face" | "edge" | "datum" | "pattern" | "profile" | "unknown",
+    kind:
+      | "solid"
+      | "surface"
+      | "face"
+      | "edge"
+      | "datum"
+      | "pattern"
+      | "profile"
+      | "unknown",
     id?: string,
     meta: Record<string, unknown> = {}
   ) {

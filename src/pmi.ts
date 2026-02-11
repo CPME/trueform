@@ -1,4 +1,11 @@
-import type { BuildContext, FTIConstraint, FTIDatum, ID, IntentPart } from "./ir.js";
+import type {
+  BuildContext,
+  CosmeticThread,
+  FTIConstraint,
+  FTIDatum,
+  ID,
+  IntentPart,
+} from "./ir.js";
 
 export const TF_PMI_SCHEMA = "trueform.pmi.v1";
 
@@ -7,6 +14,7 @@ export type PmiPayload = {
   partId: ID;
   datums?: FTIDatum[];
   constraints: FTIConstraint[];
+  cosmeticThreads?: CosmeticThread[];
   context?: BuildContext;
 };
 
@@ -16,6 +24,7 @@ export function buildPmiPayload(part: IntentPart, context?: BuildContext): PmiPa
     partId: part.id,
     datums: part.datums ?? [],
     constraints: part.constraints ?? [],
+    cosmeticThreads: part.cosmeticThreads ?? [],
     ...(context ? { context } : {}),
   };
 }

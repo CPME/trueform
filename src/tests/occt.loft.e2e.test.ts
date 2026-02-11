@@ -29,6 +29,7 @@ const tests = [
       const result = buildPart(part, backend);
       const body = result.final.outputs.get("body:main");
       assert.ok(body, "missing body:main output");
+      assert.equal(body.kind, "surface");
       const shape = body.meta["shape"] as any;
       assert.ok(shape, "missing shape metadata");
       assertValidShape(occt, shape, "loft solid");
@@ -76,6 +77,37 @@ const tests = [
       const result = buildPart(part, backend);
       const body = result.final.outputs.get("body:main");
       assert.ok(body, "missing body:main output");
+      const shape = body.meta["shape"] as any;
+      assert.ok(shape, "missing shape metadata");
+      assertValidShape(occt, shape, "loft surface");
+      const solids = countSolids(occt, shape);
+      assert.ok(solids === 0, `expected loft surface, got ${solids} solids`);
+      const faces = countFaces(occt, shape);
+      assert.ok(faces > 0, "expected loft surface to have faces");
+    },
+  },
+  {
+    name: "occt e2e: loft surface from closed profiles respects mode surface",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const part = dsl.part("loft-surface-closed", [
+        dsl.loft(
+          "loft-surface",
+          [
+            dsl.profileCircle(10, [0, 0, 0]),
+            dsl.profileCircle(12, [0, 0, 12]),
+            dsl.profilePoly(6, 16, [0, 0, 24], Math.PI / 6),
+          ],
+          "surface:main",
+          undefined,
+          { mode: "surface" }
+        ),
+      ]);
+
+      const result = buildPart(part, backend);
+      const body = result.final.outputs.get("surface:main");
+      assert.ok(body, "missing surface:main output");
+      assert.equal(body.kind, "surface");
       const shape = body.meta["shape"] as any;
       assert.ok(shape, "missing shape metadata");
       assertValidShape(occt, shape, "loft surface");

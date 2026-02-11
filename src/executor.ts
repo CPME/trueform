@@ -1,10 +1,18 @@
-import { Backend, BackendAsync, KernelResult, KernelSelection } from "./backend.js";
-import { compileNormalizedPart, normalizePart } from "./compiler.js";
+import {
+  Backend,
+  BackendAsync,
+  KernelResult,
+  KernelSelection,
+  type BackendCapabilities,
+} from "./backend.js";
+import { compileNormalizedPart } from "./compiler.js";
+import { normalizePart } from "./ir_normalize.js";
 import { IntentPart, Selector, Units } from "./ir.js";
 import { resolveConnectors, type ConnectorFrame } from "./connectors.js";
 import { ParamOverrides } from "./params.js";
 import { resolveSelector } from "./selectors.js";
 import { type ValidationOptions } from "./validate.js";
+import { BackendError } from "./errors.js";
 
 export type FeatureStep = {
   featureId: string;
@@ -29,6 +37,7 @@ export function buildPart(
   const normalized = normalizePart(part, overrides, options, units);
   const compiled = compileNormalizedPart(normalized);
   const byId = new Map(normalized.features.map((f) => [f.id, f]));
+  const caps = backend.capabilities ? backend.capabilities() : undefined;
 
   let current: KernelResult = { outputs: new Map(), selections: [] };
   const steps: FeatureStep[] = [];
@@ -36,6 +45,7 @@ export function buildPart(
   for (const id of compiled.featureOrder) {
     const feature = byId.get(id);
     if (!feature) throw new Error(`Missing feature ${id}`);
+    ensureBackendSupports(caps, feature.kind);
 
     const result = backend.execute({
       feature,
@@ -67,6 +77,7 @@ export async function buildPartAsync(
   const normalized = normalizePart(part, overrides, options, units);
   const compiled = compileNormalizedPart(normalized);
   const byId = new Map(normalized.features.map((f) => [f.id, f]));
+  const caps = backend.capabilities ? await backend.capabilities() : undefined;
 
   let current: KernelResult = { outputs: new Map(), selections: [] };
   const steps: FeatureStep[] = [];
@@ -74,6 +85,7 @@ export async function buildPartAsync(
   for (const id of compiled.featureOrder) {
     const feature = byId.get(id);
     if (!feature) throw new Error(`Missing feature ${id}`);
+    ensureBackendSupports(caps, feature.kind);
 
     const result = await backend.execute({
       feature,
@@ -114,10 +126,25 @@ function mergeResults(a: KernelResult, b: KernelResult): KernelResult {
   return { outputs, selections };
 }
 
+function ensureBackendSupports(caps: BackendCapabilities | undefined, featureKind: string): void {
+  if (!caps || !caps.featureKinds) return;
+  if (caps.featureKinds.includes(featureKind)) return;
+  const name = caps.name ? ` (${caps.name})` : "";
+  throw new BackendError(
+    "backend_unsupported_feature",
+    `Backend${name} does not support feature ${featureKind}`
+  );
+}
+
 function toResolutionContext(upstream: KernelResult) {
   const named = new Map<string, KernelSelection>();
   for (const [key, obj] of upstream.outputs) {
-    if (obj.kind === "face" || obj.kind === "edge" || obj.kind === "solid") {
+    if (
+      obj.kind === "face" ||
+      obj.kind === "edge" ||
+      obj.kind === "solid" ||
+      obj.kind === "surface"
+    ) {
       named.set(key, { id: obj.id, kind: obj.kind, meta: obj.meta });
     }
   }

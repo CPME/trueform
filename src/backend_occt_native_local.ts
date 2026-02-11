@@ -238,7 +238,12 @@ function deflateMeta(
 function toResolutionContext(upstream: KernelResult) {
   const named = new Map<string, KernelSelection>();
   for (const [key, obj] of upstream.outputs) {
-    if (obj.kind === "face" || obj.kind === "edge" || obj.kind === "solid") {
+    if (
+      obj.kind === "face" ||
+      obj.kind === "edge" ||
+      obj.kind === "solid" ||
+      obj.kind === "surface"
+    ) {
       named.set(key, { id: obj.id, kind: obj.kind, meta: obj.meta });
     }
   }

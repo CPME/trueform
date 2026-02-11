@@ -65,12 +65,18 @@ const tests = [
         nominal: 10,
         tolerance: 0.1,
       });
+      const thread = dsl.cosmeticThread("thread-1", surface, {
+        designation: "M8x1.25-6H",
+        internal: true,
+        length: 12,
+      });
 
       assert.equal(flat.kind, "constraint.flatness");
       assert.equal(parallel.kind, "constraint.parallelism");
       assert.equal(perp.kind, "constraint.perpendicularity");
       assert.equal(pos.kind, "constraint.position");
       assert.equal(size.kind, "constraint.size");
+      assert.equal(thread.kind, "thread.cosmetic");
     },
   },
 ];

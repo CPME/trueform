@@ -341,10 +341,57 @@ function polylineForEntity(entity: SketchEntity): { points: [number, number][]; 
     case "sketch.polygon":
       return { points: polygonPoints(entity), closed: true };
     case "sketch.spline":
-      return { points: entity.points.map(asVec2), closed: Boolean(entity.closed) };
+      return {
+        points: sampleSpline(entity.points.map(asVec2), Boolean(entity.closed), 24),
+        closed: Boolean(entity.closed),
+      };
     default:
       return null;
   }
+}
+
+function sampleSpline(
+  points: [number, number][],
+  closed: boolean,
+  steps: number
+): [number, number][] {
+  if (!points || points.length < 2) return points ?? [];
+  const result: [number, number][] = [];
+  const count = points.length;
+  const segmentCount = closed ? count : count - 1;
+  const clampIndex = (i: number) => {
+    if (closed) return (i + count) % count;
+    return Math.max(0, Math.min(count - 1, i));
+  };
+
+  for (let i = 0; i < segmentCount; i += 1) {
+    const p0 = points[clampIndex(i - 1)] ?? [0, 0];
+    const p1 = points[clampIndex(i)] ?? [0, 0];
+    const p2 = points[clampIndex(i + 1)] ?? [0, 0];
+    const p3 = points[clampIndex(i + 2)] ?? [0, 0];
+    for (let s = 0; s < steps; s += 1) {
+      const t = steps === 0 ? 0 : s / steps;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      const x =
+        0.5 *
+        (2 * p1[0] +
+          (-p0[0] + p2[0]) * t +
+          (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+          (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
+      const y =
+        0.5 *
+        (2 * p1[1] +
+          (-p0[1] + p2[1]) * t +
+          (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+          (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
+      result.push([x, y]);
+    }
+  }
+  if (!closed) {
+    result.push(points[count - 1] ?? [0, 0]);
+  }
+  return result;
 }
 
 function polylineToPath(points: [number, number][], closed: boolean): string {

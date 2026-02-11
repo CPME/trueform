@@ -110,9 +110,14 @@ function featureResultName(feature: IntentFeature): string | undefined {
     case "feature.surface":
     case "feature.revolve":
     case "feature.loft":
+    case "feature.sweep":
     case "feature.pipe":
     case "feature.pipeSweep":
     case "feature.hexTubeSweep":
+    case "feature.mirror":
+    case "feature.shell":
+    case "feature.thicken":
+    case "feature.thread":
     case "feature.boolean":
       return feature.result;
     default:
@@ -129,7 +134,8 @@ function inferProfileDependencies(
   if (
     feature.kind === "feature.extrude" ||
     feature.kind === "feature.surface" ||
-    feature.kind === "feature.revolve"
+    feature.kind === "feature.revolve" ||
+    feature.kind === "feature.sweep"
   ) {
     refs.push(feature.profile as ProfileRef);
   } else if (feature.kind === "feature.loft") {
@@ -185,6 +191,15 @@ function inferDatumDependencies(
       break;
     case "feature.extrude":
       addExtrudeAxisDep((feature as { axis?: ExtrudeAxis }).axis, deps, byId);
+      break;
+    case "feature.sweep":
+      addPlaneRefDep((feature as { frame?: PlaneRef }).frame, deps, byId);
+      break;
+    case "feature.mirror":
+      addPlaneRefDep((feature as { plane?: PlaneRef }).plane, deps, byId);
+      break;
+    case "feature.thread":
+      addAxisSpecDep((feature as { axis?: AxisSpec }).axis, deps, byId);
       break;
     default:
       break;
@@ -253,6 +268,14 @@ function featureSelectors(feature: IntentFeature): Selector[] {
       return [feature.edges];
     case "feature.boolean":
       return [feature.left, feature.right];
+    case "feature.mirror":
+      return [feature.source];
+    case "feature.shell": {
+      const faces = Array.isArray(feature.openFaces) ? feature.openFaces : [];
+      return [feature.source, ...faces];
+    }
+    case "feature.thicken":
+      return [feature.surface];
     case "pattern.linear":
     case "pattern.circular":
       return [feature.origin];

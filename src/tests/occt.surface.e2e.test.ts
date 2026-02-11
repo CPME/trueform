@@ -71,10 +71,53 @@ const tests = [
       const result = buildPart(part, backend);
       const output = result.final.outputs.get("surface:wall");
       assert.ok(output, "missing surface output");
-      assert.equal(output.kind, "face");
+      assert.equal(output.kind, "surface");
       const shape = output.meta["shape"] as any;
       assert.ok(shape, "missing shape metadata");
       assertValidShape(occt, shape, "extrude surface");
+      assert.equal(countSolids(occt, shape), 0);
+      assert.ok(countFaces(occt, shape) > 0, "expected surface to have faces");
+    },
+  },
+  {
+    name: "occt e2e: sweep surface along polyline produces surface output",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const line = dsl.sketchLine("line-1", [-8, 0], [8, 0]);
+      const sketch = dsl.sketch2d(
+        "sketch-sweep",
+        [
+          {
+            name: "profile:open",
+            profile: dsl.profileSketchLoop(["line-1"], { open: true }),
+          },
+        ],
+        { entities: [line] }
+      );
+      const path = dsl.pathPolyline([
+        [0, 0, 0],
+        [0, 0, 20],
+        [15, 0, 30],
+      ]);
+      const part = dsl.part("sweep-surface", [
+        sketch,
+        dsl.sweep(
+          "sweep-1",
+          dsl.profileRef("profile:open"),
+          path,
+          "surface:main",
+          undefined,
+          { mode: "surface" }
+        ),
+      ]);
+
+      const result = buildPart(part, backend);
+      const output = result.final.outputs.get("surface:main");
+      assert.ok(output, "missing surface output");
+      assert.equal(output.kind, "surface");
+      const shape = output.meta["shape"] as any;
+      assert.ok(shape, "missing shape metadata");
+      assertValidShape(occt, shape, "sweep surface");
       assert.equal(countSolids(occt, shape), 0);
       assert.ok(countFaces(occt, shape) > 0, "expected surface to have faces");
     },

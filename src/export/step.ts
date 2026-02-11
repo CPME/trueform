@@ -33,9 +33,10 @@ export function exportStepAp242WithPmi(
   }
   const step = backend.exportStep(target, { ...opts, schema: "AP242" });
   const constraints = part.constraints ?? [];
-  if (constraints.length === 0) {
+  const cosmeticThreads = part.cosmeticThreads ?? [];
+  if (constraints.length === 0 && cosmeticThreads.length === 0) {
     if (opts.requirePmi) {
-      throw new Error("STEP PMI export: no constraints available on part");
+      throw new Error("STEP PMI export: no constraints or cosmetic threads available on part");
     }
     return { step };
   }
@@ -57,9 +58,10 @@ export async function exportStepAp242WithPmiAsync(
     throw new Error("STEP PMI export requires AP242 schema");
   }
   const constraints = part.constraints ?? [];
-  if (constraints.length === 0) {
+  const cosmeticThreads = part.cosmeticThreads ?? [];
+  if (constraints.length === 0 && cosmeticThreads.length === 0) {
     if (opts.requirePmi) {
-      throw new Error("STEP PMI export: no constraints available on part");
+      throw new Error("STEP PMI export: no constraints or cosmetic threads available on part");
     }
     const step = await backend.exportStep(target, { ...opts, schema: "AP242" });
     return { step };
