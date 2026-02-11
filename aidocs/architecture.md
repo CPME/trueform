@@ -80,7 +80,7 @@ Assumed for Step 1 and downstream docs/code:
 ### Boundary Hardening
 - [x] Separate stable root exports from backend/kernel internals.
 - [x] Introduce `experimental` export surface for unstable features.
-- [ ] Add lint/import boundary checks for core vs backend layers.
+- [x] Add lint/import boundary checks for core vs backend layers.
 
 ### IR And Compatibility
 - [ ] Add canonical serialization golden fixtures.
@@ -97,6 +97,7 @@ Completed since initial draft:
   - `trueform/export`
 - File format docs now describe separate part (`.tfp`) and assembly (`.tfa` draft) containers.
 - Assembly documents now have a draft import/reference shape tied to part files.
+- CI guardrails now run docs drift checks and boundary checks on push/PR.
 
 Next item:
-- Implement CI guardrails for boundary enforcement and docs drift checks.
+- Add canonical IR/hash compatibility fixtures.

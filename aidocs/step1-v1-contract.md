@@ -1,7 +1,7 @@
 # Step 1: V1 Contract Lock (Draft)
 
 Date: 2026-02-11
-Status: In progress
+Status: Completed
 
 ## Goal
 
@@ -49,3 +49,7 @@ Assembly document/file:
 - [x] Define import/reference shape from assembly docs to part docs.
 - [x] Decide transition strategy for existing single-document bundle flows.
 - [x] Define temporary compatibility layer and deprecation timeline.
+
+## Next Focus
+
+- Add canonical IR/hash compatibility fixtures and CI coverage.
