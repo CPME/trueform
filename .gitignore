@@ -8,11 +8,13 @@ pnpm-debug.log*
 *.log
 tools/viewer/assets/
 tools/sketch/assets/
-docs/public/api/
+docs/public/api/*
+!docs/public/api/.gitkeep
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 temp/
-aidocs/
+aidocs/*
+!aidocs/.gitkeep
 agents.local.md
 native/occt_server/build/
 tools/_tmp_render_thread_views.mjs
