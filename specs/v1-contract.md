@@ -82,14 +82,42 @@ Stable:
 - IR types and schema identifiers.
 - DSL authoring helpers for core features.
 - Core compile/build contracts for parts.
+- Root package entrypoint (`trueform`) is limited to stable core APIs.
 
 Experimental:
 - Assembly solver helpers.
 - Native transport variants and any backend-specific extension hooks.
+- Exposed only through `trueform/experimental`.
 
 Backend SPI:
 - Kernel-facing/backend-facing contracts used to implement backends.
 - Must be exposed through explicit backend/spi entry points, not root API.
+- Exposed through `trueform/backend-spi`.
+
+## Root Export Policy (Step 1 decision)
+
+Allowed root (`trueform`) exports:
+- IR + schema contracts.
+- DSL helpers and types.
+- Core compile/build APIs for part workflows.
+- Core assertion/cache/profile helpers that do not expose backend internals.
+
+Disallowed root exports:
+- Backend implementation classes (`OcctBackend`, native transports, etc.).
+- Kernel-shaped SPI contracts (`KernelObject`, `KernelResult`, etc.).
+- Experimental assembly solver/runtime helpers.
+- Export-tooling functions (STEP/GLB/STL helper entrypoints).
+
+Required explicit subpaths:
+- `trueform/backend` for backend implementations.
+- `trueform/backend-spi` for backend interfaces/adapters.
+- `trueform/experimental` for unstable runtime APIs.
+- `trueform/export` for export tooling.
+
+Semver policy:
+- Root + stable subpaths follow normal semver compatibility.
+- `trueform/experimental` may change between minors with deprecation notes.
+- Breaking root export additions/removals require contract + guardrail updates.
 
 ## Documentation Alignment Requirements
 
@@ -102,4 +130,4 @@ The following docs must remain consistent with this contract:
 
 ## Open Items
 
-- Final root export policy for stable vs experimental/backend symbols.
+- Final packaging split timeline for moving from single package to multi-package layout.

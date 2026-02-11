@@ -52,4 +52,4 @@ Assembly document/file:
 
 ## Next Focus
 
-- Finalize root export policy details for stable vs experimental/backend SPI.
+- Define packaging split timeline (single package -> multi-package layout).

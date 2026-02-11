@@ -102,4 +102,4 @@ Completed since initial draft:
   container document hash/schema behavior.
 
 Next item:
-- Finalize root export policy details for stable vs experimental/backend SPI.
+- Define packaging split timeline (single package -> multi-package layout).
