@@ -12,6 +12,7 @@ docs/public/api/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 temp/
+aidocs/
 agents.local.md
 native/occt_server/build/
 tools/_tmp_render_thread_views.mjs
