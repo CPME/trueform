@@ -136,6 +136,8 @@ export type IntentFeature =
   | Surface
   | Revolve
   | Loft
+  | Sweep
+  | Shell
   | Pipe
   | PipeSweep
   | HexTubeSweep
@@ -299,6 +301,8 @@ export type Path3D =
   | { kind: "path.spline"; points: Point3D[]; closed?: boolean; degree?: Scalar }
   | { kind: "path.segments"; segments: PathSegment[] };
 
+export type SweepOrientation = "frenet" | "fixed";
+
 export type Extrude = FeatureBase & {
   kind: "feature.extrude";
   profile: ProfileRef;
@@ -327,6 +331,26 @@ export type Revolve = FeatureBase & {
 export type Loft = FeatureBase & {
   kind: "feature.loft";
   profiles: ProfileRef[];
+  result: string;
+  mode?: ExtrudeMode;
+};
+
+export type Sweep = FeatureBase & {
+  kind: "feature.sweep";
+  profile: ProfileRef;
+  path: Path3D;
+  result: string;
+  mode?: ExtrudeMode;
+  frame?: PlaneRef;
+  orientation?: SweepOrientation;
+};
+
+export type Shell = FeatureBase & {
+  kind: "feature.shell";
+  source: Selector;
+  thickness: Scalar;
+  direction?: "inside" | "outside";
+  openFaces?: Selector[];
   result: string;
 };
 
@@ -383,6 +407,9 @@ export type Thread = FeatureBase & {
   pitch: Scalar;
   handedness?: ThreadHandedness;
   segmentsPerTurn?: Scalar;
+  profileAngle?: Scalar;
+  crestFlat?: Scalar;
+  rootFlat?: Scalar;
   result: string;
 };
 

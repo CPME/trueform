@@ -56,6 +56,7 @@ export const part = (
     connectors?: MateConnector[];
     datums?: IntentPart["datums"];
     constraints?: IntentPart["constraints"];
+    cosmeticThreads?: IntentPart["cosmeticThreads"];
     assertions?: IntentPart["assertions"];
   }
 ): IntentPart =>
@@ -66,6 +67,7 @@ export const part = (
     connectors: opts?.connectors,
     datums: opts?.datums,
     constraints: opts?.constraints,
+    cosmeticThreads: opts?.cosmeticThreads,
     assertions: opts?.assertions,
   });
 

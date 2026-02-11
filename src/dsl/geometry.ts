@@ -29,6 +29,7 @@ import type {
   Predicate,
   Profile,
   ProfileRef,
+  Mirror,
   RankRule,
   Revolve,
   Scalar,
@@ -48,6 +49,12 @@ import type {
   SketchLine,
   SolidQuery,
   Surface,
+  Shell,
+  Sweep,
+  Thicken,
+  ThickenDirection,
+  Thread,
+  ThreadHandedness,
 } from "../ir.js";
 import { compact } from "./utils.js";
 
@@ -307,7 +314,7 @@ export const revolve = (
   axis: Revolve["axis"],
   angle: Revolve["angle"],
   result?: string,
-  opts?: { origin?: [number, number, number]; deps?: ID[] }
+  opts?: { origin?: [number, number, number]; deps?: ID[]; mode?: Revolve["mode"] }
 ): Revolve =>
   compact({
     id,
@@ -316,22 +323,49 @@ export const revolve = (
     axis,
     angle,
     origin: opts?.origin,
-    result: result ?? `body:${id}`,
+    result: result ?? (opts?.mode === "surface" ? `surface:${id}` : `body:${id}`),
     deps: opts?.deps,
+    mode: opts?.mode,
   });
 
 export const loft = (
   id: ID,
   profiles: ProfileRef[],
   result?: string,
-  deps?: ID[]
+  deps?: ID[],
+  opts?: { mode?: Loft["mode"] }
 ): Loft =>
   compact({
     id,
     kind: "feature.loft",
     profiles,
-    result: result ?? `body:${id}`,
+    result: result ?? (opts?.mode === "surface" ? `surface:${id}` : `body:${id}`),
     deps,
+    mode: opts?.mode,
+  });
+
+export const sweep = (
+  id: ID,
+  profile: ProfileRef,
+  path: Path3D,
+  result?: string,
+  deps?: ID[],
+  opts?: {
+    mode?: Sweep["mode"];
+    frame?: Sweep["frame"];
+    orientation?: Sweep["orientation"];
+  }
+): Sweep =>
+  compact({
+    id,
+    kind: "feature.sweep",
+    profile,
+    path,
+    result: result ?? (opts?.mode === "surface" ? `surface:${id}` : `body:${id}`),
+    deps,
+    mode: opts?.mode,
+    frame: opts?.frame,
+    orientation: opts?.orientation,
   });
 
 export const pipe = (
@@ -361,7 +395,7 @@ export const pipeSweep = (
   outerDiameter: Scalar,
   innerDiameter?: Scalar,
   result?: string,
-  opts?: { deps?: ID[] }
+  opts?: { deps?: ID[]; mode?: PipeSweep["mode"] }
 ): PipeSweep =>
   compact({
     id,
@@ -369,8 +403,9 @@ export const pipeSweep = (
     path,
     outerDiameter,
     innerDiameter,
-    result: result ?? `body:${id}`,
+    result: result ?? (opts?.mode === "surface" ? `surface:${id}` : `body:${id}`),
     deps: opts?.deps,
+    mode: opts?.mode,
   });
 
 export const hexTubeSweep = (
@@ -379,7 +414,7 @@ export const hexTubeSweep = (
   outerAcrossFlats: Scalar,
   innerAcrossFlats?: Scalar,
   result?: string,
-  opts?: { deps?: ID[] }
+  opts?: { deps?: ID[]; mode?: HexTubeSweep["mode"] }
 ): HexTubeSweep =>
   compact({
     id,
@@ -387,8 +422,98 @@ export const hexTubeSweep = (
     path,
     outerAcrossFlats,
     innerAcrossFlats,
-    result: result ?? `body:${id}`,
+    result: result ?? (opts?.mode === "surface" ? `surface:${id}` : `body:${id}`),
     deps: opts?.deps,
+    mode: opts?.mode,
+  });
+
+export const mirror = (
+  id: ID,
+  source: Selector,
+  plane: PlaneRef,
+  result?: string,
+  deps?: ID[]
+): Mirror =>
+  compact({
+    id,
+    kind: "feature.mirror",
+    source,
+    plane,
+    result: result ?? `body:${id}`,
+    deps,
+  });
+
+export const thicken = (
+  id: ID,
+  surface: Selector,
+  thickness: Scalar,
+  result?: string,
+  deps?: ID[],
+  opts?: { direction?: ThickenDirection }
+): Thicken =>
+  compact({
+    id,
+    kind: "feature.thicken",
+    surface,
+    thickness,
+    direction: opts?.direction,
+    result: result ?? `body:${id}`,
+    deps,
+  });
+
+export const shell = (
+  id: ID,
+  source: Selector,
+  thickness: Scalar,
+  result?: string,
+  deps?: ID[],
+  opts?: { direction?: Shell["direction"]; openFaces?: Selector[] }
+): Shell =>
+  compact({
+    id,
+    kind: "feature.shell",
+    source,
+    thickness,
+    direction: opts?.direction,
+    openFaces: opts?.openFaces,
+    result: result ?? `body:${id}`,
+    deps,
+  });
+
+export const thread = (
+  id: ID,
+  axis: Thread["axis"],
+  length: Scalar,
+  majorDiameter: Scalar,
+  pitch: Scalar,
+  result?: string,
+  deps?: ID[],
+  opts?: {
+    origin?: Point3D;
+    minorDiameter?: Scalar;
+    handedness?: ThreadHandedness;
+    segmentsPerTurn?: Scalar;
+    profileAngle?: Scalar;
+    crestFlat?: Scalar;
+    rootFlat?: Scalar;
+  }
+): Thread =>
+  compact({
+    id,
+    kind: "feature.thread",
+    axis,
+    origin: opts?.origin,
+    length,
+    majorDiameter,
+    minorDiameter: opts?.minorDiameter,
+    pitch,
+    handedness: opts?.handedness,
+    segmentsPerTurn: opts?.segmentsPerTurn,
+    profileAngle: opts?.profileAngle,
+    crestFlat: opts?.crestFlat,
+    rootFlat: opts?.rootFlat,
+    result: result ?? `body:${id}`,
+    deps,
   });
 
 export const hole = (

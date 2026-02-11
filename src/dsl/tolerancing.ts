@@ -1,8 +1,12 @@
 import type {
+  AssertionBrepValid,
+  AssertionMinEdgeLength,
+  CosmeticThread,
   DatumModifier,
   DatumRef,
   FTIDatum,
   FlatnessConstraint,
+  GeometryRef,
   ID,
   ParallelismConstraint,
   PerpendicularityConstraint,
@@ -16,6 +20,7 @@ import type {
   Selector,
   SizeConstraint,
   SurfaceProfileConstraint,
+  ThreadHandedness,
   ToleranceModifier,
 } from "../ir.js";
 import { compact } from "./utils.js";
@@ -166,6 +171,28 @@ export const positionConstraint = (
     zone: opts?.zone,
   });
 
+export const assertBrepValid = (
+  id: ID,
+  target?: Selector
+): AssertionBrepValid =>
+  compact({
+    id,
+    kind: "assert.brepValid",
+    target,
+  });
+
+export const assertMinEdgeLength = (
+  id: ID,
+  min: Scalar,
+  target?: Selector
+): AssertionMinEdgeLength =>
+  compact({
+    id,
+    kind: "assert.minEdgeLength",
+    min,
+    target,
+  });
+
 export const sizeConstraint = (
   id: ID,
   target: RefSurface | RefEdge | RefAxis | RefPoint | RefFrame,
@@ -190,4 +217,44 @@ export const sizeConstraint = (
     modifiers: opts.modifiers,
     capabilities: opts.capabilities,
     requirement: opts.requirement,
+  });
+
+export const cosmeticThread = (
+  id: ID,
+  target: GeometryRef,
+  opts?: {
+    designation?: string;
+    standard?: string;
+    series?: string;
+    class?: string;
+    handedness?: ThreadHandedness;
+    internal?: boolean;
+    majorDiameter?: Scalar;
+    minorDiameter?: Scalar;
+    pitch?: Scalar;
+    length?: Scalar;
+    depth?: Scalar;
+    notes?: string[];
+    capabilities?: ID[];
+    requirement?: ID;
+  }
+): CosmeticThread =>
+  compact({
+    id,
+    kind: "thread.cosmetic",
+    target,
+    designation: opts?.designation,
+    standard: opts?.standard,
+    series: opts?.series,
+    class: opts?.class,
+    handedness: opts?.handedness,
+    internal: opts?.internal,
+    majorDiameter: opts?.majorDiameter,
+    minorDiameter: opts?.minorDiameter,
+    pitch: opts?.pitch,
+    length: opts?.length,
+    depth: opts?.depth,
+    notes: opts?.notes,
+    capabilities: opts?.capabilities,
+    requirement: opts?.requirement,
   });
