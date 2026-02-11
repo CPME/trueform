@@ -82,7 +82,9 @@ PR 2: extract stable core modules.
   to the built core artifact for compatibility-safe adoption.
 - PR 2b in progress: added package-local source entrypoint at
   `packages/tf-core/src/index.ts` as a forwarder to root core exports.
-- PR 2c pending: move/copy core source modules under `packages/tf-core/src`.
+- PR 2c in progress: initial package-local module files added (`ir`, `dsl`,
+  `compiler`, `executor`, `pmi`, and utility facades) and wired through the
+  local package index.
 
 PR 3: extract DSL package.
 - Move DSL helpers/types to `packages/tf-dsl`.
