@@ -80,7 +80,9 @@ PR 2: extract stable core modules.
 - Keep top-level facade re-exports intact.
 - PR 2a completed: introduced `src/core.ts` and mapped workspace `@trueform/core`
   to the built core artifact for compatibility-safe adoption.
-- PR 2b pending: move/copy core source modules under `packages/tf-core/src`.
+- PR 2b in progress: added package-local source entrypoint at
+  `packages/tf-core/src/index.ts` as a forwarder to root core exports.
+- PR 2c pending: move/copy core source modules under `packages/tf-core/src`.
 
 PR 3: extract DSL package.
 - Move DSL helpers/types to `packages/tf-dsl`.
@@ -106,4 +108,4 @@ PR 7 (major release gate): optional facade slimming.
 
 - [x] Phase 0 guardrails and explicit subpaths.
 - [x] Phase 1 PR 1 scaffolding (workspace config + placeholder package manifests).
-- [ ] Phase 1 PR 2 core module extraction (bridge landed; source move pending).
+- [ ] Phase 1 PR 2 core module extraction (bridge landed; source move in progress).
