@@ -1,8 +1,12 @@
 # Assembly DSL
 
-Assembly data remains the authoritative source, but `buildAssembly` / `solveAssembly`
-can solve basic mates for now (fixed, coaxial, planar, distance, angle, parallel,
-perpendicular, insert, slider, hinge).
+Assembly data is modeled in the DSL and IR, but core compile remains part-centric in v1.
+`buildAssembly` / `solveAssembly` are currently utility APIs and are treated as
+experimental rather than part of the deterministic part compile pipeline.
+
+Current Step 1 contract direction:
+- Mate connectors are authored on parts.
+- Assembly intent is stored in a separate assembly file/document.
 
 ## Assembly (Data-Only in v1)
 
@@ -22,6 +26,11 @@ perpendicular, insert, slider, hinge).
 - `mateHinge(a, b, offset?) -> AssemblyMate`
 - `output(name, refs) -> AssemblyOutput`
 - `connector(id, origin, opts?) -> MateConnector`
+
+## Experimental Solver Helpers
+
+- `buildAssembly(assembly, parts, options?) -> AssemblySolveResult`
+- `solveAssembly(assembly, partConnectors, options?) -> AssemblySolveResult`
 
 ## Mate DOF
 

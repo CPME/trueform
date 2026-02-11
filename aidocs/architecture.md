@@ -1,108 +1,87 @@
-# Architecture Review (Draft)
+# Architecture Review And Remediation Plan
 
-Date: 2026-02-09
+Date: 2026-02-11
 Reviewer: Codex
 
-This document captures architectural findings for the current TrueForm repo
-and proposes a concrete path forward. It is intentionally direct and focuses
-on issues that will block the stated mission if left unaddressed.
+## Snapshot
 
-## Scope
+What is already strong:
+- Clear intent -> canonical IR -> deterministic build framing.
+- Selector + datum strategy avoids brittle face index usage.
+- Backend boundary is explicitly documented.
+- Container format separates authoritative IR from optional artifacts.
 
-The review is based on the current repository structure and core modules:
-the DSL, compiler, executor, selectors, backend interfaces, and OCCT
-implementations. The viewer and docs are considered only as they affect
-core architecture and webapp viability.
+Core issues to fix:
+- Public API is too mixed (stable surface vs backend internals vs experiments).
+- Kernel-shaped types are exported at the root package boundary.
+- Assembly contract is inconsistent across compile/docs/API.
+- Core vs export layering is under-specified in product docs.
+- Source-of-truth docs have drift and broken references.
 
-## Current Architecture (Observed)
+## Counterarguments To Prior Critique
 
-Summary:
-- DSL emits a separate IR with schema + versioning; IR has a JSON schema.
-- Compilation normalizes and builds a deterministic order.
-- Execution is a sequential backend loop that resolves selectors at runtime.
-- OCCT is the only real backend. Native transport exists but is OCCT.
-- Assemblies are data-only in IR; solver is a separate utility module.
-- Assertions and constraints exist as data but are not enforced.
+1. "API is too large for v1" is directionally correct, but the core issue is
+   stability tiering, not raw symbol count.
+2. PMI/AP242 layering risk is real, but there is already separation in code:
+   `src/pmi.ts` and `src/export/step.ts` are outside compile.
+3. Immediate package split is optional; boundary rules and export discipline
+   can provide most of the value before a full monorepo/package split.
 
-This is a reasonable v1 modeling layer, but it does not yet fulfill the
-"standards + IR + kernel + API" framing.
+## Priority Plan
 
-## Findings (Issues To Fix)
+Step 1 (current): lock v1 contract and docs truth.
+- Publish explicit v1 decisions for:
+  - Assembly contract.
+  - Public API tiers (`stable`, `experimental`, `backend-spi`).
+  - Core pipeline boundary (`compile` vs `execute/export`).
+- Align docs to one contract (README + docs + specs map).
 
-Severity: High
-- Kernel independence is unproven. OCCT is the only backend; conformance
-  coverage is minimal and mock-only today.
-- Assertions and constraints are not evaluated by default (an evaluator
-  exists, but is not wired into build).
+Step 2: de-risk public API.
+- Keep root exports focused on IR/DSL/compile/runtime-safe APIs.
+- Move backend/kernel-facing contracts to explicit subpath exports.
+- Move unstable features under `experimental` namespace.
 
-Severity: Medium
-- Build pipeline lacks integrated caching (cache keys exist but are not
-  used in build/mesh/extract flows).
-- Mesh and export APIs do not enforce webapp footgun boundaries. It is
-  possible to leak kernel objects or block on long operations.
+Step 3: choose and enforce assembly stance.
+- Recommended: data-only in core compile for v1.
+- If solver remains, demote it to experimental and keep out of core compile.
 
-Severity: Low
-- Internal API surface is mixed: some modules are "public-ish" without a
-  clear packaging boundary.
-- The viewer/export tooling is useful but is not a formal API layer.
+Step 4: lock IR compatibility.
+- Canonical serialization fixtures.
+- Golden hash fixtures.
+- Compatibility tests across schema/version upgrades.
 
-## IR Status
+Step 5: enforce boundaries in CI.
+- Import rules to prevent DSL/core from importing backend/native internals.
+- Docs-link and source-of-truth drift checks.
 
-The IR now exists and is required if the project intends to be:
-- An interchange format across tools.
-- Kernel-agnostic.
-- Stable for agents, CI, and long-lived projects.
+Step 6 (optional): package split after contract stabilization.
+- `tf-core`, `tf-dsl`, `tf-backend-*`, `tf-export`, `apps/*`.
 
-The remaining gap is enforcing IR-only boundaries and defining
-migration/versioning strategy.
+## Step 1 Decision Baseline (Started)
 
-## Clear Separation Plan (DSL vs IR)
+Assumed for Step 1 and downstream docs/code:
+- Mate connectors are authored and stored at the part level.
+- Assembly information is stored in a separate assembly file/document.
+- Core compile remains part-centric in v1; assembly solving is not part of
+  deterministic part compile.
 
-Goal:
-Keep the DSL as a friendly authoring layer and define a strict IR that is
-stable, versioned, and validated. The compiler becomes a DSL-to-IR
-translator. Backends consume only IR.
+## Checklist
 
-Proposed separation (remaining):
-1. Move normalization and validation to operate on IR only.
-2. Treat the DSL as optional. External tools can generate IR directly.
+### Contract And Docs
+- [x] Capture architecture critique + counterarguments in this document.
+- [x] Define phased remediation plan with explicit decision points.
+- [x] Start Step 1 contract baseline with assembly-file assumption.
+- [x] Publish v1 API stability tiers in a dedicated contract doc.
+- [x] Align README, DSL docs, and specs map on one assembly contract.
+- [x] Remove or fix broken docs pointers (for example `specs/backend-interface.md`).
+- [x] Resolve file format naming drift (`.tfp` vs `.tf` references).
 
-This keeps authoring flexible while stabilizing the interchange contract.
+### Boundary Hardening
+- [ ] Separate stable root exports from backend/kernel internals.
+- [ ] Introduce `experimental` export surface for unstable features.
+- [ ] Add lint/import boundary checks for core vs backend layers.
 
-## Investigation List
-
-These items need focused investigation or decisions before implementation:
-- IR schema scope. What is the minimal IR for v1 that remains stable?
-- Versioning strategy. How to migrate IR documents across versions?
-- Selector semantics. Must be fully deterministic and kernel-agnostic.
-- Build context and caching. What is the canonical key for feature reuse?
-- Assembly contract. Is the solver in-scope for v1 or should it be moved
-  to a separate layer with a clear interface?
-- FTI and assertion evaluation. What is the minimal runtime evaluator that
-  can run in Node and in the browser (worker)?
-- Backend capability flags. How do we fail fast on unsupported features?
-
-## Path Forward (Concrete Steps)
-
-Mid-term (6-10 weeks):
-1. Wire mesh profiles into viewer/export and enforce profile usage.
-
-## Non-Goals (For Now)
-
-- Full GUI CAD application.
-- Multi-kernel parity across all features.
-- A universal file format replacement for STEP/IGES in v1.
-
-## Risks If Unaddressed
-
-- Tooling lock-in: without a stable IR, external tools cannot integrate
-  safely, and version drift will be constant.
-- Kernel coupling: the system becomes "OCCT with a DSL" rather than a
-  reusable architecture.
-- Inconsistent semantics: selector and assembly behavior may diverge
-  across backends without formal tests.
-
-## Notes
-
-This is a pragmatic, staged path that preserves current momentum while
-creating a real interchange layer and clearer boundaries.
+### IR And Compatibility
+- [ ] Add canonical serialization golden fixtures.
+- [ ] Add stable hash compatibility fixtures.
+- [ ] Add schema compatibility test coverage for container/document reads.

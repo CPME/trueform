@@ -1,6 +1,6 @@
 # TrueForm
 
-TrueForm is a declarative, intent-first modeling layer on top of OpenCascade.js. It lets agents and web apps describe **what** a part is (features, constraints, assertions) without scripting kernel steps.
+TrueForm is a declarative, intent-first modeling layer that compiles to interchangeable geometric backends (OpenCascade.js today, native OCCT support in progress). It lets agents and web apps describe **what** a part is (features, constraints, assertions) without scripting kernel steps.
 
 ## What It Promises (and Not)
 
@@ -19,11 +19,11 @@ Non-promises:
 
 - IR-only source of truth (no kernel history stored)
 - JSON-serializable builders
-- PartIR only; `AssemblyIR` is data-only (compile warns)
+- Core compile is part-centric in v1; assembly solving is experimental
 - Features: `Sketch2D` (line/arc/circle/ellipse/rect/slot/polygon/spline/point), `profile.rect/circle/poly/sketch`, `Extrude`, `Revolve`, `Loft`, `Pipe`, `PipeSweep`, `HexTubeSweep`, `Hole` (linear/circular pattern layouts), `Fillet`, `Chamfer`, `Boolean`
 - Primary output: `body:main` (single-body v1)
 - Runtime target: Node + OpenCascade.js
-- Mesh export only via the viewer tool (no public export API yet)
+- Export tooling exists in dedicated modules (`src/export/*`) and is distinct from core compile
 - Unsupported features (e.g., shell/draft/rib, full feature/body patterns) must throw explicit errors in the OCJS backend
 
 ## What Problem It Solves
@@ -83,5 +83,5 @@ const part = dsl.part("plate", [
 
 - Technical spec (IR, pipeline, backend boundary): `specs/spec.md`
 - Functional tolerancing intent: `specs/functional-tolerancing-intent.md`
-- Backend interface pointer: `specs/backend-interface.md`
+- V1 contract and API tiers: `specs/v1-contract.md`
 - Roadmap abstractions (future ideas): `specs/geometric-abstractions.md`

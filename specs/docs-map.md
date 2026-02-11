@@ -7,12 +7,12 @@ Purpose: define the source of truth for each topic to prevent drift.
 - Public-facing docs (VitePress site): `docs/`
 - Generated API reference (from TSDoc): `docs/public/api` via `npm run docs:api`
 - Viewer usage + mesh schema: `tools/viewer/README.md`
-- Native file format (.tf): `docs/reference/file-format.md`
+- Native file format (.tfp): `docs/reference/file-format.md`
 - Technical spec (IR, pipeline, backend boundary): `specs/spec.md`
+- V1 product contract and API tiers: `specs/v1-contract.md`
 - High-level overview + positioning: `specs/summary.md`
 - Functional tolerancing intent: `specs/functional-tolerancing-intent.md`
 - Roadmap ideas (non-MVP): `specs/geometric-abstractions.md`
-- Backend interface pointer (short): `specs/backend-interface.md`
 
 ## Maintenance Rules
 

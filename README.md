@@ -4,7 +4,7 @@
 
 Docs: [https://cpme.github.io/trueform/](https://cpme.github.io/trueform/)
 
-TrueForm is a declarative, intent-first modeling layer on top of OpenCascade.js.
+TrueForm is a declarative, intent-first modeling layer that compiles to interchangeable geometric backends (OpenCascade.js today, native OCCT server support in progress).
 It lets humans and agents describe what a part is (features, constraints, assertions)
 without scripting kernel steps.
 
@@ -13,27 +13,30 @@ without scripting kernel steps.
 For decades, enterprise CAD vendors have locked data behind proprietary formats.
 Legacy exchange formats (STEP, IGES, OBJ) lose feature history and intent, so teams
 fall back to PDFs and other lossy artifacts. TrueForm aims to make hardware design
-feel more like software: a single source of truth that can produce all downstream assets.
+feel more like software: a canonical source of intent with deterministic compile,
+plus ecosystem tools that generate downstream assets.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  DSL[DSL Authoring] --> IR[IR (JSON)];
-  IR --> Compiler[Compiler + Validation];
-  Compiler -->|build| Backend[Backend];
-  Backend --> OCCTJS[OpenCascade.js];
-  Backend --> OCCTNative[Native OCCT Server];
+  DSL[DSL Authoring] --> Compile[Compile: Normalize + Validate];
+  Compile --> IR[Canonical IR (JSON)];
+  IR --> Execute[Execute: Backend Build + Resolve];
+  Execute --> OCCTJS[OpenCascade.js Backend];
+  Execute --> OCCTNative[Native OCCT Backend];
   OCCTJS --> Meshes[Meshes + View Data];
-  OCCTNative --> STEP[STEP/AP242 + PMI];
+  OCCTNative --> STEP[STEP/AP242 Export];
+  STEP --> PMI[PMI Sidecar or Embedded PMI];
   Meshes --> Viewer[Web Viewer];
 ```
 
 ## Status
 - V1 compiles a JSON-serializable IR and builds with an OpenCascade.js backend.
 - Runtime target is Node + OpenCascade.js.
-- Assemblies are data-only for now (compile warns).
-- Experimental native OCCT backend supports server-side CAD compute, including AP242 STEP export with XCAF PMI via the native HTTP server.
+- Core compile is part-centric; assembly solving APIs are experimental and outside the core compile pipeline.
+- Step 1 contract direction: mate connectors live on parts, and assembly intent is stored in a separate assembly file/document.
+- Experimental native OCCT backend supports server-side CAD compute and AP242 export via native HTTP transport.
 
 ## Quickstart
 ```bash
