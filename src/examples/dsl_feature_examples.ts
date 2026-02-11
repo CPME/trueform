@@ -1,18 +1,27 @@
 import { part } from "../dsl/core.js";
 import type { IntentPart } from "../dsl.js";
+import type { MeshOptions } from "../backend.js";
 import {
   booleanOp,
   loft,
+  sweep,
   chamfer,
+  datumPlane,
   extrude,
   fillet,
   hole,
+  mirror,
+  shell,
+  planeDatum,
   predCreatedBy,
   predPlanar,
   predNormal,
+  pathPolyline,
   profileCircle,
   profilePoly,
   profileRect,
+  profileRef,
+  profileSketchLoop,
   rankMinZ,
   rankMaxZ,
   rankMaxArea,
@@ -20,10 +29,18 @@ import {
   selectorEdge,
   selectorFace,
   selectorNamed,
+  sketch2d,
+  sketchLine,
+  sketchRectCenter,
+  sketchRectCorner,
+  surface,
+  thicken,
+  thread,
 } from "../dsl/geometry.js";
 import {
   datumFeature,
   datumRef,
+  cosmeticThread,
   flatnessConstraint,
   parallelismConstraint,
   perpendicularityConstraint,
@@ -45,6 +62,29 @@ export type DslFeatureExample = {
   id: string;
   title: string;
   part: IntentPart;
+  render?: {
+    meshOpts?: MeshOptions;
+    renderOpts?: {
+      width?: number;
+      height?: number;
+      padding?: number;
+      viewDir?: [number, number, number];
+      background?: [number, number, number];
+      backgroundAlpha?: number;
+      lightDir?: [number, number, number];
+      ambient?: number;
+      diffuse?: number;
+    };
+    layers?: Array<{
+      output: string;
+      color?: [number, number, number];
+      alpha?: number;
+      wireframe?: boolean;
+      wireColor?: [number, number, number];
+      wireDepthTest?: boolean;
+      depthTest?: boolean;
+    }>;
+  };
 };
 
 export const dslFeatureExamples: DslFeatureExample[] = [
@@ -81,6 +121,52 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         "body:main"
       ),
     ]),
+  },
+  {
+    id: "sweep",
+    title: "Sweep (Surface)",
+    part: (() => {
+      const line = sketchLine("line-1", [-8, 0], [8, 0]);
+      const sketch = sketch2d(
+        "sketch-sweep",
+        [
+          {
+            name: "profile:line",
+            profile: profileSketchLoop(["line-1"], { open: true }),
+          },
+        ],
+        { entities: [line] }
+      );
+      const path = pathPolyline([
+        [0, 0, 0],
+        [0, 0, 20],
+        [15, 0, 30],
+      ]);
+      return part("example-sweep", [
+        sketch,
+        sweep(
+          "sweep-1",
+          profileRef("profile:line"),
+          path,
+          "surface:main",
+          undefined,
+          { mode: "surface" }
+        ),
+      ]);
+    })(),
+    render: {
+      layers: [
+        {
+          output: "surface:main",
+          color: [154, 192, 230],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [32, 40, 52],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
   },
   {
     id: "hole",
@@ -437,5 +523,199 @@ export const dslFeatureExamples: DslFeatureExample[] = [
 
       return part("example-radial-array", [base, ...bosses, ...unions]);
     })(),
+  },
+  {
+    id: "mirror",
+    title: "Mirror",
+    part: (() => {
+      const rect = sketchRectCenter("rect-1", [26, 0], 60, 10, {
+        rotation: Math.PI / 5,
+      });
+      const sketch = sketch2d(
+        "sketch-v",
+        [{ name: "profile:bar", profile: profileSketchLoop(["rect-1"]) }],
+        { entities: [rect] }
+      );
+      return part("example-mirror", [
+        sketch,
+        extrude("bar", profileRef("profile:bar"), 6, "body:base"),
+        datumPlane("mirror-plane", "+X"),
+        mirror(
+          "mirror-1",
+          selectorNamed("body:base"),
+          planeDatum("mirror-plane"),
+          "body:mirror"
+        ),
+        booleanOp(
+          "union-1",
+          "union",
+          selectorNamed("body:base"),
+          selectorNamed("body:mirror"),
+          "body:main"
+        ),
+      ]);
+    })(),
+  },
+  {
+    id: "thicken",
+    title: "Thicken",
+    part: (() => {
+      const line = sketchLine("line-1", [10, 0], [10, 16]);
+      const sketch = sketch2d(
+        "sketch-thicken",
+        [
+          {
+            name: "profile:open",
+            profile: profileSketchLoop(["line-1"], { open: true }),
+          },
+        ],
+        { plane: planeDatum("sketch-plane"), entities: [line] }
+      );
+      return part("example-thicken", [
+        datumPlane("sketch-plane", "+Y"),
+        sketch,
+        revolve(
+          "surface-revolve",
+          profileRef("profile:open"),
+          "+Z",
+          "full",
+          "surface:main",
+          { mode: "surface" }
+        ),
+        thicken("thicken-1", selectorNamed("surface:main"), 4, "body:main"),
+      ]);
+    })(),
+    render: {
+      layers: [
+        {
+          output: "body:main",
+          color: [154, 192, 230],
+          alpha: 1,
+          wireframe: false,
+          depthTest: true,
+        },
+        {
+          output: "surface:main",
+          color: [90, 120, 160],
+          alpha: 0.25,
+          wireframe: true,
+          wireColor: [32, 40, 52],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
+  },
+  {
+    id: "shell-before",
+    title: "Shell (Before)",
+    part: part("example-shell-before", [
+      extrude("base", profileRect(60, 40), 20, "body:base"),
+    ]),
+    render: {
+      layers: [
+        {
+          output: "body:base",
+          color: [140, 150, 160],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [20, 30, 40],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
+  },
+  {
+    id: "shell-after",
+    title: "Shell (After)",
+    part: part("example-shell-after", [
+      extrude("base", profileRect(60, 40), 20, "body:base"),
+      shell("shell-1", selectorNamed("body:base"), 2, "body:main", undefined, {
+        direction: "inside",
+        openFaces: [
+          selectorFace(
+            [predCreatedBy("base"), predPlanar(), predNormal("+Z")],
+            [rankMaxArea()]
+          ),
+        ],
+      }),
+    ]),
+    render: {
+      layers: [
+        {
+          output: "body:main",
+          color: [118, 170, 220],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [20, 30, 40],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
+  },
+  {
+    id: "shell",
+    title: "Shell",
+    part: part("example-shell", [
+      extrude("base", profileRect(60, 40), 20, "body:base"),
+      shell("shell-1", selectorNamed("body:base"), 2, "body:main", undefined, {
+        direction: "inside",
+        openFaces: [
+          selectorFace(
+            [predCreatedBy("base"), predPlanar(), predNormal("+Z")],
+            [rankMaxArea()]
+          ),
+        ],
+      }),
+    ]),
+    render: {
+      layers: [
+        {
+          output: "body:main",
+          color: [118, 170, 220],
+          alpha: 0.4,
+          wireframe: false,
+          depthTest: true,
+        },
+      ],
+    },
+  },
+  {
+    id: "thread",
+    title: "Thread",
+    part: part("example-thread", [
+      thread("thread-1", "+Z", 24, 22, 3.5, "body:main", undefined, {
+        segmentsPerTurn: 24,
+      }),
+    ]),
+    render: {
+      meshOpts: {
+        linearDeflection: 0.1,
+        angularDeflection: 0.2,
+      },
+    },
+  },
+  {
+    id: "thread-cosmetic",
+    title: "Cosmetic Thread",
+    part: part(
+      "example-thread-cosmetic",
+      [extrude("base", profileCircle(10), 24, "body:main")],
+      {
+        cosmeticThreads: [
+          cosmeticThread(
+            "thread-1",
+            refSurface(selectorFace([predCreatedBy("base")], [rankMaxArea()])),
+            {
+              designation: "M8x1.25-6H",
+              internal: true,
+              length: 12,
+            }
+          ),
+        ],
+      }
+    ),
   },
 ];

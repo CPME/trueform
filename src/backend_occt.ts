@@ -1,5 +1,6 @@
 import {
   Backend,
+  BackendCapabilities,
   ExecuteInput,
   KernelResult,
   KernelObject,
@@ -10,6 +11,7 @@ import {
   StlExportOptions,
 } from "./backend.js";
 import { resolveSelectorSet } from "./selectors.js";
+import { BackendError } from "./errors.js";
 import {
   AxisDirection,
   AxisSpec,
@@ -23,6 +25,8 @@ import {
   Fillet,
   Hole,
   Loft,
+  Sweep,
+  Shell,
   Pipe,
   PipeSweep,
   HexTubeSweep,
@@ -40,6 +44,9 @@ import {
   Sketch2D,
   SketchEntity,
   Surface,
+  Mirror,
+  Thicken,
+  Thread,
 } from "./ir.js";
 
 export type OcctModule = {
@@ -80,6 +87,39 @@ export class OcctBackend implements Backend {
     this.occt = options.occt;
   }
 
+  capabilities(): BackendCapabilities {
+    return {
+      name: "opencascade.js",
+      featureKinds: [
+        "datum.plane",
+        "datum.axis",
+        "datum.frame",
+        "feature.sketch2d",
+        "feature.extrude",
+        "feature.surface",
+        "feature.revolve",
+        "feature.loft",
+        "feature.sweep",
+        "feature.shell",
+        "feature.pipe",
+        "feature.pipeSweep",
+        "feature.hexTubeSweep",
+        "feature.mirror",
+        "feature.thicken",
+        "feature.thread",
+        "feature.hole",
+        "feature.fillet",
+        "feature.chamfer",
+        "feature.boolean",
+        "pattern.linear",
+        "pattern.circular",
+      ],
+      mesh: true,
+      exports: { step: true, stl: true },
+      assertions: ["assert.brepValid", "assert.minEdgeLength"],
+    };
+  }
+
   execute(input: ExecuteInput): KernelResult {
     const kind = (input.feature as { kind: string }).kind;
     switch (kind) {
@@ -107,12 +147,38 @@ export class OcctBackend implements Backend {
         return this.execRevolve(input.feature as Revolve, input.upstream);
       case "feature.loft":
         return this.execLoft(input.feature as Loft, input.upstream);
+      case "feature.sweep":
+        return this.execSweep(
+          input.feature as Sweep,
+          input.upstream,
+          input.resolve
+        );
+      case "feature.shell":
+        return this.execShell(
+          input.feature as Shell,
+          input.upstream,
+          input.resolve
+        );
       case "feature.pipe":
         return this.execPipe(input.feature as Pipe, input.upstream);
       case "feature.pipeSweep":
         return this.execPipeSweep(input.feature as PipeSweep, input.upstream);
       case "feature.hexTubeSweep":
         return this.execHexTubeSweep(input.feature as HexTubeSweep, input.upstream);
+      case "feature.mirror":
+        return this.execMirror(
+          input.feature as Mirror,
+          input.upstream,
+          input.resolve
+        );
+      case "feature.thicken":
+        return this.execThicken(
+          input.feature as Thicken,
+          input.upstream,
+          input.resolve
+        );
+      case "feature.thread":
+        return this.execThread(input.feature as Thread, input.upstream);
       case "feature.hole":
         return this.execHole(
           input.feature as Hole,
@@ -145,8 +211,33 @@ export class OcctBackend implements Backend {
           input.resolve
         );
       default:
-        throw new Error(`OCCT backend: unsupported feature ${kind}`);
+        throw new BackendError(
+          "backend_unsupported_feature",
+          `OCCT backend: unsupported feature ${kind}`
+        );
     }
+  }
+
+  checkValid(target: KernelObject): boolean {
+    const shape = target.meta["shape"] as any;
+    if (!shape) {
+      throw new BackendError("backend_missing_shape", "OCCT backend: missing shape");
+    }
+    const occt = this.occt as any;
+    if (!occt.BRepCheck_Analyzer) {
+      throw new BackendError(
+        "backend_missing_capability",
+        "OCCT backend: BRepCheck_Analyzer not available"
+      );
+    }
+    const analyzer = new occt.BRepCheck_Analyzer(shape, true, true);
+    if (typeof analyzer.IsValid_2 === "function") {
+      return analyzer.IsValid_2() === true;
+    }
+    if (typeof analyzer.IsValid_1 === "function") {
+      return analyzer.IsValid_1(shape) === true;
+    }
+    return false;
   }
 
   mesh(target: KernelObject, opts: MeshOptions = {}): MeshData {
@@ -359,7 +450,7 @@ export class OcctBackend implements Backend {
           feature.result,
           {
             id: `${feature.id}:surface`,
-            kind: "face" as const,
+            kind: "surface" as const,
             meta: { shape },
           },
         ],
@@ -428,8 +519,34 @@ export class OcctBackend implements Backend {
               throw new Error("OCCT backend: revolve angle must be normalized to number");
             })();
     const profile = this.resolveProfile(feature.profile, upstream);
-    const face = this.buildProfileFace(profile);
     const axis = this.makeAxis(feature.axis, feature.origin);
+    const mode = feature.mode ?? "solid";
+    if (mode === "surface") {
+      const section = this.buildProfileWire(profile);
+      const revol = this.makeRevol(section.wire, axis, angleRad);
+      this.tryBuild(revol);
+      const shape = this.readShape(revol);
+      const outputs = new Map([
+        [
+          feature.result,
+          {
+            id: `${feature.id}:surface`,
+            kind: "surface" as const,
+            meta: { shape },
+          },
+        ],
+      ]);
+      const selections = this.collectSelections(
+        shape,
+        feature.id,
+        feature.result,
+        feature.tags,
+        { rootKind: "face" }
+      );
+      return { outputs, selections };
+    }
+
+    const face = this.buildProfileFace(profile);
     const revol = this.makeRevol(face, axis, angleRad);
     this.tryBuild(revol);
     const solid = this.readShape(revol);
@@ -454,14 +571,27 @@ export class OcctBackend implements Backend {
 
   private execLoft(feature: Loft, upstream: KernelResult): KernelResult {
     const profiles = feature.profiles ?? [];
-    if (profiles.length !== 2) {
-      throw new Error("OCCT backend: loft requires exactly two profiles");
+    if (profiles.length < 2) {
+      throw new Error("OCCT backend: loft requires at least two profiles");
     }
     const resolved = profiles.map((profileRef) =>
       this.resolveProfile(profileRef, upstream)
     );
     const sections = resolved.map((profile) => this.buildProfileWire(profile));
-    const isSolid = sections.every((section) => section.closed);
+    const allClosed = sections.every((section) => section.closed);
+    let isSolid = allClosed;
+    const mode = feature.mode;
+    if (mode === "surface") {
+      isSolid = false;
+    } else if (mode === "solid") {
+      if (!allClosed) {
+        throw new Error("OCCT backend: loft solid requires closed profiles");
+      }
+      isSolid = true;
+    } else {
+      // Default: auto-select by closed/open profiles.
+      isSolid = allClosed;
+    }
     const loft = this.makeLoftBuilder(isSolid);
 
     for (const section of sections) {
@@ -483,7 +613,7 @@ export class OcctBackend implements Backend {
     }
     this.tryBuild(loft);
     const shape = this.readShape(loft);
-    const outputKind: "solid" | "face" = isSolid ? "solid" : "face";
+    const outputKind: "solid" | "surface" = isSolid ? "solid" : "surface";
     const outputs = new Map([
       [
         feature.result,
@@ -499,7 +629,67 @@ export class OcctBackend implements Backend {
       feature.id,
       feature.result,
       feature.tags,
-      { rootKind: outputKind }
+      { rootKind: isSolid ? "solid" : "face" }
+    );
+    return { outputs, selections };
+  }
+
+  private execSweep(
+    feature: Sweep,
+    upstream: KernelResult,
+    resolve: ExecuteInput["resolve"]
+  ): KernelResult {
+    const profile = this.resolveProfile(feature.profile, upstream);
+    const { wire, closed } = this.buildProfileWire(profile);
+    const spine = this.buildPathWire(feature.path);
+    const frame = feature.frame
+      ? this.resolvePlaneBasis(feature.frame, upstream, resolve)
+      : undefined;
+    const frenet = feature.orientation === "frenet" ? true : undefined;
+
+    const mode = feature.mode;
+    const makeSolid = mode === "solid" ? true : mode === "surface" ? false : closed;
+    if (makeSolid && !closed) {
+      throw new Error("OCCT backend: sweep solid requires a closed profile");
+    }
+
+    let shape: any;
+    let outputKind: "solid" | "surface";
+    if (makeSolid) {
+      const face = this.buildProfileFace(profile);
+      shape = frame
+        ? this.makePipeSolid(spine, face, frame, {
+            makeSolid: true,
+            frenet,
+          })
+        : this.makePipeSolid(spine, face, { makeSolid: true, frenet });
+      outputKind = "solid";
+    } else {
+      shape = frame
+        ? this.makePipeSolid(spine, wire, frame, {
+            makeSolid: false,
+            frenet,
+          })
+        : this.makePipeSolid(spine, wire, { makeSolid: false, frenet });
+      outputKind = "surface";
+    }
+
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:${outputKind}`,
+          kind: outputKind,
+          meta: { shape },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      shape,
+      feature.id,
+      feature.result,
+      feature.tags,
+      { rootKind: outputKind === "solid" ? "solid" : "face" }
     );
     return { outputs, selections };
   }
@@ -661,6 +851,41 @@ export class OcctBackend implements Backend {
       );
     }
 
+    const mode = feature.mode ?? "solid";
+    if (mode === "surface") {
+      const spine = this.buildPathWire(feature.path);
+      const { start, tangent } = this.pathStartTangent(feature.path);
+      const axis = normalizeVector(tangent);
+      if (!isFiniteVec(axis)) {
+        throw new Error("OCCT backend: pipe sweep path tangent is degenerate");
+      }
+      const plane = this.planeBasisFromNormal(start, axis);
+      const outerEdge = this.makeCircleEdge(plane.origin, outerRadius, plane.normal);
+      const outerWire = this.makeWireFromEdges([outerEdge]);
+      const shape = this.makePipeSolid(spine, outerWire, plane, {
+        makeSolid: false,
+        allowFallback: false,
+      });
+      const outputs = new Map([
+        [
+          feature.result,
+          {
+            id: `${feature.id}:surface`,
+            kind: "surface" as const,
+            meta: { shape },
+          },
+        ],
+      ]);
+      const selections = this.collectSelections(
+        shape,
+        feature.id,
+        feature.result,
+        feature.tags,
+        { rootKind: "face" }
+      );
+      return { outputs, selections };
+    }
+
     const segments = this.pathSegments(feature.path);
     if (segments.length === 0) {
       throw new Error("OCCT backend: pipe sweep path has no segments");
@@ -756,6 +981,33 @@ export class OcctBackend implements Backend {
       outerRadius,
       6
     );
+    const mode = feature.mode ?? "solid";
+    if (mode === "surface") {
+      const outerWire = this.makePolygonWire(outerPoints);
+      const shape = this.makePipeSolid(spine, outerWire, plane, {
+        makeSolid: false,
+        allowFallback: false,
+      });
+      const outputs = new Map([
+        [
+          feature.result,
+          {
+            id: `${feature.id}:surface`,
+            kind: "surface" as const,
+            meta: { shape },
+          },
+        ],
+      ]);
+      const selections = this.collectSelections(
+        shape,
+        feature.id,
+        feature.result,
+        feature.tags,
+        { rootKind: "face" }
+      );
+      return { outputs, selections };
+    }
+
     const outerWire = this.makePolygonWire(outerPoints);
     const faceBuilder = this.makeFaceFromWire(outerWire);
     if (innerRadius > 0) {
@@ -779,7 +1031,7 @@ export class OcctBackend implements Backend {
     }
     const face = this.readFace(faceBuilder);
 
-    let solid = this.makePipeSolid(spine, face, plane);
+    let solid = this.makePipeSolid(spine, face, plane, { makeSolid: true });
     solid = this.normalizeSolid(solid);
 
     const outputs = new Map([
@@ -792,6 +1044,508 @@ export class OcctBackend implements Backend {
         },
       ],
     ]);
+    const selections = this.collectSelections(
+      solid,
+      feature.id,
+      feature.result,
+      feature.tags
+    );
+    return { outputs, selections };
+  }
+
+  private execMirror(
+    feature: Mirror,
+    upstream: KernelResult,
+    resolve: ExecuteInput["resolve"]
+  ): KernelResult {
+    const target = resolve(feature.source, upstream);
+    if (target.kind !== "solid" && target.kind !== "face" && target.kind !== "surface") {
+      throw new Error(
+        "OCCT backend: mirror source must resolve to a solid, surface, or face"
+      );
+    }
+    const shape = target.meta["shape"];
+    if (!shape) {
+      throw new Error("OCCT backend: mirror source missing shape metadata");
+    }
+
+    const plane = this.resolvePlaneBasis(feature.plane, upstream, resolve);
+    const origin = this.makePnt(plane.origin[0], plane.origin[1], plane.origin[2]);
+    const normal = this.makeDir(plane.normal[0], plane.normal[1], plane.normal[2]);
+    const xDir = this.makeDir(plane.xDir[0], plane.xDir[1], plane.xDir[2]);
+    const ax2 = this.makeAx2WithXDir(origin, normal, xDir);
+    const trsf = this.newOcct("gp_Trsf");
+    this.callWithFallback(
+      trsf,
+      ["SetMirror", "SetMirror_1", "SetMirror_2", "SetMirror_3"],
+      [[ax2], [this.makeAx1(origin, normal)], [origin]]
+    );
+
+    const builder = this.newOcct("BRepBuilderAPI_Transform", shape, trsf, true);
+    this.tryBuild(builder);
+    const mirrored = this.readShape(builder);
+    const outputKind: "solid" | "face" | "surface" =
+      target.kind === "solid" ? "solid" : target.kind === "surface" ? "surface" : "face";
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:${outputKind}`,
+          kind: outputKind,
+          meta: { shape: mirrored },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      mirrored,
+      feature.id,
+      feature.result,
+      feature.tags,
+      { rootKind: outputKind === "solid" ? "solid" : "face" }
+    );
+    return { outputs, selections };
+  }
+
+  private execThicken(
+    feature: Thicken,
+    upstream: KernelResult,
+    resolve: ExecuteInput["resolve"]
+  ): KernelResult {
+    const target = resolve(feature.surface, upstream);
+    if (target.kind !== "face" && target.kind !== "surface") {
+      throw new Error(
+        "OCCT backend: thicken target must resolve to a face or surface"
+      );
+    }
+    const shape = target.meta["shape"];
+    if (!shape) {
+      throw new Error("OCCT backend: thicken target missing shape");
+    }
+    const thickness = expectNumber(feature.thickness, "feature.thickness");
+    if (thickness <= 0) {
+      throw new Error("OCCT backend: thicken thickness must be positive");
+    }
+    const direction = feature.direction ?? "normal";
+    const sign = direction === "reverse" ? -1 : 1;
+
+    const planar =
+      target.kind === "surface"
+        ? false
+        : typeof target.meta["planar"] === "boolean"
+          ? (target.meta["planar"] as boolean)
+          : this.faceProperties(shape).planar;
+    const finalizeSolid = (shape: any) => {
+      let solidShape = this.normalizeSolid(shape);
+      if (!this.shapeHasSolid(solidShape)) {
+        const stitched = this.makeSolidFromShells(solidShape);
+        if (stitched) {
+          solidShape = this.normalizeSolid(stitched);
+        }
+      }
+      return solidShape;
+    };
+
+    let solid: any;
+    const offset = thickness * sign;
+    if (planar) {
+      let normalVec = target.meta["normalVec"] as [number, number, number] | undefined;
+      if (!normalVec) {
+        try {
+        normalVec = this.planeBasisFromFace(shape).normal;
+        } catch {
+          normalVec = undefined;
+        }
+      }
+      if (!normalVec) {
+        throw new Error("OCCT backend: thicken requires a planar face");
+      }
+      const vec = this.makeVec(
+        normalVec[0] * offset,
+        normalVec[1] * offset,
+        normalVec[2] * offset
+      );
+      const prism = this.makePrism(shape, vec);
+      solid = this.readShape(prism);
+    } else {
+      let analytic: any | null = null;
+      const face = target.kind === "face" ? shape : this.firstFace(shape);
+      if (face) {
+        analytic = this.tryThickenCylindricalFace(face, offset);
+      }
+      solid = analytic ?? this.makeThickSolid(shape, [], offset, 1e-6);
+    }
+    solid = finalizeSolid(solid);
+    if (!this.isValidShape(solid)) {
+      const retry = finalizeSolid(
+        this.makeThickSolid(shape, [], thickness * sign, 1e-6, {
+          intersection: true,
+          selfIntersection: true,
+          removeInternalEdges: true,
+        })
+      );
+      if (this.isValidShape(retry)) {
+        solid = retry;
+      }
+    }
+    if (!this.isValidShape(solid)) {
+      const sewed = this.sewShapeFaces(solid);
+      if (sewed) {
+        const stitched = this.makeSolidFromShells(sewed);
+        if (stitched && this.isValidShape(stitched)) {
+          solid = this.normalizeSolid(stitched);
+        }
+      }
+    }
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:solid`,
+          kind: "solid" as const,
+          meta: { shape: solid },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      solid,
+      feature.id,
+      feature.result,
+      feature.tags
+    );
+    return { outputs, selections };
+  }
+
+  private execShell(
+    feature: Shell,
+    upstream: KernelResult,
+    resolve: ExecuteInput["resolve"]
+  ): KernelResult {
+    const target = resolve(feature.source, upstream);
+    if (target.kind !== "solid") {
+      throw new Error("OCCT backend: shell source must resolve to a solid");
+    }
+    const shape = target.meta["shape"];
+    if (!shape) {
+      throw new Error("OCCT backend: shell source missing shape");
+    }
+    const thickness = expectNumber(feature.thickness, "feature.thickness");
+    if (thickness <= 0) {
+      throw new Error("OCCT backend: shell thickness must be positive");
+    }
+    const direction = feature.direction ?? "inside";
+    const sign = direction === "outside" ? 1 : -1;
+    const openFaces = feature.openFaces ?? [];
+    const removeFaces: any[] = [];
+    for (const selector of openFaces) {
+      const faceTarget = resolve(selector, upstream);
+      if (faceTarget.kind !== "face") {
+        throw new Error("OCCT backend: shell open face must resolve to a face");
+      }
+      const faceShape = faceTarget.meta["shape"];
+      if (!faceShape) {
+        throw new Error("OCCT backend: shell open face missing shape");
+      }
+      removeFaces.push(faceShape);
+    }
+    const finalizeSolid = (shape: any) => {
+      let solidShape = this.normalizeSolid(shape);
+      if (!this.shapeHasSolid(solidShape)) {
+        const stitched = this.makeSolidFromShells(solidShape);
+        if (stitched) {
+          solidShape = this.normalizeSolid(stitched);
+        }
+      }
+      return solidShape;
+    };
+
+    let solid = finalizeSolid(
+      this.makeThickSolid(shape, removeFaces, thickness * sign, 1e-6)
+    );
+    if (!this.isValidShape(solid)) {
+      const retry = finalizeSolid(
+        this.makeThickSolid(shape, removeFaces, thickness * sign, 1e-6, {
+          intersection: true,
+          selfIntersection: true,
+          removeInternalEdges: true,
+        })
+      );
+      if (this.isValidShape(retry)) {
+        solid = retry;
+      }
+    }
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:solid`,
+          kind: "solid" as const,
+          meta: { shape: solid },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      solid,
+      feature.id,
+      feature.result,
+      feature.tags
+    );
+    return { outputs, selections };
+  }
+
+  private execThread(feature: Thread, upstream: KernelResult): KernelResult {
+    const axisDir = this.resolveAxisSpec(feature.axis, upstream, "thread axis");
+    const axis = normalizeVector(axisDir);
+    if (!isFiniteVec(axis)) {
+      throw new Error("OCCT backend: thread axis is degenerate");
+    }
+    const origin = feature.origin ?? [0, 0, 0];
+    const originVec: [number, number, number] = [
+      expectNumber(origin[0], "thread origin[0]"),
+      expectNumber(origin[1], "thread origin[1]"),
+      expectNumber(origin[2], "thread origin[2]"),
+    ];
+    const length = expectNumber(feature.length, "thread length");
+    if (length <= 0) {
+      throw new Error("OCCT backend: thread length must be positive");
+    }
+    const pitch = expectNumber(feature.pitch, "thread pitch");
+    if (pitch <= 0) {
+      throw new Error("OCCT backend: thread pitch must be positive");
+    }
+    const majorDiameter = expectNumber(feature.majorDiameter, "thread major diameter");
+    if (majorDiameter <= 0) {
+      throw new Error("OCCT backend: thread major diameter must be positive");
+    }
+    const defaultMinor = majorDiameter - pitch * 1.22687;
+    const minorDiameter =
+      feature.minorDiameter === undefined
+        ? defaultMinor
+        : expectNumber(feature.minorDiameter, "thread minor diameter");
+    if (minorDiameter <= 0 || minorDiameter >= majorDiameter) {
+      throw new Error("OCCT backend: thread minor diameter must be smaller than major diameter");
+    }
+
+    const majorRadius = majorDiameter / 2;
+    const minorRadius = minorDiameter / 2;
+    const depth = majorRadius - minorRadius;
+    const halfDepth = depth / 2;
+    const pitchRadius = (majorRadius + minorRadius) / 2;
+    const handedness = feature.handedness ?? "right";
+    const direction = handedness === "left" ? -1 : 1;
+
+    const basePlane = this.planeBasisFromNormal(originVec, axis);
+    const angle =
+      feature.profileAngle === undefined
+        ? Math.PI / 3
+        : expectNumber(feature.profileAngle, "thread profile angle");
+    if (!(angle > 0 && angle < Math.PI)) {
+      throw new Error("OCCT backend: thread profile angle must be between 0 and PI");
+    }
+
+    const sharpHeight = pitch / (2 * Math.tan(angle / 2));
+    const truncation = Math.max(0, sharpHeight - depth);
+    const crestTrunc = truncation / 3;
+    const rootTrunc = (truncation * 2) / 3;
+    let crestFlat =
+      feature.crestFlat === undefined
+        ? 2 * crestTrunc * Math.tan(angle / 2)
+        : Math.max(0, expectNumber(feature.crestFlat, "thread crest flat"));
+    let rootFlat =
+      feature.rootFlat === undefined
+        ? 2 * rootTrunc * Math.tan(angle / 2)
+        : Math.max(0, expectNumber(feature.rootFlat, "thread root flat"));
+    if (feature.crestFlat !== undefined && feature.rootFlat === undefined) {
+      const crestHalf = crestFlat / 2;
+      rootFlat = Math.max(0, (crestHalf + depth * Math.tan(angle / 2)) * 2);
+    } else if (feature.rootFlat !== undefined && feature.crestFlat === undefined) {
+      const rootHalf = rootFlat / 2;
+      crestFlat = Math.max(0, (rootHalf - depth * Math.tan(angle / 2)) * 2);
+    }
+    if (crestFlat <= 1e-6 && rootFlat <= 1e-6) {
+      const candidate = 2 * depth * Math.tan(angle / 2);
+      rootFlat = Math.max(1e-6, Math.min(pitch * 0.9, candidate));
+    }
+
+    const turns = length / pitch;
+    const angleSpan = direction * Math.PI * 2 * turns;
+
+    const crestHalf = crestFlat / 2;
+    const rootHalf = rootFlat / 2;
+    const embed = Math.max(depth * 0.03, 1e-4);
+    const crestOffset = halfDepth;
+    const rootOffset = -(halfDepth + embed);
+    const segmentsPerTurn =
+      feature.segmentsPerTurn === undefined
+        ? 24
+        : Math.round(
+            Math.max(
+              6,
+              expectNumber(feature.segmentsPerTurn, "thread segments per turn")
+            )
+          );
+    const sectionCount = Math.max(2, Math.ceil(turns * segmentsPerTurn) + 1);
+    const sections: any[] = [];
+    for (let i = 0; i < sectionCount; i += 1) {
+      const t = sectionCount === 1 ? 0 : i / (sectionCount - 1);
+      const angle = angleSpan * t;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const radialDir = normalizeVector(
+        this.addVec(
+          this.scaleVec(basePlane.xDir, cos),
+          this.scaleVec(basePlane.yDir, sin)
+        )
+      );
+      const center = this.addVec(
+        originVec,
+        this.addVec(
+          this.scaleVec(radialDir, pitchRadius),
+          this.scaleVec(axis, length * t)
+        )
+      );
+      let sectionX = normalizeVector(radialDir);
+      if (!isFiniteVec(sectionX)) {
+        sectionX = basePlane.xDir;
+      }
+      const axisProj = dot(sectionX, axis);
+      if (Math.abs(axisProj) > 1e-6) {
+        sectionX = normalizeVector(
+          this.subVec(sectionX, this.scaleVec(axis, axisProj))
+        );
+      }
+      if (!isFiniteVec(sectionX)) {
+        sectionX = basePlane.xDir;
+      }
+      let sectionY = axis;
+      if (!isFiniteVec(sectionY)) {
+        sectionY = basePlane.yDir;
+      }
+      const sectionPoints: [number, number, number][] = [];
+      if (crestHalf > 1e-6) {
+        sectionPoints.push(
+          this.addVec(
+            this.addVec(center, this.scaleVec(sectionY, -crestHalf)),
+            this.scaleVec(sectionX, crestOffset)
+          )
+        );
+        sectionPoints.push(
+          this.addVec(
+            this.addVec(center, this.scaleVec(sectionY, crestHalf)),
+            this.scaleVec(sectionX, crestOffset)
+          )
+        );
+      } else {
+        sectionPoints.push(this.addVec(center, this.scaleVec(sectionX, crestOffset)));
+      }
+      if (rootHalf > 1e-6) {
+        sectionPoints.push(
+          this.addVec(
+            this.addVec(center, this.scaleVec(sectionY, rootHalf)),
+            this.scaleVec(sectionX, rootOffset)
+          )
+        );
+        sectionPoints.push(
+          this.addVec(
+            this.addVec(center, this.scaleVec(sectionY, -rootHalf)),
+            this.scaleVec(sectionX, rootOffset)
+          )
+        );
+      } else {
+        sectionPoints.push(this.addVec(center, this.scaleVec(sectionX, rootOffset)));
+      }
+      sections.push(this.makePolygonWire(sectionPoints));
+    }
+
+    let ridge: any;
+    try {
+      const loft = this.makeLoftBuilder(true);
+      for (const section of sections) {
+        this.addLoftWire(loft, section);
+      }
+      if (
+        typeof (loft as any).CheckCompatibility === "function" ||
+        typeof (loft as any).CheckCompatibility_1 === "function"
+      ) {
+        try {
+          this.callWithFallback(
+            loft,
+            ["CheckCompatibility", "CheckCompatibility_1"],
+            [[true], [false]]
+          );
+        } catch {
+          // ignore compatibility check failures; build will surface real issues
+        }
+      }
+      this.tryBuild(loft);
+      ridge = this.readShape(loft);
+    } catch {
+      const helixPoints: [number, number, number][] = [];
+      const segments = Math.max(12, Math.ceil(turns * segmentsPerTurn));
+      for (let i = 0; i <= segments; i += 1) {
+        const t = i / segments;
+        const angle = angleSpan * t;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const radialVec = this.addVec(
+          this.scaleVec(basePlane.xDir, pitchRadius * cos),
+          this.scaleVec(basePlane.yDir, pitchRadius * sin)
+        );
+        const along = this.scaleVec(axis, length * t);
+        helixPoints.push(this.addVec(originVec, this.addVec(radialVec, along)));
+      }
+      const helixEdge = this.makeSplineEdge3D({
+        kind: "path.spline",
+        points: helixPoints,
+      }).edge;
+      const spine = this.makeWireFromEdges([helixEdge]);
+      const fallbackProfile = sections[0];
+      ridge = this.makeSweepSolid(spine, fallbackProfile, {
+        makeSolid: true,
+        frenet: true,
+      });
+    }
+    ridge = this.normalizeSolid(ridge);
+    if (!this.shapeHasSolid(ridge)) {
+      const stitched = this.makeSolidFromShells(ridge);
+      if (stitched) {
+        ridge = this.normalizeSolid(stitched);
+      }
+    }
+    const core = this.readShape(
+      this.makeCylinder(minorRadius, length, axis, originVec)
+    );
+    const union = this.makeBoolean("union", core, ridge);
+    let solid = this.readShape(union);
+    solid = this.normalizeSolid(solid);
+    const solidVolume = this.solidVolume(solid);
+    if (Number.isFinite(solidVolume) && solidVolume < 0) {
+      solid = this.reverseShape(solid);
+    }
+
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:solid`,
+          kind: "solid" as const,
+          meta: { shape: solid },
+        },
+      ],
+    ]);
+    const debugThread =
+      typeof process !== "undefined" && process?.env?.TF_THREAD_DEBUG === "1";
+    if (debugThread) {
+      outputs.set(`debug:${feature.id}:ridge`, {
+        id: `${feature.id}:ridge`,
+        kind: "solid" as const,
+        meta: { shape: ridge },
+      });
+      outputs.set(`debug:${feature.id}:core`, {
+        id: `${feature.id}:core`,
+        kind: "solid" as const,
+        meta: { shape: core },
+      });
+    }
     const selections = this.collectSelections(
       solid,
       feature.id,
@@ -1325,7 +2079,8 @@ export class OcctBackend implements Backend {
     ownerKey: string,
     featureTags?: string[]
   ): Record<string, unknown> {
-    const { area, center, planar, normal, normalVec } = this.faceProperties(face);
+    const { area, center, planar, normal, normalVec, surfaceType } =
+      this.faceProperties(face);
     const meta: Record<string, unknown> = {
       shape: face,
       owner,
@@ -1342,6 +2097,9 @@ export class OcctBackend implements Backend {
     }
     if (normalVec) {
       meta.normalVec = normalVec;
+    }
+    if (surfaceType) {
+      meta.surfaceType = surfaceType;
     }
     return meta;
   }
@@ -1378,6 +2136,7 @@ export class OcctBackend implements Backend {
     planar: boolean;
     normal?: AxisDirection;
     normalVec?: [number, number, number];
+    surfaceType?: string;
   } {
     let area = 0;
     let center: [number, number, number] = [0, 0, 0];
@@ -1398,13 +2157,30 @@ export class OcctBackend implements Backend {
     let planar = false;
     let normal: AxisDirection | undefined;
     let normalVec: [number, number, number] | undefined;
+    let surfaceType: string | undefined;
     try {
       const faceHandle = this.toFace(face);
       const adaptor = this.newOcct("BRepAdaptor_Surface", faceHandle, true);
       const type = this.call(adaptor, "GetType") as { value?: number } | undefined;
-      const planeType = (this.occt as any).GeomAbs_SurfaceType?.GeomAbs_Plane;
-      if (planeType && typeof type?.value === "number") {
-        planar = type.value === planeType.value;
+      const types = (this.occt as any).GeomAbs_SurfaceType;
+      if (types && typeof type?.value === "number") {
+        const value = type.value;
+        const matches = (entry: { value?: number } | undefined) =>
+          typeof entry?.value === "number" && entry.value === value;
+        if (matches(types.GeomAbs_Plane)) surfaceType = "plane";
+        else if (matches(types.GeomAbs_Cylinder)) surfaceType = "cylinder";
+        else if (matches(types.GeomAbs_Cone)) surfaceType = "cone";
+        else if (matches(types.GeomAbs_Sphere)) surfaceType = "sphere";
+        else if (matches(types.GeomAbs_Torus)) surfaceType = "torus";
+        else if (matches(types.GeomAbs_BSplineSurface)) surfaceType = "bspline";
+        else if (matches(types.GeomAbs_BezierSurface)) surfaceType = "bezier";
+        else if (matches(types.GeomAbs_SurfaceOfExtrusion))
+          surfaceType = "extrusion";
+        else if (matches(types.GeomAbs_SurfaceOfRevolution))
+          surfaceType = "revolution";
+        else if (matches(types.GeomAbs_OffsetSurface)) surfaceType = "offset";
+        else surfaceType = "other";
+        planar = surfaceType === "plane";
       }
       if (planar) {
         const plane = this.call(adaptor, "Plane");
@@ -1437,7 +2213,7 @@ export class OcctBackend implements Backend {
       ];
     }
 
-    return { area, center, planar, normal, normalVec };
+    return { area, center, planar, normal, normalVec, surfaceType };
   }
 
   private faceCenter(face: any): [number, number, number] {
@@ -1469,7 +2245,12 @@ export class OcctBackend implements Backend {
   private toResolutionContext(upstream: KernelResult) {
     const named = new Map<string, KernelSelection>();
     for (const [key, obj] of upstream.outputs) {
-      if (obj.kind === "face" || obj.kind === "edge" || obj.kind === "solid") {
+      if (
+        obj.kind === "face" ||
+        obj.kind === "edge" ||
+        obj.kind === "solid" ||
+        obj.kind === "surface"
+      ) {
         named.set(key, { id: obj.id, kind: obj.kind, meta: obj.meta });
       }
     }
@@ -1486,6 +2267,130 @@ export class OcctBackend implements Backend {
     const min = this.pointToArray(box.CornerMin());
     const max = this.pointToArray(box.CornerMax());
     return { min, max };
+  }
+
+  private firstFace(shape: any): any | null {
+    const occt = this.occt as any;
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_FACE,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    if (!explorer.More()) return null;
+    return this.toFace(explorer.Current());
+  }
+
+  private axisBounds(
+    axis: [number, number, number],
+    bounds: { min: [number, number, number]; max: [number, number, number] }
+  ): { min: number; max: number } | null {
+    const corners: Array<[number, number, number]> = [
+      [bounds.min[0], bounds.min[1], bounds.min[2]],
+      [bounds.min[0], bounds.min[1], bounds.max[2]],
+      [bounds.min[0], bounds.max[1], bounds.min[2]],
+      [bounds.min[0], bounds.max[1], bounds.max[2]],
+      [bounds.max[0], bounds.min[1], bounds.min[2]],
+      [bounds.max[0], bounds.min[1], bounds.max[2]],
+      [bounds.max[0], bounds.max[1], bounds.min[2]],
+      [bounds.max[0], bounds.max[1], bounds.max[2]],
+    ];
+    let min = Infinity;
+    let max = -Infinity;
+    for (const corner of corners) {
+      const proj = dot(corner, axis);
+      if (proj < min) min = proj;
+      if (proj > max) max = proj;
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+    return { min, max };
+  }
+
+  private cylinderFromFace(face: any): {
+    origin: [number, number, number];
+    axis: [number, number, number];
+    radius: number;
+  } | null {
+    try {
+      const faceHandle = this.toFace(face);
+      const adaptor = this.newOcct("BRepAdaptor_Surface", faceHandle, true);
+      const type = this.call(adaptor, "GetType") as { value?: number } | undefined;
+      const types = (this.occt as any).GeomAbs_SurfaceType;
+      if (!types || typeof type?.value !== "number") return null;
+      const cylinderType = types.GeomAbs_Cylinder;
+      if (!cylinderType || cylinderType.value !== type.value) return null;
+      const cylinder = this.callWithFallback(adaptor, ["Cylinder", "Cylinder_1"], [[]]);
+      if (!cylinder) return null;
+      const axis = this.callWithFallback(cylinder, ["Axis", "Axis_1", "Axis_2"], [[]]);
+      const dir = axis
+        ? this.callWithFallback(axis, ["Direction", "Direction_1"], [[]])
+        : null;
+      const loc = axis
+        ? this.callWithFallback(axis, ["Location", "Location_1"], [[]])
+        : null;
+      const radius = this.callWithFallback(cylinder, ["Radius", "Radius_1"], [[]]);
+      if (!dir || !loc || typeof radius !== "number") return null;
+      return {
+        origin: this.pointToArray(loc),
+        axis: this.dirToArray(dir),
+        radius,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private cylinderVExtents(
+    face: any,
+    cylinder: { origin: [number, number, number]; axis: [number, number, number] }
+  ): { min: number; max: number } | null {
+    try {
+      const faceHandle = this.toFace(face);
+      const adaptor = this.newOcct("BRepAdaptor_Surface", faceHandle, true);
+      const first = this.callNumber(adaptor, "FirstVParameter");
+      const last = this.callNumber(adaptor, "LastVParameter");
+      const axis = normalizeVector(cylinder.axis);
+      if (!isFiniteVec(axis)) return null;
+      const base = dot(cylinder.origin, axis);
+      const min = base + Math.min(first, last);
+      const max = base + Math.max(first, last);
+      if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+      return { min, max };
+    } catch {
+      const axis = normalizeVector(cylinder.axis);
+      if (!isFiniteVec(axis)) return null;
+      return this.axisBounds(axis, this.shapeBounds(face));
+    }
+  }
+
+  private tryThickenCylindricalFace(face: any, offset: number): any | null {
+    if (!Number.isFinite(offset) || offset === 0) return null;
+    const cylinder = this.cylinderFromFace(face);
+    if (!cylinder) return null;
+    const axis = normalizeVector(cylinder.axis);
+    if (!isFiniteVec(axis)) return null;
+    const extents = this.cylinderVExtents(face, cylinder);
+    if (!extents) return null;
+    const min = Math.min(extents.min, extents.max);
+    const max = Math.max(extents.min, extents.max);
+    const height = max - min;
+    if (!(height > 1e-6)) return null;
+    const baseProj = dot(cylinder.origin, axis);
+    const base = this.addVec(cylinder.origin, this.scaleVec(axis, min - baseProj));
+    const r0 = cylinder.radius;
+    const r1 = r0 + offset;
+    const outer = Math.max(r0, r1);
+    const inner = Math.min(r0, r1);
+    if (!(outer > 0)) return null;
+    const outerShape = this.readShape(this.makeCylinder(outer, height, axis, base));
+    if (!(inner > 0)) {
+      return outerShape;
+    }
+    const innerShape = this.readShape(this.makeCylinder(inner, height, axis, base));
+    const cut = this.makeBoolean("cut", outerShape, innerShape);
+    const result = this.readShape(cut);
+    if (!this.isValidShape(result)) return null;
+    return result;
   }
 
   private shapeCenter(shape: any): [number, number, number] {
@@ -1733,6 +2638,81 @@ export class OcctBackend implements Backend {
     return best;
   }
 
+  private reverseShape(shape: any): any {
+    const reversedCandidates = ["Reversed", "Reversed_1", "Reversed_2"];
+    for (const name of reversedCandidates) {
+      const fn = shape?.[name];
+      if (typeof fn !== "function") continue;
+      try {
+        const candidate = fn.call(shape);
+        if (candidate) return candidate;
+      } catch {
+        continue;
+      }
+    }
+    const reverseCandidates = ["Reverse", "Reverse_1", "Reverse_2"];
+    for (const name of reverseCandidates) {
+      const fn = shape?.[name];
+      if (typeof fn !== "function") continue;
+      try {
+        fn.call(shape);
+        return shape;
+      } catch {
+        continue;
+      }
+    }
+    return shape;
+  }
+
+  private shapeHasSolid(shape: any): boolean {
+    const occt = this.occt as any;
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_SOLID,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    return explorer.More();
+  }
+
+  private makeSolidFromShells(shape: any): any | null {
+    const occt = this.occt as any;
+    const shells: any[] = [];
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_SHELL,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    for (; explorer.More(); explorer.Next()) {
+      shells.push(explorer.Current());
+    }
+    if (shells.length === 0) return null;
+    let builder: any;
+    try {
+      builder = this.newOcct("BRepBuilderAPI_MakeSolid");
+    } catch {
+      return null;
+    }
+    for (const shell of shells) {
+      this.callWithFallback(builder, ["Add", "Add_1"], [[this.toShell(shell)]]);
+    }
+    this.tryBuild(builder);
+    try {
+      return this.readShape(builder);
+    } catch {
+      return null;
+    }
+  }
+
+  private isValidShape(shape: any, kind: KernelObject["kind"] = "solid"): boolean {
+    try {
+      return this.checkValid({ id: "tmp", kind, meta: { shape } } as KernelObject);
+    } catch {
+      return true;
+    }
+  }
+
   private solidVolume(solid: any): number {
     const occt = this.occt as any;
     if (!occt.GProp_GProps_1 || !occt.BRepGProp?.VolumeProperties_1) {
@@ -1786,6 +2766,14 @@ export class OcctBackend implements Backend {
       return occt.TopoDS.Wire_1(wire);
     }
     return wire;
+  }
+
+  private toShell(shell: any) {
+    const occt = this.occt as any;
+    if (occt.TopoDS?.Shell_1) {
+      return occt.TopoDS.Shell_1(shell);
+    }
+    return shell;
   }
 
   private resolveProfile(
@@ -1915,36 +2903,7 @@ export class OcctBackend implements Backend {
         normal: [0, 0, 1],
       };
     }
-    const planeRef = feature.plane;
-    let basis: PlaneBasis;
-    if (this.isSelectorRef(planeRef)) {
-      const target = resolve(planeRef as Selector, upstream);
-      if (target.kind !== "face") {
-        throw new Error("OCCT backend: sketch plane must resolve to a face");
-      }
-      const face = target.meta["shape"];
-      if (!face) {
-        throw new Error("OCCT backend: sketch plane missing face shape");
-      }
-      basis = this.planeBasisFromFace(face);
-    } else if (planeRef.kind === "plane.datum") {
-      const datum = upstream.outputs.get(this.datumKey(planeRef.ref));
-      if (!datum || datum.kind !== "datum") {
-        throw new Error(`OCCT backend: missing datum plane ${planeRef.ref}`);
-      }
-      const meta = datum.meta as Record<string, unknown>;
-      if (meta.type !== "plane" && meta.type !== "frame") {
-        throw new Error("OCCT backend: datum is not a plane or frame");
-      }
-      basis = {
-        origin: meta.origin as [number, number, number],
-        xDir: meta.xDir as [number, number, number],
-        yDir: meta.yDir as [number, number, number],
-        normal: meta.normal as [number, number, number],
-      };
-    } else {
-      throw new Error("OCCT backend: unsupported sketch plane reference");
-    }
+    const basis = this.resolvePlaneBasis(feature.plane, upstream, resolve);
     return {
       ...basis,
       origin: [
@@ -1953,6 +2912,41 @@ export class OcctBackend implements Backend {
         basis.origin[2] + originOffset[2],
       ],
     };
+  }
+
+  private resolvePlaneBasis(
+    planeRef: PlaneRef,
+    upstream: KernelResult,
+    resolve: ExecuteInput["resolve"]
+  ): PlaneBasis {
+    if (this.isSelectorRef(planeRef)) {
+      const target = resolve(planeRef as Selector, upstream);
+      if (target.kind !== "face") {
+        throw new Error("OCCT backend: plane reference must resolve to a face");
+      }
+      const face = target.meta["shape"];
+      if (!face) {
+        throw new Error("OCCT backend: plane reference missing face shape");
+      }
+      return this.planeBasisFromFace(face);
+    }
+    if (planeRef.kind === "plane.datum") {
+      const datum = upstream.outputs.get(this.datumKey(planeRef.ref));
+      if (!datum || datum.kind !== "datum") {
+        throw new Error(`OCCT backend: missing datum plane ${planeRef.ref}`);
+      }
+      const meta = datum.meta as Record<string, unknown>;
+      if (meta.type !== "plane" && meta.type !== "frame") {
+        throw new Error("OCCT backend: datum is not a plane or frame");
+      }
+      return {
+        origin: meta.origin as [number, number, number],
+        xDir: meta.xDir as [number, number, number],
+        yDir: meta.yDir as [number, number, number],
+        normal: meta.normal as [number, number, number],
+      };
+    }
+    throw new Error("OCCT backend: unsupported plane reference");
   }
 
   private planeBasisFromFace(face: any): PlaneBasis {
@@ -2382,14 +3376,136 @@ export class OcctBackend implements Backend {
     return this.addVec(center, midVec);
   }
 
-  private makePipeSolid(spine: any, profile: any, frame?: PlaneBasis) {
+  private makeShapeList(shapes: any[]): any {
+    const list = this.newOcct("TopTools_ListOfShape");
+    for (const shape of shapes) {
+      this.callWithFallback(
+        list,
+        ["Append", "Append_1", "Add", "Add_1", "add"],
+        [[shape]]
+      );
+    }
+    return list;
+  }
+
+  private makeThickSolid(
+    shape: any,
+    removeFaces: any[],
+    offset: number,
+    tolerance: number,
+    opts?: {
+      intersection?: boolean;
+      selfIntersection?: boolean;
+      removeInternalEdges?: boolean;
+    }
+  ): any {
+    const faces = this.makeShapeList(removeFaces.map((face) => this.toFace(face)));
     const occt = this.occt as any;
+    const mode = occt.BRepOffset_Mode?.BRepOffset_Skin;
+    const join = occt.GeomAbs_JoinType?.GeomAbs_Arc;
+    const progress = this.makeProgressRange();
+    const intersection = opts?.intersection ?? false;
+    const selfIntersection = opts?.selfIntersection ?? false;
+    const removeInternalEdges = opts?.removeInternalEdges ?? false;
+    const argsList: unknown[][] = [[shape, faces, offset, tolerance]];
+    if (mode !== undefined) {
+      argsList.push([shape, faces, offset, tolerance, mode]);
+    }
+    if (mode !== undefined && join !== undefined) {
+      argsList.push([
+        shape,
+        faces,
+        offset,
+        tolerance,
+        mode,
+        intersection,
+        selfIntersection,
+        join,
+        removeInternalEdges,
+      ]);
+      if (progress !== null && progress !== undefined) {
+        argsList.push([
+          shape,
+          faces,
+          offset,
+          tolerance,
+          mode,
+          intersection,
+          selfIntersection,
+          join,
+          removeInternalEdges,
+          progress,
+        ]);
+      }
+    }
+
+    let builder: any | null = null;
+    try {
+      builder = this.newOcct("BRepOffsetAPI_MakeThickSolid");
+    } catch {
+      builder = null;
+    }
+    if (builder) {
+      this.callWithFallback(
+        builder,
+        ["MakeThickSolidByJoin", "MakeThickSolidByJoin_1", "MakeThickSolidByJoin_2"],
+        argsList
+      );
+      this.tryBuild(builder);
+      return this.readShape(builder);
+    }
+
+    const ctorArgs = [
+      [shape, faces, offset, tolerance],
+      [shape, faces, offset],
+    ];
+    for (const args of ctorArgs) {
+      try {
+        const candidate = this.newOcct("BRepOffsetAPI_MakeThickSolid", ...args);
+        this.tryBuild(candidate);
+        return this.readShape(candidate);
+      } catch {
+        continue;
+      }
+    }
+    throw new Error("OCCT backend: failed to construct thick solid");
+  }
+
+  private makePipeSolid(
+    spine: any,
+    profile: any,
+    frame: PlaneBasis,
+    opts?: { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean }
+  ): any;
+  private makePipeSolid(
+    spine: any,
+    profile: any,
+    opts?: { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean }
+  ): any;
+  private makePipeSolid(
+    spine: any,
+    profile: any,
+    frame?: PlaneBasis | { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean },
+    opts?: { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean }
+  ) {
+    const resolvedFrame =
+      frame && "origin" in frame ? (frame as PlaneBasis) : undefined;
+    const resolvedOpts =
+      frame && "origin" in frame
+        ? opts
+        : (frame as
+            | { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean }
+            | undefined);
+    const occt = this.occt as any;
+    const makeSolid = resolvedOpts?.makeSolid !== false;
+    const allowFallback = resolvedOpts?.allowFallback !== false;
+    const frenet = resolvedOpts?.frenet === true;
     try {
       const shell = this.newOcct("BRepOffsetAPI_MakePipeShell", spine);
-      if (frame) {
-        this.trySetPipeShellMode(shell, frame);
-      } else if (typeof shell.SetMode_1 === "function") {
-        shell.SetMode_1(false);
+      if (resolvedFrame) {
+        this.trySetPipeShellMode(shell, resolvedFrame);
+      } else {
+        this.trySetPipeShellFrenet(shell, frenet);
       }
       const mode = occt.BRepBuilderAPI_TransitionMode?.BRepBuilderAPI_RoundCorner;
       if (mode && typeof shell.SetTransitionMode === "function") {
@@ -2406,15 +3522,147 @@ export class OcctBackend implements Backend {
       }
       add(profile, false, false);
       this.tryBuild(shell);
-      if (typeof shell.MakeSolid === "function") {
+      if (makeSolid && typeof shell.MakeSolid === "function") {
         shell.MakeSolid();
       }
       return this.readShape(shell);
     } catch {
+      if (!allowFallback) {
+        throw new Error("OCCT backend: pipe shell failed and fallback is disabled");
+      }
       const builder = this.newOcct("BRepOffsetAPI_MakePipe", spine, profile);
       this.tryBuild(builder);
       return this.readShape(builder);
     }
+  }
+
+  private makeSweepSolid(
+    spine: any,
+    profile: any,
+    frame: PlaneBasis,
+    opts?: {
+      makeSolid?: boolean;
+      allowFallback?: boolean;
+      frenet?: boolean;
+      auxiliarySpine?: any;
+      auxiliaryCurvilinear?: boolean;
+      auxiliaryKeepContact?: boolean;
+    }
+  ): any;
+  private makeSweepSolid(
+    spine: any,
+    profile: any,
+    opts?: {
+      makeSolid?: boolean;
+      allowFallback?: boolean;
+      frenet?: boolean;
+      auxiliarySpine?: any;
+      auxiliaryCurvilinear?: boolean;
+      auxiliaryKeepContact?: boolean;
+    }
+  ): any;
+  private makeSweepSolid(
+    spine: any,
+    profile: any,
+    frame?:
+      | PlaneBasis
+      | {
+          makeSolid?: boolean;
+          allowFallback?: boolean;
+          frenet?: boolean;
+          auxiliarySpine?: any;
+          auxiliaryCurvilinear?: boolean;
+          auxiliaryKeepContact?: boolean;
+        },
+    opts?: {
+      makeSolid?: boolean;
+      allowFallback?: boolean;
+      frenet?: boolean;
+      auxiliarySpine?: any;
+      auxiliaryCurvilinear?: boolean;
+      auxiliaryKeepContact?: boolean;
+      }
+  ) {
+    type SweepOpts = {
+      makeSolid?: boolean;
+      allowFallback?: boolean;
+      frenet?: boolean;
+      auxiliarySpine?: any;
+      auxiliaryCurvilinear?: boolean;
+      auxiliaryKeepContact?: boolean;
+    };
+    const resolvedFrame =
+      frame && "origin" in frame ? (frame as PlaneBasis) : undefined;
+    const resolvedOpts: SweepOpts | undefined =
+      frame && "origin" in frame
+        ? (opts as SweepOpts | undefined)
+        : (frame as SweepOpts | undefined);
+    const occt = this.occt as any;
+    const makeSolid = resolvedOpts?.makeSolid !== false;
+    const allowFallback = resolvedOpts?.allowFallback !== false;
+    const frenet = resolvedOpts?.frenet !== false;
+    const auxiliarySpine = resolvedOpts?.auxiliarySpine;
+    try {
+      const shell = this.newOcct("BRepOffsetAPI_MakePipeShell", spine);
+      if (auxiliarySpine) {
+        const applied = this.trySetPipeShellAuxiliary(shell, auxiliarySpine, {
+          curvilinear: resolvedOpts?.auxiliaryCurvilinear,
+          keepContact: resolvedOpts?.auxiliaryKeepContact,
+        });
+        if (!applied) {
+          if (resolvedFrame) {
+            this.trySetPipeShellMode(shell, resolvedFrame);
+          } else {
+            this.trySetPipeShellFrenet(shell, frenet);
+          }
+        }
+      } else if (resolvedFrame) {
+        this.trySetPipeShellMode(shell, resolvedFrame);
+      } else {
+        this.trySetPipeShellFrenet(shell, frenet);
+      }
+      const mode = occt.BRepBuilderAPI_TransitionMode?.BRepBuilderAPI_RoundCorner;
+      if (mode && typeof shell.SetTransitionMode === "function") {
+        shell.SetTransitionMode(mode);
+      }
+      const add =
+        typeof shell.Add_1 === "function"
+          ? shell.Add_1.bind(shell)
+          : typeof shell.Add === "function"
+            ? shell.Add.bind(shell)
+            : null;
+      if (!add) {
+        throw new Error("OCCT backend: sweep shell missing Add()");
+      }
+      add(profile, false, false);
+      this.tryBuild(shell);
+      if (makeSolid && typeof shell.MakeSolid === "function") {
+        shell.MakeSolid();
+      }
+      return this.readShape(shell);
+    } catch {
+      if (!allowFallback) {
+        throw new Error("OCCT backend: sweep shell failed and fallback is disabled");
+      }
+      const builder = this.newOcct("BRepOffsetAPI_MakePipe", spine, profile);
+      this.tryBuild(builder);
+      return this.readShape(builder);
+    }
+  }
+
+  private trySetPipeShellFrenet(shell: any, frenet: boolean): boolean {
+    const candidates = ["SetMode_1", "SetMode"];
+    for (const name of candidates) {
+      const fn = shell?.[name];
+      if (typeof fn !== "function") continue;
+      try {
+        fn.call(shell, frenet);
+        return true;
+      } catch {
+        continue;
+      }
+    }
+    return false;
   }
 
   private trySetPipeShellMode(shell: any, frame: PlaneBasis): boolean {
@@ -2426,6 +3674,34 @@ export class OcctBackend implements Backend {
       { names: ["SetMode_3", "SetMode_2", "SetMode_1", "SetMode"], args: [ax2] },
       { names: ["SetMode_2", "SetMode_1", "SetMode"], args: [xDir] },
       { names: ["SetMode_1", "SetMode"], args: [false] },
+    ];
+    for (const candidate of candidates) {
+      for (const name of candidate.names) {
+        const fn = shell?.[name];
+        if (typeof fn !== "function") continue;
+        try {
+          fn.call(shell, ...candidate.args);
+          return true;
+        } catch {
+          continue;
+        }
+      }
+    }
+    return false;
+  }
+
+  private trySetPipeShellAuxiliary(
+    shell: any,
+    auxiliarySpine: any,
+    opts?: { curvilinear?: boolean; keepContact?: boolean }
+  ): boolean {
+    const wire = this.toWire(auxiliarySpine);
+    const curvilinear = opts?.curvilinear ?? true;
+    const keepContact = opts?.keepContact ?? true;
+    const candidates: Array<{ names: string[]; args: unknown[] }> = [
+      { names: ["SetMode_5", "SetMode_4", "SetMode_3", "SetMode_2", "SetMode"], args: [wire, curvilinear, keepContact] },
+      { names: ["SetMode_5", "SetMode_4", "SetMode_3", "SetMode_2", "SetMode"], args: [wire, curvilinear] },
+      { names: ["SetMode_5", "SetMode_4", "SetMode_3", "SetMode_2", "SetMode"], args: [wire] },
     ];
     for (const candidate of candidates) {
       for (const name of candidate.names) {
@@ -3344,6 +4620,28 @@ export class OcctBackend implements Backend {
     throw new Error("OCCT backend: gp_XYZ_2 constructor not available");
   }
 
+  private makeXY(x: number, y: number) {
+    return this.newOcct("gp_XY", x, y);
+  }
+
+  private makePnt2d(x: number, y: number) {
+    try {
+      return this.newOcct("gp_Pnt2d", x, y);
+    } catch {
+      const xy = this.makeXY(x, y);
+      return this.newOcct("gp_Pnt2d", xy);
+    }
+  }
+
+  private makeDir2d(x: number, y: number) {
+    try {
+      return this.newOcct("gp_Dir2d", x, y);
+    } catch {
+      const xy = this.makeXY(x, y);
+      return this.newOcct("gp_Dir2d", xy);
+    }
+  }
+
   private makeAx2(pnt: any, dir: any) {
     const occt = this.occt as any;
     if (occt.gp_Ax2_3) return new occt.gp_Ax2_3(pnt, dir);
@@ -3378,6 +4676,38 @@ export class OcctBackend implements Backend {
     if (occt.gp_Circ_2) return new occt.gp_Circ_2(ax2, radius);
     throw new Error("OCCT backend: gp_Circ_2 constructor not available");
   }
+
+  private makeCylindricalSurface(
+    ax2: any,
+    radius: number,
+    pnt?: any,
+    dir?: any,
+    xDir?: any
+  ) {
+    try {
+      return this.newOcct("Geom_CylindricalSurface", ax2, radius);
+    } catch {
+      // fall through
+    }
+    if (pnt && dir && xDir) {
+      try {
+        const ax3 = this.newOcct("gp_Ax3", pnt, dir, xDir);
+        return this.newOcct("Geom_CylindricalSurface", ax3, radius);
+      } catch {
+        // fall through
+      }
+    }
+    if (pnt && dir) {
+      try {
+        const ax3 = this.newOcct("gp_Ax3", pnt, dir);
+        return this.newOcct("Geom_CylindricalSurface", ax3, radius);
+      } catch {
+        // fall through
+      }
+    }
+    throw new Error("OCCT backend: failed to construct cylindrical surface");
+  }
+
 
   private ensureTriangulation(shape: any, opts: MeshOptions) {
     const linear = opts.linearDeflection ?? 0.5;
@@ -3667,6 +4997,52 @@ export class OcctBackend implements Backend {
       }
     }
     return null;
+  }
+
+  private sewShapeFaces(shape: any, tolerance = 1e-6): any | null {
+    const occt = this.occt as any;
+    let sewing: any;
+    try {
+      sewing = this.newOcct("BRepBuilderAPI_Sewing", tolerance, true, true, true, false);
+    } catch {
+      return null;
+    }
+    const add =
+      typeof sewing.Add_1 === "function"
+        ? sewing.Add_1.bind(sewing)
+        : typeof sewing.Add === "function"
+          ? sewing.Add.bind(sewing)
+          : null;
+    if (!add) return null;
+
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_FACE,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    let sawFace = false;
+    for (; explorer.More(); explorer.Next()) {
+      sawFace = true;
+      add(explorer.Current());
+    }
+    if (!sawFace) return null;
+
+    const progress = this.makeProgressRange();
+    try {
+      sewing.Perform(progress);
+    } catch {
+      try {
+        sewing.Perform();
+      } catch {
+        return null;
+      }
+    }
+    try {
+      return this.callWithFallback(sewing, ["SewedShape", "SewedShape_1"], [[]]);
+    } catch {
+      return null;
+    }
   }
 
   private edgeContinuityValue(edge: any, faceA: any, faceB: any): number | null {

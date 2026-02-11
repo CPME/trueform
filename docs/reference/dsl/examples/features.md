@@ -196,7 +196,9 @@ const examplePart = part("example-thicken", [
 ```
 
 Notes:
-- `thicken` supports planar faces and can offset curved faces.
+- `thicken` turns a face or surface into a solid by offsetting it.
+- `thicken` supports planar faces and can offset curved faces (including open
+  curved surfaces such as cylinders).
 - Use `{ direction: "reverse" }` to thicken opposite the face normal.
 - For thin-walled solids built from a closed solid, use `shell` instead.
 
