@@ -45,7 +45,7 @@ Assembly document/file:
 ### Remaining for Step 1
 - [x] Publish a stable contract doc in `specs/` (source-of-truth, not aidocs).
 - [x] Update DSL docs to remove data-only vs solver contradiction.
-- [ ] Add explicit assembly file/document format section to reference docs.
-- [ ] Define import/reference shape from assembly docs to part docs.
-- [ ] Decide transition strategy for existing single-document bundle flows.
-- [ ] Define temporary compatibility layer and deprecation timeline.
+- [x] Add explicit assembly file/document format section to reference docs.
+- [x] Define import/reference shape from assembly docs to part docs.
+- [x] Decide transition strategy for existing single-document bundle flows.
+- [x] Define temporary compatibility layer and deprecation timeline.

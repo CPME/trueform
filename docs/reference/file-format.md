@@ -68,6 +68,20 @@ Assembly document (`.tfa`) draft example:
   "schema": "trueform.document.v1",
   "document": {
     "id": "asm-doc-1",
+    "imports": [
+      {
+        "id": "part:plate",
+        "path": "parts/plate.tfp",
+        "partId": "plate",
+        "documentHash": "sha256:..."
+      },
+      {
+        "id": "part:peg",
+        "path": "parts/peg.tfp",
+        "partId": "peg",
+        "documentHash": "sha256:..."
+      }
+    ],
     "parts": [],
     "assemblies": [ /* IntentAssembly[] */ ],
     "capabilities": {},
@@ -81,6 +95,58 @@ Assembly document (`.tfa`) draft example:
   }
 }
 ```
+
+## Assembly -> Part References (Draft Direction)
+
+To connect assembly documents to part documents, use `document.imports` in
+assembly files:
+
+```
+{
+  "id": "part:plate",
+  "path": "parts/plate.tfp",
+  "partId": "plate",
+  "documentHash": "sha256:..."
+}
+```
+
+Field meaning:
+- `id`: local import key within the assembly document.
+- `path`: relative location of the part container (`.tfp`).
+- `partId`: target part id inside the imported part document.
+- `documentHash`: optional integrity lock for reproducible builds.
+
+Assembly instance resolution rule (draft):
+- `AssemblyInstance.part` refers to `imports[].id`, not a free-form global id.
+- `AssemblyRef = { instance, connector }` stays unchanged.
+- Connectors remain defined in the referenced part document.
+
+Notes:
+- This is a Step 1 contract direction; schema/tooling implementation is pending.
+- Existing inline/bundle workflows are still supported during migration.
+
+## Bundle Compatibility And Migration (Step 1)
+
+Legacy bundle format (single document with both `parts` and `assemblies`) is
+supported during transition.
+
+Read compatibility:
+- Loaders accept legacy bundles and split formats.
+- For legacy bundles, loaders synthesize virtual imports:
+  - `id = "part:<part.id>"`
+  - `partId = <part.id>`
+  - `path` omitted (in-document source)
+
+Write behavior:
+- Default write mode is split:
+  - part documents in `.tfp`
+  - assembly documents in `.tfa` with `document.imports`
+- Legacy bundle write mode is compatibility-only and must be explicit.
+
+Deprecation direction:
+1. Transition: read both formats; write split by default.
+2. Next minor: warn on legacy bundle writes.
+3. Next major: remove legacy bundle writes; retain legacy bundle reads.
 
 Notes:
 - The IR stores no kernel history or B-Rep.

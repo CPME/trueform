@@ -75,13 +75,28 @@ Assumed for Step 1 and downstream docs/code:
 - [x] Align README, DSL docs, and specs map on one assembly contract.
 - [x] Remove or fix broken docs pointers (for example `specs/backend-interface.md`).
 - [x] Resolve file format naming drift (`.tfp` vs `.tf` references).
+- [x] Define assembly-to-part import/reference shape in docs/contract draft.
 
 ### Boundary Hardening
-- [ ] Separate stable root exports from backend/kernel internals.
-- [ ] Introduce `experimental` export surface for unstable features.
+- [x] Separate stable root exports from backend/kernel internals.
+- [x] Introduce `experimental` export surface for unstable features.
 - [ ] Add lint/import boundary checks for core vs backend layers.
 
 ### IR And Compatibility
 - [ ] Add canonical serialization golden fixtures.
 - [ ] Add stable hash compatibility fixtures.
 - [ ] Add schema compatibility test coverage for container/document reads.
+
+## Progress Update (2026-02-11)
+
+Completed since initial draft:
+- Root API surface split into explicit subpaths:
+  - `trueform/backend`
+  - `trueform/backend-spi`
+  - `trueform/experimental`
+  - `trueform/export`
+- File format docs now describe separate part (`.tfp`) and assembly (`.tfa` draft) containers.
+- Assembly documents now have a draft import/reference shape tied to part files.
+
+Next item:
+- Implement CI guardrails for boundary enforcement and docs drift checks.

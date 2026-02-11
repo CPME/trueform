@@ -30,6 +30,52 @@ and public API stability tiers.
    - Assembly solving helpers can exist as experimental utilities.
    - Assembly solving is not a required stage of core deterministic part compile.
 
+## Assembly Part Reference Shape (Step 1 draft)
+
+Assembly documents define part dependencies through `document.imports`.
+
+Draft import entry:
+- `id`: local import key (for example `part:plate`).
+- `path`: relative path to a `.tfp` part container.
+- `partId`: part id inside the referenced part document.
+- `documentHash` (optional): hash lock for deterministic resolution.
+
+Draft resolution rule:
+- `AssemblyInstance.part` resolves against `document.imports[].id`.
+- Assembly connectors are resolved from the referenced part's connector definitions.
+
+## Bundle Transition Strategy (Step 1 decision)
+
+Current legacy shape:
+- A single document may contain both `parts` and `assemblies`.
+
+Target shape:
+- Part intent lives in `.tfp` part containers.
+- Assembly intent lives in `.tfa` assembly containers with `document.imports`.
+
+Compatibility behavior:
+1. Reader compatibility:
+   - Readers must accept legacy single-document bundles during transition.
+   - When reading a legacy bundle, loaders create virtual imports using
+     `part:<part.id>` keys so assembly instance references can resolve through
+     one import path.
+2. Writer default:
+   - New write flows default to split output (`.tfa` + referenced `.tfp` parts).
+   - Legacy bundle write mode is allowed only as an explicit compatibility option.
+3. Build/compile behavior:
+   - Core part compile stays unchanged.
+   - Assembly loaders must resolve instances through import keys (virtual or explicit).
+
+Deprecation timeline (version-gated, not date-gated):
+1. v0.x transition start:
+   - Read legacy bundles and split format.
+   - Write split by default; legacy bundle write remains opt-in.
+2. next minor after transition:
+   - Emit warning when writing legacy bundle mode.
+3. next major:
+   - Remove legacy bundle write support.
+   - Keep legacy bundle read support as compatibility mode.
+
 ## API Stability Tiers
 
 Stable:
@@ -56,6 +102,4 @@ The following docs must remain consistent with this contract:
 
 ## Open Items
 
-- Exact assembly file schema and part reference format.
-- Compatibility path for existing mixed document flows.
 - Final root export policy for stable vs experimental/backend symbols.
