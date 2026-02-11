@@ -10,7 +10,7 @@ import { CompileError } from "./errors.js";
 
 export type Selection = {
   id: ID;
-  kind: "face" | "edge" | "solid";
+  kind: "face" | "edge" | "solid" | "surface";
   meta: Record<string, unknown>;
 };
 
