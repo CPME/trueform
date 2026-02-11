@@ -1,10 +1,8 @@
-import type { IntentDocument as DslDocument, IntentPart as DslPart } from "./dsl.js";
 import { CompileResult, IntentDocument, IntentFeature, IntentPart, Units } from "./ir.js";
 import { buildDependencyGraph, topoSortDeterministic } from "./graph.js";
 import { ParamOverrides } from "./params.js";
 import { hashFeature } from "./hash.js";
 import { shouldValidate, validateDocument, type ValidationOptions } from "./ir_validate.js";
-import { dslToIrDocument, dslToIrPart } from "./ir_convert.js";
 import { normalizePart } from "./ir_normalize.js";
 
 export { normalizePart } from "./ir_normalize.js";
@@ -15,45 +13,44 @@ export type CompiledPart = {
   hashes: Map<string, string>;
 };
 
-export function emitIrDocument(doc: DslDocument): IntentDocument {
-  return dslToIrDocument(doc);
+/** @deprecated Identity helper retained for compatibility. Pass IR directly. */
+export function emitIrDocument(doc: IntentDocument): IntentDocument {
+  return doc;
 }
 
-export function emitIrPart(part: DslPart): IntentPart {
-  return dslToIrPart(part);
+/** @deprecated Identity helper retained for compatibility. Pass IR directly. */
+export function emitIrPart(part: IntentPart): IntentPart {
+  return part;
 }
 
 export function compileDocument(
-  doc: DslDocument,
+  doc: IntentDocument,
   overrides?: Record<string, ParamOverrides>,
   options?: ValidationOptions
 ): CompileResult[] {
-  const irDoc = emitIrDocument(doc);
-  if (shouldValidate(options)) validateDocument(irDoc);
-  warnPlaceholders(irDoc);
-  return irDoc.parts.map((part) =>
-    compilePart(part, overrides?.[part.id], options, irDoc.context?.units)
+  if (shouldValidate(options)) validateDocument(doc);
+  warnPlaceholders(doc);
+  return doc.parts.map((part) =>
+    compilePart(part, overrides?.[part.id], options, doc.context?.units)
   );
 }
 
 export function compilePart(
-  part: DslPart,
+  part: IntentPart,
   overrides?: ParamOverrides,
   options?: ValidationOptions,
   units?: Units
 ): CompileResult {
-  const irPart = emitIrPart(part);
-  const normalized = normalizePart(irPart, overrides, options, units);
+  const normalized = normalizePart(part, overrides, options, units);
   return compileNormalizedPart(normalized);
 }
 
 export function compilePartWithHashes(
-  part: DslPart,
+  part: IntentPart,
   options?: ValidationOptions,
   units?: Units
 ): CompiledPart {
-  const irPart = emitIrPart(part);
-  const normalized = normalizePart(irPart, undefined, options, units);
+  const normalized = normalizePart(part, undefined, options, units);
   const graph = buildDependencyGraph({ ...normalized, features: normalized.features });
   const order = topoSortDeterministic(normalized.features, graph);
   const hashes = new Map<string, string>();

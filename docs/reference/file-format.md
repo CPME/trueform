@@ -44,7 +44,7 @@ Part document (`.tfp`) example:
 
 ```
 {
-  "schema": "trueform.document.v1",
+  "schema": "trueform.ir.v1",
   "document": {
     "id": "doc-1",
     "parts": [ /* IntentPart[] */ ],
@@ -65,7 +65,7 @@ Assembly document (`.tfa`) draft example:
 
 ```
 {
-  "schema": "trueform.document.v1",
+  "schema": "trueform.ir.v1",
   "document": {
     "id": "asm-doc-1",
     "imports": [
@@ -165,7 +165,7 @@ artifacts.
   "createdAt": "2026-02-07T00:00:00Z",
   "document": {
     "path": "document.json",
-    "schema": "trueform.document.v1",
+    "schema": "trueform.ir.v1",
     "hash": "sha256:...",
     "bytes": 12345
   },
