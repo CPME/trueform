@@ -102,4 +102,4 @@ Completed since initial draft:
   container document hash/schema behavior.
 
 Next item:
-- Define packaging split timeline (single package -> multi-package layout).
+- Define package split execution details (naming + phased migration PR breakdown).

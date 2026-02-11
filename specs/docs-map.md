@@ -10,6 +10,7 @@ Purpose: define the source of truth for each topic to prevent drift.
 - Native file format (.tfp): `docs/reference/file-format.md`
 - Technical spec (IR, pipeline, backend boundary): `specs/spec.md`
 - V1 product contract and API tiers: `specs/v1-contract.md`
+- Packaging split timeline: `specs/packaging-split-timeline.md`
 - High-level overview + positioning: `specs/summary.md`
 - Functional tolerancing intent: `specs/functional-tolerancing-intent.md`
 - Roadmap ideas (non-MVP): `specs/geometric-abstractions.md`

@@ -130,4 +130,8 @@ The following docs must remain consistent with this contract:
 
 ## Open Items
 
-- Final packaging split timeline for moving from single package to multi-package layout.
+- Package split execution and package naming finalization.
+
+## Related
+
+- Packaging split timeline: `specs/packaging-split-timeline.md`

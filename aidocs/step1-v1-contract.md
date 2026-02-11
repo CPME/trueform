@@ -52,4 +52,4 @@ Assembly document/file:
 
 ## Next Focus
 
-- Define packaging split timeline (single package -> multi-package layout).
+- Define package split execution details (naming + phased migration PR breakdown).
