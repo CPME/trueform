@@ -29,6 +29,12 @@ Current Step 1 contract direction:
 
 ## Experimental Solver Helpers
 
+Import from:
+
+```ts
+import { buildAssembly, solveAssembly } from "trueform/experimental";
+```
+
 - `buildAssembly(assembly, parts, options?) -> AssemblySolveResult`
 - `solveAssembly(assembly, partConnectors, options?) -> AssemblySolveResult`
 

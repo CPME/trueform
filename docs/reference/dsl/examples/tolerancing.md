@@ -31,7 +31,8 @@ from DSL -> IR -> PMI export (AP242 sidecar today).
 ![Tolerancing example](/examples/dsl/tolerancing.iso.png)
 
 ```ts
-import { dsl, buildPart, exportStepAp242WithPmi } from "trueform";
+import { dsl, buildPart } from "trueform";
+import { exportStepAp242WithPmi } from "trueform/export";
 
 const topFace = dsl.selectorFace(
   [dsl.predPlanar(), dsl.predNormal("+Z")],

@@ -3,7 +3,9 @@
 ## Basic Assembly
 
 ```ts
-import { dsl, buildAssembly, buildPart, MockBackend } from "trueform";
+import { dsl, buildPart } from "trueform";
+import { MockBackend } from "trueform/backend";
+import { buildAssembly } from "trueform/experimental";
 
 const plate = dsl.part(
   "plate",

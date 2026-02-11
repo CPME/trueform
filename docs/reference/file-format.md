@@ -1,8 +1,17 @@
-# File Format (.tfp)
+# File Format (.tfp / .tfa direction)
 
 TrueForm’s part file type is a `.tfp` container that stores the authoritative
 IR plus optional preview artifacts (mesh + isometric thumbnail). The IR is the
 source of truth. Preview artifacts are caches and can be regenerated.
+
+Step 1 contract direction:
+- Part connectors are stored with part intent (`.tfp`).
+- Assembly intent is stored in a separate assembly container/file (`.tfa` draft).
+
+## Container Types
+
+- `.tfp` (part container): implemented.
+- `.tfa` (assembly container): contract direction; schema and tooling are in progress.
 
 ## Container Layout
 
@@ -17,9 +26,21 @@ my_part.tfp
     preview.png
 ```
 
+Draft `.tfa` layout:
+
+```
+my_assembly.tfa
+  manifest.json
+  document.json
+  artifacts/
+    assembly.preview.json
+```
+
 ## document.json (Authoritative IR)
 
 The document is the canonical, kernel-agnostic intent model.
+
+Part document (`.tfp`) example:
 
 ```
 {
@@ -40,10 +61,32 @@ The document is the canonical, kernel-agnostic intent model.
 }
 ```
 
+Assembly document (`.tfa`) draft example:
+
+```
+{
+  "schema": "trueform.document.v1",
+  "document": {
+    "id": "asm-doc-1",
+    "parts": [],
+    "assemblies": [ /* IntentAssembly[] */ ],
+    "capabilities": {},
+    "constraints": [],
+    "assertions": [],
+    "context": {
+      "units": "mm",
+      "kernel": { "name": "ocjs", "version": "X.Y.Z" },
+      "tolerance": { "linear": 1e-6, "angular": 1e-6 }
+    }
+  }
+}
+```
+
 Notes:
 - The IR stores no kernel history or B-Rep.
 - Feature order in arrays is preserved.
-- Assemblies are data-only in v1.
+- In v1 direction, part connectors are defined in part documents.
+- In v1 direction, assembly intent is serialized in separate assembly documents.
 
 ## manifest.json (Container Metadata)
 
@@ -98,7 +141,7 @@ This ensures stable hashes for caching and diffing.
 ## File Handling
 
 Open:
-1. Unzip the `.tfp` container.
+1. Unzip the `.tfp` (part) or `.tfa` (assembly) container.
 2. Parse `manifest.json` and `document.json`.
 3. Validate schema versions.
 4. Hash `document.json` and compare to manifest.
@@ -108,7 +151,7 @@ Save:
 1. Serialize the IR to `document.json`.
 2. Compute document hash and update `manifest.json`.
 3. Optionally include preview mesh + thumbnail artifacts and hashes.
-4. Zip into a `.tfp` container.
+4. Zip into a `.tfp` (part) or `.tfa` (assembly) container.
 5. Optionally regenerate sidecar artifacts.
 
 ## Minimal Example
