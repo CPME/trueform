@@ -1,0 +1,34 @@
+{
+  "schema": "trueform.compat.ir-hash.v1",
+  "hashValueCases": [
+    {
+      "id": "stable-object-order",
+      "expectedString": "{\"a\":1,\"b\":2,\"c\":{\"y\":[3,2,1],\"z\":9}}",
+      "expectedHash": "ha9b513a5"
+    },
+    {
+      "id": "stable-array-of-objects",
+      "expectedString": "[{\"j\":1,\"k\":2},{\"a\":false,\"b\":true}]",
+      "expectedHash": "h9bfbf9dc"
+    }
+  ],
+  "compilePartWithHashes": {
+    "expectedOrder": [
+      "sketch-base",
+      "base-extrude",
+      "sketch-top",
+      "top-extrude"
+    ],
+    "expectedFeatureHashes": {
+      "sketch-base": "hfb8161a",
+      "base-extrude": "h645f12e2",
+      "sketch-top": "hd414c9c6",
+      "top-extrude": "h427f464d"
+    }
+  },
+  "container": {
+    "createdAt": "2026-02-07T00:00:00Z",
+    "expectedDocumentHash": "sha256:84aac901fcbd5e6c9d4bd213200a0dbd711b689f74bf7f7180842836693930e2",
+    "expectedDocumentJson": "{\"document\":{\"context\":{\"kernel\":{\"name\":\"opencascade.js\",\"version\":\"unknown\"},\"tolerance\":{\"angular\":0.001,\"linear\":0.01},\"units\":\"mm\"},\"id\":\"compat-doc\",\"irVersion\":1,\"parts\":[{\"features\":[{\"id\":\"sketch-base\",\"kind\":\"feature.sketch2d\",\"profiles\":[{\"name\":\"profile:base\",\"profile\":{\"height\":10,\"kind\":\"profile.rectangle\",\"width\":20}}]},{\"deps\":[\"sketch-base\"],\"depth\":6,\"id\":\"base-extrude\",\"kind\":\"feature.extrude\",\"profile\":{\"kind\":\"profile.ref\",\"name\":\"profile:base\"},\"result\":\"body:main\"},{\"deps\":[\"base-extrude\"],\"id\":\"sketch-top\",\"kind\":\"feature.sketch2d\",\"profiles\":[{\"name\":\"profile:top\",\"profile\":{\"center\":[0,0,6],\"height\":4,\"kind\":\"profile.rectangle\",\"width\":8}}]},{\"deps\":[\"sketch-top\",\"base-extrude\"],\"depth\":4,\"id\":\"top-extrude\",\"kind\":\"feature.extrude\",\"profile\":{\"kind\":\"profile.ref\",\"name\":\"profile:top\"},\"result\":\"body:top\"}],\"id\":\"compat-part\"}],\"schema\":\"trueform.ir.v1\"},\"schema\":\"trueform.ir.v1\"}"
+  }
+}

@@ -83,9 +83,9 @@ Assumed for Step 1 and downstream docs/code:
 - [x] Add lint/import boundary checks for core vs backend layers.
 
 ### IR And Compatibility
-- [ ] Add canonical serialization golden fixtures.
-- [ ] Add stable hash compatibility fixtures.
-- [ ] Add schema compatibility test coverage for container/document reads.
+- [x] Add canonical serialization golden fixtures.
+- [x] Add stable hash compatibility fixtures.
+- [x] Add schema compatibility test coverage for container/document reads.
 
 ## Progress Update (2026-02-11)
 
@@ -98,6 +98,8 @@ Completed since initial draft:
 - File format docs now describe separate part (`.tfp`) and assembly (`.tfa` draft) containers.
 - Assembly documents now have a draft import/reference shape tied to part files.
 - CI guardrails now run docs drift checks and boundary checks on push/PR.
+- Compatibility fixtures now lock canonical stringify, feature hash values, and
+  container document hash/schema behavior.
 
 Next item:
-- Add canonical IR/hash compatibility fixtures.
+- Finalize root export policy details for stable vs experimental/backend SPI.

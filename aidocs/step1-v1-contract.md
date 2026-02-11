@@ -52,4 +52,4 @@ Assembly document/file:
 
 ## Next Focus
 
-- Add canonical IR/hash compatibility fixtures and CI coverage.
+- Finalize root export policy details for stable vs experimental/backend SPI.
