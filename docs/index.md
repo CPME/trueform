@@ -24,7 +24,16 @@ The goal: hardware design that feels more like software. A single, digital defin
 
 ## Status
 
-Current scope (v1) compiles a JSON-serializable IR and builds with an OpenCascade.js backend. Runtime target is Node + OpenCascade.js, with a minimal feature set: `Sketch2D`, `profile.rect/circle`, `Extrude`, `Revolve`, and single-body output (`body:main`). Assemblies are data-only for now (compile warns).
+Current scope (v1) compiles a JSON-serializable IR and builds with an OpenCascade.js backend. Runtime target is Node + OpenCascade.js.
+
+Implemented part feature surface includes:
+- Datums and sketching (`datum.*`, `feature.sketch2d`, sketch entities/profiles).
+- Solid/surface operations (`extrude`, `surface`, `revolve`, `loft`, `sweep`, `pipe`, `pipeSweep`, `hexTubeSweep`, `mirror`, `thicken`, `shell`, `thread`, `hole`, `fillet`, `chamfer`, `boolean`).
+- Pattern intent (`pattern.linear`, `pattern.circular`).
+
+Outputs are named and not limited to `body:main`; helpers default to `body:<id>` or `surface:<id>` depending on feature/mode.
+
+Assemblies, constraints, and assertions are represented in IR. Core deterministic compile remains part-centric in v1, and assembly solving/runtime helpers are exposed under `trueform/experimental`.
 
 ## Start Here
 

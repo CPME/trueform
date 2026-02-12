@@ -112,6 +112,57 @@ Notes:
 - Use `{ orientation: "frenet" }` to follow the path Frenet frame; the default
   is a fixed frame. If you provide `frame`, orientation is fixed to that frame.
 
+## Pipe
+
+```ts
+const examplePart = part("example-pipe", [
+  pipe("pipe-1", "+Z", 60, 24, 18, "body:main"),
+]);
+```
+
+Notes:
+- `pipe` creates a straight cylindrical pipe/tube primitive on a cardinal axis.
+- Use `opts.origin` to place the primitive at an explicit origin.
+
+## Pipe Sweep
+
+```ts
+const path = pathPolyline([
+  [0, 0, 0],
+  [0, 0, 24],
+  [20, 0, 36],
+]);
+
+const examplePart = part("example-pipe-sweep", [
+  pipeSweep("pipe-sweep-1", path, 18, 12, "body:main"),
+]);
+```
+
+Notes:
+- `pipeSweep` sweeps a circular tube profile along a path.
+- Use `{ mode: "surface" }` for a surface result (`surface:*`) when needed.
+
+## Hex Tube Sweep
+
+```ts
+const path = pathSpline(
+  [
+    [0, 0, 0],
+    [0, 12, 18],
+    [20, 10, 32],
+    [30, -4, 40],
+  ],
+  { degree: 3 }
+);
+
+const examplePart = part("example-hex-tube-sweep", [
+  hexTubeSweep("hex-1", path, 16, 10, "body:main"),
+]);
+```
+
+Notes:
+- `hexTubeSweep` is similar to `pipeSweep`, but uses hexagonal outer/inner sections specified by across-flats dimensions.
+
 ## Shell
 
 ![Shell example](/examples/dsl/shell.iso.png)

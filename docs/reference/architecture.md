@@ -14,7 +14,7 @@ This is a short overview of the core concepts. The full technical specification 
 2. Build a dependency DAG.
 3. Execute features in deterministic order via a backend.
 4. Resolve selectors against current geometry.
-5. Validate assertions and tolerancing intent.
+5. Optionally evaluate assertions post-build; tolerancing intent is carried in IR (constraints/assertions are placeholder data in v1 compile).
 
 ## Selectors and Datums
 

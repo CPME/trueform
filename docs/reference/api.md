@@ -26,6 +26,6 @@ When running the docs site, open:
 
 - `/api/`
 
-[Open the API Reference](/api/)
+<a class="vp-raw" href="/trueform/api/">Open the API Reference</a>
 
 If you need to regenerate after changes, re-run `npm run docs:api`.
