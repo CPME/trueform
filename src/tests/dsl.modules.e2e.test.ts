@@ -2,12 +2,16 @@ import assert from "node:assert/strict";
 import * as core from "../dsl/core.js";
 import * as assembly from "../dsl/assembly.js";
 import * as geometry from "../dsl/geometry.js";
+import * as booleans from "../dsl/booleans.js";
+import * as features from "../dsl/features.js";
+import * as selectors from "../dsl/selectors.js";
+import * as sketch from "../dsl/sketch.js";
 import * as tolerancing from "../dsl/tolerancing.js";
 import { runTests } from "./occt_test_utils.js";
 
 const tests = [
   {
-    name: "dsl modules: assembly + geometry helpers",
+    name: "dsl modules: intent-focused helper modules",
     fn: async () => {
       const transform = assembly.transform({
         translation: [1, 2, 3],
@@ -57,7 +61,7 @@ const tests = [
       });
       assert.equal(asm.outputs?.length, 1);
 
-      const selectorFace = geometry.selectorFace([geometry.predPlanar()]);
+      const selectorFace = selectors.selectorFace([selectors.predPlanar()]);
       const connector = assembly.connector("conn-1", selectorFace, {
         normal: "+Z",
       });
@@ -75,12 +79,25 @@ const tests = [
       const doc = core.document("doc-1", [part], core.context(), [asm]);
       assert.equal(doc.assemblies?.length, 1);
 
-      const extrude = geometry.extrude(
-        "extrude-1",
+      const profile = sketch.profileRect(2, 3);
+      const extrude = features.extrude("extrude-1", profile, 5);
+      assert.equal(extrude.kind, "feature.extrude");
+
+      const left = selectors.selectorNamed("body:left");
+      const right = selectors.selectorNamed("body:right");
+      const cut = features.cut("cut-1", left, right);
+      const union = booleans.union("union-1", left, right);
+      const intersect = booleans.intersect("intersect-1", left, right);
+      assert.equal(cut.op, "subtract");
+      assert.equal(union.op, "union");
+      assert.equal(intersect.op, "intersect");
+
+      const extrudeLegacy = geometry.extrude(
+        "extrude-legacy",
         geometry.profileRect(2, 3),
         5
       );
-      assert.equal(extrude.kind, "feature.extrude");
+      assert.equal(extrudeLegacy.kind, "feature.extrude");
     },
   },
 ];

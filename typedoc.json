@@ -1,5 +1,21 @@
 {
-  "entryPoints": ["src/index.ts"],
+  "entryPoints": [
+    "src/index.ts",
+    "src/backends.ts",
+    "src/backend-spi.ts",
+    "src/experimental.ts",
+    "src/export/index.ts",
+    "src/dsl.ts",
+    "src/dsl/core.ts",
+    "src/dsl/assembly.ts",
+    "src/dsl/geometry.ts",
+    "src/dsl/features.ts",
+    "src/dsl/sketch.ts",
+    "src/dsl/selectors.ts",
+    "src/dsl/booleans.ts",
+    "src/dsl/tolerancing.ts",
+    "src/dsl/generators.ts"
+  ],
   "out": "docs/public/api",
   "readme": "none",
   "tsconfig": "tsconfig.json",

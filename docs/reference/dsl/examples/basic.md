@@ -5,7 +5,8 @@
 ```ts
 import { buildPart } from "trueform";
 import { part } from "trueform/dsl/core";
-import { extrude, profileRect, profileRef, sketch2d } from "trueform/dsl/geometry";
+import { sketch2d, profileRect, profileRef } from "trueform/dsl/sketch";
+import { extrude } from "trueform/dsl/features";
 
 const plate = part("plate", [
   sketch2d("sketch-base", [

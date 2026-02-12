@@ -1,5 +1,23 @@
 # Features DSL
 
+## Import
+
+```ts
+import {
+  extrude,
+  revolve,
+  sweep,
+  pipe,
+  pipeSweep,
+  hexTubeSweep,
+  thicken,
+  booleanOp,
+  union,
+  cut,
+  intersect,
+} from "trueform/dsl/features";
+```
+
 ## Features
 
 - `extrude(id, profile, depth, result?, deps?, opts?) -> Extrude`
@@ -7,6 +25,9 @@
 - `revolve(id, profile, axis, angle, result?, opts?) -> Revolve`
 - `loft(id, profiles, result?, deps?, opts?) -> Loft`
 - `sweep(id, profile, path, result?, deps?, opts?) -> Sweep`
+- `pipe(id, axis, length, outerDiameter, innerDiameter?, result?, opts?) -> Pipe`
+- `pipeSweep(id, path, outerDiameter, innerDiameter?, result?, opts?) -> PipeSweep`
+- `hexTubeSweep(id, path, outerAcrossFlats, innerAcrossFlats?, result?, opts?) -> HexTubeSweep`
 - `shell(id, source, thickness, result?, deps?, opts?) -> Shell`
 - `mirror(id, source, plane, result?, deps?) -> Mirror`
 - `thicken(id, surface, thickness, result?, deps?, opts?) -> Thicken`
@@ -15,6 +36,9 @@
 - `fillet(id, edges, radius, deps?) -> Fillet`
 - `chamfer(id, edges, distance, deps?) -> Chamfer`
 - `booleanOp(id, op, left, right, result?, deps?) -> BooleanOp`
+- `union(id, left, right, result?, deps?) -> BooleanOp`
+- `cut(id, left, right, result?, deps?) -> BooleanOp` (subtract)
+- `intersect(id, left, right, result?, deps?) -> BooleanOp`
 
 Examples:
 - [Extrude](./examples/features#extrude)
@@ -22,6 +46,9 @@ Examples:
 - [Revolve](./examples/features#revolve)
 - [Loft](./examples/features#loft)
 - [Sweep](./examples/features#sweep)
+- [Pipe](./examples/features#pipe)
+- [Pipe sweep](./examples/features#pipe-sweep)
+- [Hex tube sweep](./examples/features#hex-tube-sweep)
 - [Shell](./examples/features#shell)
 - [Mirror](./examples/features#mirror)
 - [Thicken](./examples/features#thicken)

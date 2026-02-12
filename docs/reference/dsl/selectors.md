@@ -1,5 +1,18 @@
 # Selectors, Predicates, Ranking
 
+## Import
+
+```ts
+import {
+  selectorFace,
+  selectorEdge,
+  selectorNamed,
+  predPlanar,
+  predCreatedBy,
+  rankMaxArea,
+} from "trueform/dsl/selectors";
+```
+
 ## Selectors
 
 - `selectorFace(predicates, rank?) -> FaceQuery`
