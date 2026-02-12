@@ -5,7 +5,8 @@ import { spawn } from "node:child_process";
 import initOpenCascade from "opencascade.js/dist/node.js";
 import { OcctBackend } from "../../dist/backend_occt.js";
 import { buildPart } from "../../dist/executor.js";
-import { buildAssembly, dsl } from "../../dist/index.js";
+import { dsl } from "../../dist/index.js";
+import { buildAssembly } from "../../dist/experimental.js";
 import { renderIsometricPngLayers } from "../../dist/viewer/isometric_renderer.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

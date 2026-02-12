@@ -77,6 +77,12 @@ function triangleCount(mesh: { indices?: number[]; positions?: number[] }): numb
 }
 
 async function startRuntimeServer(): Promise<RuntimeServer> {
+  return startRuntimeServerWithEnv();
+}
+
+async function startRuntimeServerWithEnv(
+  envOverrides: Record<string, string> = {}
+): Promise<RuntimeServer> {
   const port = await getFreePort();
   const logs: string[] = [];
   const child = spawn(process.execPath, ["tools/runtime/server.mjs"], {
@@ -85,6 +91,7 @@ async function startRuntimeServer(): Promise<RuntimeServer> {
       ...process.env,
       TF_RUNTIME_PORT: String(port),
       TF_RUNTIME_JOB_TIMEOUT_MS: "15000",
+      ...envOverrides,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -136,25 +143,89 @@ async function waitForServer(
   return false;
 }
 
-async function pollJob(baseUrl: string, jobId: string, timeoutMs = 30000): Promise<JobRecord> {
+async function pollJob(
+  baseUrl: string,
+  jobId: string,
+  timeoutMs = 30000,
+  tenantId?: string
+): Promise<JobRecord> {
   const start = Date.now();
+  const headers: Record<string, string> = {};
+  if (tenantId) headers["x-tf-tenant-id"] = tenantId;
   while (Date.now() - start <= timeoutMs) {
-    const job = await fetchJson<JobRecord>(`${baseUrl}/v1/jobs/${jobId}`);
+    const job = await fetchJson<JobRecord>(`${baseUrl}/v1/jobs/${jobId}`, { headers });
     if (["succeeded", "failed", "canceled"].includes(job.state)) return job;
     await sleep(50);
   }
   throw new Error(`Polling timed out for job ${jobId}`);
 }
 
+type StreamEvent = {
+  event: string;
+  state: string;
+};
+
+async function collectJobStreamEvents(
+  baseUrl: string,
+  jobId: string,
+  tenantId?: string
+): Promise<StreamEvent[]> {
+  const headers: Record<string, string> = {};
+  if (tenantId) headers["x-tf-tenant-id"] = tenantId;
+  const res = await fetch(`${baseUrl}/v1/jobs/${jobId}/stream`, { headers });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(
+      `Stream request failed (${res.status})${text ? `: ${text}` : ""}`
+    );
+  }
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("Missing stream reader");
+  const decoder = new TextDecoder();
+  let buffer = "";
+  const events: StreamEvent[] = [];
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split("\n\n");
+    buffer = chunks.pop() ?? "";
+    for (const chunk of chunks) {
+      const lines = chunk
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+      let event = "message";
+      let data = "";
+      for (const line of lines) {
+        if (line.startsWith("event:")) {
+          event = line.slice("event:".length).trim();
+        }
+        if (line.startsWith("data:")) {
+          data += line.slice("data:".length).trim();
+        }
+      }
+      if (!data) continue;
+      const parsed = JSON.parse(data) as { state?: string };
+      events.push({ event, state: String(parsed.state ?? "") });
+      if (event === "end") return events;
+    }
+  }
+  return events;
+}
+
 async function waitUntilStateSeen(
   baseUrl: string,
   jobId: string,
   target: string,
-  timeoutMs = 20000
+  timeoutMs = 20000,
+  tenantId?: string
 ): Promise<boolean> {
   const start = Date.now();
+  const headers: Record<string, string> = {};
+  if (tenantId) headers["x-tf-tenant-id"] = tenantId;
   while (Date.now() - start <= timeoutMs) {
-    const job = await fetchJson<JobRecord>(`${baseUrl}/v1/jobs/${jobId}`);
+    const job = await fetchJson<JobRecord>(`${baseUrl}/v1/jobs/${jobId}`, { headers });
     if (job.state === target) return true;
     if (["succeeded", "failed", "canceled"].includes(job.state)) return false;
     await sleep(20);
@@ -466,6 +537,118 @@ const tests = [
         assert.ok(observedStates.has("succeeded"), "Expected succeeded state coverage");
         assert.ok(observedStates.has("failed"), "Expected failed state coverage");
         assert.ok(observedStates.has("canceled"), "Expected canceled state coverage");
+      } finally {
+        await runtime.stop();
+      }
+    },
+  },
+  {
+    name: "runtime service: tenant isolation, quotas, and stream updates",
+    fn: async () => {
+      const runtime = await startRuntimeServerWithEnv({
+        TF_RUNTIME_MAX_PENDING_JOBS_PER_TENANT: "1",
+      });
+      try {
+        const { document } = makeRuntimeDoc();
+        const tenantA = { "x-tf-tenant-id": "tenant-a" };
+        const tenantB = { "x-tf-tenant-id": "tenant-b" };
+
+        const docA = await fetchJsonWithStatus<{ docId: string }>(
+          `${runtime.baseUrl}/v1/documents`,
+          201,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json", ...tenantA },
+            body: JSON.stringify({ document }),
+          }
+        );
+
+        const buildA = await fetchJsonWithStatus<{ jobId: string }>(
+          `${runtime.baseUrl}/v1/build`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json", ...tenantA },
+            body: JSON.stringify({
+              docId: docA.docId,
+              partId: "runtime-cylinder",
+              options: { meshProfile: "interactive", simulateDelayMs: 120 },
+            }),
+          }
+        );
+
+        const streamEventsPromise = collectJobStreamEvents(
+          runtime.baseUrl,
+          buildA.jobId,
+          "tenant-a"
+        );
+        const buildAResult = await pollJob(runtime.baseUrl, buildA.jobId, 30000, "tenant-a");
+        assert.equal(buildAResult.state, "succeeded");
+        const streamEvents = await streamEventsPromise;
+        assert.ok(streamEvents.length >= 2, "expected multiple stream events");
+        assert.equal(streamEvents[0]?.event, "job");
+        assert.equal(streamEvents[streamEvents.length - 1]?.event, "end");
+        assert.equal(streamEvents.some((evt) => evt.state === "running"), true);
+        assert.equal(streamEvents.some((evt) => evt.state === "succeeded"), true);
+
+        const jobFromOtherTenant = await fetchJsonWithStatus<{ error?: unknown }>(
+          `${runtime.baseUrl}/v1/jobs/${buildA.jobId}`,
+          404,
+          { headers: tenantB }
+        );
+        assert.ok(jobFromOtherTenant.error !== undefined);
+
+        const docFromOtherTenant = await fetchJsonWithStatus<{ error?: unknown }>(
+          `${runtime.baseUrl}/v1/documents/${docA.docId}`,
+          404,
+          { headers: tenantB }
+        );
+        assert.ok(docFromOtherTenant.error !== undefined);
+
+        const buildId = String(buildAResult.result?.buildId ?? "");
+        assert.ok(buildId.length > 0, "missing build id");
+
+        const longMeshBody = {
+          buildId,
+          profile: "export",
+          options: {
+            linearDeflection: 0.002,
+            angularDeflection: 0.02,
+            relative: false,
+            includeEdges: true,
+            edgeSegmentLength: 0.05,
+            edgeMaxSegments: 10000,
+            simulateDelayMs: 300,
+          },
+        };
+
+        const meshJobA1 = await fetchJsonWithStatus<{ jobId: string }>(
+          `${runtime.baseUrl}/v1/jobs/mesh`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json", ...tenantA },
+            body: JSON.stringify(longMeshBody),
+          }
+        );
+        assert.ok(meshJobA1.jobId.length > 0);
+
+        const quotaError = await fetchJsonWithStatus<{
+          error?: { code?: string };
+        }>(`${runtime.baseUrl}/v1/jobs/mesh`, 429, {
+          method: "POST",
+          headers: { "content-type": "application/json", ...tenantA },
+          body: JSON.stringify(longMeshBody),
+        });
+        assert.equal(quotaError.error?.code, "quota_exceeded");
+
+        const meshJobA1Done = await pollJob(
+          runtime.baseUrl,
+          meshJobA1.jobId,
+          30000,
+          "tenant-a"
+        );
+        assert.equal(meshJobA1Done.state, "succeeded");
       } finally {
         await runtime.stop();
       }

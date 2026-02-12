@@ -18,7 +18,15 @@ const DEFAULT_JOB_TIMEOUT_MS = Number(process.env.TF_RUNTIME_JOB_TIMEOUT_MS || 3
 const BUILD_CACHE_MAX = Number(process.env.TF_RUNTIME_BUILD_CACHE_MAX || 32);
 const MESH_CACHE_MAX = Number(process.env.TF_RUNTIME_MESH_CACHE_MAX || 64);
 const EXPORT_CACHE_MAX = Number(process.env.TF_RUNTIME_EXPORT_CACHE_MAX || 64);
+const MAX_DOC_BYTES = Number(process.env.TF_RUNTIME_MAX_DOCUMENT_BYTES || 2_000_000);
+const MAX_DOCS_PER_TENANT = Number(process.env.TF_RUNTIME_MAX_DOCUMENTS_PER_TENANT || 256);
+const MAX_ASSETS_PER_TENANT = Number(process.env.TF_RUNTIME_MAX_ASSETS_PER_TENANT || 1024);
+const MAX_PENDING_JOBS_PER_TENANT = Number(
+  process.env.TF_RUNTIME_MAX_PENDING_JOBS_PER_TENANT || 32
+);
 const KEY_VERSION = "tf-service-key-v1";
+const TENANT_HEADER = "x-tf-tenant-id";
+const DEFAULT_TENANT = "public";
 
 class HttpError extends Error {
   constructor(status, code, message, details) {
@@ -44,6 +52,7 @@ export function createTfServiceServer(options = {}) {
   const buildCache = new Map();
   const meshCache = new Map();
   const exportCache = new Map();
+  const jobOwners = new Map();
 
   const cacheStats = {
     partBuild: { hit: 0, miss: 0 },
@@ -90,7 +99,7 @@ export function createTfServiceServer(options = {}) {
       "content-type": "application/json",
       "access-control-allow-origin": "*",
       "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-      "access-control-allow-headers": "content-type",
+      "access-control-allow-headers": `content-type,${TENANT_HEADER}`,
     });
     res.end(body);
   }
@@ -100,7 +109,7 @@ export function createTfServiceServer(options = {}) {
       "content-type": "text/plain",
       "access-control-allow-origin": "*",
       "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-      "access-control-allow-headers": "content-type",
+      "access-control-allow-headers": `content-type,${TENANT_HEADER}`,
     });
     res.end(payload);
   }
@@ -110,7 +119,7 @@ export function createTfServiceServer(options = {}) {
       "content-type": contentType,
       "access-control-allow-origin": "*",
       "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-      "access-control-allow-headers": "content-type",
+      "access-control-allow-headers": `content-type,${TENANT_HEADER}`,
     });
     res.end(payload);
   }
@@ -124,6 +133,59 @@ export function createTfServiceServer(options = {}) {
     } catch {
       throw new HttpError(400, "invalid_json", "Request body is not valid JSON");
     }
+  }
+
+  function tenantScopedKey(tenantId, id) {
+    return `${tenantId}::${id}`;
+  }
+
+  function normalizeTenantId(value) {
+    if (typeof value !== "string" || value.trim().length === 0) return DEFAULT_TENANT;
+    const trimmed = value.trim();
+    if (!/^[A-Za-z0-9._:-]{1,64}$/.test(trimmed)) {
+      throw new HttpError(
+        400,
+        "invalid_tenant_id",
+        "Tenant id must match [A-Za-z0-9._:-]{1,64}"
+      );
+    }
+    return trimmed;
+  }
+
+  function getTenantId(req, url) {
+    const headerValue = req.headers[TENANT_HEADER];
+    const headerTenant = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+    const queryTenant = url.searchParams.get("tenantId");
+    return normalizeTenantId(headerTenant ?? queryTenant ?? DEFAULT_TENANT);
+  }
+
+  function countTenantInStore(store, tenantId) {
+    let count = 0;
+    for (const value of store.values()) {
+      if (value?.tenantId === tenantId) count += 1;
+    }
+    return count;
+  }
+
+  function countPendingJobsForTenant(tenantId) {
+    let count = 0;
+    for (const [jobId, owner] of jobOwners.entries()) {
+      if (owner !== tenantId) continue;
+      const record = jobQueue.get(jobId);
+      if (!record) continue;
+      if (record.state === "queued" || record.state === "running") count += 1;
+    }
+    return count;
+  }
+
+  function assertTenantQuota(tenantId, kind, limit, current) {
+    if (current < limit) return;
+    throw new HttpError(429, "quota_exceeded", `Tenant ${tenantId} exceeded ${kind} quota`, {
+      tenantId,
+      kind,
+      limit,
+      current,
+    });
   }
 
   function nextAssetId(prefix) {
@@ -251,38 +313,54 @@ export function createTfServiceServer(options = {}) {
     return createHash("sha256").update(input).digest("hex");
   }
 
-  function makeDocumentRecord(document) {
+  function makeDocumentRecord(tenantId, document) {
     const canonicalJson = stableStringify(document);
     const canonicalDocument = JSON.parse(canonicalJson);
+    const bytes = Buffer.byteLength(canonicalJson);
+    if (bytes > MAX_DOC_BYTES) {
+      throw new HttpError(413, "document_too_large", `Document exceeds ${MAX_DOC_BYTES} bytes`, {
+        tenantId,
+        bytes,
+        maxBytes: MAX_DOC_BYTES,
+      });
+    }
     const docId = sha256(canonicalJson);
     const createdAt = new Date().toISOString();
     return {
       id: docId,
       docId,
+      tenantId,
       contentHash: docId,
       canonicalJson,
       document: canonicalDocument,
       createdAt,
-      bytes: Buffer.byteLength(canonicalJson),
+      bytes,
     };
   }
 
-  function storeDocument(document) {
-    const next = makeDocumentRecord(document);
-    const existing = documentStore.get(next.docId);
+  function storeDocument(tenantId, document) {
+    const next = makeDocumentRecord(tenantId, document);
+    const existing = documentStore.get(tenantScopedKey(tenantId, next.docId));
     if (existing) {
       return { record: existing, inserted: false };
     }
-    documentStore.set(next.docId, next);
+    assertTenantQuota(
+      tenantId,
+      "documents_per_tenant",
+      MAX_DOCS_PER_TENANT,
+      countTenantInStore(documentStore, tenantId)
+    );
+    documentStore.set(tenantScopedKey(tenantId, next.docId), next);
     return { record: next, inserted: true };
   }
 
-  function makePartBuildKey(part, context, overrides, backendFingerprint) {
+  function makePartBuildKey(tenantId, part, context, overrides, backendFingerprint) {
     if (!context) return null;
     const coreKey = buildPartCacheKey(part, context, overrides);
     const key = {
       version: KEY_VERSION,
       type: "partBuildKey",
+      tenantId,
       backendFingerprint,
       key: coreKey,
     };
@@ -340,13 +418,20 @@ export function createTfServiceServer(options = {}) {
     );
   }
 
-  function storeAsset(type, data, contentType, metadata = {}) {
+  function storeAsset(tenantId, type, data, contentType, metadata = {}) {
+    assertTenantQuota(
+      tenantId,
+      "assets_per_tenant",
+      MAX_ASSETS_PER_TENANT,
+      countTenantInStore(assetStore, tenantId)
+    );
     const id = nextAssetId(type);
     const url = `/v1/assets/${type}/${id}`;
-    assetStore.set(id, { type, data, contentType });
+    assetStore.set(id, { tenantId, type, data, contentType });
     artifactStore.set(id, {
       artifactId: id,
       assetId: id,
+      tenantId,
       type,
       url,
       createdAt: new Date().toISOString(),
@@ -355,16 +440,16 @@ export function createTfServiceServer(options = {}) {
     return { id, url };
   }
 
-  function resolvePart(request) {
+  function resolvePart(tenantId, request) {
     let document = null;
     let docId = request?.docId ?? null;
 
     if (request?.document) {
-      const stored = storeDocument(request.document);
+      const stored = storeDocument(tenantId, request.document);
       document = stored.record.document;
       docId = stored.record.docId;
     } else if (docId) {
-      const stored = documentStore.get(docId);
+      const stored = documentStore.get(tenantScopedKey(tenantId, docId));
       if (!stored) {
         throw new HttpError(404, "document_not_found", `Unknown document ${docId}`);
       }
@@ -419,6 +504,7 @@ export function createTfServiceServer(options = {}) {
       ctx,
       purpose,
       docId,
+      tenantId,
     } = params;
 
     const meshKey = makeMeshKey(partBuildKey, profile, options);
@@ -447,7 +533,7 @@ export function createTfServiceServer(options = {}) {
       selections: safeSelections,
       selectionSummary,
     };
-    const asset = storeAsset("mesh", JSON.stringify(payload), "application/json", {
+    const asset = storeAsset(tenantId, "mesh", JSON.stringify(payload), "application/json", {
       buildId,
       partId,
       docId,
@@ -482,6 +568,7 @@ export function createTfServiceServer(options = {}) {
         options,
         purpose: "preview_prefetch",
         docId: entry.docId,
+        tenantId: entry.tenantId,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -490,9 +577,9 @@ export function createTfServiceServer(options = {}) {
     }
   }
 
-  async function handleBuild(request, ctx) {
+  async function handleBuild(tenantId, request, ctx) {
     await maybeSimulateDelay(request, ctx);
-    const { part, document, docId } = resolvePart(request);
+    const { part, document, docId } = resolvePart(tenantId, request);
     const overrides = request?.params ?? undefined;
     const units = request?.units;
     const validationMode = request?.options?.validationMode;
@@ -504,7 +591,13 @@ export function createTfServiceServer(options = {}) {
     const prefetchPreview = request?.options?.prefetchPreview !== false;
 
     const backendFingerprint = await getBackendFingerprint();
-    const partBuildKey = makePartBuildKey(part, document?.context, overrides, backendFingerprint);
+    const partBuildKey = makePartBuildKey(
+      tenantId,
+      part,
+      document?.context,
+      overrides,
+      backendFingerprint
+    );
 
     let buildResult = null;
     let partBuildHit = false;
@@ -527,6 +620,7 @@ export function createTfServiceServer(options = {}) {
     const buildId = nextBuildId();
     const entry = {
       id: buildId,
+      tenantId,
       partId: buildResult.partId,
       result: buildResult,
       partBuildKey,
@@ -558,6 +652,7 @@ export function createTfServiceServer(options = {}) {
         ctx,
         purpose: "build",
         docId,
+        tenantId,
       });
       meshAsset = { profile: meshProfile, asset: meshResult.asset };
       bounds = meshResult.bounds;
@@ -598,13 +693,16 @@ export function createTfServiceServer(options = {}) {
     };
   }
 
-  async function handleMesh(request, ctx) {
+  async function handleMesh(tenantId, request, ctx) {
     await maybeSimulateDelay(request, ctx);
     const buildId = request?.buildId;
     if (!buildId || !buildStore.has(buildId)) {
       throw new HttpError(404, "build_not_found", "Unknown buildId");
     }
     const entry = buildStore.get(buildId);
+    if (entry.tenantId !== tenantId) {
+      throw new HttpError(404, "build_not_found", "Unknown buildId");
+    }
     const target = request?.target ?? "body:main";
     const profile = request?.profile ?? "interactive";
     const { simulateDelayMs: _meshDelayMs, ...meshOverrides } = request?.options ?? {};
@@ -626,6 +724,7 @@ export function createTfServiceServer(options = {}) {
       ctx,
       purpose: "mesh",
       docId: entry.docId,
+      tenantId,
     });
 
     ctx?.updateProgress(1);
@@ -644,13 +743,16 @@ export function createTfServiceServer(options = {}) {
     };
   }
 
-  async function handleExport(request, kind, ctx) {
+  async function handleExport(tenantId, request, kind, ctx) {
     await maybeSimulateDelay(request, ctx);
     const buildId = request?.buildId;
     if (!buildId || !buildStore.has(buildId)) {
       throw new HttpError(404, "build_not_found", "Unknown buildId");
     }
     const entry = buildStore.get(buildId);
+    if (entry.tenantId !== tenantId) {
+      throw new HttpError(404, "build_not_found", "Unknown buildId");
+    }
     const target = request?.target ?? "body:main";
     const { simulateDelayMs: _exportDelayMs, ...options } = request?.options ?? {};
     void _exportDelayMs;
@@ -688,7 +790,7 @@ export function createTfServiceServer(options = {}) {
       throw new HttpError(400, "unsupported_export", `Unsupported export kind ${kind}`);
     }
 
-    const asset = storeAsset("export", payload, "application/octet-stream", {
+    const asset = storeAsset(tenantId, "export", payload, "application/octet-stream", {
       buildId: entry.id,
       partId: entry.partId,
       docId: entry.docId,
@@ -710,26 +812,46 @@ export function createTfServiceServer(options = {}) {
     };
   }
 
-  async function enqueueJob(handler, payload, timeoutMs) {
-    return jobQueue.enqueue(
-      async (ctx) => handler(payload, ctx),
+  async function enqueueJob(tenantId, handler, payload, timeoutMs) {
+    assertTenantQuota(
+      tenantId,
+      "pending_jobs_per_tenant",
+      MAX_PENDING_JOBS_PER_TENANT,
+      countPendingJobsForTenant(tenantId)
+    );
+    const job = jobQueue.enqueue(
+      async (ctx) => handler(tenantId, payload, ctx),
       timeoutMs ? { timeoutMs } : {}
     );
+    jobOwners.set(job.id, tenantId);
+    return job;
   }
 
-  function enqueueBuild(payload) {
+  function enqueueBuild(tenantId, payload) {
     const timeoutMs = payload?.timeoutMs ?? payload?.options?.timeoutMs;
-    return enqueueJob(handleBuild, payload, timeoutMs);
+    return enqueueJob(tenantId, handleBuild, payload, timeoutMs);
   }
 
-  function enqueueMesh(payload) {
+  function enqueueMesh(tenantId, payload) {
     const timeoutMs = payload?.timeoutMs;
-    return enqueueJob(handleMesh, payload, timeoutMs);
+    return enqueueJob(tenantId, handleMesh, payload, timeoutMs);
   }
 
-  function enqueueExport(payload, kind) {
+  function enqueueExport(tenantId, payload, kind) {
     const timeoutMs = payload?.timeoutMs;
-    return enqueueJob((request, ctx) => handleExport(request, kind, ctx), payload, timeoutMs);
+    return enqueueJob(tenantId, (ownerTenantId, request, ctx) => handleExport(ownerTenantId, request, kind, ctx), payload, timeoutMs);
+  }
+
+  function assertTenantJobAccess(tenantId, jobId) {
+    const owner = jobOwners.get(jobId);
+    if (!owner || owner !== tenantId) {
+      throw new HttpError(404, "job_not_found", "Job not found");
+    }
+  }
+
+  function writeSse(res, event, payload) {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
   }
 
   const server = http.createServer(async (req, res) => {
@@ -742,7 +864,7 @@ export function createTfServiceServer(options = {}) {
       res.writeHead(204, {
         "access-control-allow-origin": "*",
         "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-        "access-control-allow-headers": "content-type",
+        "access-control-allow-headers": `content-type,${TENANT_HEADER}`,
       });
       res.end();
       return;
@@ -750,6 +872,7 @@ export function createTfServiceServer(options = {}) {
 
     const url = new URL(req.url, `http://${req.headers.host}`);
     const { pathname } = url;
+    const tenantId = getTenantId(req, url);
 
     try {
       if (req.method === "GET" && pathname === "/v1/capabilities") {
@@ -758,12 +881,19 @@ export function createTfServiceServer(options = {}) {
         const backendFingerprint = await getBackendFingerprint();
         json(res, 200, {
           apiVersion: API_VERSION,
+          tenantId,
           backend: caps.name ?? "opencascade.js",
           backendFingerprint,
           featureKinds: caps.featureKinds ?? [],
           exports: caps.exports ?? { step: true, stl: true },
           mesh: caps.mesh ?? true,
           assertions: caps.assertions ?? [],
+          quotas: {
+            maxDocumentBytes: MAX_DOC_BYTES,
+            maxDocumentsPerTenant: MAX_DOCS_PER_TENANT,
+            maxAssetsPerTenant: MAX_ASSETS_PER_TENANT,
+            maxPendingJobsPerTenant: MAX_PENDING_JOBS_PER_TENANT,
+          },
         });
         return;
       }
@@ -774,8 +904,9 @@ export function createTfServiceServer(options = {}) {
         if (!document || !Array.isArray(document.parts)) {
           throw new HttpError(400, "invalid_document", "Document payload must include parts[]");
         }
-        const stored = storeDocument(document);
+        const stored = storeDocument(tenantId, document);
         json(res, stored.inserted ? 201 : 200, {
+          tenantId,
           docId: stored.record.docId,
           contentHash: stored.record.contentHash,
           inserted: stored.inserted,
@@ -788,12 +919,13 @@ export function createTfServiceServer(options = {}) {
 
       if (req.method === "GET" && pathname.startsWith("/v1/documents/")) {
         const docId = pathname.split("/").pop();
-        const stored = docId ? documentStore.get(docId) : null;
+        const stored = docId ? documentStore.get(tenantScopedKey(tenantId, docId)) : null;
         if (!stored) {
           json(res, 404, { error: "Document not found" });
           return;
         }
         json(res, 200, {
+          tenantId,
           docId: stored.docId,
           contentHash: stored.contentHash,
           createdAt: stored.createdAt,
@@ -805,34 +937,79 @@ export function createTfServiceServer(options = {}) {
 
       if (req.method === "POST" && (pathname === "/v1/build" || pathname === "/v1/jobs/build")) {
         const payload = await readJson(req);
-        const job = await enqueueBuild(payload);
+        const job = await enqueueBuild(tenantId, payload);
         json(res, 202, { jobId: job.id, state: job.state });
         return;
       }
 
       if (req.method === "POST" && (pathname === "/v1/mesh" || pathname === "/v1/jobs/mesh")) {
         const payload = await readJson(req);
-        const job = await enqueueMesh(payload);
+        const job = await enqueueMesh(tenantId, payload);
         json(res, 202, { jobId: job.id, state: job.state });
         return;
       }
 
       if (req.method === "POST" && (pathname === "/v1/export/step" || pathname === "/v1/jobs/export/step")) {
         const payload = await readJson(req);
-        const job = await enqueueExport(payload, "step");
+        const job = await enqueueExport(tenantId, payload, "step");
         json(res, 202, { jobId: job.id, state: job.state });
         return;
       }
 
       if (req.method === "POST" && (pathname === "/v1/export/stl" || pathname === "/v1/jobs/export/stl")) {
         const payload = await readJson(req);
-        const job = await enqueueExport(payload, "stl");
+        const job = await enqueueExport(tenantId, payload, "stl");
         json(res, 202, { jobId: job.id, state: job.state });
+        return;
+      }
+
+      if (req.method === "GET" && pathname.startsWith("/v1/jobs/") && pathname.endsWith("/stream")) {
+        const parts = pathname.split("/");
+        const jobId = parts[3];
+        if (!jobId) {
+          json(res, 404, { error: "Job not found" });
+          return;
+        }
+        assertTenantJobAccess(tenantId, jobId);
+        const job = jobQueue.get(jobId);
+        if (!job) {
+          json(res, 404, { error: "Job not found" });
+          return;
+        }
+        res.writeHead(200, {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
+          "access-control-allow-origin": "*",
+        });
+        writeSse(res, "job", job);
+        let lastUpdatedAt = job.updatedAt;
+        const timer = setInterval(() => {
+          const current = jobQueue.get(jobId);
+          if (!current) return;
+          if (current.updatedAt !== lastUpdatedAt) {
+            lastUpdatedAt = current.updatedAt;
+            writeSse(res, "job", current);
+          }
+          if (
+            current.state === "succeeded" ||
+            current.state === "failed" ||
+            current.state === "canceled"
+          ) {
+            writeSse(res, "end", current);
+            clearInterval(timer);
+            res.end();
+          }
+        }, 200);
+        req.on("close", () => {
+          clearInterval(timer);
+        });
         return;
       }
 
       if (req.method === "GET" && pathname.startsWith("/v1/jobs/")) {
         const jobId = pathname.split("/").pop();
+        assertTenantJobAccess(tenantId, jobId);
         const job = jobQueue.get(jobId);
         if (!job) {
           json(res, 404, { error: "Job not found" });
@@ -844,6 +1021,7 @@ export function createTfServiceServer(options = {}) {
 
       if (req.method === "DELETE" && pathname.startsWith("/v1/jobs/")) {
         const jobId = pathname.split("/").pop();
+        assertTenantJobAccess(tenantId, jobId);
         const canceled = jobQueue.cancel(jobId);
         const job = jobQueue.get(jobId);
         if (!job && !canceled) {
@@ -857,7 +1035,7 @@ export function createTfServiceServer(options = {}) {
       if (req.method === "GET" && pathname.startsWith("/v1/assets/mesh/")) {
         const id = pathname.split("/").pop();
         const asset = id ? assetStore.get(id) : null;
-        if (!asset) {
+        if (!asset || asset.tenantId !== tenantId) {
           text(res, 404, "Asset not found");
           return;
         }
@@ -868,7 +1046,7 @@ export function createTfServiceServer(options = {}) {
       if (req.method === "GET" && pathname.startsWith("/v1/assets/export/")) {
         const id = pathname.split("/").pop();
         const asset = id ? assetStore.get(id) : null;
-        if (!asset) {
+        if (!asset || asset.tenantId !== tenantId) {
           text(res, 404, "Asset not found");
           return;
         }
@@ -879,7 +1057,7 @@ export function createTfServiceServer(options = {}) {
       if (req.method === "GET" && pathname.startsWith("/v1/artifacts/")) {
         const id = pathname.split("/").pop();
         const artifact = id ? artifactStore.get(id) : null;
-        if (!artifact) {
+        if (!artifact || artifact.tenantId !== tenantId) {
           json(res, 404, { error: "Artifact not found" });
           return;
         }
@@ -889,15 +1067,17 @@ export function createTfServiceServer(options = {}) {
 
       if (req.method === "GET" && pathname === "/v1/metrics") {
         json(res, 200, {
+          tenantId,
           cache: cacheStats,
           stores: {
-            documents: documentStore.size,
-            builds: buildStore.size,
-            assets: assetStore.size,
-            artifacts: artifactStore.size,
+            documents: countTenantInStore(documentStore, tenantId),
+            builds: countTenantInStore(buildStore, tenantId),
+            assets: countTenantInStore(assetStore, tenantId),
+            artifacts: countTenantInStore(artifactStore, tenantId),
             buildCache: buildCache.size,
             meshCache: meshCache.size,
             exportCache: exportCache.size,
+            pendingJobs: countPendingJobsForTenant(tenantId),
           },
         });
         return;

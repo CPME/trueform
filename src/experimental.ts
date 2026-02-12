@@ -27,3 +27,13 @@ export {
   LocalOcctTransport,
   type LocalOcctTransportOptions,
 } from "./backend_occt_native_local.js";
+
+export {
+  TfServiceClient,
+  type JobState as ServiceClientJobState,
+  type PollJobOptions,
+  type ServiceJob,
+  type ServiceJobAccepted,
+  type StreamJobOptions,
+  type TfServiceClientOptions,
+} from "./service_client.js";

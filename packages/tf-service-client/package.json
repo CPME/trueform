@@ -1,0 +1,9 @@
+{
+  "name": "@trueform/service-client",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "source": "../../src/service_client.ts",
+  "main": "../../dist/service_client.js",
+  "types": "../../dist/service_client.d.ts"
+}
