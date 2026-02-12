@@ -20,15 +20,15 @@ plus ecosystem tools that generate downstream assets.
 
 ```mermaid
 flowchart LR
-  DSL[DSL Authoring] --> Compile[Compile: Normalize + Validate];
-  Compile --> IR[Canonical IR (JSON)];
-  IR --> Execute[Execute: Backend Build + Resolve];
-  Execute --> OCCTJS[OpenCascade.js Backend];
-  Execute --> OCCTNative[Native OCCT Backend];
-  OCCTJS --> Meshes[Meshes + View Data];
-  OCCTNative --> STEP[STEP/AP242 Export];
-  STEP --> PMI[PMI Sidecar or Embedded PMI];
-  Meshes --> Viewer[Web Viewer];
+  DSL["DSL Authoring"] --> Compile["Compile: Normalize + Validate"]
+  Compile --> IR["Canonical IR JSON"]
+  IR --> Execute["Execute: Backend Build + Resolve"]
+  Execute --> OCCTJS["OpenCascade.js Backend"]
+  Execute --> OCCTNative["Native OCCT Backend"]
+  OCCTJS --> Meshes["Meshes + View Data"]
+  OCCTNative --> STEP["STEP/AP242 Export"]
+  STEP --> PMI["PMI Sidecar or Embedded PMI"]
+  Meshes --> Viewer["Web Viewer"]
 ```
 
 ## Status
