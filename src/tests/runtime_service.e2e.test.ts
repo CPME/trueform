@@ -14,6 +14,7 @@ type RuntimeServer = {
 
 type JobRecord = {
   id: string;
+  jobId: string;
   state: string;
   result: any;
   error: { code?: string; message?: string } | null;
@@ -248,6 +249,32 @@ const tests = [
       const runtime = await startRuntimeServer();
       try {
         const observedStates = new Set<string>();
+        const capabilities = await fetchJson<{
+          apiVersion?: string;
+          optionalFeatures?: {
+            partialBuild?: { endpoint?: boolean; execution?: string };
+            assembly?: { solve?: boolean };
+            bom?: { derive?: boolean };
+            release?: { preflight?: boolean };
+          };
+        }>(`${runtime.baseUrl}/v1/capabilities`);
+        assert.equal(capabilities.apiVersion, "1.2");
+        assert.equal(capabilities.optionalFeatures?.partialBuild?.endpoint, true);
+        assert.equal(
+          capabilities.optionalFeatures?.partialBuild?.execution,
+          "hinted_full_rebuild"
+        );
+        assert.equal(capabilities.optionalFeatures?.assembly?.solve, false);
+        assert.equal(capabilities.optionalFeatures?.bom?.derive, false);
+        assert.equal(capabilities.optionalFeatures?.release?.preflight, false);
+        const openapi = await fetchJson<{
+          openapi?: string;
+          info?: { version?: string };
+          paths?: Record<string, unknown>;
+        }>(`${runtime.baseUrl}/v1/openapi.json`);
+        assert.equal(openapi.openapi, "3.1.0");
+        assert.equal(openapi.info?.version, "1.2");
+        assert.equal(typeof openapi.paths?.["/v1/build/partial"], "object");
 
         const { part, document } = makeRuntimeDoc();
 
@@ -288,7 +315,7 @@ const tests = [
           options: { meshProfile: "interactive" },
         };
 
-        const buildSubmit1 = await fetchJsonWithStatus<{ jobId: string; state: string }>(
+        const buildSubmit1 = await fetchJsonWithStatus<{ id: string; jobId: string; state: string }>(
           `${runtime.baseUrl}/v1/build`,
           202,
           {
@@ -297,17 +324,19 @@ const tests = [
             body: JSON.stringify(buildPayload),
           }
         );
+        assert.equal(buildSubmit1.id, buildSubmit1.jobId);
         observedStates.add(buildSubmit1.state);
 
         const buildJob1 = await pollJob(runtime.baseUrl, buildSubmit1.jobId);
         observedStates.add(buildJob1.state);
+        assert.equal(buildJob1.id, buildJob1.jobId);
         assert.equal(buildJob1.state, "succeeded");
         assert.equal(buildJob1.result?.docId, docCreate.docId);
         assert.equal(buildJob1.result?.cache?.partBuild?.hit, false);
         const partBuildKey1 = String(buildJob1.result?.keys?.partBuildKey ?? "");
         assert.ok(partBuildKey1.length > 0, "Missing partBuildKey in first build");
 
-        const buildSubmit2 = await fetchJsonWithStatus<{ jobId: string; state: string }>(
+        const buildSubmit2 = await fetchJsonWithStatus<{ id: string; jobId: string; state: string }>(
           `${runtime.baseUrl}/v1/jobs/build`,
           202,
           {
@@ -316,6 +345,7 @@ const tests = [
             body: JSON.stringify(buildPayload),
           }
         );
+        assert.equal(buildSubmit2.id, buildSubmit2.jobId);
         observedStates.add(buildSubmit2.state);
 
         const buildJob2 = await pollJob(runtime.baseUrl, buildSubmit2.jobId);
@@ -323,11 +353,44 @@ const tests = [
         assert.equal(buildJob2.state, "succeeded");
         assert.equal(buildJob2.result?.cache?.partBuild?.hit, true);
         assert.equal(String(buildJob2.result?.keys?.partBuildKey ?? ""), partBuildKey1);
+        assert.equal(buildJob2.id, buildJob2.jobId);
+
+        const partialBuildSubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(`${runtime.baseUrl}/v1/build/partial`, 202, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            ...buildPayload,
+            partial: {
+              changedFeatureIds: ["cylinder"],
+              selectorHints: { "body:main": { kind: "solid" } },
+            },
+          }),
+        });
+        assert.equal(partialBuildSubmit.id, partialBuildSubmit.jobId);
+        const partialBuildJob = await pollJob(runtime.baseUrl, partialBuildSubmit.jobId);
+        observedStates.add(partialBuildJob.state);
+        assert.equal(partialBuildJob.state, "succeeded");
+        assert.equal(
+          partialBuildJob.result?.diagnostics?.partialBuild?.buildMode,
+          "hinted_full_rebuild"
+        );
+        assert.deepEqual(
+          partialBuildJob.result?.diagnostics?.partialBuild?.requestedChangedFeatureIds,
+          ["cylinder"]
+        );
 
         const buildId = String(buildJob1.result?.buildId ?? "");
         assert.ok(buildId.length > 0, "Missing buildId from build result");
 
-        const meshInteractiveSubmit = await fetchJsonWithStatus<{ jobId: string; state: string }>(
+        const meshInteractiveSubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(
           `${runtime.baseUrl}/v1/mesh`,
           202,
           {
@@ -336,9 +399,14 @@ const tests = [
             body: JSON.stringify({ buildId, profile: "interactive" }),
           }
         );
+        assert.equal(meshInteractiveSubmit.id, meshInteractiveSubmit.jobId);
         observedStates.add(meshInteractiveSubmit.state);
 
-        const meshPreviewSubmit = await fetchJsonWithStatus<{ jobId: string; state: string }>(
+        const meshPreviewSubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(
           `${runtime.baseUrl}/v1/jobs/mesh`,
           202,
           {
@@ -347,9 +415,14 @@ const tests = [
             body: JSON.stringify({ buildId, profile: "preview" }),
           }
         );
+        assert.equal(meshPreviewSubmit.id, meshPreviewSubmit.jobId);
         observedStates.add(meshPreviewSubmit.state);
 
-        const meshExportSubmit = await fetchJsonWithStatus<{ jobId: string; state: string }>(
+        const meshExportSubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(
           `${runtime.baseUrl}/v1/jobs/mesh`,
           202,
           {
@@ -358,6 +431,7 @@ const tests = [
             body: JSON.stringify({ buildId, profile: "export" }),
           }
         );
+        assert.equal(meshExportSubmit.id, meshExportSubmit.jobId);
         observedStates.add(meshExportSubmit.state);
 
         const meshInteractiveJob = await pollJob(runtime.baseUrl, meshInteractiveSubmit.jobId);
@@ -409,7 +483,11 @@ const tests = [
         );
         assert.equal(String(previewArtifact.partBuildKey ?? ""), partBuildKey1);
 
-        const exportSubmit1 = await fetchJsonWithStatus<{ jobId: string; state: string }>(
+        const exportSubmit1 = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(
           `${runtime.baseUrl}/v1/export/step`,
           202,
           {
@@ -418,6 +496,7 @@ const tests = [
             body: JSON.stringify({ buildId, options: { schema: "AP242" } }),
           }
         );
+        assert.equal(exportSubmit1.id, exportSubmit1.jobId);
         observedStates.add(exportSubmit1.state);
 
         const exportJob1 = await pollJob(runtime.baseUrl, exportSubmit1.jobId);
@@ -425,7 +504,11 @@ const tests = [
         assert.equal(exportJob1.state, "succeeded");
         assert.equal(exportJob1.result?.cache?.export?.hit, false);
 
-        const exportSubmit2 = await fetchJsonWithStatus<{ jobId: string; state: string }>(
+        const exportSubmit2 = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(
           `${runtime.baseUrl}/v1/jobs/export/step`,
           202,
           {
@@ -434,6 +517,7 @@ const tests = [
             body: JSON.stringify({ buildId, options: { schema: "AP242" } }),
           }
         );
+        assert.equal(exportSubmit2.id, exportSubmit2.jobId);
         observedStates.add(exportSubmit2.state);
 
         const exportJob2 = await pollJob(runtime.baseUrl, exportSubmit2.jobId);
@@ -455,7 +539,11 @@ const tests = [
         );
         assert.equal(String(exportArtifact.partBuildKey ?? ""), partBuildKey1);
 
-        const timeoutSubmit = await fetchJsonWithStatus<{ jobId: string; state: string }>(
+        const timeoutSubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(
           `${runtime.baseUrl}/v1/build`,
           202,
           {
@@ -468,6 +556,7 @@ const tests = [
             }),
           }
         );
+        assert.equal(timeoutSubmit.id, timeoutSubmit.jobId);
         observedStates.add(timeoutSubmit.state);
 
         const timeoutJob = await pollJob(runtime.baseUrl, timeoutSubmit.jobId);
@@ -489,7 +578,11 @@ const tests = [
           },
         };
 
-        const longMeshSubmit1 = await fetchJsonWithStatus<{ jobId: string; state: string }>(
+        const longMeshSubmit1 = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(
           `${runtime.baseUrl}/v1/jobs/mesh`,
           202,
           {
@@ -498,9 +591,14 @@ const tests = [
             body: JSON.stringify(longMeshBody),
           }
         );
+        assert.equal(longMeshSubmit1.id, longMeshSubmit1.jobId);
         observedStates.add(longMeshSubmit1.state);
 
-        const longMeshSubmit2 = await fetchJsonWithStatus<{ jobId: string; state: string }>(
+        const longMeshSubmit2 = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(
           `${runtime.baseUrl}/v1/jobs/mesh`,
           202,
           {
@@ -509,6 +607,7 @@ const tests = [
             body: JSON.stringify(longMeshBody),
           }
         );
+        assert.equal(longMeshSubmit2.id, longMeshSubmit2.jobId);
         observedStates.add(longMeshSubmit2.state);
 
         const sawRunning =
@@ -563,7 +662,7 @@ const tests = [
           }
         );
 
-        const buildA = await fetchJsonWithStatus<{ jobId: string }>(
+        const buildA = await fetchJsonWithStatus<{ id: string; jobId: string }>(
           `${runtime.baseUrl}/v1/build`,
           202,
           {
@@ -576,6 +675,7 @@ const tests = [
             }),
           }
         );
+        assert.equal(buildA.id, buildA.jobId);
 
         const streamEventsPromise = collectJobStreamEvents(
           runtime.baseUrl,
@@ -622,7 +722,7 @@ const tests = [
           },
         };
 
-        const meshJobA1 = await fetchJsonWithStatus<{ jobId: string }>(
+        const meshJobA1 = await fetchJsonWithStatus<{ id: string; jobId: string }>(
           `${runtime.baseUrl}/v1/jobs/mesh`,
           202,
           {
@@ -631,6 +731,7 @@ const tests = [
             body: JSON.stringify(longMeshBody),
           }
         );
+        assert.equal(meshJobA1.id, meshJobA1.jobId);
         assert.ok(meshJobA1.jobId.length > 0);
 
         const quotaError = await fetchJsonWithStatus<{

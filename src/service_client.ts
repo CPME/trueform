@@ -1,23 +1,16 @@
-export type JobState = "queued" | "running" | "succeeded" | "failed" | "canceled";
+import {
+  TF_API_ENDPOINTS,
+  type RuntimeBuildRequest,
+  type RuntimeJobAccepted,
+  type RuntimeJobRecord,
+  type RuntimeJobState,
+} from "./api.js";
 
-export type ServiceJob<T = unknown> = {
-  id: string;
-  state: JobState;
-  progress: number;
-  createdAt: string;
-  updatedAt: string;
-  result: T | null;
-  error: {
-    code: string;
-    message: string;
-    details?: Record<string, unknown>;
-  } | null;
-};
+export type JobState = RuntimeJobState;
 
-export type ServiceJobAccepted = {
-  jobId: string;
-  state: JobState;
-};
+export type ServiceJob<T = unknown> = RuntimeJobRecord<T>;
+
+export type ServiceJobAccepted = RuntimeJobAccepted;
 
 export type PollJobOptions = {
   intervalMs?: number;
@@ -65,13 +58,13 @@ export class TfServiceClient {
   }
 
   async capabilities<T = unknown>(): Promise<T> {
-    return this.requestJson<T>({ method: "GET", path: "/v1/capabilities" });
+    return this.requestJson<T>({ method: "GET", path: TF_API_ENDPOINTS.capabilities });
   }
 
   async createDocument<T = unknown>(document: unknown): Promise<T> {
     return this.requestJson<T>({
       method: "POST",
-      path: "/v1/documents",
+      path: TF_API_ENDPOINTS.documents,
       body: { document },
     });
   }
@@ -79,22 +72,30 @@ export class TfServiceClient {
   async getDocument<T = unknown>(docId: string): Promise<T> {
     return this.requestJson<T>({
       method: "GET",
-      path: `/v1/documents/${encodeURIComponent(docId)}`,
+      path: `${TF_API_ENDPOINTS.documents}/${encodeURIComponent(docId)}`,
     });
   }
 
-  async build(payload: unknown): Promise<ServiceJobAccepted> {
+  async build(payload: RuntimeBuildRequest): Promise<ServiceJobAccepted> {
     return this.requestJson<ServiceJobAccepted>({
       method: "POST",
-      path: "/v1/build",
+      path: TF_API_ENDPOINTS.build,
       body: payload,
     });
   }
 
-  async buildJob(payload: unknown): Promise<ServiceJobAccepted> {
+  async buildJob(payload: RuntimeBuildRequest): Promise<ServiceJobAccepted> {
     return this.requestJson<ServiceJobAccepted>({
       method: "POST",
-      path: "/v1/jobs/build",
+      path: TF_API_ENDPOINTS.buildJobs,
+      body: payload,
+    });
+  }
+
+  async buildPartial(payload: RuntimeBuildRequest): Promise<ServiceJobAccepted> {
+    return this.requestJson<ServiceJobAccepted>({
+      method: "POST",
+      path: TF_API_ENDPOINTS.buildPartial,
       body: payload,
     });
   }
@@ -102,7 +103,7 @@ export class TfServiceClient {
   async mesh(payload: unknown): Promise<ServiceJobAccepted> {
     return this.requestJson<ServiceJobAccepted>({
       method: "POST",
-      path: "/v1/mesh",
+      path: TF_API_ENDPOINTS.mesh,
       body: payload,
     });
   }
@@ -110,7 +111,7 @@ export class TfServiceClient {
   async exportStep(payload: unknown): Promise<ServiceJobAccepted> {
     return this.requestJson<ServiceJobAccepted>({
       method: "POST",
-      path: "/v1/export/step",
+      path: TF_API_ENDPOINTS.exportStep,
       body: payload,
     });
   }
@@ -118,23 +119,26 @@ export class TfServiceClient {
   async exportStl(payload: unknown): Promise<ServiceJobAccepted> {
     return this.requestJson<ServiceJobAccepted>({
       method: "POST",
-      path: "/v1/export/stl",
+      path: TF_API_ENDPOINTS.exportStl,
       body: payload,
     });
   }
 
   async getJob<T = unknown>(jobId: string): Promise<ServiceJob<T>> {
-    return this.requestJson<ServiceJob<T>>({
+    const job = await this.requestJson<ServiceJob<T>>({
       method: "GET",
-      path: `/v1/jobs/${encodeURIComponent(jobId)}`,
+      path: `${TF_API_ENDPOINTS.jobs}/${encodeURIComponent(jobId)}`,
     });
+    return normalizeServiceJob(job);
   }
 
   async cancelJob<T = unknown>(jobId: string): Promise<ServiceJob<T> | Record<string, unknown>> {
-    return this.requestJson<ServiceJob<T> | Record<string, unknown>>({
+    const payload = await this.requestJson<ServiceJob<T> | Record<string, unknown>>({
       method: "DELETE",
-      path: `/v1/jobs/${encodeURIComponent(jobId)}`,
+      path: `${TF_API_ENDPOINTS.jobs}/${encodeURIComponent(jobId)}`,
     });
+    if (isJobLike(payload)) return normalizeServiceJob(payload);
+    return payload;
   }
 
   async pollJob<T = unknown>(jobId: string, options: PollJobOptions = {}): Promise<ServiceJob<T>> {
@@ -158,7 +162,7 @@ export class TfServiceClient {
   ): AsyncGenerator<StreamJobEvent<T>, void, void> {
     const response = await this.requestRaw({
       method: "GET",
-      path: `/v1/jobs/${encodeURIComponent(jobId)}/stream`,
+      path: `${TF_API_ENDPOINTS.jobs}/${encodeURIComponent(jobId)}/stream`,
       signal: options.signal,
     });
     if (!response.ok) {
@@ -210,12 +214,12 @@ export class TfServiceClient {
   async getArtifact<T = unknown>(artifactId: string): Promise<T> {
     return this.requestJson<T>({
       method: "GET",
-      path: `/v1/artifacts/${encodeURIComponent(artifactId)}`,
+      path: `${TF_API_ENDPOINTS.artifacts}/${encodeURIComponent(artifactId)}`,
     });
   }
 
   async metrics<T = unknown>(): Promise<T> {
-    return this.requestJson<T>({ method: "GET", path: "/v1/metrics" });
+    return this.requestJson<T>({ method: "GET", path: TF_API_ENDPOINTS.metrics });
   }
 
   private async requestJson<T>(req: {
@@ -283,10 +287,37 @@ function parseSseChunk<T>(chunk: string): StreamJobEvent<T> | null {
   }
   if (dataLines.length === 0) return null;
   const dataText = dataLines.join("\n");
-  const data = JSON.parse(dataText) as ServiceJob<T>;
+  const data = normalizeServiceJob(JSON.parse(dataText) as ServiceJob<T>);
   return { event, data };
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isJobLike(
+  value: unknown
+): value is Partial<ServiceJob<unknown>> & { state: unknown; id?: unknown; jobId?: unknown } {
+  if (!value || typeof value !== "object") return false;
+  return "state" in value && ("id" in value || "jobId" in value);
+}
+
+function normalizeServiceJob<T>(
+  job: Partial<ServiceJob<T>> & { id?: unknown; jobId?: unknown }
+): ServiceJob<T> {
+  const id = String((job as { id?: unknown }).id ?? (job as { jobId?: unknown }).jobId ?? "");
+  const jobId = String(
+    (job as { jobId?: unknown }).jobId ?? (job as { id?: unknown }).id ?? ""
+  );
+  return {
+    ...job,
+    state: (job.state as JobState | undefined) ?? "queued",
+    progress: typeof job.progress === "number" ? job.progress : 0,
+    createdAt: String(job.createdAt ?? ""),
+    updatedAt: String(job.updatedAt ?? ""),
+    result: (job.result as T | null | undefined) ?? null,
+    error: (job.error as ServiceJob<T>["error"] | undefined) ?? null,
+    id,
+    jobId,
+  };
 }

@@ -8,11 +8,16 @@ import {
   buildPartCacheKey,
   meshOptionsForProfile,
 } from "../../dist/index.js";
+import {
+  TF_API_ENDPOINTS,
+  TF_RUNTIME_OPTIONAL_FEATURES,
+  TF_API_VERSION,
+  TF_RUNTIME_OPENAPI,
+} from "../../dist/api.js";
 import { OcctBackend } from "../../dist/backends.js";
 import { backendToAsync } from "../../dist/backend-spi.js";
 import { InMemoryJobQueue } from "../../dist/experimental.js";
 
-const API_VERSION = "1.1";
 const DEFAULT_PORT = Number(process.env.TF_RUNTIME_PORT || process.env.PORT || 8080);
 const DEFAULT_JOB_TIMEOUT_MS = Number(process.env.TF_RUNTIME_JOB_TIMEOUT_MS || 30000);
 const BUILD_CACHE_MAX = Number(process.env.TF_RUNTIME_BUILD_CACHE_MAX || 32);
@@ -262,6 +267,49 @@ export function createTfServiceServer(options = {}) {
       if (selection.kind === "solid") solids.push(selection.id);
     }
     return { faces, edges, solids };
+  }
+
+  function normalizePartialBuildHints(request) {
+    const partial = request?.partial && typeof request.partial === "object" ? request.partial : {};
+    const changedFeatureSource = Array.isArray(partial.changedFeatureIds)
+      ? partial.changedFeatureIds
+      : Array.isArray(request?.changedFeatureIds)
+        ? request.changedFeatureIds
+        : [];
+    const changedFeatureIds = Array.from(
+      new Set(
+        changedFeatureSource
+          .filter((id) => typeof id === "string")
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0)
+      )
+    );
+    const selectorHints =
+      partial.selectorHints && typeof partial.selectorHints === "object"
+        ? partial.selectorHints
+        : request?.selectorHints && typeof request.selectorHints === "object"
+          ? request.selectorHints
+          : {};
+    const selectorHintKeys = Object.keys(selectorHints).sort();
+    const requested = changedFeatureIds.length > 0 || selectorHintKeys.length > 0;
+    return {
+      requested,
+      changedFeatureIds,
+      selectorHintKeys,
+    };
+  }
+
+  function extractFeatureIdFromError(err) {
+    if (err && typeof err === "object") {
+      if (typeof err.featureId === "string" && err.featureId.length > 0) return err.featureId;
+      if (err.details && typeof err.details === "object") {
+        const featureId = err.details.featureId;
+        if (typeof featureId === "string" && featureId.length > 0) return featureId;
+      }
+    }
+    const message = err instanceof Error ? err.message : String(err ?? "");
+    const match = message.match(/feature(?:Id)?\s*[:= ]\s*([A-Za-z0-9._:-]+)/i);
+    return match ? match[1] : null;
   }
 
   function computeBounds(positions) {
@@ -582,6 +630,7 @@ export function createTfServiceServer(options = {}) {
     const { part, document, docId } = resolvePart(tenantId, request);
     const overrides = request?.params ?? undefined;
     const units = request?.units;
+    const partialHints = normalizePartialBuildHints(request);
     const validationMode = request?.options?.validationMode;
     const validation =
       validationMode && validationMode !== "default"
@@ -611,7 +660,17 @@ export function createTfServiceServer(options = {}) {
       recordCacheEvent("partBuild", false, partBuildKey?.value);
       ctx?.updateProgress(0.05);
       const backend = await getBackendAsync();
-      buildResult = await buildPartAsync(part, backend, overrides, validation, units);
+      try {
+        buildResult = await buildPartAsync(part, backend, overrides, validation, units);
+      } catch (err) {
+        if (!partialHints.requested) throw err;
+        const message = err instanceof Error ? err.message : String(err);
+        throw new HttpError(400, "build_failed", message, {
+          featureId: extractFeatureIdFromError(err) ?? partialHints.changedFeatureIds[0] ?? null,
+          changedFeatureIds: partialHints.changedFeatureIds,
+          selectorHintKeys: partialHints.selectorHintKeys,
+        });
+      }
       if (partBuildKey) {
         cacheSet(buildCache, partBuildKey.value, { result: buildResult }, BUILD_CACHE_MAX);
       }
@@ -682,6 +741,13 @@ export function createTfServiceServer(options = {}) {
       selections: buildSelectionIndex(buildResult.final.selections),
       mesh: meshAsset,
       metadata: bounds ? { bounds, triangleCount } : { triangleCount },
+      diagnostics: {
+        partialBuild: {
+          buildMode: partialHints.requested ? "hinted_full_rebuild" : "full",
+          requestedChangedFeatureIds: partialHints.changedFeatureIds,
+          selectorHintKeys: partialHints.selectorHintKeys,
+        },
+      },
       keys: {
         partBuildKey: partBuildKey?.value ?? null,
         meshKey: meshKey?.value ?? null,
@@ -849,6 +915,26 @@ export function createTfServiceServer(options = {}) {
     }
   }
 
+  function toJobRecordEnvelope(record) {
+    if (!record || typeof record !== "object") return record;
+    const id = String(record.id ?? record.jobId ?? "");
+    const jobId = String(record.jobId ?? record.id ?? "");
+    return {
+      ...record,
+      id,
+      jobId,
+    };
+  }
+
+  function toJobAccepted(record) {
+    const job = toJobRecordEnvelope(record);
+    return {
+      id: job.id,
+      jobId: job.jobId,
+      state: job.state,
+    };
+  }
+
   function writeSse(res, event, payload) {
     res.write(`event: ${event}\n`);
     res.write(`data: ${JSON.stringify(payload)}\n\n`);
@@ -875,12 +961,12 @@ export function createTfServiceServer(options = {}) {
     const tenantId = getTenantId(req, url);
 
     try {
-      if (req.method === "GET" && pathname === "/v1/capabilities") {
+      if (req.method === "GET" && pathname === TF_API_ENDPOINTS.capabilities) {
         await getBackendAsync();
         const caps = backendSync?.capabilities?.() ?? {};
         const backendFingerprint = await getBackendFingerprint();
         json(res, 200, {
-          apiVersion: API_VERSION,
+          apiVersion: TF_API_VERSION,
           tenantId,
           backend: caps.name ?? "opencascade.js",
           backendFingerprint,
@@ -894,11 +980,24 @@ export function createTfServiceServer(options = {}) {
             maxAssetsPerTenant: MAX_ASSETS_PER_TENANT,
             maxPendingJobsPerTenant: MAX_PENDING_JOBS_PER_TENANT,
           },
+          optionalFeatures: TF_RUNTIME_OPTIONAL_FEATURES,
         });
         return;
       }
 
-      if (req.method === "POST" && pathname === "/v1/documents") {
+      if (req.method === "GET" && pathname === TF_API_ENDPOINTS.openapi) {
+        const openapi = {
+          ...TF_RUNTIME_OPENAPI,
+          info: {
+            ...TF_RUNTIME_OPENAPI.info,
+            version: TF_API_VERSION,
+          },
+        };
+        json(res, 200, openapi);
+        return;
+      }
+
+      if (req.method === "POST" && pathname === TF_API_ENDPOINTS.documents) {
         const payload = await readJson(req);
         const document = payload?.document ?? payload;
         if (!document || !Array.isArray(document.parts)) {
@@ -917,7 +1016,7 @@ export function createTfServiceServer(options = {}) {
         return;
       }
 
-      if (req.method === "GET" && pathname.startsWith("/v1/documents/")) {
+      if (req.method === "GET" && pathname.startsWith(`${TF_API_ENDPOINTS.documents}/`)) {
         const docId = pathname.split("/").pop();
         const stored = docId ? documentStore.get(tenantScopedKey(tenantId, docId)) : null;
         if (!stored) {
@@ -935,31 +1034,43 @@ export function createTfServiceServer(options = {}) {
         return;
       }
 
-      if (req.method === "POST" && (pathname === "/v1/build" || pathname === "/v1/jobs/build")) {
+      if (
+        req.method === "POST" &&
+        (pathname === TF_API_ENDPOINTS.build ||
+          pathname === TF_API_ENDPOINTS.buildJobs ||
+          pathname === TF_API_ENDPOINTS.buildPartial ||
+          pathname === TF_API_ENDPOINTS.buildPartialJobs)
+      ) {
         const payload = await readJson(req);
         const job = await enqueueBuild(tenantId, payload);
-        json(res, 202, { jobId: job.id, state: job.state });
+        json(res, 202, toJobAccepted(job));
         return;
       }
 
-      if (req.method === "POST" && (pathname === "/v1/mesh" || pathname === "/v1/jobs/mesh")) {
+      if (req.method === "POST" && (pathname === TF_API_ENDPOINTS.mesh || pathname === TF_API_ENDPOINTS.meshJobs)) {
         const payload = await readJson(req);
         const job = await enqueueMesh(tenantId, payload);
-        json(res, 202, { jobId: job.id, state: job.state });
+        json(res, 202, toJobAccepted(job));
         return;
       }
 
-      if (req.method === "POST" && (pathname === "/v1/export/step" || pathname === "/v1/jobs/export/step")) {
+      if (
+        req.method === "POST" &&
+        (pathname === TF_API_ENDPOINTS.exportStep || pathname === TF_API_ENDPOINTS.exportStepJobs)
+      ) {
         const payload = await readJson(req);
         const job = await enqueueExport(tenantId, payload, "step");
-        json(res, 202, { jobId: job.id, state: job.state });
+        json(res, 202, toJobAccepted(job));
         return;
       }
 
-      if (req.method === "POST" && (pathname === "/v1/export/stl" || pathname === "/v1/jobs/export/stl")) {
+      if (
+        req.method === "POST" &&
+        (pathname === TF_API_ENDPOINTS.exportStl || pathname === TF_API_ENDPOINTS.exportStlJobs)
+      ) {
         const payload = await readJson(req);
         const job = await enqueueExport(tenantId, payload, "stl");
-        json(res, 202, { jobId: job.id, state: job.state });
+        json(res, 202, toJobAccepted(job));
         return;
       }
 
@@ -982,21 +1093,21 @@ export function createTfServiceServer(options = {}) {
           connection: "keep-alive",
           "access-control-allow-origin": "*",
         });
-        writeSse(res, "job", job);
+        writeSse(res, "job", toJobRecordEnvelope(job));
         let lastUpdatedAt = job.updatedAt;
         const timer = setInterval(() => {
           const current = jobQueue.get(jobId);
           if (!current) return;
           if (current.updatedAt !== lastUpdatedAt) {
             lastUpdatedAt = current.updatedAt;
-            writeSse(res, "job", current);
+            writeSse(res, "job", toJobRecordEnvelope(current));
           }
           if (
             current.state === "succeeded" ||
             current.state === "failed" ||
             current.state === "canceled"
           ) {
-            writeSse(res, "end", current);
+            writeSse(res, "end", toJobRecordEnvelope(current));
             clearInterval(timer);
             res.end();
           }
@@ -1015,7 +1126,7 @@ export function createTfServiceServer(options = {}) {
           json(res, 404, { error: "Job not found" });
           return;
         }
-        json(res, 200, job);
+        json(res, 200, toJobRecordEnvelope(job));
         return;
       }
 
@@ -1028,7 +1139,22 @@ export function createTfServiceServer(options = {}) {
           json(res, 404, { error: "Job not found" });
           return;
         }
-        json(res, 200, job ?? { jobId, state: canceled ? "canceled" : "unknown" });
+        json(
+          res,
+          200,
+          toJobRecordEnvelope(
+            job ?? {
+              id: jobId,
+              jobId,
+              state: canceled ? "canceled" : "unknown",
+              progress: canceled ? 1 : 0,
+              createdAt: "",
+              updatedAt: "",
+              result: null,
+              error: null,
+            }
+          )
+        );
         return;
       }
 

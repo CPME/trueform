@@ -27,6 +27,7 @@ Job states:
 Common job response shape:
 ```json
 {
+  "id": "job_123",
   "jobId": "job_123",
   "state": "running",
   "progress": 0.42,
@@ -52,17 +53,29 @@ Error shape:
 Response:
 ```json
 {
-  "apiVersion": "1.0",
+  "apiVersion": "1.2",
   "backend": "opencascade.js",
   "featureKinds": ["feature.extrude", "feature.loft"],
   "exports": { "step": true, "stl": true },
   "mesh": true,
-  "assertions": ["assert.brepValid"]
+  "assertions": ["assert.brepValid"],
+  "optionalFeatures": {
+    "partialBuild": {
+      "endpoint": true,
+      "execution": "hinted_full_rebuild"
+    },
+    "buildSessions": { "enabled": false },
+    "assembly": { "solve": false, "preview": false, "validate": false },
+    "bom": { "derive": false },
+    "release": { "preflight": false, "bundle": false },
+    "pmi": { "stepAp242": false, "supportMatrix": false }
+  }
 }
 ```
 
 ## Build
 `POST /v1/build`
+`POST /v1/build/partial`
 
 Request:
 ```json
@@ -71,6 +84,10 @@ Request:
   "document": { /* DocumentIR or PartIR */ },
   "params": { "thickness": 6 },
   "units": "mm",
+  "partial": {
+    "changedFeatureIds": ["extrude-1"],
+    "selectorHints": { "body:main": { "kind": "solid" } }
+  },
   "options": {
     "validationMode": "default",
     "meshProfile": "interactive"
@@ -81,6 +98,7 @@ Request:
 Response:
 ```json
 {
+  "id": "job_123",
   "jobId": "job_123",
   "state": "queued"
 }
@@ -89,6 +107,7 @@ Response:
 Job result (`GET /v1/jobs/:id`):
 ```json
 {
+  "id": "job_123",
   "jobId": "job_123",
   "state": "succeeded",
   "result": {
@@ -136,6 +155,7 @@ Request:
 Response:
 ```json
 {
+  "id": "job_124",
   "jobId": "job_124",
   "state": "queued"
 }
@@ -158,7 +178,7 @@ Request:
 
 Response:
 ```json
-{ "jobId": "job_200", "state": "queued" }
+{ "id": "job_200", "jobId": "job_200", "state": "queued" }
 ```
 
 Job result returns `asset.url` for the binary export.
@@ -198,6 +218,11 @@ Selection metadata is exposed to the client only for selectors and debug overlay
 - Server-sent events (SSE) or chunked JSON lines.
 - Used for progressive mesh updates and progress reporting.
 
+## OpenAPI
+`GET /v1/openapi.json`
+
+- Returns the OpenAPI 3.1 contract for `/v1` endpoints.
+
 ## Multi-Tenant Considerations
 - Job requests include tenant/user context from auth.
 - Enforce quotas on CPU time, memory, and storage per tenant.
@@ -207,4 +232,3 @@ Selection metadata is exposed to the client only for selectors and debug overlay
 - All endpoints can run in a single-process mode for local usage.
 - Asset storage can default to local disk for OSS deployments.
 - The contract remains stable for SaaS builders to extend.
-

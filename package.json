@@ -32,6 +32,10 @@
       "types": "./dist/experimental.d.ts",
       "default": "./dist/experimental.js"
     },
+    "./api": {
+      "types": "./dist/api.d.ts",
+      "default": "./dist/api.js"
+    },
     "./export": {
       "types": "./dist/export/index.d.ts",
       "default": "./dist/export/index.js"
