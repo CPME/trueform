@@ -13,6 +13,7 @@ Purpose: define the source of truth for each topic to prevent drift.
 - Packaging split timeline: `specs/packaging-split-timeline.md`
 - High-level overview + positioning: `specs/summary.md`
 - Functional tolerancing intent: `specs/functional-tolerancing-intent.md`
+- Feature maturity/staging registry: `specs/feature-staging.md`
 - Roadmap ideas (non-MVP): `specs/geometric-abstractions.md`
 
 ## Maintenance Rules

@@ -56,6 +56,16 @@ Response:
   "apiVersion": "1.2",
   "backend": "opencascade.js",
   "featureKinds": ["feature.extrude", "feature.loft"],
+  "featureStages": {
+    "feature.thread": {
+      "stage": "staging",
+      "notes": "Modelled thread output is still under active geometry tuning."
+    },
+    "feature.surface": {
+      "stage": "staging",
+      "notes": "Surface workflows are supported but still maturing for reliability."
+    }
+  },
   "exports": { "step": true, "stl": true },
   "mesh": true,
   "assertions": ["assert.brepValid"],
@@ -68,7 +78,8 @@ Response:
     "assembly": { "solve": false, "preview": false, "validate": false },
     "bom": { "derive": false },
     "release": { "preflight": false, "bundle": false },
-    "pmi": { "stepAp242": false, "supportMatrix": false }
+    "pmi": { "stepAp242": false, "supportMatrix": false },
+    "featureStaging": { "registry": true }
   }
 }
 ```
@@ -90,6 +101,7 @@ Request:
   },
   "options": {
     "validationMode": "default",
+    "stagedFeatures": "error",
     "meshProfile": "interactive"
   }
 }

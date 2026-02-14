@@ -62,6 +62,74 @@ const tests = [
     },
   },
   {
+    name: "validation: staged features can be blocked",
+    fn: async () => {
+      const part = dsl.part("staged-thread", [
+        dsl.thread("thread-1", "+Z", 10, 8, 1.5, "body:main"),
+      ]);
+      assert.throws(
+        () => normalizePart(part, undefined, { stagedFeatures: "error" }),
+        /staging feature/i
+      );
+    },
+  },
+  {
+    name: "validation: staged features can warn without blocking",
+    fn: async () => {
+      const part = dsl.part("staged-surface", [
+        dsl.extrude(
+          "surface-extrude",
+          dsl.profileCircle(4),
+          10,
+          "surface:main",
+          undefined,
+          { mode: "surface" }
+        ),
+      ]);
+
+      const originalWarn = console.warn;
+      const warnings: string[] = [];
+      console.warn = (message?: unknown) => warnings.push(String(message ?? ""));
+      try {
+        assert.doesNotThrow(() =>
+          normalizePart(part, undefined, { stagedFeatures: "warn" })
+        );
+      } finally {
+        console.warn = originalWarn;
+      }
+      assert.ok(
+        warnings.some((message) => message.includes("staging feature")),
+        "Expected staging warning to be emitted"
+      );
+    },
+  },
+  {
+    name: "validation: stable features pass when staged policy is error",
+    fn: async () => {
+      const part = dsl.part("stable-only", [
+        dsl.extrude("base", dsl.profileRect(2, 3), 5),
+      ]);
+      assert.doesNotThrow(() =>
+        normalizePart(part, undefined, { stagedFeatures: "error" })
+      );
+    },
+  },
+  {
+    name: "validation: unknown staged feature policy is rejected",
+    fn: async () => {
+      const part = dsl.part("stable-only", [
+        dsl.extrude("base", dsl.profileRect(2, 3), 5),
+      ]);
+      assert.throws(
+        () =>
+          normalizePart(part, undefined, {
+            stagedFeatures: "blocker" as "error",
+          }),
+        /Unsupported stagedFeatures policy/
+      );
+    },
+  },
+  {
     name: "validation: compilePart accepts IR part directly",
     fn: async () => {
       const part = {

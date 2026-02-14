@@ -15,6 +15,8 @@ Use explicit import paths by stability tier:
 
 Runtime guidance:
 - Treat `/v1/capabilities` as the source of truth for optional surface support (`optionalFeatures`), not route existence assumptions.
+- Treat `/v1/capabilities.featureStages` as the source of truth for staging/in-development feature maturity.
+- Use build/compile `ValidationOptions.stagedFeatures` (or runtime `options.stagedFeatures`) to allow, warn, or block staged features.
 
 ## Generate
 

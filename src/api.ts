@@ -1,3 +1,5 @@
+import { TF_STAGED_FEATURES } from "./feature_staging.js";
+
 export const TF_API_VERSION = "1.2";
 
 export const TF_API_ENDPOINTS = {
@@ -46,7 +48,12 @@ export const TF_RUNTIME_OPTIONAL_FEATURES = {
     stepAp242: false,
     supportMatrix: false,
   },
+  featureStaging: {
+    registry: true,
+  },
 } as const;
+
+export const TF_RUNTIME_FEATURE_STAGING = TF_STAGED_FEATURES;
 
 export type RuntimeJobState = "queued" | "running" | "succeeded" | "failed" | "canceled";
 
@@ -80,6 +87,7 @@ export type RuntimePartialBuildHints = {
 
 export type RuntimeBuildOptions = {
   validationMode?: "default" | "off" | "strict";
+  stagedFeatures?: "allow" | "warn" | "error";
   meshProfile?: "interactive" | "preview" | "export";
   prefetchPreview?: boolean;
   simulateDelayMs?: number;

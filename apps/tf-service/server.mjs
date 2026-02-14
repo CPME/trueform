@@ -11,6 +11,7 @@ import {
 import {
   TF_API_ENDPOINTS,
   TF_RUNTIME_OPTIONAL_FEATURES,
+  TF_RUNTIME_FEATURE_STAGING,
   TF_API_VERSION,
   TF_RUNTIME_OPENAPI,
 } from "../../dist/api.js";
@@ -87,6 +88,7 @@ export function createTfServiceServer(options = {}) {
         const source = {
           backend: caps?.name ?? "opencascade.js",
           featureKinds: [...(caps?.featureKinds ?? [])].sort(),
+          featureStages: caps?.featureStages ?? {},
           assertions: [...(caps?.assertions ?? [])].sort(),
           exports: caps?.exports ?? {},
           runtimeBackendVersion: process.env.TF_RUNTIME_BACKEND_VERSION ?? null,
@@ -632,10 +634,13 @@ export function createTfServiceServer(options = {}) {
     const units = request?.units;
     const partialHints = normalizePartialBuildHints(request);
     const validationMode = request?.options?.validationMode;
-    const validation =
-      validationMode && validationMode !== "default"
+    const stagedFeatures = request?.options?.stagedFeatures;
+    const validation = {
+      ...(validationMode && validationMode !== "default"
         ? { validate: validationMode }
-        : undefined;
+        : {}),
+      ...(stagedFeatures ? { stagedFeatures } : {}),
+    };
     const meshProfile = request?.options?.meshProfile ?? "interactive";
     const prefetchPreview = request?.options?.prefetchPreview !== false;
 
@@ -661,7 +666,13 @@ export function createTfServiceServer(options = {}) {
       ctx?.updateProgress(0.05);
       const backend = await getBackendAsync();
       try {
-        buildResult = await buildPartAsync(part, backend, overrides, validation, units);
+        buildResult = await buildPartAsync(
+          part,
+          backend,
+          overrides,
+          Object.keys(validation).length > 0 ? validation : undefined,
+          units
+        );
       } catch (err) {
         if (!partialHints.requested) throw err;
         const message = err instanceof Error ? err.message : String(err);
@@ -971,6 +982,7 @@ export function createTfServiceServer(options = {}) {
           backend: caps.name ?? "opencascade.js",
           backendFingerprint,
           featureKinds: caps.featureKinds ?? [],
+          featureStages: caps.featureStages ?? TF_RUNTIME_FEATURE_STAGING,
           exports: caps.exports ?? { step: true, stl: true },
           mesh: caps.mesh ?? true,
           assertions: caps.assertions ?? [],

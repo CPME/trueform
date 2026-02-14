@@ -31,6 +31,9 @@ Implemented part feature surface includes:
 - Solid/surface operations (`extrude`, `surface`, `revolve`, `loft`, `sweep`, `pipe`, `pipeSweep`, `hexTubeSweep`, `mirror`, `thicken`, `shell`, `thread`, `hole`, `fillet`, `chamfer`, `boolean`).
 - Pattern intent (`pattern.linear`, `pattern.circular`).
 
+Staging note:
+- `thread` and surface-oriented workflows are currently marked as `staging` in the runtime feature registry (`/v1/capabilities.featureStages`).
+
 Outputs are named and not limited to `body:main`; helpers default to `body:<id>` or `surface:<id>` depending on feature/mode.
 
 Assemblies, constraints, and assertions are represented in IR. Core deterministic compile remains part-centric in v1, and assembly solving/runtime helpers are exposed under `trueform/experimental`.

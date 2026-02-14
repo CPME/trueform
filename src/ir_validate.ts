@@ -53,7 +53,11 @@ import {
 import { CompileError } from "./errors.js";
 
 export type ValidationMode = "strict" | "none";
-export type ValidationOptions = { validate?: ValidationMode };
+export type StagedFeaturePolicy = "allow" | "warn" | "error";
+export type ValidationOptions = {
+  validate?: ValidationMode;
+  stagedFeatures?: StagedFeaturePolicy;
+};
 
 const AXIS_DIRECTIONS = new Set<AxisDirection>([
   "+X",

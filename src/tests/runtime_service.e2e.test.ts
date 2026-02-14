@@ -251,11 +251,13 @@ const tests = [
         const observedStates = new Set<string>();
         const capabilities = await fetchJson<{
           apiVersion?: string;
+          featureStages?: Record<string, { stage?: string; notes?: string }>;
           optionalFeatures?: {
             partialBuild?: { endpoint?: boolean; execution?: string };
             assembly?: { solve?: boolean };
             bom?: { derive?: boolean };
             release?: { preflight?: boolean };
+            featureStaging?: { registry?: boolean };
           };
         }>(`${runtime.baseUrl}/v1/capabilities`);
         assert.equal(capabilities.apiVersion, "1.2");
@@ -267,6 +269,9 @@ const tests = [
         assert.equal(capabilities.optionalFeatures?.assembly?.solve, false);
         assert.equal(capabilities.optionalFeatures?.bom?.derive, false);
         assert.equal(capabilities.optionalFeatures?.release?.preflight, false);
+        assert.equal(capabilities.optionalFeatures?.featureStaging?.registry, true);
+        assert.equal(capabilities.featureStages?.["feature.thread"]?.stage, "staging");
+        assert.equal(capabilities.featureStages?.["feature.surface"]?.stage, "staging");
         const openapi = await fetchJson<{
           openapi?: string;
           info?: { version?: string };
@@ -750,6 +755,48 @@ const tests = [
           "tenant-a"
         );
         assert.equal(meshJobA1Done.state, "succeeded");
+      } finally {
+        await runtime.stop();
+      }
+    },
+  },
+  {
+    name: "runtime service: staged feature policy can block builds",
+    fn: async () => {
+      const runtime = await startRuntimeServer();
+      try {
+        const stagedPart = dsl.part("runtime-staged-surface", [
+          dsl.extrude(
+            "surface-extrude",
+            dsl.profileCircle(6),
+            20,
+            "surface:main",
+            undefined,
+            { mode: "surface" }
+          ),
+          dsl.thicken("surface-thicken", dsl.selectorNamed("surface:main"), 1.5, "body:main"),
+        ]);
+
+        const blockedSubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(`${runtime.baseUrl}/v1/build`, 202, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            part: stagedPart,
+            options: {
+              stagedFeatures: "error",
+              meshProfile: "interactive",
+            },
+          }),
+        });
+        assert.equal(blockedSubmit.id, blockedSubmit.jobId);
+        const blockedJob = await pollJob(runtime.baseUrl, blockedSubmit.jobId);
+        assert.equal(blockedJob.state, "failed");
+        assert.equal(blockedJob.error?.code, "validation_staged_feature");
+
       } finally {
         await runtime.stop();
       }

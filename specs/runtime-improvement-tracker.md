@@ -23,6 +23,7 @@ Source: `/home/eveber/code/truecad/TRUEFORM_PROPOSALS.md`
     - `bom.derive: false`
     - `release.preflight/bundle: false`
     - `pmi.stepAp242/supportMatrix: false`
+    - `featureStaging.registry: true`
 
 ## Defer
 

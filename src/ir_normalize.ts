@@ -17,6 +17,9 @@ import {
 import { buildParamContext, normalizeScalar, ParamOverrides } from "./params.js";
 import { normalizeSelector } from "./selectors.js";
 import { shouldValidate, validatePart, type ValidationOptions } from "./ir_validate.js";
+import { getFeatureStage } from "./feature_staging.js";
+import { CompileError } from "./errors.js";
+
 export function normalizePart(
   part: IntentPart,
   overrides?: ParamOverrides,
@@ -36,11 +39,62 @@ export function normalizePart(
   }
   const ctx = buildParamContext(part.params, overrides, units ?? "mm");
   const features = part.features.map((feature) => normalizeFeature(feature, ctx));
+  enforceStagedFeaturePolicy(part.id, features, options);
   const connectors = part.connectors?.map((connector) => ({
     ...connector,
     origin: normalizeSelector(connector.origin),
   }));
   return { ...part, features, connectors };
+}
+
+function enforceStagedFeaturePolicy(
+  partId: string,
+  features: IntentFeature[],
+  options?: ValidationOptions
+): void {
+  const policy = options?.stagedFeatures ?? "allow";
+  if (policy !== "allow" && policy !== "warn" && policy !== "error") {
+    throw new CompileError(
+      "validation_staged_feature_policy",
+      `Unsupported stagedFeatures policy ${String(policy)}`
+    );
+  }
+  if (policy === "allow") return;
+
+  const staged = features
+    .map((feature) => ({
+      featureId: feature.id,
+      ...getFeatureStage(feature),
+    }))
+    .filter((entry) => entry.stage === "staging");
+  if (staged.length === 0) return;
+
+  const byKey = new Map<string, { featureIds: string[]; notes?: string }>();
+  for (const entry of staged) {
+    const bucket = byKey.get(entry.key) ?? { featureIds: [] as string[], notes: entry.notes };
+    bucket.featureIds.push(entry.featureId);
+    if (!bucket.notes && entry.notes) bucket.notes = entry.notes;
+    byKey.set(entry.key, bucket);
+  }
+
+  const details = [...byKey.entries()].map(([key, value]) => {
+    const ids = value.featureIds.join(", ");
+    const note = value.notes ? ` (${value.notes})` : "";
+    return `${key} [${ids}]${note}`;
+  });
+
+  if (policy === "warn") {
+    for (const line of details) {
+      console.warn(`TrueForm: Part ${partId} uses staging feature ${line}.`);
+    }
+    return;
+  }
+
+  throw new CompileError(
+    "validation_staged_feature",
+    `Part ${partId} uses staging feature(s): ${details.join("; ")}. ` +
+      `Set options.stagedFeatures to "warn" or "allow" to proceed.`
+  );
 }
 
 function normalizeFeature(
