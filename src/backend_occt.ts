@@ -5455,7 +5455,7 @@ export class OcctBackend implements Backend {
       if (faces.length > 0 && faces.length < 2) continue;
       if (faces.length >= 2) {
         const continuity = this.edgeContinuityValue(edge, faces[0], faces[1]);
-        if (continuity !== null && continuity > 0) {
+        if (!opts.includeTangentEdges && continuity !== null && continuity > 0) {
           continue;
         }
       }

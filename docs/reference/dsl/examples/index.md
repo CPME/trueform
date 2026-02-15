@@ -8,3 +8,4 @@ The examples below are rendered from OpenCascade.js output via `npm run docs:exa
 - [Sketch primitives](./sketches)
 - [Features](./features)
 - [Generators](./generators)
+- [Patterns vs Generators](./patterns-vs-generators)

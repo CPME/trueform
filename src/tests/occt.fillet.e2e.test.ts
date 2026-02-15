@@ -51,6 +51,46 @@ const tests = [
       );
     },
   },
+  {
+    name: "occt e2e: mesh can include tangent edges for fillet wireframe",
+    fn: async () => {
+      const { backend } = await getBackendContext();
+      const part = dsl.part("fillet-cylinder-wire", [
+        dsl.extrude("cyl", dsl.profileCircle(10), 20, "body:main"),
+        dsl.fillet(
+          "edge-fillet",
+          dsl.selectorEdge(
+            [dsl.predCreatedBy("cyl")],
+            [dsl.rankMaxZ()]
+          ),
+          2,
+          ["cyl"]
+        ),
+      ]);
+
+      const result = buildPart(part, backend);
+      const output = result.final.outputs.get("body:main");
+      assert.ok(output, "missing final body:main output");
+
+      const defaultMesh = backend.mesh(output, {
+        linearDeflection: 0.2,
+        angularDeflection: 0.2,
+        includeEdges: true,
+      });
+      const tangentMesh = backend.mesh(output, {
+        linearDeflection: 0.2,
+        angularDeflection: 0.2,
+        includeEdges: true,
+        includeTangentEdges: true,
+      });
+      const defaultEdges = defaultMesh.edgePositions?.length ?? 0;
+      const tangentEdges = tangentMesh.edgePositions?.length ?? 0;
+      assert.ok(
+        tangentEdges > defaultEdges,
+        `expected tangent edges to increase edge segments (default=${defaultEdges}, tangent=${tangentEdges})`
+      );
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

@@ -19,6 +19,7 @@ import {
   predNormal,
   pathPolyline,
   patternLinear,
+  pipe,
   profileCircle,
   profilePoly,
   profileRect,
@@ -37,7 +38,6 @@ import {
   sketchRectCorner,
   surface,
   thicken,
-  thread,
 } from "../dsl/geometry.js";
 import {
   datumFeature,
@@ -171,6 +171,13 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     },
   },
   {
+    id: "pipe",
+    title: "Pipe",
+    part: part("example-pipe", [
+      pipe("pipe-1", "+Z", 60, 24, 18, "body:main"),
+    ]),
+  },
+  {
     id: "hole",
     title: "Hole",
     part: part("example-hole", [
@@ -228,6 +235,11 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         ["cyl"]
       ),
     ]),
+    render: {
+      meshOpts: {
+        includeTangentEdges: true,
+      },
+    },
   },
   {
     id: "chamfer",
@@ -548,33 +560,62 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     id: "mirror",
     title: "Mirror",
     part: (() => {
-      const rect = sketchRectCenter("rect-1", [26, 0], 60, 10, {
-        rotation: Math.PI / 5,
-      });
-      const sketch = sketch2d(
-        "sketch-v",
-        [{ name: "profile:bar", profile: profileSketchLoop(["rect-1"]) }],
-        { entities: [rect] }
+      const planeRect = sketchRectCenter("plane-rect", [0, 0], 80, 52);
+      const planeSketch = sketch2d(
+        "sketch-mirror-plane",
+        [{ name: "profile:mirror-plane", profile: profileSketchLoop(["plane-rect"]) }],
+        { plane: planeDatum("mirror-plane"), entities: [planeRect] }
       );
       return part("example-mirror", [
-        sketch,
-        extrude("bar", profileRef("profile:bar"), 6, "body:base"),
         datumPlane("mirror-plane", "+X"),
+        planeSketch,
+        surface("mirror-plane-surface", profileRef("profile:mirror-plane"), "surface:mirror-plane"),
+        extrude("rib", profileRect(44, 12, [20, 0, 0]), 8, "body:rib"),
+        extrude("boss", profileCircle(10, [34, 12, 0]), 16, "body:boss"),
+        booleanOp(
+          "half-union",
+          "union",
+          selectorNamed("body:rib"),
+          selectorNamed("body:boss"),
+          "body:half"
+        ),
         mirror(
           "mirror-1",
-          selectorNamed("body:base"),
+          selectorNamed("body:half"),
           planeDatum("mirror-plane"),
           "body:mirror"
         ),
         booleanOp(
-          "union-1",
+          "union-2",
           "union",
-          selectorNamed("body:base"),
+          selectorNamed("body:half"),
           selectorNamed("body:mirror"),
           "body:main"
         ),
       ]);
     })(),
+    render: {
+      layers: [
+        {
+          output: "body:main",
+          color: [154, 192, 230],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [32, 40, 52],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+        {
+          output: "surface:mirror-plane",
+          color: [230, 140, 70],
+          alpha: 0.22,
+          wireframe: true,
+          wireColor: [156, 74, 22],
+          wireDepthTest: false,
+          depthTest: false,
+        },
+      ],
+    },
   },
   {
     id: "draft",
@@ -717,26 +758,11 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         {
           output: "body:main",
           color: [118, 170, 220],
-          alpha: 0.4,
+          alpha: 1,
           wireframe: false,
           depthTest: true,
         },
       ],
-    },
-  },
-  {
-    id: "thread",
-    title: "Thread",
-    part: part("example-thread", [
-      thread("thread-1", "+Z", 24, 22, 3.5, "body:main", undefined, {
-        segmentsPerTurn: 24,
-      }),
-    ]),
-    render: {
-      meshOpts: {
-        linearDeflection: 0.1,
-        angularDeflection: 0.2,
-      },
     },
   },
   {

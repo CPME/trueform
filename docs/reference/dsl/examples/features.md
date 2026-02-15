@@ -114,6 +114,8 @@ Notes:
 
 ## Pipe
 
+![Pipe example](/examples/dsl/pipe.iso.png)
+
 ```ts
 const examplePart = part("example-pipe", [
   pipe("pipe-1", "+Z", 60, 24, 18, "body:main"),
@@ -124,7 +126,7 @@ Notes:
 - `pipe` creates a straight cylindrical pipe/tube primitive on a cardinal axis.
 - Use `opts.origin` to place the primitive at an explicit origin.
 
-## Pipe Sweep
+## Sweeping Tube Profiles (Consolidated)
 
 ```ts
 const path = pathPolyline([
@@ -133,35 +135,19 @@ const path = pathPolyline([
   [20, 0, 36],
 ]);
 
-const examplePart = part("example-pipe-sweep", [
-  pipeSweep("pipe-sweep-1", path, 18, 12, "body:main"),
+const examplePart = part("example-tube-sweep", [
+  sweep(
+    "tube-sweep-1",
+    profileCircle(9),
+    path,
+    "body:main"
+  ),
 ]);
 ```
 
 Notes:
-- `pipeSweep` sweeps a circular tube profile along a path.
-- Use `{ mode: "surface" }` for a surface result (`surface:*`) when needed.
-
-## Hex Tube Sweep
-
-```ts
-const path = pathSpline(
-  [
-    [0, 0, 0],
-    [0, 12, 18],
-    [20, 10, 32],
-    [30, -4, 40],
-  ],
-  { degree: 3 }
-);
-
-const examplePart = part("example-hex-tube-sweep", [
-  hexTubeSweep("hex-1", path, 16, 10, "body:main"),
-]);
-```
-
-Notes:
-- `hexTubeSweep` is similar to `pipeSweep`, but uses hexagonal outer/inner sections specified by across-flats dimensions.
+- Prefer `sweep` + explicit profile (`profileCircle`, `profilePoly`, sketch profile) as the main path-sweep pattern.
+- `pipeSweep` and `hexTubeSweep` remain available as compatibility helpers.
 
 ## Shell
 
@@ -190,34 +176,46 @@ Notes:
 ![Mirror example](/examples/dsl/mirror.iso.png)
 
 ```ts
-const rect = sketchRectCenter("rect-1", [26, 0], 60, 10, {
-  rotation: Math.PI / 5,
-});
-const sketch = sketch2d(
-  "sketch-v",
-  [{ name: "profile:bar", profile: profileSketchLoop(["rect-1"]) }],
-  { entities: [rect] }
+const planeRect = sketchRectCenter("plane-rect", [0, 0], 80, 52);
+const planeSketch = sketch2d(
+  "sketch-mirror-plane",
+  [{ name: "profile:mirror-plane", profile: profileSketchLoop(["plane-rect"]) }],
+  { plane: planeDatum("mirror-plane"), entities: [planeRect] }
 );
 
 const examplePart = part("example-mirror", [
-  sketch,
-  extrude("bar", profileRef("profile:bar"), 6, "body:base"),
   datumPlane("mirror-plane", "+X"),
+  planeSketch,
+  surface("mirror-plane-surface", profileRef("profile:mirror-plane"), "surface:mirror-plane"),
+  extrude("rib", profileRect(44, 12, [20, 0, 0]), 8, "body:rib"),
+  extrude("boss", profileCircle(10, [34, 12, 0]), 16, "body:boss"),
+  booleanOp(
+    "half-union",
+    "union",
+    selectorNamed("body:rib"),
+    selectorNamed("body:boss"),
+    "body:half"
+  ),
   mirror(
     "mirror-1",
-    selectorNamed("body:base"),
+    selectorNamed("body:half"),
     planeDatum("mirror-plane"),
     "body:mirror"
   ),
   booleanOp(
-    "union-1",
+    "union-2",
     "union",
-    selectorNamed("body:base"),
+    selectorNamed("body:half"),
     selectorNamed("body:mirror"),
     "body:main"
   ),
 ]);
 ```
+
+Notes:
+- The mirrored source is intentionally asymmetric (`body:half`) so the mirrored
+  result is visually clear.
+- Rendering a thin surface on the datum plane makes the mirror plane visible in docs.
 
 ## Draft
 
@@ -279,22 +277,8 @@ Notes:
 - Use `{ direction: "reverse" }` to thicken opposite the face normal.
 - For thin-walled solids built from a closed solid, use `shell` instead.
 
-## Modelled Thread
-
-![Modelled thread example](/examples/dsl/thread.iso.png)
-
-```ts
-const examplePart = part("example-thread", [
-  thread("thread-1", "+Z", 24, 22, 3.5, "body:main", undefined, {
-    minorDiameter: 14,
-    segmentsPerTurn: 24,
-  }),
-]);
-```
-
-Notes:
-- Use `booleanOp(..., "subtract", ...)` with a thread solid to cut internal threads.
-- Prefer `cosmeticThread` unless you need explicit thread geometry.
+Modelled thread examples are currently kept in sandbox/staging workflows while
+geometry tuning continues. Use cosmetic thread callouts for production docs.
 
 ## Hole
 
@@ -365,6 +349,10 @@ const examplePart = part("example-fillet", [
   ),
 ]);
 ```
+
+Notes:
+- The docs renderer enables `mesh(..., { includeTangentEdges: true })` for this
+  example so smooth fillet transitions remain visible in wireframe.
 
 ## Chamfer
 

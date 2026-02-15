@@ -1,5 +1,8 @@
 # Generators DSL
 
+Generators are authoring-time helpers. They expand into explicit features/sketch
+entities before compile and do not appear as their own runtime IR feature kind.
+
 ## Generators
 
 - `featureArray(layout, make) -> IntentFeature[]`
@@ -22,3 +25,4 @@ Examples:
 - [Circular array](./examples/generators#circular-array)
 - [Radial array](./examples/generators#radial-array)
 - [Spline array](./examples/generators#spline-array)
+- [Pattern vs generator comparison](./examples/patterns-vs-generators)

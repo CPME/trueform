@@ -21,6 +21,11 @@
       "image": "/examples/dsl/sweep.iso.png"
     },
     {
+      "id": "pipe",
+      "title": "Pipe",
+      "image": "/examples/dsl/pipe.iso.png"
+    },
+    {
       "id": "hole",
       "title": "Hole",
       "image": "/examples/dsl/hole.iso.png"
@@ -44,6 +49,11 @@
       "id": "boolean",
       "title": "Boolean Union",
       "image": "/examples/dsl/boolean.iso.png"
+    },
+    {
+      "id": "pattern",
+      "title": "Pattern (Feature/Body)",
+      "image": "/examples/dsl/pattern.iso.png"
     },
     {
       "id": "feature-array",
@@ -76,6 +86,11 @@
       "image": "/examples/dsl/mirror.iso.png"
     },
     {
+      "id": "draft",
+      "title": "Draft",
+      "image": "/examples/dsl/draft.iso.png"
+    },
+    {
       "id": "thicken",
       "title": "Thicken",
       "image": "/examples/dsl/thicken.iso.png"
@@ -94,11 +109,6 @@
       "id": "shell",
       "title": "Shell",
       "image": "/examples/dsl/shell.iso.png"
-    },
-    {
-      "id": "thread",
-      "title": "Thread",
-      "image": "/examples/dsl/thread.iso.png"
     },
     {
       "id": "thread-cosmetic",

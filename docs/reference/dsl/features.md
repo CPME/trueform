@@ -7,17 +7,18 @@ import {
   extrude,
   revolve,
   sweep,
+  pipe,
+  shell,
+  mirror,
+  thicken,
+  hole,
+  fillet,
+  chamfer,
+  thread,
   draft,
   patternLinear,
   patternCircular,
-  pipe,
-  pipeSweep,
-  hexTubeSweep,
-  thicken,
   booleanOp,
-  union,
-  cut,
-  intersect,
 } from "trueform/dsl/features";
 ```
 
@@ -29,8 +30,6 @@ import {
 - `loft(id, profiles, result?, deps?, opts?) -> Loft`
 - `sweep(id, profile, path, result?, deps?, opts?) -> Sweep`
 - `pipe(id, axis, length, outerDiameter, innerDiameter?, result?, opts?) -> Pipe`
-- `pipeSweep(id, path, outerDiameter, innerDiameter?, result?, opts?) -> PipeSweep`
-- `hexTubeSweep(id, path, outerAcrossFlats, innerAcrossFlats?, result?, opts?) -> HexTubeSweep`
 - `shell(id, source, thickness, result?, deps?, opts?) -> Shell`
 - `mirror(id, source, plane, result?, deps?) -> Mirror`
 - `draft(id, source, faces, neutralPlane, pullDirection, angle, result?, deps?) -> Draft` (staging)
@@ -42,6 +41,10 @@ import {
 - `booleanOp(id, op, left, right, result?, deps?) -> BooleanOp`
 - `patternLinear(id, origin, spacing, count, depsOrOpts?) -> PatternLinear`
 - `patternCircular(id, origin, axis, count, depsOrOpts?) -> PatternCircular`
+
+Compatibility helpers (still exported):
+- `pipeSweep(id, path, outerDiameter, innerDiameter?, result?, opts?) -> PipeSweep`
+- `hexTubeSweep(id, path, outerAcrossFlats, innerAcrossFlats?, result?, opts?) -> HexTubeSweep`
 - `union(id, left, right, result?, deps?) -> BooleanOp`
 - `cut(id, left, right, result?, deps?) -> BooleanOp` (subtract)
 - `intersect(id, left, right, result?, deps?) -> BooleanOp`
@@ -53,18 +56,21 @@ Examples:
 - [Loft](./examples/features#loft)
 - [Sweep](./examples/features#sweep)
 - [Pipe](./examples/features#pipe)
-- [Pipe sweep](./examples/features#pipe-sweep)
-- [Hex tube sweep](./examples/features#hex-tube-sweep)
 - [Shell](./examples/features#shell)
 - [Mirror](./examples/features#mirror)
 - [Draft](./examples/features#draft)
 - [Thicken](./examples/features#thicken)
-- [Modelled thread](./examples/features#modelled-thread)
 - [Hole](./examples/features#hole)
 - [Fillet](./examples/features#fillet)
 - [Chamfer](./examples/features#chamfer)
 - [Boolean](./examples/features#boolean-union)
 - [Pattern](./examples/features#pattern-featurebody)
+
+## Consolidation Notes
+
+- Prefer `sweep` + explicit `profileCircle(...)` / `profilePoly(...)` for path sweeps.
+- Prefer `booleanOp(..., "union" | "subtract" | "intersect", ...)` as the canonical boolean surface.
+- `pipeSweep`, `hexTubeSweep`, `union`, `cut`, and `intersect` remain as compatibility aliases.
 
 ## Thread
 
@@ -80,3 +86,6 @@ Options (`opts`):
 - `profileAngle?: Scalar` (radians)
 - `crestFlat?: Scalar`
 - `rootFlat?: Scalar`
+
+Modelled thread is currently staging behavior. Public docs intentionally avoid
+showing it in the main feature examples until robustness tuning is complete.

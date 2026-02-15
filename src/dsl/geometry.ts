@@ -390,6 +390,10 @@ export const pipe = (
     deps: opts?.deps,
   });
 
+/**
+ * Compatibility helper. Prefer `sweep(..., profileCircle(...), path, ...)`
+ * for new code to keep sweep workflows unified.
+ */
 export const pipeSweep = (
   id: ID,
   path: Path3D,
@@ -409,6 +413,10 @@ export const pipeSweep = (
     mode: opts?.mode,
   });
 
+/**
+ * Compatibility helper. Prefer `sweep(..., profilePoly(6, ...), path, ...)`
+ * for new code to keep sweep workflows unified.
+ */
 export const hexTubeSweep = (
   id: ID,
   path: Path3D,

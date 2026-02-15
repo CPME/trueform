@@ -22,6 +22,8 @@ Compatibility note:
 
 ## Reference Pages
 
+- [Quickstart](./quickstart)
+- [Gallery](./gallery)
 - [Core](./core)
 - [Assembly](./assembly)
 - [Tolerancing](./tolerancing)

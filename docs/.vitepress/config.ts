@@ -5,6 +5,9 @@ export default defineConfig({
   description: "Declarative, intent-first modeling on OpenCascade.js.",
   base: "/trueform/",
   themeConfig: {
+    search: {
+      provider: "local",
+    },
     nav: [
       { text: "Guide", link: "/guide/getting-started" },
       { text: "Reference", link: "/reference/architecture" },
@@ -21,6 +24,8 @@ export default defineConfig({
           text: "DSL",
           items: [
             { text: "Overview", link: "/reference/dsl/" },
+            { text: "Quickstart", link: "/reference/dsl/quickstart" },
+            { text: "Gallery", link: "/reference/dsl/gallery" },
             { text: "Core", link: "/reference/dsl/core" },
             { text: "Assembly", link: "/reference/dsl/assembly" },
             { text: "Tolerancing", link: "/reference/dsl/tolerancing" },

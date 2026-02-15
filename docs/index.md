@@ -28,8 +28,12 @@ Current scope (v1) compiles a JSON-serializable IR and builds with an OpenCascad
 
 Implemented part feature surface includes:
 - Datums and sketching (`datum.*`, `feature.sketch2d`, sketch entities/profiles).
-- Solid/surface operations (`extrude`, `surface`, `revolve`, `loft`, `sweep`, `pipe`, `pipeSweep`, `hexTubeSweep`, `mirror`, `thicken`, `shell`, `thread`, `hole`, `fillet`, `chamfer`, `boolean`).
+- Solid/surface operations (`extrude`, `surface`, `revolve`, `loft`, `sweep`, `pipe`, `mirror`, `thicken`, `shell`, `thread`, `hole`, `fillet`, `chamfer`, `boolean`).
 - Pattern intent (`pattern.linear`, `pattern.circular`).
+
+Consolidation note:
+- Prefer `sweep` + explicit profiles for path sweeps and `booleanOp(..., op, ...)` for boolean operations.
+- `pipeSweep`, `hexTubeSweep`, `union`, `cut`, and `intersect` remain available as compatibility aliases.
 
 Staging note:
 - `thread` and surface-oriented workflows are currently marked as `staging` in the runtime feature registry (`/v1/capabilities.featureStages`).
@@ -43,6 +47,7 @@ Assemblies, constraints, and assertions are represented in IR. Core deterministi
 - [Getting Started](/guide/getting-started)
 - [Architecture](/reference/architecture)
 - [File Format (.tfp)](/reference/file-format)
+- [DSL Quickstart](/reference/dsl/quickstart)
 - [DSL Reference](/reference/dsl/)
 - [API Reference](/reference/api)
 

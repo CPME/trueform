@@ -3,6 +3,9 @@
 The examples below are rendered from OpenCascade.js output via
 `npm run docs:examples`.
 
+Use generators for authoring-time repetition. If you need runtime pattern intent
+in the model graph, use `patternLinear` / `patternCircular` instead.
+
 ## Feature Array
 
 ![Feature array example](/examples/dsl/feature-array.iso.png)
