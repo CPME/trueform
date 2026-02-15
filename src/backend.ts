@@ -1,5 +1,6 @@
 import { IntentFeature, ID, Selector } from "./ir.js";
 import type { PmiPayload } from "./pmi.js";
+import type { FeatureStageEntry } from "./feature_staging.js";
 
 export type KernelResult = {
   outputs: Map<string, KernelObject>;
@@ -29,6 +30,7 @@ export type KernelSelection = {
 export type BackendCapabilities = {
   name?: string;
   featureKinds?: string[];
+  featureStages?: Record<string, FeatureStageEntry>;
   mesh?: boolean;
   exports?: {
     step?: boolean;

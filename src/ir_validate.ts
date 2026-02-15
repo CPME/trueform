@@ -910,6 +910,30 @@ function validateFeature(feature: IntentFeature): void {
       );
       return;
     }
+    case "feature.draft": {
+      const draft = feature as {
+        source?: Selector;
+        faces?: Selector;
+        neutralPlane?: PlaneRef;
+        pullDirection?: AxisSpec;
+        angle?: Scalar;
+        result?: string;
+      };
+      validateSelector(draft.source);
+      validateSelector(draft.faces);
+      validatePlaneRef(
+        draft.neutralPlane as PlaneRef,
+        "Draft neutral plane is required"
+      );
+      validateAxisSpec(draft.pullDirection, "Draft pull direction is required");
+      validateScalar(draft.angle, "Draft angle");
+      ensureNonEmptyString(
+        draft.result,
+        "validation_feature_result",
+        "Draft result is required"
+      );
+      return;
+    }
     case "feature.pipe": {
       const pipe = feature as {
         axis?: AxisDirection;
@@ -1144,6 +1168,8 @@ function validateFeature(feature: IntentFeature): void {
         origin?: Selector;
         spacing?: [Scalar, Scalar];
         count?: [Scalar, Scalar];
+        source?: Selector;
+        result?: string;
       };
       validateSelector(pattern.origin);
       ensureTuple2(pattern.spacing, "Pattern spacing");
@@ -1152,6 +1178,19 @@ function validateFeature(feature: IntentFeature): void {
       ensureTuple2(pattern.count, "Pattern count");
       validateScalar(pattern.count?.[0], "Pattern count X");
       validateScalar(pattern.count?.[1], "Pattern count Y");
+      if (pattern.source !== undefined) {
+        validateSelector(pattern.source);
+        ensureNonEmptyString(
+          pattern.result,
+          "validation_feature_result",
+          "Pattern result is required when source is provided"
+        );
+      } else if (pattern.result !== undefined) {
+        throw new CompileError(
+          "validation_pattern_result_without_source",
+          "Pattern result requires a source selector"
+        );
+      }
       return;
     }
     case "pattern.circular": {
@@ -1159,10 +1198,25 @@ function validateFeature(feature: IntentFeature): void {
         origin?: Selector;
         axis?: AxisDirection;
         count?: Scalar;
+        source?: Selector;
+        result?: string;
       };
       validateSelector(pattern.origin);
       ensureAxis(pattern.axis, "Pattern axis is required");
       validateScalar(pattern.count, "Pattern count");
+      if (pattern.source !== undefined) {
+        validateSelector(pattern.source);
+        ensureNonEmptyString(
+          pattern.result,
+          "validation_feature_result",
+          "Pattern result is required when source is provided"
+        );
+      } else if (pattern.result !== undefined) {
+        throw new CompileError(
+          "validation_pattern_result_without_source",
+          "Pattern result requires a source selector"
+        );
+      }
       return;
     }
     default:

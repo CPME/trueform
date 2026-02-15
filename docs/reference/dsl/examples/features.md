@@ -219,6 +219,32 @@ const examplePart = part("example-mirror", [
 ]);
 ```
 
+## Draft
+
+```ts
+const examplePart = part("example-draft", [
+  extrude("base", profileRect(60, 40), 20, "body:base"),
+  datumPlane("draft-neutral", "+Z"),
+  draft(
+    "draft-1",
+    selectorNamed("body:base"),
+    selectorFace([
+      predCreatedBy("base"),
+      predPlanar(),
+      predNormal("+X"),
+    ]),
+    planeDatum("draft-neutral"),
+    "+Z",
+    Math.PI / 60,
+    "body:main"
+  ),
+]);
+```
+
+Notes:
+- `draft` is currently in staging and should be treated as maturing behavior.
+- Use `neutralPlane` + `pullDirection` explicitly; avoid relying on implicit model orientation.
+
 ## Thicken
 
 ![Thicken example](/examples/dsl/thicken.iso.png)
@@ -376,6 +402,27 @@ const examplePart = part("example-boolean", [
     selectorNamed("body:tool"),
     "body:main",
     ["base", "tool"]
+  ),
+]);
+```
+
+## Pattern (Feature/Body)
+
+![Pattern example](/examples/dsl/pattern.iso.png)
+
+```ts
+const examplePart = part("example-pattern", [
+  extrude("seed", profileRect(10, 10), 8, "body:seed"),
+  patternLinear(
+    "pattern-1",
+    selectorFace([predCreatedBy("seed"), predPlanar(), predNormal("+Z")], [rankMaxZ()]),
+    [18, 0],
+    [4, 1],
+    {
+      source: selectorNamed("body:seed"),
+      result: "body:main",
+      deps: ["seed"],
+    }
   ),
 ]);
 ```

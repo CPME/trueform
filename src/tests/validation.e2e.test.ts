@@ -62,6 +62,30 @@ const tests = [
     },
   },
   {
+    name: "validation: pattern result without source throws",
+    fn: async () => {
+      const topFace = dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxZ()]);
+      const part = dsl.part("pattern-invalid", [
+        dsl.patternLinear("pattern-1", topFace, [10, 0], [2, 1], {
+          result: "body:main",
+        }),
+      ]);
+      assert.throws(() => normalizePart(part), /requires a source selector/i);
+    },
+  },
+  {
+    name: "validation: pattern source requires result",
+    fn: async () => {
+      const topFace = dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxZ()]);
+      const part = dsl.part("pattern-invalid-2", [
+        dsl.patternCircular("pattern-1", topFace, "+Z", 4, {
+          source: dsl.selectorNamed("body:seed"),
+        }),
+      ]);
+      assert.throws(() => normalizePart(part), /Pattern result is required/i);
+    },
+  },
+  {
     name: "validation: staged features can be blocked",
     fn: async () => {
       const part = dsl.part("staged-thread", [

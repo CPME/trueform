@@ -12,6 +12,7 @@ import {
 } from "./backend.js";
 import { resolveSelectorSet } from "./selectors.js";
 import { BackendError } from "./errors.js";
+import { TF_STAGED_FEATURES } from "./feature_staging.js";
 import {
   AxisDirection,
   AxisSpec,
@@ -45,6 +46,7 @@ import {
   SketchEntity,
   Surface,
   Mirror,
+  Draft,
   Thicken,
   Thread,
 } from "./ir.js";
@@ -105,6 +107,7 @@ export class OcctBackend implements Backend {
         "feature.pipeSweep",
         "feature.hexTubeSweep",
         "feature.mirror",
+        "feature.draft",
         "feature.thicken",
         "feature.thread",
         "feature.hole",
@@ -114,6 +117,7 @@ export class OcctBackend implements Backend {
         "pattern.linear",
         "pattern.circular",
       ],
+      featureStages: TF_STAGED_FEATURES,
       mesh: true,
       exports: { step: true, stl: true },
       assertions: ["assert.brepValid", "assert.minEdgeLength"],
@@ -168,6 +172,12 @@ export class OcctBackend implements Backend {
       case "feature.mirror":
         return this.execMirror(
           input.feature as Mirror,
+          input.upstream,
+          input.resolve
+        );
+      case "feature.draft":
+        return this.execDraft(
+          input.feature as Draft,
           input.upstream,
           input.resolve
         );
@@ -1215,6 +1225,111 @@ export class OcctBackend implements Backend {
     return { outputs, selections };
   }
 
+  private execDraft(
+    feature: Draft,
+    upstream: KernelResult,
+    resolve: ExecuteInput["resolve"]
+  ): KernelResult {
+    const source = resolve(feature.source, upstream);
+    if (source.kind !== "solid") {
+      throw new Error("OCCT backend: draft source must resolve to a solid");
+    }
+    const ownerKey = this.resolveOwnerKey(source, upstream);
+    const owner = this.resolveOwnerShape(source, upstream);
+    if (!owner) {
+      throw new Error("OCCT backend: draft source missing owner solid");
+    }
+
+    const faceTargets = resolveSelectorSet(
+      feature.faces,
+      this.toResolutionContext(upstream)
+    );
+    if (faceTargets.length === 0) {
+      throw new Error("OCCT backend: draft selector matched 0 faces");
+    }
+    for (const target of faceTargets) {
+      if (target.kind !== "face") {
+        throw new Error("OCCT backend: draft selector must resolve to faces");
+      }
+      const faceOwnerKey =
+        typeof target.meta["ownerKey"] === "string"
+          ? (target.meta["ownerKey"] as string)
+          : undefined;
+      if (faceOwnerKey && faceOwnerKey !== ownerKey) {
+        throw new Error(
+          "OCCT backend: draft faces must belong to the same source solid"
+        );
+      }
+    }
+
+    const angle = expectNumber(feature.angle, "feature.angle");
+    if (Math.abs(angle) < 1e-8 || Math.abs(angle) >= Math.PI / 2) {
+      throw new Error(
+        "OCCT backend: draft angle must be non-zero and less than PI/2 in magnitude"
+      );
+    }
+    const pullDirection = this.resolveAxisSpec(
+      feature.pullDirection,
+      upstream,
+      "draft pull direction"
+    );
+    const neutralBasis = this.resolvePlaneBasis(
+      feature.neutralPlane,
+      upstream,
+      resolve
+    );
+    const neutralPlane = this.makePln(neutralBasis.origin, neutralBasis.normal);
+    const pullDir = this.makeDir(
+      pullDirection[0],
+      pullDirection[1],
+      pullDirection[2]
+    );
+    const draft = this.makeDraftBuilder(owner);
+
+    for (const target of faceTargets) {
+      const face = this.toFace(target.meta["shape"]);
+      const added = (() => {
+        try {
+          this.callWithFallback(
+            draft,
+            ["Add", "Add_1"],
+            [
+              [face, pullDir, angle, neutralPlane, true],
+              [face, pullDir, angle, neutralPlane, false],
+              [face, pullDir, angle, neutralPlane],
+            ]
+          );
+          return true;
+        } catch {
+          return false;
+        }
+      })();
+      if (!added) {
+        throw new Error("OCCT backend: failed to add draft face");
+      }
+    }
+
+    this.tryBuild(draft);
+    const solid = this.readShape(draft);
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:solid`,
+          kind: "solid" as const,
+          meta: { shape: solid },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      solid,
+      feature.id,
+      feature.result,
+      feature.tags
+    );
+    return { outputs, selections };
+  }
+
   private execShell(
     feature: Shell,
     upstream: KernelResult,
@@ -1330,10 +1445,14 @@ export class OcctBackend implements Backend {
     const depth = majorRadius - minorRadius;
     const halfDepth = depth / 2;
     const pitchRadius = (majorRadius + minorRadius) / 2;
+    const radialCutOverlap = Math.max(depth * 0.005, 5e-5);
+    const axialCutOverlap = Math.max(depth * 0.1, pitch * 0.05, 1e-3);
+    const cutOriginVec = this.subVec(originVec, this.scaleVec(axis, axialCutOverlap));
+    const cutLength = length + axialCutOverlap * 2;
     const handedness = feature.handedness ?? "right";
     const direction = handedness === "left" ? -1 : 1;
 
-    const basePlane = this.planeBasisFromNormal(originVec, axis);
+    const basePlane = this.planeBasisFromNormal(cutOriginVec, axis);
     const angle =
       feature.profileAngle === undefined
         ? Math.PI / 3
@@ -1366,144 +1485,124 @@ export class OcctBackend implements Backend {
       rootFlat = Math.max(1e-6, Math.min(pitch * 0.9, candidate));
     }
 
-    const turns = length / pitch;
+    const turns = cutLength / pitch;
     const angleSpan = direction * Math.PI * 2 * turns;
 
     const crestHalf = crestFlat / 2;
     const rootHalf = rootFlat / 2;
-    const embed = Math.max(depth * 0.03, 1e-4);
-    const crestOffset = halfDepth;
-    const rootOffset = -(halfDepth + embed);
-    const segmentsPerTurn =
+    const innerCutOverlap = Math.max(depth * 0.03, 1e-4);
+    const crestOffset = halfDepth + radialCutOverlap;
+    const rootOffset = -(halfDepth + innerCutOverlap);
+    let segmentsPerTurn =
       feature.segmentsPerTurn === undefined
         ? 24
         : Math.round(
             Math.max(
-              6,
+              8,
               expectNumber(feature.segmentsPerTurn, "thread segments per turn")
             )
           );
-    const sectionCount = Math.max(2, Math.ceil(turns * segmentsPerTurn) + 1);
-    const sections: any[] = [];
-    for (let i = 0; i < sectionCount; i += 1) {
-      const t = sectionCount === 1 ? 0 : i / (sectionCount - 1);
-      const angle = angleSpan * t;
+    const maxSpineSegments = 640;
+    const rawSpineSegments = Math.ceil(turns * segmentsPerTurn);
+    if (rawSpineSegments > maxSpineSegments) {
+      segmentsPerTurn = Math.max(
+        8,
+        Math.floor(maxSpineSegments / Math.max(turns, 1))
+      );
+    }
+    const segments = Math.max(24, Math.ceil(turns * segmentsPerTurn));
+    const startAngleOffset = Math.PI * 0.5;
+    const startCos = Math.cos(startAngleOffset);
+    const startSin = Math.sin(startAngleOffset);
+    let startRadialDir = normalizeVector(
+      this.addVec(
+        this.scaleVec(basePlane.xDir, startCos),
+        this.scaleVec(basePlane.yDir, startSin)
+      )
+    );
+    if (!isFiniteVec(startRadialDir)) {
+      startRadialDir = basePlane.xDir;
+    }
+    const startCenter = this.addVec(
+      cutOriginVec,
+      this.scaleVec(startRadialDir, pitchRadius)
+    );
+    let profileX = normalizeVector(startRadialDir);
+    const axisProj = dot(profileX, axis);
+    if (Math.abs(axisProj) > 1e-6) {
+      profileX = normalizeVector(
+        this.subVec(profileX, this.scaleVec(axis, axisProj))
+      );
+    }
+    if (!isFiniteVec(profileX)) {
+      profileX = basePlane.xDir;
+    }
+    let profileY = axis;
+    if (!isFiniteVec(profileY)) {
+      profileY = basePlane.yDir;
+    }
+    const profilePoints: [number, number, number][] = [];
+    if (crestHalf > 1e-6) {
+      profilePoints.push(
+        this.addVec(
+          this.addVec(startCenter, this.scaleVec(profileY, -crestHalf)),
+          this.scaleVec(profileX, crestOffset)
+        )
+      );
+      profilePoints.push(
+        this.addVec(
+          this.addVec(startCenter, this.scaleVec(profileY, crestHalf)),
+          this.scaleVec(profileX, crestOffset)
+        )
+      );
+    } else {
+      profilePoints.push(
+        this.addVec(startCenter, this.scaleVec(profileX, crestOffset))
+      );
+    }
+    if (rootHalf > 1e-6) {
+      profilePoints.push(
+        this.addVec(
+          this.addVec(startCenter, this.scaleVec(profileY, rootHalf)),
+          this.scaleVec(profileX, rootOffset)
+        )
+      );
+      profilePoints.push(
+        this.addVec(
+          this.addVec(startCenter, this.scaleVec(profileY, -rootHalf)),
+          this.scaleVec(profileX, rootOffset)
+        )
+      );
+    } else {
+      profilePoints.push(
+        this.addVec(startCenter, this.scaleVec(profileX, rootOffset))
+      );
+    }
+    const profileWire = this.makePolygonWire(profilePoints);
+
+    const helixPoints: [number, number, number][] = [];
+    for (let i = 0; i <= segments; i += 1) {
+      const t = i / segments;
+      const angle = startAngleOffset + angleSpan * t;
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
-      const radialDir = normalizeVector(
-        this.addVec(
-          this.scaleVec(basePlane.xDir, cos),
-          this.scaleVec(basePlane.yDir, sin)
-        )
+      const radialVec = this.addVec(
+        this.scaleVec(basePlane.xDir, pitchRadius * cos),
+        this.scaleVec(basePlane.yDir, pitchRadius * sin)
       );
-      const center = this.addVec(
-        originVec,
-        this.addVec(
-          this.scaleVec(radialDir, pitchRadius),
-          this.scaleVec(axis, length * t)
-        )
-      );
-      let sectionX = normalizeVector(radialDir);
-      if (!isFiniteVec(sectionX)) {
-        sectionX = basePlane.xDir;
-      }
-      const axisProj = dot(sectionX, axis);
-      if (Math.abs(axisProj) > 1e-6) {
-        sectionX = normalizeVector(
-          this.subVec(sectionX, this.scaleVec(axis, axisProj))
-        );
-      }
-      if (!isFiniteVec(sectionX)) {
-        sectionX = basePlane.xDir;
-      }
-      let sectionY = axis;
-      if (!isFiniteVec(sectionY)) {
-        sectionY = basePlane.yDir;
-      }
-      const sectionPoints: [number, number, number][] = [];
-      if (crestHalf > 1e-6) {
-        sectionPoints.push(
-          this.addVec(
-            this.addVec(center, this.scaleVec(sectionY, -crestHalf)),
-            this.scaleVec(sectionX, crestOffset)
-          )
-        );
-        sectionPoints.push(
-          this.addVec(
-            this.addVec(center, this.scaleVec(sectionY, crestHalf)),
-            this.scaleVec(sectionX, crestOffset)
-          )
-        );
-      } else {
-        sectionPoints.push(this.addVec(center, this.scaleVec(sectionX, crestOffset)));
-      }
-      if (rootHalf > 1e-6) {
-        sectionPoints.push(
-          this.addVec(
-            this.addVec(center, this.scaleVec(sectionY, rootHalf)),
-            this.scaleVec(sectionX, rootOffset)
-          )
-        );
-        sectionPoints.push(
-          this.addVec(
-            this.addVec(center, this.scaleVec(sectionY, -rootHalf)),
-            this.scaleVec(sectionX, rootOffset)
-          )
-        );
-      } else {
-        sectionPoints.push(this.addVec(center, this.scaleVec(sectionX, rootOffset)));
-      }
-      sections.push(this.makePolygonWire(sectionPoints));
+      const along = this.scaleVec(axis, cutLength * t);
+      helixPoints.push(this.addVec(cutOriginVec, this.addVec(radialVec, along)));
     }
-
-    let ridge: any;
-    try {
-      const loft = this.makeLoftBuilder(true);
-      for (const section of sections) {
-        this.addLoftWire(loft, section);
-      }
-      if (
-        typeof (loft as any).CheckCompatibility === "function" ||
-        typeof (loft as any).CheckCompatibility_1 === "function"
-      ) {
-        try {
-          this.callWithFallback(
-            loft,
-            ["CheckCompatibility", "CheckCompatibility_1"],
-            [[true], [false]]
-          );
-        } catch {
-          // ignore compatibility check failures; build will surface real issues
-        }
-      }
-      this.tryBuild(loft);
-      ridge = this.readShape(loft);
-    } catch {
-      const helixPoints: [number, number, number][] = [];
-      const segments = Math.max(12, Math.ceil(turns * segmentsPerTurn));
-      for (let i = 0; i <= segments; i += 1) {
-        const t = i / segments;
-        const angle = angleSpan * t;
-        const cos = Math.cos(angle);
-        const sin = Math.sin(angle);
-        const radialVec = this.addVec(
-          this.scaleVec(basePlane.xDir, pitchRadius * cos),
-          this.scaleVec(basePlane.yDir, pitchRadius * sin)
-        );
-        const along = this.scaleVec(axis, length * t);
-        helixPoints.push(this.addVec(originVec, this.addVec(radialVec, along)));
-      }
-      const helixEdge = this.makeSplineEdge3D({
-        kind: "path.spline",
-        points: helixPoints,
-      }).edge;
-      const spine = this.makeWireFromEdges([helixEdge]);
-      const fallbackProfile = sections[0];
-      ridge = this.makeSweepSolid(spine, fallbackProfile, {
-        makeSolid: true,
-        frenet: true,
-      });
-    }
+    const helixEdge = this.makeSplineEdge3D({
+      kind: "path.spline",
+      points: helixPoints,
+    }).edge;
+    const spine = this.makeWireFromEdges([helixEdge]);
+    let ridge = this.makeSweepSolid(spine, profileWire, {
+      makeSolid: true,
+      frenet: true,
+      allowFallback: false,
+    });
     ridge = this.normalizeSolid(ridge);
     if (!this.shapeHasSolid(ridge)) {
       const stitched = this.makeSolidFromShells(ridge);
@@ -1511,12 +1610,16 @@ export class OcctBackend implements Backend {
         ridge = this.normalizeSolid(stitched);
       }
     }
-    const core = this.readShape(
-      this.makeCylinder(minorRadius, length, axis, originVec)
+    const blank = this.readShape(
+      this.makeCylinder(majorRadius, length, axis, originVec)
     );
-    const union = this.makeBoolean("union", core, ridge);
-    let solid = this.readShape(union);
+    const cut = this.makeBoolean("cut", blank, ridge);
+    let solid = this.readShape(cut);
+    solid = this.unifySameDomain(solid);
     solid = this.normalizeSolid(solid);
+    if (!this.shapeHasSolid(solid) || !this.isValidShape(solid)) {
+      throw new Error("OCCT backend: thread cut produced an invalid solid");
+    }
     const solidVolume = this.solidVolume(solid);
     if (Number.isFinite(solidVolume) && solidVolume < 0) {
       solid = this.reverseShape(solid);
@@ -1540,10 +1643,10 @@ export class OcctBackend implements Backend {
         kind: "solid" as const,
         meta: { shape: ridge },
       });
-      outputs.set(`debug:${feature.id}:core`, {
-        id: `${feature.id}:core`,
+      outputs.set(`debug:${feature.id}:blank`, {
+        id: `${feature.id}:blank`,
         kind: "solid" as const,
-        meta: { shape: core },
+        meta: { shape: blank },
       });
     }
     const selections = this.collectSelections(
@@ -1911,9 +2014,33 @@ export class OcctBackend implements Backend {
     const origin = this.faceCenter(face);
     const outputs = new Map<string, KernelObject>();
 
+    const source = (feature as { source?: Selector }).source;
+    const sourceResult = (feature as { result?: string }).result;
+    const isFeaturePattern = source !== undefined;
+    let sourceShape: any | null = null;
+    if (isFeaturePattern) {
+      const sourceSelection = resolve(source as Selector, upstream);
+      if (sourceSelection.kind !== "solid") {
+        throw new Error("OCCT backend: pattern source must resolve to a solid");
+      }
+      sourceShape = this.resolveOwnerShape(sourceSelection, upstream);
+      if (!sourceShape) {
+        throw new Error("OCCT backend: pattern source missing owner shape");
+      }
+      if (!sourceResult) {
+        throw new Error("OCCT backend: pattern result is required when source is set");
+      }
+    }
+
     if (feature.kind === "pattern.linear") {
-      const spacing = feature.spacing as [number, number];
-      const count = feature.count as [number, number];
+      const spacing: [number, number] = [
+        expectNumber(feature.spacing[0], "pattern spacing X"),
+        expectNumber(feature.spacing[1], "pattern spacing Y"),
+      ];
+      const count: [number, number] = [
+        Math.max(1, Math.round(expectNumber(feature.count[0], "pattern count X"))),
+        Math.max(1, Math.round(expectNumber(feature.count[1], "pattern count Y"))),
+      ];
       outputs.set(this.patternKey(feature.id), {
         id: `${feature.id}:pattern`,
         kind: "pattern" as const,
@@ -1927,11 +2054,46 @@ export class OcctBackend implements Backend {
           count,
         },
       });
+      if (isFeaturePattern && sourceShape && sourceResult) {
+        let merged: any | null = null;
+        for (let i = 0; i < count[0]; i += 1) {
+          for (let j = 0; j < count[1]; j += 1) {
+            const delta: [number, number, number] = [
+              basis.xDir[0] * spacing[0] * i + basis.yDir[0] * spacing[1] * j,
+              basis.xDir[1] * spacing[0] * i + basis.yDir[1] * spacing[1] * j,
+              basis.xDir[2] * spacing[0] * i + basis.yDir[2] * spacing[1] * j,
+            ];
+            const inst = this.transformShapeTranslate(sourceShape, delta);
+            if (!merged) {
+              merged = inst;
+            } else {
+              const fused = this.makeBoolean("union", merged, inst);
+              merged = this.readShape(fused);
+            }
+          }
+        }
+        if (!merged) {
+          throw new Error("OCCT backend: pattern generated no instances");
+        }
+        outputs.set(sourceResult, {
+          id: `${feature.id}:solid`,
+          kind: "solid",
+          meta: { shape: merged },
+        });
+        const selections = this.collectSelections(
+          merged,
+          feature.id,
+          sourceResult,
+          feature.tags
+        );
+        return { outputs, selections };
+      }
       return { outputs, selections: [] };
     }
 
-    const count = feature.count as number;
+    const count = Math.max(1, Math.round(expectNumber(feature.count, "pattern count")));
     const axisDir = axisVector(feature.axis);
+    const axis = normalizeVector(axisDir);
     outputs.set(this.patternKey(feature.id), {
       id: `${feature.id}:pattern`,
       kind: "pattern" as const,
@@ -1941,10 +2103,38 @@ export class OcctBackend implements Backend {
         xDir: basis.xDir,
         yDir: basis.yDir,
         normal: basis.normal,
-        axis: normalizeVector(axisDir),
+        axis,
         count,
       },
     });
+    if (isFeaturePattern && sourceShape && sourceResult) {
+      let merged: any | null = null;
+      for (let i = 0; i < count; i += 1) {
+        const angle = (Math.PI * 2 * i) / count;
+        const inst = this.transformShapeRotate(sourceShape, origin, axis, angle);
+        if (!merged) {
+          merged = inst;
+        } else {
+          const fused = this.makeBoolean("union", merged, inst);
+          merged = this.readShape(fused);
+        }
+      }
+      if (!merged) {
+        throw new Error("OCCT backend: pattern generated no instances");
+      }
+      outputs.set(sourceResult, {
+        id: `${feature.id}:solid`,
+        kind: "solid",
+        meta: { shape: merged },
+      });
+      const selections = this.collectSelections(
+        merged,
+        feature.id,
+        sourceResult,
+        feature.tags
+      );
+      return { outputs, selections };
+    }
     return { outputs, selections: [] };
   }
 
@@ -2498,6 +2688,18 @@ export class OcctBackend implements Backend {
     }
   }
 
+  private makeDraftBuilder(shape: any) {
+    const candidates: Array<unknown[]> = [[shape], []];
+    for (const args of candidates) {
+      try {
+        return this.newOcct("BRepOffsetAPI_DraftAngle", ...args);
+      } catch {
+        continue;
+      }
+    }
+    throw new Error("OCCT backend: failed to construct draft builder");
+  }
+
   private makeLoftBuilder(isSolid: boolean) {
     const candidates: Array<unknown[]> = [
       [isSolid, false, 1e-6],
@@ -2606,6 +2808,37 @@ export class OcctBackend implements Backend {
       return this.readShape(splitter);
     } catch {
       return result;
+    }
+  }
+
+  private unifySameDomain(shape: any): any {
+    let unifier: any;
+    const ctorArgs: unknown[][] = [
+      [shape, true, true, true],
+      [shape, true, true, false],
+      [shape, true, true],
+      [shape],
+    ];
+    for (const args of ctorArgs) {
+      try {
+        unifier = this.newOcct("ShapeUpgrade_UnifySameDomain", ...args);
+        break;
+      } catch {
+        continue;
+      }
+    }
+    if (!unifier) return shape;
+
+    try {
+      this.callWithFallback(unifier, ["Build", "Build_1"], [[]]);
+    } catch {
+      return shape;
+    }
+
+    try {
+      return this.callWithFallback(unifier, ["Shape", "Shape_1"], [[]]);
+    } catch {
+      return shape;
     }
   }
 
@@ -4659,6 +4892,41 @@ export class OcctBackend implements Backend {
     if (occt.gp_Ax1_2) return new occt.gp_Ax1_2(pnt, dir);
     if (occt.gp_Ax1_3) return new occt.gp_Ax1_3(pnt, dir);
     throw new Error("OCCT backend: gp_Ax1 constructor not available");
+  }
+
+  private makePln(origin: [number, number, number], normal: [number, number, number]) {
+    const pnt = this.makePnt(origin[0], origin[1], origin[2]);
+    const dir = this.makeDir(normal[0], normal[1], normal[2]);
+    return this.newOcct("gp_Pln", pnt, dir);
+  }
+
+  private transformShapeTranslate(shape: any, delta: [number, number, number]) {
+    const trsf = this.newOcct("gp_Trsf");
+    const vec = this.makeVec(delta[0], delta[1], delta[2]);
+    this.callWithFallback(
+      trsf,
+      ["SetTranslation", "SetTranslation_1", "SetTranslationPart"],
+      [[vec]]
+    );
+    const builder = this.newOcct("BRepBuilderAPI_Transform", shape, trsf, true);
+    this.tryBuild(builder);
+    return this.readShape(builder);
+  }
+
+  private transformShapeRotate(
+    shape: any,
+    origin: [number, number, number],
+    axis: [number, number, number],
+    angle: number
+  ) {
+    const trsf = this.newOcct("gp_Trsf");
+    const pnt = this.makePnt(origin[0], origin[1], origin[2]);
+    const dir = this.makeDir(axis[0], axis[1], axis[2]);
+    const ax1 = this.makeAx1(pnt, dir);
+    this.callWithFallback(trsf, ["SetRotation", "SetRotation_1"], [[ax1, angle]]);
+    const builder = this.newOcct("BRepBuilderAPI_Transform", shape, trsf, true);
+    this.tryBuild(builder);
+    return this.readShape(builder);
   }
 
   private makeAxis(

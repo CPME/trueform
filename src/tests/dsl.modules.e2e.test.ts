@@ -82,6 +82,20 @@ const tests = [
       const profile = sketch.profileRect(2, 3);
       const extrude = features.extrude("extrude-1", profile, 5);
       assert.equal(extrude.kind, "feature.extrude");
+      const patternLinear = features.patternLinear(
+        "p-l",
+        selectors.selectorNamed("body:seed"),
+        [10, 0],
+        [3, 1]
+      );
+      assert.equal(patternLinear.kind, "pattern.linear");
+      const patternCircular = features.patternCircular(
+        "p-c",
+        selectors.selectorNamed("body:seed"),
+        "+Z",
+        4
+      );
+      assert.equal(patternCircular.kind, "pattern.circular");
 
       const left = selectors.selectorNamed("body:left");
       const right = selectors.selectorNamed("body:right");

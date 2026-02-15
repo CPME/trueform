@@ -140,6 +140,14 @@ function normalizeFeature(
   if ("frame" in clone && isSelector(clone.frame)) {
     (clone as { frame: Selector }).frame = normalizeSelector(clone.frame as Selector);
   }
+  if ("faces" in clone && isSelector(clone.faces)) {
+    (clone as { faces: Selector }).faces = normalizeSelector(clone.faces as Selector);
+  }
+  if ("neutralPlane" in clone && isSelector(clone.neutralPlane)) {
+    (clone as { neutralPlane: Selector }).neutralPlane = normalizeSelector(
+      clone.neutralPlane as Selector
+    );
+  }
   if ("openFaces" in clone && Array.isArray(clone.openFaces)) {
     (clone as { openFaces: Selector[] }).openFaces = (
       clone.openFaces as Selector[]
@@ -199,6 +207,10 @@ function normalizeFeature(
       break;
     case "feature.shell":
       clone.thickness = normalizeScalar(clone.thickness, "length", ctx);
+      break;
+    case "feature.draft":
+      clone.pullDirection = normalizeAxisSpec(clone.pullDirection, ctx);
+      clone.angle = normalizeScalar(clone.angle, "angle", ctx);
       break;
     case "feature.pipe":
       clone.length = normalizeScalar(clone.length, "length", ctx);

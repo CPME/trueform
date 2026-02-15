@@ -318,6 +318,17 @@ const tests = [
       );
       assert.equal(mirror.kind, "feature.mirror");
 
+      const draft = dsl.draft(
+        "draft-1",
+        dsl.selectorNamed("body:base"),
+        dsl.selectorFace([dsl.predPlanar()]),
+        planeDatum,
+        dsl.axisVector([0, 0, 1]),
+        Math.PI / 36
+      );
+      assert.equal(draft.kind, "feature.draft");
+      assert.equal(draft.result, "body:draft-1");
+
       const thicken = dsl.thicken("thicken-1", selectorFace, 2);
       assert.equal(thicken.kind, "feature.thicken");
 
@@ -393,6 +404,18 @@ const tests = [
         [3, 4]
       );
       assert.equal(patternLinear.kind, "pattern.linear");
+      const patternLinearFeature = dsl.patternLinear(
+        "pattern-lf",
+        dsl.selectorNamed("body:main"),
+        [10, 0],
+        [3, 1],
+        {
+          source: dsl.selectorNamed("body:seed"),
+          result: "body:patterned",
+        }
+      );
+      assert.equal(patternLinearFeature.source?.kind, "selector.named");
+      assert.equal(patternLinearFeature.result, "body:patterned");
 
       const patternCircular = dsl.patternCircular(
         "pattern-c",
@@ -401,6 +424,18 @@ const tests = [
         6
       );
       assert.equal(patternCircular.kind, "pattern.circular");
+      const patternCircularFeature = dsl.patternCircular(
+        "pattern-cf",
+        dsl.selectorNamed("body:main"),
+        "+Z",
+        4,
+        {
+          source: dsl.selectorNamed("body:seed"),
+          result: "body:patterned-c",
+        }
+      );
+      assert.equal(patternCircularFeature.source?.kind, "selector.named");
+      assert.equal(patternCircularFeature.result, "body:patterned-c");
     },
   },
   {

@@ -12,6 +12,9 @@ clients and agents can avoid treating them as production-stable.
 
 ## Current Staging Entries
 
+- `feature.draft`
+  - Status: `staging`
+  - Note: draft behavior is available but still hardening across broader face-selection cases.
 - `feature.thread`
   - Status: `staging`
   - Note: modelled thread geometry is under active tuning.

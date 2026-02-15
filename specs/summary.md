@@ -20,11 +20,11 @@ Non-promises:
 - IR-only source of truth (no kernel history stored)
 - JSON-serializable builders
 - Core compile is part-centric in v1; assembly solving is experimental
-- Features: `Sketch2D` (line/arc/circle/ellipse/rect/slot/polygon/spline/point), `profile.rect/circle/poly/sketch`, `Extrude`, `Revolve`, `Loft`, `Pipe`, `PipeSweep`, `HexTubeSweep`, `Hole` (linear/circular pattern layouts), `Fillet`, `Chamfer`, `Boolean`
+- Features: `Sketch2D` (line/arc/circle/ellipse/rect/slot/polygon/spline/point), `profile.rect/circle/poly/sketch`, `Extrude`, `Surface`, `Revolve`, `Loft`, `Sweep`, `Pipe`, `PipeSweep`, `HexTubeSweep`, `Mirror`, `Shell`, `Draft`, `Thicken`, `Thread`, `Hole`, `Pattern` (linear/circular layout + feature/body replication), `Fillet`, `Chamfer`, `Boolean`
 - Primary output: `body:main` (single-body v1)
 - Runtime target: Node + OpenCascade.js
 - Export tooling exists in dedicated modules (`src/export/*`) and is distinct from core compile
-- Unsupported features (e.g., shell/draft/rib, full feature/body patterns) must throw explicit errors in the OCJS backend
+- Unsupported features (e.g., rib, full feature/body patterns) must throw explicit errors in the OCJS backend. `Draft` is now available as a staging feature.
 
 ## What Problem It Solves
 

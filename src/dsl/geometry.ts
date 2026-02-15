@@ -30,6 +30,7 @@ import type {
   Profile,
   ProfileRef,
   Mirror,
+  Draft,
   RankRule,
   Revolve,
   Scalar,
@@ -443,6 +444,28 @@ export const mirror = (
     deps,
   });
 
+export const draft = (
+  id: ID,
+  source: Selector,
+  faces: Selector,
+  neutralPlane: PlaneRef,
+  pullDirection: AxisSpec,
+  angle: Scalar,
+  result?: string,
+  deps?: ID[]
+): Draft =>
+  compact({
+    id,
+    kind: "feature.draft",
+    source,
+    faces,
+    neutralPlane,
+    pullDirection,
+    angle,
+    result: result ?? `body:${id}`,
+    deps,
+  });
+
 export const thicken = (
   id: ID,
   surface: Selector,
@@ -595,32 +618,58 @@ export const patternLinear = (
   origin: Selector,
   spacing: PatternLinear["spacing"],
   count: PatternLinear["count"],
-  deps?: ID[]
+  depsOrOpts?: ID[] | { deps?: ID[]; source?: Selector; result?: string }
 ): PatternLinear =>
-  compact({
-    id,
-    kind: "pattern.linear",
-    origin,
-    spacing,
-    count,
-    deps,
-  });
+  compact(
+    Array.isArray(depsOrOpts)
+      ? {
+          id,
+          kind: "pattern.linear",
+          origin,
+          spacing,
+          count,
+          deps: depsOrOpts,
+        }
+      : {
+          id,
+          kind: "pattern.linear",
+          origin,
+          spacing,
+          count,
+          deps: depsOrOpts?.deps,
+          source: depsOrOpts?.source,
+          result: depsOrOpts?.result,
+        }
+  );
 
 export const patternCircular = (
   id: ID,
   origin: Selector,
   axis: PatternCircular["axis"],
   count: Scalar,
-  deps?: ID[]
+  depsOrOpts?: ID[] | { deps?: ID[]; source?: Selector; result?: string }
 ): PatternCircular =>
-  compact({
-    id,
-    kind: "pattern.circular",
-    origin,
-    axis,
-    count,
-    deps,
-  });
+  compact(
+    Array.isArray(depsOrOpts)
+      ? {
+          id,
+          kind: "pattern.circular",
+          origin,
+          axis,
+          count,
+          deps: depsOrOpts,
+        }
+      : {
+          id,
+          kind: "pattern.circular",
+          origin,
+          axis,
+          count,
+          deps: depsOrOpts?.deps,
+          source: depsOrOpts?.source,
+          result: depsOrOpts?.result,
+        }
+  );
 
 export const profileRect = (
   width: Scalar,

@@ -9,6 +9,7 @@ import {
   KernelObject,
 } from "./backend.js";
 import { IntentFeature, Sketch2D, Selector } from "./ir.js";
+import { TF_STAGED_FEATURES } from "./feature_staging.js";
 
 export class MockBackend implements Backend {
   private seq = 0;
@@ -30,6 +31,10 @@ export class MockBackend implements Backend {
         "feature.sweep",
         "feature.shell",
         "feature.pipe",
+        "feature.mirror",
+        "feature.draft",
+        "feature.thicken",
+        "feature.thread",
         "feature.hole",
         "feature.fillet",
         "feature.chamfer",
@@ -37,6 +42,7 @@ export class MockBackend implements Backend {
         "pattern.linear",
         "pattern.circular",
       ],
+      featureStages: TF_STAGED_FEATURES,
       mesh: true,
       exports: { step: true, stl: true },
       assertions: ["assert.brepValid", "assert.minEdgeLength"],
@@ -94,6 +100,7 @@ export class MockBackend implements Backend {
         return this.emitSolid(feature);
       }
       case "feature.shell":
+      case "feature.draft":
       case "feature.thicken":
       case "feature.thread":
         return this.emitSolid(feature);
@@ -238,6 +245,25 @@ export class MockBackend implements Backend {
 
   private emitPatternOrGeneric(feature: IntentFeature): KernelResult {
     if (feature.kind === "pattern.linear" || feature.kind === "pattern.circular") {
+      const source =
+        "source" in feature ? (feature as { source?: Selector }).source : undefined;
+      if (source) {
+        const resultName =
+          "result" in feature && typeof (feature as { result?: string }).result === "string"
+            ? (feature as { result: string }).result
+            : `body:${feature.id}`;
+        return {
+          outputs: new Map([[resultName, this.makeObj("solid")]]),
+          selections: [
+            this.makeSelection("solid", {
+              createdBy: feature.id,
+              role: "body",
+              ownerKey: resultName,
+              center: [0, 0, 0],
+            }),
+          ],
+        };
+      }
       return {
         outputs: new Map([[`pattern:${feature.id}`, this.makeObj("pattern")]]),
         selections: [],

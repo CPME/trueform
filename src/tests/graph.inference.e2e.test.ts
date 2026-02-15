@@ -234,6 +234,34 @@ const tests = [
       assert.ok(result.featureOrder.indexOf("datum-1") < extrudeIndex);
     },
   },
+  {
+    name: "graph: draft infers source + datum dependencies",
+    fn: async () => {
+      const part = dsl.part("draft-deps", [
+        dsl.datumAxis("pull-axis", "+Z"),
+        dsl.datumPlane("neutral", "+Z"),
+        dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:base"),
+        dsl.draft(
+          "draft-1",
+          dsl.selectorNamed("body:base"),
+          dsl.selectorFace([
+            dsl.predCreatedBy("base"),
+            dsl.predPlanar(),
+            dsl.predNormal("+X"),
+          ]),
+          dsl.planeDatum("neutral"),
+          dsl.axisDatum("pull-axis"),
+          Math.PI / 60,
+          "body:main"
+        ),
+      ]);
+      const result = compilePart(part);
+      const draftIndex = result.featureOrder.indexOf("draft-1");
+      assert.ok(result.featureOrder.indexOf("base") < draftIndex);
+      assert.ok(result.featureOrder.indexOf("neutral") < draftIndex);
+      assert.ok(result.featureOrder.indexOf("pull-axis") < draftIndex);
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

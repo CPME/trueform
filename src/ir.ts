@@ -142,6 +142,7 @@ export type IntentFeature =
   | PipeSweep
   | HexTubeSweep
   | Mirror
+  | Draft
   | Thicken
   | Thread
   | Hole
@@ -389,6 +390,16 @@ export type Mirror = FeatureBase & {
   result: string;
 };
 
+export type Draft = FeatureBase & {
+  kind: "feature.draft";
+  source: Selector;
+  faces: Selector;
+  neutralPlane: PlaneRef;
+  pullDirection: AxisSpec;
+  angle: Scalar;
+  result: string;
+};
+
 export type Thicken = FeatureBase & {
   kind: "feature.thicken";
   surface: Selector;
@@ -480,6 +491,8 @@ export type PatternLinear = FeatureBase & {
   origin: Selector;
   spacing: [Scalar, Scalar];
   count: [Scalar, Scalar];
+  source?: Selector;
+  result?: string;
 };
 
 export type PatternCircular = FeatureBase & {
@@ -487,6 +500,8 @@ export type PatternCircular = FeatureBase & {
   origin: Selector;
   axis: AxisDirection;
   count: Scalar;
+  source?: Selector;
+  result?: string;
 };
 
 export type PatternRef =

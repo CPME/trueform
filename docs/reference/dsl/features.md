@@ -7,6 +7,9 @@ import {
   extrude,
   revolve,
   sweep,
+  draft,
+  patternLinear,
+  patternCircular,
   pipe,
   pipeSweep,
   hexTubeSweep,
@@ -30,12 +33,15 @@ import {
 - `hexTubeSweep(id, path, outerAcrossFlats, innerAcrossFlats?, result?, opts?) -> HexTubeSweep`
 - `shell(id, source, thickness, result?, deps?, opts?) -> Shell`
 - `mirror(id, source, plane, result?, deps?) -> Mirror`
+- `draft(id, source, faces, neutralPlane, pullDirection, angle, result?, deps?) -> Draft` (staging)
 - `thicken(id, surface, thickness, result?, deps?, opts?) -> Thicken`
 - `thread(id, axis, length, majorDiameter, pitch, result?, deps?, opts?) -> Thread` (modelled)
 - `hole(id, onFace, axis, diameter, depth, opts?) -> Hole`
 - `fillet(id, edges, radius, deps?) -> Fillet`
 - `chamfer(id, edges, distance, deps?) -> Chamfer`
 - `booleanOp(id, op, left, right, result?, deps?) -> BooleanOp`
+- `patternLinear(id, origin, spacing, count, depsOrOpts?) -> PatternLinear`
+- `patternCircular(id, origin, axis, count, depsOrOpts?) -> PatternCircular`
 - `union(id, left, right, result?, deps?) -> BooleanOp`
 - `cut(id, left, right, result?, deps?) -> BooleanOp` (subtract)
 - `intersect(id, left, right, result?, deps?) -> BooleanOp`
@@ -51,12 +57,14 @@ Examples:
 - [Hex tube sweep](./examples/features#hex-tube-sweep)
 - [Shell](./examples/features#shell)
 - [Mirror](./examples/features#mirror)
+- [Draft](./examples/features#draft)
 - [Thicken](./examples/features#thicken)
 - [Modelled thread](./examples/features#modelled-thread)
 - [Hole](./examples/features#hole)
 - [Fillet](./examples/features#fillet)
 - [Chamfer](./examples/features#chamfer)
 - [Boolean](./examples/features#boolean-union)
+- [Pattern](./examples/features#pattern-featurebody)
 
 ## Thread
 

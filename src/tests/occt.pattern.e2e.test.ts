@@ -61,6 +61,59 @@ const tests = [
       assertPositiveVolume(occt, shape, "circular pattern solid");
     },
   },
+  {
+    name: "occt e2e: linear pattern replicates source solids",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const topFace = dsl.selectorFace(
+        [dsl.predCreatedBy("seed"), dsl.predNormal("+Z")],
+        [dsl.rankMaxZ()]
+      );
+      const part = dsl.part("pattern-linear-feature", [
+        dsl.extrude("seed", dsl.profileRect(8, 8), 6, "body:seed"),
+        dsl.patternLinear("pattern-f", topFace, [14, 0], [3, 1], {
+          source: dsl.selectorNamed("body:seed"),
+          result: "body:main",
+          deps: ["seed"],
+        }),
+      ]);
+
+      const result = buildPart(part, backend);
+      const body = result.final.outputs.get("body:main");
+      assert.ok(body, "missing body:main output");
+      const shape = body.meta["shape"] as any;
+      assert.ok(shape, "missing shape metadata");
+      assertValidShape(occt, shape, "linear feature pattern solid");
+      assertPositiveVolume(occt, shape, "linear feature pattern solid");
+    },
+  },
+  {
+    name: "occt e2e: circular pattern replicates source solids",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const anchorTopFace = dsl.selectorFace(
+        [dsl.predCreatedBy("anchor"), dsl.predNormal("+Z")],
+        [dsl.rankMaxZ()]
+      );
+      const part = dsl.part("pattern-circular-feature", [
+        dsl.extrude("anchor", dsl.profileRect(6, 6), 2, "body:anchor"),
+        dsl.extrude("seed", dsl.profileRect(6, 6, [18, 0, 0]), 6, "body:seed"),
+        dsl.patternCircular("pattern-fc", anchorTopFace, "+Z", 4, {
+          source: dsl.selectorNamed("body:seed"),
+          result: "body:main",
+          deps: ["anchor", "seed"],
+        }),
+      ]);
+
+      const result = buildPart(part, backend);
+      const body = result.final.outputs.get("body:main");
+      assert.ok(body, "missing body:main output");
+      const shape = body.meta["shape"] as any;
+      assert.ok(shape, "missing shape metadata");
+      assertValidShape(occt, shape, "circular feature pattern solid");
+      assertPositiveVolume(occt, shape, "circular feature pattern solid");
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

@@ -3,6 +3,7 @@ import type { IntentPart } from "../dsl.js";
 import type { MeshOptions } from "../backend.js";
 import {
   booleanOp,
+  draft,
   loft,
   sweep,
   chamfer,
@@ -17,6 +18,7 @@ import {
   predPlanar,
   predNormal,
   pathPolyline,
+  patternLinear,
   profileCircle,
   profilePoly,
   profileRect,
@@ -258,6 +260,24 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         selectorNamed("body:tool"),
         "body:main",
         ["base", "tool"]
+      ),
+    ]),
+  },
+  {
+    id: "pattern",
+    title: "Pattern (Feature/Body)",
+    part: part("example-pattern", [
+      extrude("seed", profileRect(10, 10), 8, "body:seed"),
+      patternLinear(
+        "pattern-1",
+        selectorFace([predCreatedBy("seed"), predPlanar(), predNormal("+Z")], [rankMaxZ()]),
+        [18, 0],
+        [4, 1],
+        {
+          source: selectorNamed("body:seed"),
+          result: "body:main",
+          deps: ["seed"],
+        }
       ),
     ]),
   },
@@ -555,6 +575,28 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         ),
       ]);
     })(),
+  },
+  {
+    id: "draft",
+    title: "Draft",
+    part: part("example-draft", [
+      extrude("base", profileRect(60, 40), 20, "body:base"),
+      datumPlane("draft-neutral", "+Z"),
+      draft(
+        "draft-1",
+        selectorNamed("body:base"),
+        selectorFace([
+          predCreatedBy("base"),
+          predPlanar(),
+          predNormal("+X"),
+        ]),
+        planeDatum("draft-neutral"),
+        "+Z",
+        Math.PI / 18,
+        "body:main",
+        ["base", "draft-neutral"]
+      ),
+    ]),
   },
   {
     id: "thicken",

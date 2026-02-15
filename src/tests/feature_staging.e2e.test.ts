@@ -10,13 +10,31 @@ import { runTests } from "./occt_test_utils.js";
 
 const tests = [
   {
-    name: "feature staging: registry includes thread and base surface feature",
+    name: "feature staging: registry includes draft/thread/surface entries",
     fn: async () => {
       const keys = listStagedFeatureKeys();
+      assert.ok(keys.includes("feature.draft"));
       assert.ok(keys.includes("feature.thread"));
       assert.ok(keys.includes("feature.surface"));
+      assert.equal(TF_STAGED_FEATURES["feature.draft"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.thread"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.surface"]?.stage, "staging");
+    },
+  },
+  {
+    name: "feature staging: draft resolves to staging entry",
+    fn: async () => {
+      const draft = dsl.draft(
+        "draft-1",
+        dsl.selectorNamed("body:main"),
+        dsl.selectorFace([dsl.predPlanar()]),
+        dsl.planeDatum("datum-1"),
+        dsl.axisVector([0, 0, 1]),
+        0.1
+      );
+      const stage = getFeatureStage(draft);
+      assert.equal(stage.key, "feature.draft");
+      assert.equal(stage.stage, "staging");
     },
   },
   {
