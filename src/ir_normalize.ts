@@ -29,7 +29,7 @@ export function normalizePart(
   if (shouldValidate(options)) validatePart(part);
   if (part.constraints && part.constraints.length > 0) {
     console.warn(
-      `TrueForm: Part constraints are a data-only placeholder in v1; constraints are not evaluated (part ${part.id}).`
+      `TrueForm: Part constraints are data-only in v1; use evaluatePartDimensions for semantic dimensions (part ${part.id}).`
     );
   }
   if (part.assertions && part.assertions.length > 0) {
@@ -187,6 +187,13 @@ function normalizeFeature(
       clone.depth = normalizeDepth(clone.depth, ctx);
       if (clone.axis !== undefined) {
         clone.axis = normalizeExtrudeAxis(clone.axis, ctx);
+      }
+      break;
+    case "feature.plane":
+      clone.width = normalizeScalar(clone.width, "length", ctx);
+      clone.height = normalizeScalar(clone.height, "length", ctx);
+      if (clone.origin !== undefined) {
+        clone.origin = normalizePoint3(clone.origin, ctx);
       }
       break;
     case "feature.surface":

@@ -23,6 +23,7 @@ export class MockBackend implements Backend {
         "datum.frame",
         "feature.sketch2d",
         "feature.extrude",
+        "feature.plane",
         "feature.surface",
         "feature.revolve",
         "feature.pipeSweep",
@@ -67,6 +68,8 @@ export class MockBackend implements Backend {
           return this.emitSurface(feature, "surface");
         }
         return this.emitSolid(feature);
+      case "feature.plane":
+        return this.emitSurface(feature, "face");
       case "feature.surface":
         return this.emitSurface(feature, "face");
       case "feature.revolve":

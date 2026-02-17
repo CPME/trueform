@@ -30,6 +30,7 @@ import {
   Shell,
   Pipe,
   PipeSweep,
+  Plane,
   HexTubeSweep,
   PlaneRef,
   Path3D,
@@ -98,6 +99,7 @@ export class OcctBackend implements Backend {
         "datum.frame",
         "feature.sketch2d",
         "feature.extrude",
+        "feature.plane",
         "feature.surface",
         "feature.revolve",
         "feature.loft",
@@ -145,6 +147,12 @@ export class OcctBackend implements Backend {
         );
       case "feature.extrude":
         return this.execExtrude(input.feature as Extrude, input.upstream);
+      case "feature.plane":
+        return this.execPlane(
+          input.feature as Plane,
+          input.upstream,
+          input.resolve
+        );
       case "feature.surface":
         return this.execSurface(input.feature as Surface, input.upstream);
       case "feature.revolve":
@@ -316,9 +324,16 @@ export class OcctBackend implements Backend {
     }
 
     const normals = this.computeNormals(positions, indices);
-    const edgePositions =
-      opts.includeEdges === false ? undefined : this.buildEdgeLines(shape, opts);
-    return { positions, indices, normals, faceIds, edgePositions };
+    const edgeData =
+      opts.includeEdges === false ? null : this.buildEdgeLines(shape, opts);
+    return {
+      positions,
+      indices,
+      normals,
+      faceIds,
+      edgePositions: edgeData?.positions,
+      edgeIndices: edgeData?.edgeIndices,
+    };
   }
 
   exportStep(target: KernelObject, opts: StepExportOptions = {}): Uint8Array {
@@ -491,6 +506,69 @@ export class OcctBackend implements Backend {
       feature.id,
       feature.result,
       feature.tags
+    );
+    return { outputs, selections };
+  }
+
+  private execPlane(
+    feature: Plane,
+    upstream: KernelResult,
+    resolve: ExecuteInput["resolve"]
+  ): KernelResult {
+    const width = expectNumber(feature.width, "plane width");
+    const height = expectNumber(feature.height, "plane height");
+    if (!(width > 0)) {
+      throw new Error("OCCT backend: plane width must be greater than zero");
+    }
+    if (!(height > 0)) {
+      throw new Error("OCCT backend: plane height must be greater than zero");
+    }
+
+    const basis = feature.plane
+      ? this.resolvePlaneBasis(feature.plane, upstream, resolve)
+      : {
+          origin: [0, 0, 0] as [number, number, number],
+          xDir: [1, 0, 0] as [number, number, number],
+          yDir: [0, 1, 0] as [number, number, number],
+          normal: [0, 0, 1] as [number, number, number],
+        };
+    const originOffset = feature.origin ?? [0, 0, 0];
+    const center: [number, number, number] = [
+      basis.origin[0] + expectNumber(originOffset[0], "plane origin[0]"),
+      basis.origin[1] + expectNumber(originOffset[1], "plane origin[1]"),
+      basis.origin[2] + expectNumber(originOffset[2], "plane origin[2]"),
+    ];
+
+    const halfWidth = width / 2;
+    const halfHeight = height / 2;
+    const xOffset = this.scaleVec(basis.xDir, halfWidth);
+    const yOffset = this.scaleVec(basis.yDir, halfHeight);
+    const corners: [number, number, number][] = [
+      this.addVec(this.addVec(center, xOffset), yOffset),
+      this.addVec(this.subVec(center, xOffset), yOffset),
+      this.subVec(this.subVec(center, xOffset), yOffset),
+      this.subVec(this.addVec(center, xOffset), yOffset),
+    ];
+
+    const wire = this.makePolygonWire(corners);
+    const faceBuilder = this.makeFaceFromWire(wire);
+    const shape = this.readShape(faceBuilder);
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:face`,
+          kind: "face" as const,
+          meta: { shape },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      shape,
+      feature.id,
+      feature.result,
+      feature.tags,
+      { rootKind: "face" }
     );
     return { outputs, selections };
   }
@@ -5437,7 +5515,10 @@ export class OcctBackend implements Backend {
     return value;
   }
 
-  private buildEdgeLines(shape: any, opts: MeshOptions): number[] {
+  private buildEdgeLines(
+    shape: any,
+    opts: MeshOptions
+  ): { positions: number[]; edgeIndices: number[] } {
     const occt = this.occt as any;
     const adjacency = this.buildEdgeAdjacency(shape);
     const explorer = new occt.TopExp_Explorer_1();
@@ -5448,27 +5529,38 @@ export class OcctBackend implements Backend {
     );
 
     const positions: number[] = [];
+    const edgeIndices: number[] = [];
+    let edgeIndex = 0;
     for (; explorer.More(); explorer.Next()) {
       const edgeShape = explorer.Current();
       const edge = this.toEdge(edgeShape);
       const faces = this.adjacentFaces(adjacency, edge);
-      if (faces.length > 0 && faces.length < 2) continue;
+      if (faces.length > 0 && faces.length < 2) {
+        edgeIndex += 1;
+        continue;
+      }
       if (faces.length >= 2) {
         const continuity = this.edgeContinuityValue(edge, faces[0], faces[1]);
         if (!opts.includeTangentEdges && continuity !== null && continuity > 0) {
+          edgeIndex += 1;
           continue;
         }
       }
       const points = this.sampleEdgePoints(edge, opts);
-      if (points.length < 2) continue;
+      if (points.length < 2) {
+        edgeIndex += 1;
+        continue;
+      }
       for (let i = 0; i + 1 < points.length; i += 1) {
         const a = points[i];
         const b = points[i + 1];
         if (!a || !b) continue;
         positions.push(a[0], a[1], a[2], b[0], b[1], b[2]);
+        edgeIndices.push(edgeIndex);
       }
+      edgeIndex += 1;
     }
-    return positions;
+    return { positions, edgeIndices };
   }
 
   private sampleEdgePoints(edge: any, opts: MeshOptions): Array<[number, number, number]> {

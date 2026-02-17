@@ -11,6 +11,7 @@ import {
   extrude,
   fillet,
   hole,
+  plane,
   mirror,
   shell,
   planeDatum,
@@ -34,7 +35,6 @@ import {
   selectorNamed,
   sketch2d,
   sketchLine,
-  sketchRectCenter,
   sketchRectCorner,
   surface,
   thicken,
@@ -559,41 +559,34 @@ export const dslFeatureExamples: DslFeatureExample[] = [
   {
     id: "mirror",
     title: "Mirror",
-    part: (() => {
-      const planeRect = sketchRectCenter("plane-rect", [0, 0], 80, 52);
-      const planeSketch = sketch2d(
-        "sketch-mirror-plane",
-        [{ name: "profile:mirror-plane", profile: profileSketchLoop(["plane-rect"]) }],
-        { plane: planeDatum("mirror-plane"), entities: [planeRect] }
-      );
-      return part("example-mirror", [
-        datumPlane("mirror-plane", "+X"),
-        planeSketch,
-        surface("mirror-plane-surface", profileRef("profile:mirror-plane"), "surface:mirror-plane"),
-        extrude("rib", profileRect(44, 12, [20, 0, 0]), 8, "body:rib"),
-        extrude("boss", profileCircle(10, [34, 12, 0]), 16, "body:boss"),
-        booleanOp(
-          "half-union",
-          "union",
-          selectorNamed("body:rib"),
-          selectorNamed("body:boss"),
-          "body:half"
-        ),
-        mirror(
-          "mirror-1",
-          selectorNamed("body:half"),
-          planeDatum("mirror-plane"),
-          "body:mirror"
-        ),
-        booleanOp(
-          "union-2",
-          "union",
-          selectorNamed("body:half"),
-          selectorNamed("body:mirror"),
-          "body:main"
-        ),
-      ]);
-    })(),
+    part: part("example-mirror", [
+      datumPlane("mirror-plane", "+X"),
+      plane("mirror-plane-surface", 80, 52, "surface:mirror-plane", {
+        plane: planeDatum("mirror-plane"),
+      }),
+      extrude("rib", profileRect(44, 12, [20, 0, 0]), 8, "body:rib"),
+      extrude("boss", profileCircle(10, [34, 12, 0]), 16, "body:boss"),
+      booleanOp(
+        "half-union",
+        "union",
+        selectorNamed("body:rib"),
+        selectorNamed("body:boss"),
+        "body:half"
+      ),
+      mirror(
+        "mirror-1",
+        selectorNamed("body:half"),
+        planeDatum("mirror-plane"),
+        "body:mirror"
+      ),
+      booleanOp(
+        "union-2",
+        "union",
+        selectorNamed("body:half"),
+        selectorNamed("body:mirror"),
+        "body:main"
+      ),
+    ]),
     render: {
       layers: [
         {

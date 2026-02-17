@@ -459,7 +459,12 @@ const tests = [
         assert.ok(meshPreviewAssetUrl.length > 0, "Missing preview mesh URL");
         assert.ok(meshExportAssetUrl.length > 0, "Missing export mesh URL");
 
-        const interactiveMesh = await fetchJson<{ indices?: number[]; positions?: number[] }>(
+        const interactiveMesh = await fetchJson<{
+          indices?: number[];
+          positions?: number[];
+          edgePositions?: number[];
+          edgeIndices?: number[];
+        }>(
           `${runtime.baseUrl}${meshInteractiveAssetUrl}`
         );
         const previewMesh = await fetchJson<{ indices?: number[]; positions?: number[] }>(
@@ -476,6 +481,14 @@ const tests = [
         assert.ok(triInteractive <= triPreview, "Expected interactive <= preview triangle count");
         assert.ok(triPreview <= triExport, "Expected preview <= export triangle count");
         assert.ok(triInteractive < triExport, "Expected interactive < export triangle count");
+        const interactiveEdgeSegments = Math.floor(
+          (interactiveMesh.edgePositions?.length ?? 0) / 6
+        );
+        assert.equal(
+          interactiveMesh.edgeIndices?.length ?? 0,
+          interactiveEdgeSegments,
+          "interactive mesh should provide one edge index per edge segment"
+        );
 
         const previewAssetId = String(meshPreviewJob.result?.mesh?.asset?.id ?? "");
         assert.ok(previewAssetId.length > 0, "Missing preview asset id");

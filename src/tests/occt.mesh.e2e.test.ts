@@ -27,6 +27,12 @@ const tests = [
         (mesh.edgePositions?.length ?? 0) > 0,
         "mesh edge positions should be non-empty"
       );
+      const edgeSegments = Math.floor((mesh.edgePositions?.length ?? 0) / 6);
+      assert.equal(
+        mesh.edgeIndices?.length ?? 0,
+        edgeSegments,
+        "mesh edgeIndices should align 1:1 with edge segments"
+      );
     },
   },
 ];

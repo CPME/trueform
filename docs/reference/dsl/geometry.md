@@ -13,6 +13,7 @@ For intent-first imports, prefer:
 - `datumAxis(id, direction, origin?, deps?) -> DatumAxis`
 - `datumFrame(id, on, deps?) -> DatumFrame`
 - `sketch2d(id, profiles, opts?) -> Sketch2D` (opts supports `entities`)
+- `plane(id, width, height, result?, opts?) -> Plane`
 
 ## Geometry: Sketch Primitives
 

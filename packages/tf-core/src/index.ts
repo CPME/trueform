@@ -2,6 +2,7 @@
 export * from "./ir.js";
 export * from "./dsl.js";
 export * from "./assertions.js";
+export * from "./dimensions.js";
 export * from "./build_cache.js";
 export * from "./mesh_profiles.js";
 export * from "./compiler.js";

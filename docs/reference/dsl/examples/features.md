@@ -176,17 +176,11 @@ Notes:
 ![Mirror example](/examples/dsl/mirror.iso.png)
 
 ```ts
-const planeRect = sketchRectCenter("plane-rect", [0, 0], 80, 52);
-const planeSketch = sketch2d(
-  "sketch-mirror-plane",
-  [{ name: "profile:mirror-plane", profile: profileSketchLoop(["plane-rect"]) }],
-  { plane: planeDatum("mirror-plane"), entities: [planeRect] }
-);
-
 const examplePart = part("example-mirror", [
   datumPlane("mirror-plane", "+X"),
-  planeSketch,
-  surface("mirror-plane-surface", profileRef("profile:mirror-plane"), "surface:mirror-plane"),
+  plane("mirror-plane-surface", 80, 52, "surface:mirror-plane", {
+    plane: planeDatum("mirror-plane"),
+  }),
   extrude("rib", profileRect(44, 12, [20, 0, 0]), 8, "body:rib"),
   extrude("boss", profileCircle(10, [34, 12, 0]), 16, "body:boss"),
   booleanOp(
@@ -215,7 +209,7 @@ const examplePart = part("example-mirror", [
 Notes:
 - The mirrored source is intentionally asymmetric (`body:half`) so the mirrored
   result is visually clear.
-- Rendering a thin surface on the datum plane makes the mirror plane visible in docs.
+- `plane(...)` creates a finite reference face directly from a datum or planar selector.
 
 ## Draft
 

@@ -262,6 +262,22 @@ const tests = [
       assert.ok(result.featureOrder.indexOf("pull-axis") < draftIndex);
     },
   },
+  {
+    name: "graph: plane infers datum plane dependency",
+    fn: async () => {
+      const part = dsl.part("plane-datum-deps", [
+        dsl.plane("plane-1", 20, 10, "surface:main", {
+          plane: dsl.planeDatum("datum-1"),
+        }),
+        dsl.datumPlane("datum-1", "+Z"),
+      ]);
+      const result = compilePart(part);
+      assert.ok(
+        result.featureOrder.indexOf("datum-1") <
+          result.featureOrder.indexOf("plane-1")
+      );
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

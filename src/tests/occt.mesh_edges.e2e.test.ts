@@ -22,7 +22,13 @@ const tests = [
         angularDeflection: 0.5,
       });
       const edges = mesh.edgePositions ?? [];
+      const edgeIndices = mesh.edgeIndices ?? [];
       assert.ok(edges.length > 0, "expected mesh edge positions");
+      assert.equal(
+        edgeIndices.length,
+        Math.floor(edges.length / 6),
+        "expected one edge index per edge segment"
+      );
 
       const z0 = 0;
       const z1 = length;

@@ -6,6 +6,7 @@ export {
   hexTubeSweep,
   hole,
   loft,
+  plane,
   mirror,
   patternCircular,
   patternLinear,

@@ -24,6 +24,13 @@ const tests = [
     },
   },
   {
+    name: "validation: plane width must be positive",
+    fn: async () => {
+      const part = dsl.part("plane-invalid", [dsl.plane("plane-1", 0, 10)]);
+      assert.throws(() => normalizePart(part), /width must be greater than zero/i);
+    },
+  },
+  {
     name: "validation: empty feature id throws",
     fn: async () => {
       const badExtrude = {

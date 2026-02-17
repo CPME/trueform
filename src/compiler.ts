@@ -75,7 +75,7 @@ function warnPlaceholders(doc: IntentDocument) {
   }
   if (doc.constraints && doc.constraints.length > 0) {
     console.warn(
-      "TrueForm: FTI constraints are a data-only placeholder in v1; constraints are not evaluated."
+      "TrueForm: FTI constraints are a data-only placeholder in v1; use evaluatePartDimensions for semantic dimensions."
     );
   }
   if (doc.assertions && doc.assertions.length > 0) {

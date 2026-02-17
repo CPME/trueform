@@ -19,6 +19,7 @@ import type {
   PathSegment,
   PatternCircular,
   PatternLinear,
+  Plane,
   PatternRef,
   Pipe,
   PipeSweep,
@@ -293,6 +294,24 @@ export const extrude = (
     deps,
     axis: opts?.axis,
     mode: opts?.mode,
+  });
+
+export const plane = (
+  id: ID,
+  width: Plane["width"],
+  height: Plane["height"],
+  result?: string,
+  opts?: { plane?: Plane["plane"]; origin?: Plane["origin"]; deps?: ID[] }
+): Plane =>
+  compact({
+    id,
+    kind: "feature.plane",
+    width,
+    height,
+    plane: opts?.plane,
+    origin: opts?.origin,
+    result: result ?? `surface:${id}`,
+    deps: opts?.deps,
   });
 
 export const surface = (

@@ -5,6 +5,7 @@
 ```ts
 import {
   extrude,
+  plane,
   revolve,
   sweep,
   pipe,
@@ -25,6 +26,7 @@ import {
 ## Features
 
 - `extrude(id, profile, depth, result?, deps?, opts?) -> Extrude`
+- `plane(id, width, height, result?, opts?) -> Plane`
 - `surface(id, profile, result?, deps?) -> Surface`
 - `revolve(id, profile, axis, angle, result?, opts?) -> Revolve`
 - `loft(id, profiles, result?, deps?, opts?) -> Loft`
