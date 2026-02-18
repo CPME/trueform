@@ -237,6 +237,7 @@ async function waitUntilStateSeen(
 function makeRuntimeDoc() {
   const part = dsl.part("runtime-cylinder", [
     dsl.extrude("cylinder", dsl.profileCircle(28), 90, "body:main"),
+    dsl.extrude("side-boss", dsl.profileRect(14, 10, [80, 0, 0]), 24, "body:secondary"),
   ]);
   const document = dsl.document("runtime-service-doc", [part], dsl.context());
   return { part, document };
@@ -501,6 +502,40 @@ const tests = [
         );
         assert.equal(String(previewArtifact.partBuildKey ?? ""), partBuildKey1);
 
+        const secondaryMeshSubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(
+          `${runtime.baseUrl}/v1/jobs/mesh`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              buildId,
+              target: "body:secondary",
+              profile: "preview",
+            }),
+          }
+        );
+        assert.equal(secondaryMeshSubmit.id, secondaryMeshSubmit.jobId);
+        const secondaryMeshJob = await pollJob(runtime.baseUrl, secondaryMeshSubmit.jobId);
+        observedStates.add(secondaryMeshJob.state);
+        assert.equal(secondaryMeshJob.state, "succeeded");
+        assert.equal(
+          String(secondaryMeshJob.result?.keys?.meshKey ?? "") !==
+            String(meshPreviewJob.result?.keys?.meshKey ?? ""),
+          true,
+          "mesh key must include target output"
+        );
+        assert.equal(
+          String(secondaryMeshJob.result?.mesh?.asset?.url ?? "") !==
+            String(meshPreviewJob.result?.mesh?.asset?.url ?? ""),
+          true,
+          "mesh asset URL should differ across targets"
+        );
+
         const exportSubmit1 = await fetchJsonWithStatus<{
           id: string;
           jobId: string;
@@ -521,6 +556,33 @@ const tests = [
         observedStates.add(exportJob1.state);
         assert.equal(exportJob1.state, "succeeded");
         assert.equal(exportJob1.result?.cache?.export?.hit, false);
+
+        const exportSecondarySubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(
+          `${runtime.baseUrl}/v1/export/step`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              buildId,
+              target: "body:secondary",
+              options: { schema: "AP242" },
+            }),
+          }
+        );
+        const exportSecondaryJob = await pollJob(runtime.baseUrl, exportSecondarySubmit.jobId);
+        observedStates.add(exportSecondaryJob.state);
+        assert.equal(exportSecondaryJob.state, "succeeded");
+        assert.equal(
+          String(exportSecondaryJob.result?.keys?.exportKey ?? "") !==
+            String(exportJob1.result?.keys?.exportKey ?? ""),
+          true,
+          "export key must include target output"
+        );
 
         const exportSubmit2 = await fetchJsonWithStatus<{
           id: string;

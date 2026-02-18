@@ -38,11 +38,21 @@ type DeflateContext = {
 class ShapeRegistry {
   private counter = 0;
   private shapes = new Map<NativeShapeHandle, any>();
+  private reverse: WeakMap<object, NativeShapeHandle> = new WeakMap();
 
   register(shape: any): NativeShapeHandle {
+    if (shape && typeof shape === "object") {
+      const existing = this.reverse.get(shape as object);
+      if (existing && this.shapes.has(existing)) {
+        return existing;
+      }
+    }
     const handle = `shape:${this.counter}`;
     this.counter += 1;
     this.shapes.set(handle, shape);
+    if (shape && typeof shape === "object") {
+      this.reverse.set(shape as object, handle);
+    }
     return handle;
   }
 
@@ -56,6 +66,7 @@ class ShapeRegistry {
 
   clear(): void {
     this.shapes.clear();
+    this.reverse = new WeakMap();
   }
 }
 

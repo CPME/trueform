@@ -373,9 +373,13 @@ function isSelector(value: unknown): value is Selector {
 
 export function topoSortDeterministic(features: IntentFeature[], graph: Graph): ID[] {
   const indegree = new Map<ID, number>();
+  const outgoing = new Map<ID, ID[]>();
   for (const node of graph.nodes) indegree.set(node, 0);
   for (const edge of graph.edges) {
     indegree.set(edge.to, (indegree.get(edge.to) ?? 0) + 1);
+    const list = outgoing.get(edge.from) ?? [];
+    list.push(edge.to);
+    outgoing.set(edge.from, list);
   }
 
   const byId = new Map<ID, IntentFeature>(features.map((f) => [f.id, f]));
@@ -389,19 +393,18 @@ export function topoSortDeterministic(features: IntentFeature[], graph: Graph): 
   while (queue.length > 0) {
     const id = queue.shift() as ID;
     result.push(id);
-    for (const edge of graph.edges) {
-      if (edge.from !== id) continue;
-      const next = edge.to;
+    const neighbors = outgoing.get(id) ?? [];
+    for (const next of neighbors) {
       indegree.set(next, (indegree.get(next) ?? 0) - 1);
       if (indegree.get(next) === 0) {
-        queue.push(next);
-        queue.sort();
+        insertSorted(queue, next);
       }
     }
   }
 
   if (result.length !== graph.nodes.length) {
-    const missing = graph.nodes.filter((n) => !result.includes(n));
+    const present = new Set(result);
+    const missing = graph.nodes.filter((n) => !present.has(n));
     throw new CompileError(
       "cycle",
       `Dependency cycle detected: ${missing.join(", ")}`
@@ -416,4 +419,16 @@ export function topoSortDeterministic(features: IntentFeature[], graph: Graph): 
   }
 
   return result;
+}
+
+function insertSorted(queue: ID[], value: ID): void {
+  let lo = 0;
+  let hi = queue.length;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    const current = queue[mid];
+    if (current !== undefined && current < value) lo = mid + 1;
+    else hi = mid;
+  }
+  queue.splice(lo, 0, value);
 }

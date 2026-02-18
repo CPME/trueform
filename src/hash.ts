@@ -15,11 +15,14 @@ export function hashFeature(feature: IntentFeature): string {
 
 export function hashValue(value: unknown): string {
   const normalized = stableStringify(value);
-  let hash = 0;
+  // 64-bit FNV-1a keeps this deterministic across runtimes while materially
+  // reducing collision risk vs a 32-bit rolling hash.
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  const mask = 0xffffffffffffffffn;
   for (let i = 0; i < normalized.length; i += 1) {
-    const chr = normalized.charCodeAt(i);
-    hash = (hash << 5) - hash + chr;
-    hash |= 0;
+    hash ^= BigInt(normalized.charCodeAt(i));
+    hash = (hash * prime) & mask;
   }
-  return `h${(hash >>> 0).toString(16)}`;
+  return `h${hash.toString(16).padStart(16, "0")}`;
 }
