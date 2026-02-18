@@ -6,8 +6,11 @@ import initOpenCascade from "opencascade.js/dist/node.js";
 import {
   buildPartAsync,
   buildPartCacheKey,
+  evaluatePartAssertions,
+  evaluatePartDimensions,
   meshOptionsForProfile,
 } from "../../dist/index.js";
+import { residualsForTesting } from "../../dist/assembly.js";
 import {
   TF_API_ENDPOINTS,
   TF_RUNTIME_OPTIONAL_FEATURES,
@@ -17,7 +20,7 @@ import {
 } from "../../dist/api.js";
 import { OcctBackend } from "../../dist/backends.js";
 import { backendToAsync } from "../../dist/backend-spi.js";
-import { InMemoryJobQueue } from "../../dist/experimental.js";
+import { buildAssembly, InMemoryJobQueue } from "../../dist/experimental.js";
 
 const DEFAULT_PORT = Number(process.env.TF_RUNTIME_PORT || process.env.PORT || 8080);
 const DEFAULT_JOB_TIMEOUT_MS = Number(process.env.TF_RUNTIME_JOB_TIMEOUT_MS || 30000);
@@ -30,6 +33,11 @@ const MAX_ASSETS_PER_TENANT = Number(process.env.TF_RUNTIME_MAX_ASSETS_PER_TENAN
 const MAX_PENDING_JOBS_PER_TENANT = Number(
   process.env.TF_RUNTIME_MAX_PENDING_JOBS_PER_TENANT || 32
 );
+const MAX_BUILD_SESSIONS_PER_TENANT = Number(
+  process.env.TF_RUNTIME_MAX_BUILD_SESSIONS_PER_TENANT || 32
+);
+const MAX_BUILDS_PER_SESSION = Number(process.env.TF_RUNTIME_MAX_BUILDS_PER_SESSION || 8);
+const BUILD_SESSION_TTL_MS = Number(process.env.TF_RUNTIME_BUILD_SESSION_TTL_MS || 30 * 60 * 1000);
 const KEY_VERSION = "tf-service-key-v1";
 const TENANT_HEADER = "x-tf-tenant-id";
 const DEFAULT_TENANT = "public";
@@ -55,6 +63,7 @@ export function createTfServiceServer(options = {}) {
   const assetStore = new Map();
   const artifactStore = new Map();
   const buildStore = new Map();
+  const buildSessionStore = new Map();
   const buildCache = new Map();
   const meshCache = new Map();
   const exportCache = new Map();
@@ -68,6 +77,7 @@ export function createTfServiceServer(options = {}) {
 
   let assetCounter = 0;
   let buildCounter = 0;
+  let sessionCounter = 0;
 
   let occtPromise;
   let backendSync;
@@ -205,6 +215,69 @@ export function createTfServiceServer(options = {}) {
     return `build_${Date.now()}_${buildCounter}`;
   }
 
+  function nextBuildSessionId() {
+    sessionCounter += 1;
+    return `session_${Date.now()}_${sessionCounter}`;
+  }
+
+  function pruneExpiredBuildSessions() {
+    const now = Date.now();
+    for (const [sessionId, session] of buildSessionStore.entries()) {
+      if (session.expiresAtMs <= now) buildSessionStore.delete(sessionId);
+    }
+  }
+
+  function createBuildSession(tenantId) {
+    pruneExpiredBuildSessions();
+    assertTenantQuota(
+      tenantId,
+      "build_sessions_per_tenant",
+      MAX_BUILD_SESSIONS_PER_TENANT,
+      countTenantInStore(buildSessionStore, tenantId)
+    );
+    const now = Date.now();
+    const sessionId = nextBuildSessionId();
+    const session = {
+      id: sessionId,
+      tenantId,
+      createdAt: new Date(now).toISOString(),
+      updatedAt: new Date(now).toISOString(),
+      expiresAtMs: now + BUILD_SESSION_TTL_MS,
+      buildsByPartKey: new Map(),
+    };
+    buildSessionStore.set(sessionId, session);
+    return session;
+  }
+
+  function getBuildSession(tenantId, sessionId) {
+    pruneExpiredBuildSessions();
+    const session = buildSessionStore.get(sessionId);
+    if (!session || session.tenantId !== tenantId) return null;
+    const now = Date.now();
+    session.updatedAt = new Date(now).toISOString();
+    session.expiresAtMs = now + BUILD_SESSION_TTL_MS;
+    return session;
+  }
+
+  function dropBuildSession(tenantId, sessionId) {
+    const session = buildSessionStore.get(sessionId);
+    if (!session || session.tenantId !== tenantId) return false;
+    buildSessionStore.delete(sessionId);
+    return true;
+  }
+
+  function setBuildSessionEntry(session, sessionPartKey, entry) {
+    if (session.buildsByPartKey.has(sessionPartKey)) {
+      session.buildsByPartKey.delete(sessionPartKey);
+    }
+    session.buildsByPartKey.set(sessionPartKey, entry);
+    while (session.buildsByPartKey.size > MAX_BUILDS_PER_SESSION) {
+      const oldestKey = session.buildsByPartKey.keys().next().value;
+      if (typeof oldestKey !== "string") break;
+      session.buildsByPartKey.delete(oldestKey);
+    }
+  }
+
   function isPrimitive(value) {
     return ["string", "number", "boolean"].includes(typeof value);
   }
@@ -269,6 +342,67 @@ export function createTfServiceServer(options = {}) {
       if (selection.kind === "solid") solids.push(selection.id);
     }
     return { faces, edges, solids };
+  }
+
+  function summarizeValidation(results) {
+    const summary = { total: results.length, ok: 0, fail: 0, unsupported: 0 };
+    for (const result of results) {
+      if (result.status === "ok") summary.ok += 1;
+      else if (result.status === "fail") summary.fail += 1;
+      else summary.unsupported += 1;
+    }
+    return summary;
+  }
+
+  function residualCountForMate(mate) {
+    switch (mate?.kind) {
+      case "mate.fixed":
+        return 6;
+      case "mate.coaxial":
+        return 6;
+      case "mate.planar":
+        return 4;
+      case "mate.distance":
+        return 1;
+      case "mate.angle":
+        return 1;
+      case "mate.parallel":
+        return 3;
+      case "mate.perpendicular":
+        return 1;
+      case "mate.insert":
+        return 8;
+      case "mate.slider":
+        return 6;
+      case "mate.hinge":
+        return 7;
+      default:
+        return 0;
+    }
+  }
+
+  function summarizeMateResiduals(mates, residuals) {
+    const out = [];
+    let offset = 0;
+    for (let i = 0; i < mates.length; i += 1) {
+      const mate = mates[i];
+      const count = residualCountForMate(mate);
+      const values = residuals.slice(offset, offset + count);
+      offset += count;
+      const maxAbs = values.reduce((acc, v) => Math.max(acc, Math.abs(v)), 0);
+      const rms =
+        values.length === 0
+          ? 0
+          : Math.sqrt(values.reduce((acc, v) => acc + v * v, 0) / values.length);
+      out.push({
+        index: i,
+        kind: mate?.kind ?? "unknown",
+        count,
+        rms,
+        maxAbs,
+      });
+    }
+    return out;
   }
 
   function normalizePartialBuildHints(request) {
@@ -630,6 +764,15 @@ export function createTfServiceServer(options = {}) {
   async function handleBuild(tenantId, request, ctx) {
     await maybeSimulateDelay(request, ctx);
     const { part, document, docId } = resolvePart(tenantId, request);
+    const sessionId =
+      typeof request?.sessionId === "string" && request.sessionId.trim().length > 0
+        ? request.sessionId.trim()
+        : null;
+    const buildSession = sessionId ? getBuildSession(tenantId, sessionId) : null;
+    if (sessionId && !buildSession) {
+      throw new HttpError(404, "build_session_not_found", `Unknown build session ${sessionId}`);
+    }
+    const sessionPartKey = buildSession ? `${docId ?? "_adhoc"}::${part.id}` : null;
     const overrides = request?.params ?? undefined;
     const units = request?.units;
     const partialHints = normalizePartialBuildHints(request);
@@ -665,13 +808,27 @@ export function createTfServiceServer(options = {}) {
       recordCacheEvent("partBuild", false, partBuildKey?.value);
       ctx?.updateProgress(0.05);
       const backend = await getBackendAsync();
+      const sessionBuildEntry =
+        buildSession && sessionPartKey
+          ? buildSession.buildsByPartKey.get(sessionPartKey) ?? null
+          : null;
+      const previousBuild =
+        partialHints.changedFeatureIds.length > 0 ? sessionBuildEntry?.result ?? null : null;
       try {
         buildResult = await buildPartAsync(
           part,
           backend,
           overrides,
           Object.keys(validation).length > 0 ? validation : undefined,
-          units
+          units,
+          previousBuild
+            ? {
+                incremental: {
+                  previous: previousBuild,
+                  changedFeatureIds: partialHints.changedFeatureIds,
+                },
+              }
+            : undefined
         );
       } catch (err) {
         if (!partialHints.requested) throw err;
@@ -685,6 +842,31 @@ export function createTfServiceServer(options = {}) {
       if (partBuildKey) {
         cacheSet(buildCache, partBuildKey.value, { result: buildResult }, BUILD_CACHE_MAX);
       }
+    }
+    if (buildSession && sessionPartKey) {
+      setBuildSessionEntry(buildSession, sessionPartKey, {
+        result: buildResult,
+        partBuildKey: partBuildKey?.value ?? null,
+      });
+    }
+
+    let dimensions = [];
+    let assertions = [];
+    let validationError = null;
+    try {
+      dimensions = evaluatePartDimensions(part, buildResult.final, {
+        overrides,
+        units: units ?? document?.context?.units ?? "mm",
+      });
+      if (!backendSync) await getBackendAsync();
+      if (backendSync) {
+        assertions = evaluatePartAssertions(part, buildResult.final, backendSync, {
+          overrides,
+          units: units ?? document?.context?.units ?? "mm",
+        });
+      }
+    } catch (err) {
+      validationError = err instanceof Error ? err.message : String(err);
     }
 
     const buildId = nextBuildId();
@@ -741,22 +923,50 @@ export function createTfServiceServer(options = {}) {
       });
     }
 
+    const diagnosticsMode =
+      partialHints.requested && partBuildHit
+        ? "incremental"
+        : partialHints.requested
+          ? buildResult.diagnostics?.mode ?? "full"
+          : "full";
+    const reusedFeatureIds =
+      partialHints.requested && partBuildHit
+        ? buildResult.order.slice()
+        : buildResult.diagnostics?.reusedFeatureIds ?? [];
+    const invalidatedFeatureIds =
+      partialHints.requested && partBuildHit
+        ? []
+        : buildResult.diagnostics?.invalidatedFeatureIds ?? buildResult.order.slice();
+
     ctx?.updateProgress(1);
     return {
       buildId,
       partId: buildResult.partId,
       docId,
+      sessionId: buildSession?.id ?? null,
       backendFingerprint,
       featureOrder: buildResult.order,
       outputs: buildOutputsMap(buildResult.final.outputs),
       selections: buildSelectionIndex(buildResult.final.selections),
       mesh: meshAsset,
       metadata: bounds ? { bounds, triangleCount } : { triangleCount },
+      validation: {
+        dimensions,
+        assertions,
+        summary: {
+          dimensions: summarizeValidation(dimensions),
+          assertions: summarizeValidation(assertions),
+        },
+        error: validationError,
+      },
       diagnostics: {
         partialBuild: {
-          buildMode: partialHints.requested ? "hinted_full_rebuild" : "full",
+          buildMode: diagnosticsMode,
           requestedChangedFeatureIds: partialHints.changedFeatureIds,
           selectorHintKeys: partialHints.selectorHintKeys,
+          reusedFeatureIds,
+          invalidatedFeatureIds,
+          failedFeatureId: buildResult.diagnostics?.failedFeatureId ?? null,
         },
       },
       keys: {
@@ -766,6 +976,112 @@ export function createTfServiceServer(options = {}) {
       cache: {
         partBuild: { hit: partBuildHit },
         mesh: meshAsset ? { hit: meshCacheHit } : null,
+      },
+    };
+  }
+
+  async function handleAssemblySolve(tenantId, request, ctx) {
+    await maybeSimulateDelay(request, ctx);
+    let document = null;
+    let docId = request?.docId ?? null;
+    if (request?.document) {
+      const stored = storeDocument(tenantId, request.document);
+      document = stored.record.document;
+      docId = stored.record.docId;
+    } else if (docId) {
+      const stored = documentStore.get(tenantScopedKey(tenantId, docId));
+      if (!stored) {
+        throw new HttpError(404, "document_not_found", `Unknown document ${docId}`);
+      }
+      document = stored.document;
+    }
+    if (!document || !Array.isArray(document.parts)) {
+      throw new HttpError(400, "invalid_request", "Assembly solve requires document/docId with parts[]");
+    }
+
+    const assemblies = Array.isArray(document.assemblies) ? document.assemblies : [];
+    let assembly = null;
+    if (request?.assembly && typeof request.assembly === "object") {
+      assembly = request.assembly;
+    } else if (request?.assemblyId) {
+      assembly = assemblies.find((candidate) => candidate?.id === request.assemblyId) ?? null;
+    } else {
+      assembly = assemblies[0] ?? null;
+    }
+    if (!assembly) {
+      throw new HttpError(400, "assembly_not_found", "Assembly solve requires assembly payload or document assembly");
+    }
+    if (!Array.isArray(assembly.instances) || assembly.instances.length === 0) {
+      throw new HttpError(400, "invalid_assembly", "Assembly must include instances[]");
+    }
+
+    const backendFingerprint = await getBackendFingerprint();
+    const backend = await getBackendAsync();
+    const byPartId = new Map(document.parts.map((part) => [part.id, part]));
+    const uniquePartIds = Array.from(
+      new Set(
+        assembly.instances
+          .map((instance) => instance?.part)
+          .filter((partId) => typeof partId === "string" && partId.length > 0)
+      )
+    );
+    const builtParts = [];
+    for (const partId of uniquePartIds) {
+      const part = byPartId.get(partId);
+      if (!part) {
+        throw new HttpError(400, "part_not_found", `Assembly references missing part ${partId}`);
+      }
+      const partBuildKey = makePartBuildKey(
+        tenantId,
+        part,
+        document?.context,
+        undefined,
+        backendFingerprint
+      );
+      let built = null;
+      if (partBuildKey && buildCache.has(partBuildKey.value)) {
+        built = buildCache.get(partBuildKey.value).result;
+        recordCacheEvent("partBuild", true, partBuildKey.value);
+      } else {
+        recordCacheEvent("partBuild", false, partBuildKey?.value);
+        built = await buildPartAsync(
+          part,
+          backend,
+          undefined,
+          undefined,
+          document?.context?.units
+        );
+        if (partBuildKey) {
+          cacheSet(buildCache, partBuildKey.value, { result: built }, BUILD_CACHE_MAX);
+        }
+      }
+      builtParts.push(built);
+    }
+
+    const { simulateDelayMs: _assemblyDelayMs, ...solveOptions } = request?.options ?? {};
+    void _assemblyDelayMs;
+    const solved = buildAssembly(assembly, builtParts, solveOptions);
+    const connectorMap = new Map();
+    for (const built of builtParts) {
+      connectorMap.set(built.partId, built.connectors);
+    }
+    const residuals = residualsForTesting(assembly.mates ?? [], solved.instances, connectorMap);
+    const mateResiduals = summarizeMateResiduals(assembly.mates ?? [], residuals);
+
+    ctx?.updateProgress(1);
+    return {
+      assemblyId: solved.assemblyId,
+      docId,
+      converged: solved.converged,
+      iterations: solved.iterations,
+      residual: solved.residual,
+      instances: solved.instances.map((instance) => ({
+        id: instance.id,
+        part: instance.part,
+        transform: [...instance.transform],
+      })),
+      diagnostics: {
+        mateResiduals,
       },
     };
   }
@@ -914,6 +1230,11 @@ export function createTfServiceServer(options = {}) {
     return enqueueJob(tenantId, handleMesh, payload, timeoutMs);
   }
 
+  function enqueueAssemblySolve(tenantId, payload) {
+    const timeoutMs = payload?.timeoutMs ?? payload?.options?.timeoutMs;
+    return enqueueJob(tenantId, handleAssemblySolve, payload, timeoutMs);
+  }
+
   function enqueueExport(tenantId, payload, kind) {
     const timeoutMs = payload?.timeoutMs;
     return enqueueJob(tenantId, (ownerTenantId, request, ctx) => handleExport(ownerTenantId, request, kind, ctx), payload, timeoutMs);
@@ -970,6 +1291,7 @@ export function createTfServiceServer(options = {}) {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const { pathname } = url;
     const tenantId = getTenantId(req, url);
+    pruneExpiredBuildSessions();
 
     try {
       if (req.method === "GET" && pathname === TF_API_ENDPOINTS.capabilities) {
@@ -991,6 +1313,9 @@ export function createTfServiceServer(options = {}) {
             maxDocumentsPerTenant: MAX_DOCS_PER_TENANT,
             maxAssetsPerTenant: MAX_ASSETS_PER_TENANT,
             maxPendingJobsPerTenant: MAX_PENDING_JOBS_PER_TENANT,
+            maxBuildSessionsPerTenant: MAX_BUILD_SESSIONS_PER_TENANT,
+            maxBuildsPerSession: MAX_BUILDS_PER_SESSION,
+            buildSessionTtlMs: BUILD_SESSION_TTL_MS,
           },
           optionalFeatures: TF_RUNTIME_OPTIONAL_FEATURES,
         });
@@ -1046,6 +1371,33 @@ export function createTfServiceServer(options = {}) {
         return;
       }
 
+      if (req.method === "POST" && pathname === TF_API_ENDPOINTS.buildSessions) {
+        const session = createBuildSession(tenantId);
+        json(res, 201, {
+          sessionId: session.id,
+          tenantId,
+          createdAt: session.createdAt,
+          updatedAt: session.updatedAt,
+          expiresAt: new Date(session.expiresAtMs).toISOString(),
+        });
+        return;
+      }
+
+      if (req.method === "DELETE" && pathname.startsWith(`${TF_API_ENDPOINTS.buildSessions}/`)) {
+        const sessionId = pathname.split("/").pop();
+        if (!sessionId || !dropBuildSession(tenantId, sessionId)) {
+          json(res, 404, { error: { code: "build_session_not_found", message: "Build session not found" } });
+          return;
+        }
+        res.writeHead(204, {
+          "access-control-allow-origin": "*",
+          "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
+          "access-control-allow-headers": `content-type,${TENANT_HEADER}`,
+        });
+        res.end();
+        return;
+      }
+
       if (
         req.method === "POST" &&
         (pathname === TF_API_ENDPOINTS.build ||
@@ -1055,6 +1407,17 @@ export function createTfServiceServer(options = {}) {
       ) {
         const payload = await readJson(req);
         const job = await enqueueBuild(tenantId, payload);
+        json(res, 202, toJobAccepted(job));
+        return;
+      }
+
+      if (
+        req.method === "POST" &&
+        (pathname === TF_API_ENDPOINTS.assemblySolve ||
+          pathname === TF_API_ENDPOINTS.assemblySolveJobs)
+      ) {
+        const payload = await readJson(req);
+        const job = await enqueueAssemblySolve(tenantId, payload);
         json(res, 202, toJobAccepted(job));
         return;
       }
@@ -1212,6 +1575,7 @@ export function createTfServiceServer(options = {}) {
             builds: countTenantInStore(buildStore, tenantId),
             assets: countTenantInStore(assetStore, tenantId),
             artifacts: countTenantInStore(artifactStore, tenantId),
+            buildSessions: countTenantInStore(buildSessionStore, tenantId),
             buildCache: buildCache.size,
             meshCache: meshCache.size,
             exportCache: exportCache.size,

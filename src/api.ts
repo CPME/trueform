@@ -6,10 +6,13 @@ export const TF_API_ENDPOINTS = {
   capabilities: "/v1/capabilities",
   openapi: "/v1/openapi.json",
   documents: "/v1/documents",
+  buildSessions: "/v1/build-sessions",
   build: "/v1/build",
   buildJobs: "/v1/jobs/build",
   buildPartial: "/v1/build/partial",
   buildPartialJobs: "/v1/jobs/build/partial",
+  assemblySolve: "/v1/assembly/solve",
+  assemblySolveJobs: "/v1/jobs/assembly/solve",
   mesh: "/v1/mesh",
   meshJobs: "/v1/jobs/mesh",
   exportStep: "/v1/export/step",
@@ -24,13 +27,17 @@ export const TF_API_ENDPOINTS = {
 export const TF_RUNTIME_OPTIONAL_FEATURES = {
   partialBuild: {
     endpoint: true,
-    execution: "hinted_full_rebuild",
+    execution: "incremental",
+    requirements: {
+      sessionScoped: true,
+      changedFeatureIds: true,
+    },
   },
   buildSessions: {
-    enabled: false,
+    enabled: true,
   },
   assembly: {
-    solve: false,
+    solve: true,
     preview: false,
     validate: false,
   },
@@ -97,6 +104,7 @@ export type RuntimeBuildOptions = {
 export type RuntimeBuildRequest = {
   document?: unknown;
   docId?: string;
+  sessionId?: string;
   part?: unknown;
   partId?: string;
   params?: Record<string, number>;
@@ -109,9 +117,28 @@ export type RuntimeBuildRequest = {
 };
 
 export type RuntimeBuildDiagnostics = {
-  buildMode: "full" | "hinted_full_rebuild";
+  buildMode: "full" | "incremental";
   requestedChangedFeatureIds: string[];
   selectorHintKeys: string[];
+  reusedFeatureIds?: string[];
+  invalidatedFeatureIds?: string[];
+  failedFeatureId?: string | null;
+};
+
+export type RuntimeAssemblySolveRequest = {
+  document?: unknown;
+  docId?: string;
+  assembly?: unknown;
+  assemblyId?: string;
+  options?: {
+    maxIterations?: number;
+    tolerance?: number;
+    damping?: number;
+    translationEps?: number;
+    rotationEps?: number;
+    simulateDelayMs?: number;
+  };
+  timeoutMs?: number;
 };
 
 export const TF_RUNTIME_OPENAPI = {
@@ -155,6 +182,31 @@ export const TF_RUNTIME_OPENAPI = {
         },
       },
     },
+    "/v1/build-sessions": {
+      post: {
+        summary: "Create build session",
+        responses: {
+          "201": { description: "Created build session" },
+        },
+      },
+    },
+    "/v1/build-sessions/{sessionId}": {
+      delete: {
+        summary: "Delete build session",
+        parameters: [
+          {
+            name: "sessionId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "204": { description: "Deleted build session" },
+          "404": { description: "Build session not found" },
+        },
+      },
+    },
     "/v1/build": {
       post: {
         summary: "Queue full build",
@@ -192,6 +244,29 @@ export const TF_RUNTIME_OPENAPI = {
         responses: {
           "202": {
             description: "Accepted build job",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/JobAccepted" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/v1/assembly/solve": {
+      post: {
+        summary: "Queue assembly solve",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/AssemblySolveRequest" },
+            },
+          },
+        },
+        responses: {
+          "202": {
+            description: "Accepted assembly solve job",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/JobAccepted" },
@@ -349,6 +424,7 @@ export const TF_RUNTIME_OPENAPI = {
         properties: {
           document: { type: "object", additionalProperties: true },
           docId: { type: "string" },
+          sessionId: { type: "string" },
           part: { type: "object", additionalProperties: true },
           partId: { type: "string" },
           params: { type: "object", additionalProperties: { type: "number" } },
@@ -364,6 +440,17 @@ export const TF_RUNTIME_OPENAPI = {
           },
           changedFeatureIds: { type: "array", items: { type: "string" } },
           selectorHints: { type: "object", additionalProperties: true },
+        },
+      },
+      AssemblySolveRequest: {
+        type: "object",
+        properties: {
+          document: { type: "object", additionalProperties: true },
+          docId: { type: "string" },
+          assembly: { type: "object", additionalProperties: true },
+          assemblyId: { type: "string" },
+          timeoutMs: { type: "number" },
+          options: { type: "object", additionalProperties: true },
         },
       },
     },

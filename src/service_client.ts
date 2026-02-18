@@ -1,5 +1,6 @@
 import {
   TF_API_ENDPOINTS,
+  type RuntimeAssemblySolveRequest,
   type RuntimeBuildRequest,
   type RuntimeJobAccepted,
   type RuntimeJobRecord,
@@ -76,6 +77,21 @@ export class TfServiceClient {
     });
   }
 
+  async createBuildSession<T = { sessionId: string; createdAt: string; expiresAt: string }>(): Promise<T> {
+    return this.requestJson<T>({
+      method: "POST",
+      path: TF_API_ENDPOINTS.buildSessions,
+      body: {},
+    });
+  }
+
+  async deleteBuildSession(sessionId: string): Promise<void> {
+    await this.requestJson<Record<string, unknown>>({
+      method: "DELETE",
+      path: `${TF_API_ENDPOINTS.buildSessions}/${encodeURIComponent(sessionId)}`,
+    });
+  }
+
   async build(payload: RuntimeBuildRequest): Promise<ServiceJobAccepted> {
     return this.requestJson<ServiceJobAccepted>({
       method: "POST",
@@ -96,6 +112,22 @@ export class TfServiceClient {
     return this.requestJson<ServiceJobAccepted>({
       method: "POST",
       path: TF_API_ENDPOINTS.buildPartial,
+      body: payload,
+    });
+  }
+
+  async assemblySolve(payload: RuntimeAssemblySolveRequest): Promise<ServiceJobAccepted> {
+    return this.requestJson<ServiceJobAccepted>({
+      method: "POST",
+      path: TF_API_ENDPOINTS.assemblySolve,
+      body: payload,
+    });
+  }
+
+  async assemblySolveJob(payload: RuntimeAssemblySolveRequest): Promise<ServiceJobAccepted> {
+    return this.requestJson<ServiceJobAccepted>({
+      method: "POST",
+      path: TF_API_ENDPOINTS.assemblySolveJobs,
       body: payload,
     });
   }
