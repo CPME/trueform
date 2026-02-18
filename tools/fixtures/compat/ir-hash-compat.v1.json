@@ -4,12 +4,12 @@
     {
       "id": "stable-object-order",
       "expectedString": "{\"a\":1,\"b\":2,\"c\":{\"y\":[3,2,1],\"z\":9}}",
-      "expectedHash": "ha9b513a5"
+      "expectedHash": "h32a7d3b763c78644"
     },
     {
       "id": "stable-array-of-objects",
       "expectedString": "[{\"j\":1,\"k\":2},{\"a\":false,\"b\":true}]",
-      "expectedHash": "h9bfbf9dc"
+      "expectedHash": "h1c16c5109aec800f"
     }
   ],
   "compilePartWithHashes": {
@@ -20,10 +20,10 @@
       "top-extrude"
     ],
     "expectedFeatureHashes": {
-      "sketch-base": "hfb8161a",
-      "base-extrude": "h645f12e2",
-      "sketch-top": "hd414c9c6",
-      "top-extrude": "h427f464d"
+      "sketch-base": "h5308348c4ac9d141",
+      "base-extrude": "h21de46fa6b790d3d",
+      "sketch-top": "h3b7cc4c05b8f404d",
+      "top-extrude": "h74dfb9cb196dc7d0"
     }
   },
   "container": {

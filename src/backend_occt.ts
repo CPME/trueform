@@ -2137,23 +2137,22 @@ export class OcctBackend implements Backend {
         },
       });
       if (isFeaturePattern && sourceShape && sourceResult) {
-        let merged: any | null = null;
+        const instances: any[] = [];
         for (let i = 0; i < count[0]; i += 1) {
           for (let j = 0; j < count[1]; j += 1) {
+            if (i === 0 && j === 0) {
+              instances.push(sourceShape);
+              continue;
+            }
             const delta: [number, number, number] = [
               basis.xDir[0] * spacing[0] * i + basis.yDir[0] * spacing[1] * j,
               basis.xDir[1] * spacing[0] * i + basis.yDir[1] * spacing[1] * j,
               basis.xDir[2] * spacing[0] * i + basis.yDir[2] * spacing[1] * j,
             ];
-            const inst = this.transformShapeTranslate(sourceShape, delta);
-            if (!merged) {
-              merged = inst;
-            } else {
-              const fused = this.makeBoolean("union", merged, inst);
-              merged = this.readShape(fused);
-            }
+            instances.push(this.transformShapeTranslate(sourceShape, delta));
           }
         }
+        const merged = this.unionShapesBalanced(instances);
         if (!merged) {
           throw new Error("OCCT backend: pattern generated no instances");
         }
@@ -2190,17 +2189,16 @@ export class OcctBackend implements Backend {
       },
     });
     if (isFeaturePattern && sourceShape && sourceResult) {
-      let merged: any | null = null;
+      const instances: any[] = [];
       for (let i = 0; i < count; i += 1) {
-        const angle = (Math.PI * 2 * i) / count;
-        const inst = this.transformShapeRotate(sourceShape, origin, axis, angle);
-        if (!merged) {
-          merged = inst;
-        } else {
-          const fused = this.makeBoolean("union", merged, inst);
-          merged = this.readShape(fused);
+        if (i === 0) {
+          instances.push(sourceShape);
+          continue;
         }
+        const angle = (Math.PI * 2 * i) / count;
+        instances.push(this.transformShapeRotate(sourceShape, origin, axis, angle));
       }
+      const merged = this.unionShapesBalanced(instances);
       if (!merged) {
         throw new Error("OCCT backend: pattern generated no instances");
       }
@@ -2218,6 +2216,27 @@ export class OcctBackend implements Backend {
       return { outputs, selections };
     }
     return { outputs, selections: [] };
+  }
+
+  private unionShapesBalanced(shapes: any[]): any | null {
+    if (shapes.length === 0) return null;
+    let current = shapes.slice();
+    while (current.length > 1) {
+      const next: any[] = [];
+      for (let i = 0; i < current.length; i += 2) {
+        const left = current[i];
+        const right = current[i + 1];
+        if (!left) continue;
+        if (!right) {
+          next.push(left);
+          continue;
+        }
+        const fused = this.makeBoolean("union", left, right);
+        next.push(this.readShape(fused));
+      }
+      current = next;
+    }
+    return current[0] ?? null;
   }
 
   private execSketch(

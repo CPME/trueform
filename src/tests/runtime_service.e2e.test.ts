@@ -251,6 +251,15 @@ function makeRuntimeDoc() {
   return { part, document };
 }
 
+function makeRuntimeMultiOutputDoc() {
+  const part = dsl.part("runtime-multi-output", [
+    dsl.extrude("base-main", dsl.profileCircle(18), 40, "body:main"),
+    dsl.extrude("boss-secondary", dsl.profileRect(12, 8, [60, 0, 0]), 14, "body:secondary"),
+  ]);
+  const document = dsl.document("runtime-multi-output-doc", [part], dsl.context());
+  return { part, document };
+}
+
 const tests = [
   {
     name: "runtime service: documents, lifecycle, cache keys, and mesh profile contract",
@@ -602,6 +611,135 @@ const tests = [
           String(meshPreviewJob.result?.keys?.meshKey ?? "")
         );
         assert.equal(String(previewArtifact.partBuildKey ?? ""), partBuildKey1);
+
+        const { part: multiOutputPart, document: multiOutputDoc } = makeRuntimeMultiOutputDoc();
+        const multiBuildSubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(`${runtime.baseUrl}/v1/build`, 202, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            document: multiOutputDoc,
+            partId: multiOutputPart.id,
+            options: { meshProfile: "preview", prefetchPreview: false },
+          }),
+        });
+        assert.equal(multiBuildSubmit.id, multiBuildSubmit.jobId);
+        const multiBuildJob = await pollJob(runtime.baseUrl, multiBuildSubmit.jobId);
+        observedStates.add(multiBuildJob.state);
+        assert.equal(multiBuildJob.state, "succeeded");
+        const multiBuildId = String(multiBuildJob.result?.buildId ?? "");
+        assert.ok(multiBuildId.length > 0, "Missing multi-output build id");
+
+        const multiMeshMainSubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(`${runtime.baseUrl}/v1/jobs/mesh`, 202, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            buildId: multiBuildId,
+            target: "body:main",
+            profile: "preview",
+          }),
+        });
+        const multiMeshSecondarySubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(`${runtime.baseUrl}/v1/jobs/mesh`, 202, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            buildId: multiBuildId,
+            target: "body:secondary",
+            profile: "preview",
+          }),
+        });
+        const multiMeshMainJob = await pollJob(runtime.baseUrl, multiMeshMainSubmit.jobId);
+        const multiMeshSecondaryJob = await pollJob(
+          runtime.baseUrl,
+          multiMeshSecondarySubmit.jobId
+        );
+        observedStates.add(multiMeshMainJob.state);
+        observedStates.add(multiMeshSecondaryJob.state);
+        assert.equal(multiMeshMainJob.state, "succeeded");
+        assert.equal(multiMeshSecondaryJob.state, "succeeded");
+        const multiMeshMainKey = String(multiMeshMainJob.result?.keys?.meshKey ?? "");
+        const multiMeshSecondaryKey = String(multiMeshSecondaryJob.result?.keys?.meshKey ?? "");
+        assert.ok(
+          multiMeshMainKey.length > 0 && multiMeshSecondaryKey.length > 0,
+          `expected non-empty mesh keys (main='${multiMeshMainKey}', secondary='${multiMeshSecondaryKey}')`
+        );
+        assert.notEqual(
+          multiMeshSecondaryKey,
+          multiMeshMainKey,
+          `mesh key must include target output (main='${multiMeshMainKey}', secondary='${multiMeshSecondaryKey}')`
+        );
+        assert.equal(
+          String(multiMeshSecondaryJob.result?.mesh?.asset?.url ?? "") !==
+            String(multiMeshMainJob.result?.mesh?.asset?.url ?? ""),
+          true,
+          "mesh asset URL should differ across targets"
+        );
+
+        const multiExportMainSubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(`${runtime.baseUrl}/v1/export/step`, 202, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            buildId: multiBuildId,
+            target: "body:main",
+            options: { schema: "AP242" },
+          }),
+        });
+        const multiExportSecondarySubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(`${runtime.baseUrl}/v1/export/step`, 202, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            buildId: multiBuildId,
+            target: "body:secondary",
+            options: { schema: "AP242" },
+          }),
+        });
+        const multiExportMainJob = await pollJob(runtime.baseUrl, multiExportMainSubmit.jobId);
+        const multiExportSecondaryJob = await pollJob(
+          runtime.baseUrl,
+          multiExportSecondarySubmit.jobId
+        );
+        observedStates.add(multiExportMainJob.state);
+        observedStates.add(multiExportSecondaryJob.state);
+        assert.equal(multiExportMainJob.state, "succeeded");
+        assert.equal(multiExportSecondaryJob.state, "succeeded");
+        const multiExportMainKey = String(multiExportMainJob.result?.keys?.exportKey ?? "");
+        const multiExportSecondaryKey = String(
+          multiExportSecondaryJob.result?.keys?.exportKey ?? ""
+        );
+        assert.ok(
+          multiExportMainKey.length > 0 && multiExportSecondaryKey.length > 0,
+          `expected non-empty export keys (main='${multiExportMainKey}', secondary='${multiExportSecondaryKey}')`
+        );
+        assert.notEqual(
+          multiExportSecondaryKey,
+          multiExportMainKey,
+          `export key must include target output (main='${multiExportMainKey}', secondary='${multiExportSecondaryKey}')`
+        );
+        assert.equal(
+          String(multiExportSecondaryJob.result?.asset?.url ?? "") !==
+            String(multiExportMainJob.result?.asset?.url ?? ""),
+          true,
+          "export asset URL should differ across targets"
+        );
 
         const exportSubmit1 = await fetchJsonWithStatus<{
           id: string;
