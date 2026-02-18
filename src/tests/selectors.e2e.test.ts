@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { dsl } from "../dsl.js";
-import { resolveSelector } from "../selectors.js";
+import { resolveSelector, resolveSelectorSet } from "../selectors.js";
 import { runTests } from "./occt_test_utils.js";
 
 const tests = [
@@ -48,6 +48,32 @@ const tests = [
       };
       const resolved = resolveSelector(selector, ctx);
       assert.equal(resolved.id, "face-high");
+    },
+  },
+  {
+    name: "selectors: resolves multi-id selector.named target lists",
+    fn: async () => {
+      const selector = dsl.selectorNamed("edge:11, edge:12");
+      const ctx = {
+        selections: [
+          {
+            id: "edge:11",
+            kind: "edge" as const,
+            meta: { center: [0, 0, 0] },
+          },
+          {
+            id: "edge:12",
+            kind: "edge" as const,
+            meta: { center: [1, 0, 0] },
+          },
+        ],
+        named: new Map(),
+      };
+      const resolved = resolveSelectorSet(selector, ctx);
+      assert.deepEqual(
+        resolved.map((entry) => entry.id),
+        ["edge:11", "edge:12"]
+      );
     },
   },
 ];

@@ -36,6 +36,42 @@ function bounds(occt: any, shape: any) {
   return { min, max };
 }
 
+function shapesSame(a: any, b: any): boolean {
+  if (a === b) return true;
+  if (a && typeof a.IsSame === "function") {
+    try {
+      return !!a.IsSame(b);
+    } catch {
+      // fall through
+    }
+  }
+  if (a && typeof a.IsEqual === "function") {
+    try {
+      return !!a.IsEqual(b);
+    } catch {
+      // fall through
+    }
+  }
+  return false;
+}
+
+function countDuplicateEdgeIdMismatches(
+  selections: Array<{ id: string; kind: string; meta: Record<string, unknown> }>
+): number {
+  const edges = selections
+    .filter((selection) => selection.kind === "edge")
+    .map((selection) => ({ id: selection.id, shape: selection.meta["shape"] }));
+  let mismatches = 0;
+  for (let i = 0; i < edges.length; i += 1) {
+    for (let j = i + 1; j < edges.length; j += 1) {
+      if (shapesSame(edges[i]?.shape, edges[j]?.shape) && edges[i]?.id !== edges[j]?.id) {
+        mismatches += 1;
+      }
+    }
+  }
+  return mismatches;
+}
+
 const tests = [
   {
     name: "occt e2e: extrude rectangle produces solid output",
@@ -64,6 +100,15 @@ const tests = [
 
       const faceCount = countFaces(occt, shape);
       assert.ok(faceCount >= 5, `expected at least 5 faces, got ${faceCount}`);
+
+      const duplicateEdgeIdMismatches = countDuplicateEdgeIdMismatches(
+        result.final.selections as any[]
+      );
+      assert.equal(
+        duplicateEdgeIdMismatches,
+        0,
+        `expected duplicate edge refs to share canonical ids, found ${duplicateEdgeIdMismatches} mismatch pair(s)`
+      );
     },
   },
   {

@@ -127,6 +127,10 @@ export class OcctBackend implements Backend {
   }
 
   execute(input: ExecuteInput): KernelResult {
+    if (input.upstream.outputs.size === 0 && input.upstream.selections.length === 0) {
+      // Runtime service reuses a backend instance; reset ids per build so selection ids stay stable.
+      this.selectionSeq = 0;
+    }
     const kind = (input.feature as { kind: string }).kind;
     switch (kind) {
       case "datum.plane":
@@ -2280,6 +2284,8 @@ export class OcctBackend implements Backend {
   ): KernelSelection[] {
     const occt = this.occt as any;
     const selections: KernelSelection[] = [];
+    const canonicalFaceIds = new Map<number, Array<{ shape: any; id: string }>>();
+    const canonicalEdgeIds = new Map<number, Array<{ shape: any; id: string }>>();
     const tags =
       Array.isArray(featureTags) && featureTags.length > 0
         ? featureTags.slice()
@@ -2310,8 +2316,9 @@ export class OcctBackend implements Backend {
     );
     for (; faceExplorer.More(); faceExplorer.Next()) {
       const face = faceExplorer.Current();
+      const id = this.canonicalSelectionId("face", face, canonicalFaceIds);
       selections.push({
-        id: this.nextSelectionId("face"),
+        id,
         kind: "face",
         meta: this.faceMetadata(face, shape, featureId, ownerKey, tags),
       });
@@ -2325,14 +2332,35 @@ export class OcctBackend implements Backend {
     );
     for (; edgeExplorer.More(); edgeExplorer.Next()) {
       const edge = edgeExplorer.Current();
+      const id = this.canonicalSelectionId("edge", edge, canonicalEdgeIds);
       selections.push({
-        id: this.nextSelectionId("edge"),
+        id,
         kind: "edge",
         meta: this.edgeMetadata(edge, shape, featureId, ownerKey, tags),
       });
     }
 
     return selections;
+  }
+
+  private canonicalSelectionId(
+    prefix: string,
+    shape: any,
+    canonical: Map<number, Array<{ shape: any; id: string }>>
+  ): string {
+    const hash = this.shapeHash(shape);
+    const bucket = canonical.get(hash);
+    if (bucket) {
+      const match = bucket.find((entry) => this.shapesSame(entry.shape, shape));
+      if (match) return match.id;
+    }
+    const id = this.nextSelectionId(prefix);
+    if (bucket) {
+      bucket.push({ shape, id });
+    } else {
+      canonical.set(hash, [{ shape, id }]);
+    }
+    return id;
   }
 
   private nextSelectionId(prefix: string): string {

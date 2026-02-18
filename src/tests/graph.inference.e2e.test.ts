@@ -74,6 +74,39 @@ const tests = [
     },
   },
   {
+    name: "graph: selector.named explicit selection id is accepted",
+    fn: async () => {
+      const part = dsl.part("named-selection-id", [
+        dsl.extrude("base", dsl.profileRect(10, 10), 5, "body:main"),
+        dsl.fillet("fillet", dsl.selectorNamed("edge:7"), 1, ["base"]),
+      ]);
+      const result = compilePart(part);
+      assert.ok(
+        result.featureOrder.indexOf("base") <
+          result.featureOrder.indexOf("fillet")
+      );
+    },
+  },
+  {
+    name: "graph: selector.named multi selection ids are accepted",
+    fn: async () => {
+      const part = dsl.part("named-selection-id-list", [
+        dsl.extrude("base", dsl.profileRect(10, 10), 5, "body:main"),
+        dsl.fillet(
+          "fillet",
+          dsl.selectorNamed("edge:7, edge:9, edge:7"),
+          1,
+          ["base"]
+        ),
+      ]);
+      const result = compilePart(part);
+      assert.ok(
+        result.featureOrder.indexOf("base") <
+          result.featureOrder.indexOf("fillet")
+      );
+    },
+  },
+  {
     name: "graph: pred.createdBy infers dependency",
     fn: async () => {
       const part = dsl.part("created-by", [

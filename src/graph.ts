@@ -320,14 +320,21 @@ function selectorDependencies(
   const deps = new Set<ID>();
 
   if (selector.kind === "selector.named") {
-    const hit = outputToFeature.get(selector.name);
-    if (!hit) {
+    const names = parseNamedSelectorReferences(selector.name);
+    for (const name of names) {
+      const hit = outputToFeature.get(name);
+      if (hit) {
+        deps.add(hit);
+        continue;
+      }
+      if (isImplicitSelectionReference(name)) {
+        continue;
+      }
       throw new CompileError(
         "selector_named_missing",
-        `Feature ${featureId} references missing output ${selector.name}`
+        `Feature ${featureId} references missing output ${name}`
       );
     }
-    deps.add(hit);
     return { deps, anchored: true };
   }
 
@@ -369,6 +376,23 @@ function isSelector(value: unknown): value is Selector {
     kind === "selector.solid" ||
     kind === "selector.named"
   );
+}
+
+function parseNamedSelectorReferences(value: string): string[] {
+  if (!/[,\n;]/.test(value)) return [value];
+  const seen = new Set<string>();
+  const entries: string[] = [];
+  for (const raw of value.split(/[\n,;]+/g)) {
+    const normalized = raw.trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    entries.push(normalized);
+  }
+  return entries.length > 0 ? entries : [value];
+}
+
+function isImplicitSelectionReference(value: string): boolean {
+  return /^(edge|face|solid|surface):/i.test(value.trim());
 }
 
 export function topoSortDeterministic(features: IntentFeature[], graph: Graph): ID[] {

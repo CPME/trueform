@@ -44,7 +44,7 @@ export function resolveSelectorSet(
   ctx: ResolutionContext
 ): Selection[] {
   if (selector.kind === "selector.named") {
-    return [resolveNamed(selector, ctx)];
+    return resolveNamedSet(selector, ctx);
   }
 
   const candidates = ctx.selections.filter((s) => {
@@ -68,12 +68,47 @@ export function resolveSelectorSet(
   return ranked;
 }
 
-function resolveNamed(selector: NamedOutput, ctx: ResolutionContext): Selection {
-  const hit = ctx.named.get(selector.name);
-  if (!hit) {
-    throw new CompileError("selector_named_missing", `Missing named output ${selector.name}`);
+function resolveNamedSet(selector: NamedOutput, ctx: ResolutionContext): Selection[] {
+  const direct = resolveNamedSingle(selector.name, ctx);
+  if (direct) return [direct];
+
+  const tokens = parseNamedTargetList(selector.name);
+  if (tokens.length > 1) {
+    const resolved: Selection[] = [];
+    const seen = new Set<string>();
+    for (const token of tokens) {
+      const hit = resolveNamedSingle(token, ctx);
+      if (!hit) {
+        throw new CompileError("selector_named_missing", `Missing named output ${token}`);
+      }
+      if (seen.has(hit.id)) continue;
+      seen.add(hit.id);
+      resolved.push(hit);
+    }
+    if (resolved.length > 0) return resolved;
   }
-  return hit;
+
+  throw new CompileError("selector_named_missing", `Missing named output ${selector.name}`);
+}
+
+function resolveNamedSingle(name: string, ctx: ResolutionContext): Selection | null {
+  const hit = ctx.named.get(name);
+  if (hit) return hit;
+  const selectionHit = ctx.selections.find((selection) => selection.id === name);
+  return selectionHit ?? null;
+}
+
+function parseNamedTargetList(name: string): string[] {
+  if (!/[,\n;]/.test(name)) return [name];
+  const seen = new Set<string>();
+  const entries: string[] = [];
+  for (const raw of name.split(/[\n,;]+/g)) {
+    const token = raw.trim();
+    if (!token || seen.has(token)) continue;
+    seen.add(token);
+    entries.push(token);
+  }
+  return entries;
 }
 
 function predicateMatches(predicate: Predicate, selection: Selection): boolean {
