@@ -74,6 +74,11 @@ const tests = [
         0.02
       );
       assert.equal(constraint.kind, "constraint.surfaceProfile");
+      const dim = tolerancing.dimensionDistance("d-1", surface, surface, {
+        nominal: 12,
+        tolerance: 0.1,
+      });
+      assert.equal(dim.kind, "dimension.distance");
 
       const part = core.part("part-1", []);
       const doc = core.document("doc-1", [part], core.context(), [asm]);
@@ -82,6 +87,8 @@ const tests = [
       const profile = sketch.profileRect(2, 3);
       const extrude = features.extrude("extrude-1", profile, 5);
       assert.equal(extrude.kind, "feature.extrude");
+      const plane = features.plane("plane-1", 20, 10);
+      assert.equal(plane.kind, "feature.plane");
       const patternLinear = features.patternLinear(
         "p-l",
         selectors.selectorNamed("body:seed"),

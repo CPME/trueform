@@ -133,6 +133,7 @@ export type IntentFeature =
   | DatumFrame
   | Sketch2D
   | Extrude
+  | Plane
   | Surface
   | Revolve
   | Loft
@@ -311,6 +312,15 @@ export type Extrude = FeatureBase & {
   result: string;
   axis?: ExtrudeAxis;
   mode?: ExtrudeMode;
+};
+
+export type Plane = FeatureBase & {
+  kind: "feature.plane";
+  width: Scalar;
+  height: Scalar;
+  plane?: PlaneRef;
+  origin?: Point3D;
+  result: string;
 };
 
 export type Surface = FeatureBase & {
@@ -663,13 +673,41 @@ export type SizeConstraint = {
   requirement?: ID;
 };
 
+export type DimensionDistance = {
+  id: ID;
+  kind: "dimension.distance";
+  from: GeometryRef;
+  to: GeometryRef;
+  nominal?: Scalar;
+  tolerance?: Scalar;
+  plus?: Scalar;
+  minus?: Scalar;
+  capabilities?: ID[];
+  requirement?: ID;
+};
+
+export type DimensionAngle = {
+  id: ID;
+  kind: "dimension.angle";
+  from: GeometryRef;
+  to: GeometryRef;
+  nominal?: Scalar;
+  tolerance?: Scalar;
+  plus?: Scalar;
+  minus?: Scalar;
+  capabilities?: ID[];
+  requirement?: ID;
+};
+
 export type FTIConstraint =
   | SurfaceProfileConstraint
   | FlatnessConstraint
   | ParallelismConstraint
   | PerpendicularityConstraint
   | PositionConstraint
-  | SizeConstraint;
+  | SizeConstraint
+  | DimensionDistance
+  | DimensionAngle;
 
 export type AssertionBrepValid = {
   id: ID;

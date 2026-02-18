@@ -5,6 +5,8 @@ import {
   CosmeticThread,
   DatumModifier,
   DatumRef,
+  DimensionAngle,
+  DimensionDistance,
   ExtrudeAxis,
   Expr,
   FTIConstraint,
@@ -748,6 +750,41 @@ function validateFeature(feature: IntentFeature): void {
       );
       return;
     }
+    case "feature.plane": {
+      const plane = feature as {
+        width?: Scalar;
+        height?: Scalar;
+        plane?: PlaneRef;
+        origin?: unknown;
+        result?: string;
+      };
+      validateScalar(plane.width, "Plane width is required");
+      validateScalar(plane.height, "Plane height is required");
+      if (typeof plane.width === "number" && plane.width <= 0) {
+        throw new CompileError(
+          "validation_plane_width_range",
+          "Plane width must be greater than zero"
+        );
+      }
+      if (typeof plane.height === "number" && plane.height <= 0) {
+        throw new CompileError(
+          "validation_plane_height_range",
+          "Plane height must be greater than zero"
+        );
+      }
+      if (plane.plane !== undefined) {
+        validatePlaneRef(plane.plane, "Plane frame");
+      }
+      if (plane.origin !== undefined) {
+        validatePoint3Scalar(plane.origin, "Plane origin");
+      }
+      ensureNonEmptyString(
+        plane.result,
+        "validation_feature_result",
+        "Plane result is required"
+      );
+      return;
+    }
     case "feature.surface": {
       const surface = feature as {
         profile?: ProfileRef;
@@ -1415,6 +1452,40 @@ function validateConstraint(constraint: FTIConstraint, datumIds: Set<ID>): void 
       }
       return;
     }
+    case "dimension.distance": {
+      const entry = constraint as DimensionDistance;
+      validateGeometryRef(entry.from, "Distance dimension from");
+      validateGeometryRef(entry.to, "Distance dimension to");
+      validateDimensionToleranceFields(entry, "Distance dimension");
+      if (entry.capabilities !== undefined) {
+        validateIdArray(entry.capabilities, "Distance dimension capabilities");
+      }
+      if (entry.requirement !== undefined) {
+        ensureNonEmptyString(
+          entry.requirement,
+          "validation_constraint_requirement",
+          "Distance dimension requirement must be a string"
+        );
+      }
+      return;
+    }
+    case "dimension.angle": {
+      const entry = constraint as DimensionAngle;
+      validateGeometryRef(entry.from, "Angle dimension from");
+      validateGeometryRef(entry.to, "Angle dimension to");
+      validateDimensionToleranceFields(entry, "Angle dimension");
+      if (entry.capabilities !== undefined) {
+        validateIdArray(entry.capabilities, "Angle dimension capabilities");
+      }
+      if (entry.requirement !== undefined) {
+        ensureNonEmptyString(
+          entry.requirement,
+          "validation_constraint_requirement",
+          "Angle dimension requirement must be a string"
+        );
+      }
+      return;
+    }
     default:
       throw new CompileError(
         "validation_constraint_kind",
@@ -1660,6 +1731,60 @@ function validatePositiveScalar(value: Scalar | undefined, label: string): void 
       "validation_scalar_positive",
       `${label} must be > 0`
     );
+  }
+}
+
+function validateNonNegativeScalar(value: Scalar | undefined, label: string): void {
+  validateScalar(value, label);
+  const literal = scalarLiteral(value);
+  if (literal !== null && literal < 0) {
+    throw new CompileError(
+      "validation_scalar_non_negative",
+      `${label} must be >= 0`
+    );
+  }
+}
+
+function validateDimensionToleranceFields(
+  value: {
+    nominal?: Scalar;
+    tolerance?: Scalar;
+    plus?: Scalar;
+    minus?: Scalar;
+  },
+  label: string
+): void {
+  if (value.nominal !== undefined) {
+    validateScalar(value.nominal, `${label} nominal`);
+  }
+  const hasSymmetric = value.tolerance !== undefined;
+  const hasBilateral = value.plus !== undefined || value.minus !== undefined;
+  if (hasSymmetric && hasBilateral) {
+    throw new CompileError(
+      "validation_dimension_tolerance_shape",
+      `${label} cannot mix symmetric tolerance with plus/minus`
+    );
+  }
+  if (hasBilateral && (value.plus === undefined || value.minus === undefined)) {
+    throw new CompileError(
+      "validation_dimension_tolerance_shape",
+      `${label} plus/minus must both be provided`
+    );
+  }
+  if ((hasSymmetric || hasBilateral) && value.nominal === undefined) {
+    throw new CompileError(
+      "validation_dimension_tolerance_shape",
+      `${label} nominal is required when tolerance is provided`
+    );
+  }
+  if (value.tolerance !== undefined) {
+    validatePositiveScalar(value.tolerance, `${label} tolerance`);
+  }
+  if (value.plus !== undefined) {
+    validateNonNegativeScalar(value.plus, `${label} plus tolerance`);
+  }
+  if (value.minus !== undefined) {
+    validateNonNegativeScalar(value.minus, `${label} minus tolerance`);
   }
 }
 

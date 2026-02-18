@@ -4,6 +4,8 @@ import type {
   CosmeticThread,
   DatumModifier,
   DatumRef,
+  DimensionAngle,
+  DimensionDistance,
   FTIDatum,
   FlatnessConstraint,
   GeometryRef,
@@ -217,6 +219,58 @@ export const sizeConstraint = (
     modifiers: opts.modifiers,
     capabilities: opts.capabilities,
     requirement: opts.requirement,
+  });
+
+export const dimensionDistance = (
+  id: ID,
+  from: GeometryRef,
+  to: GeometryRef,
+  opts?: {
+    nominal?: Scalar;
+    tolerance?: Scalar;
+    plus?: Scalar;
+    minus?: Scalar;
+    capabilities?: ID[];
+    requirement?: ID;
+  }
+): DimensionDistance =>
+  compact({
+    id,
+    kind: "dimension.distance",
+    from,
+    to,
+    nominal: opts?.nominal,
+    tolerance: opts?.tolerance,
+    plus: opts?.plus,
+    minus: opts?.minus,
+    capabilities: opts?.capabilities,
+    requirement: opts?.requirement,
+  });
+
+export const dimensionAngle = (
+  id: ID,
+  from: GeometryRef,
+  to: GeometryRef,
+  opts?: {
+    nominal?: Scalar;
+    tolerance?: Scalar;
+    plus?: Scalar;
+    minus?: Scalar;
+    capabilities?: ID[];
+    requirement?: ID;
+  }
+): DimensionAngle =>
+  compact({
+    id,
+    kind: "dimension.angle",
+    from,
+    to,
+    nominal: opts?.nominal,
+    tolerance: opts?.tolerance,
+    plus: opts?.plus,
+    minus: opts?.minus,
+    capabilities: opts?.capabilities,
+    requirement: opts?.requirement,
   });
 
 export const cosmeticThread = (

@@ -3,6 +3,7 @@ export * from "./dsl.js";
 export { IR_SCHEMA } from "./ir_schema.js";
 export type { IrJsonSchema } from "./ir_schema.js";
 export * from "./assertions.js";
+export * from "./dimensions.js";
 export * from "./build_cache.js";
 export * from "./mesh_profiles.js";
 export {

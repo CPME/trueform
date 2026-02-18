@@ -25,8 +25,10 @@ Notes:
 
 The example below defines datum features and applies a small set of basic
 constraints (flatness, parallelism, perpendicularity, position, size) plus a
-surface profile constraint. This is data-only in v1 but is intended to flow
-from DSL -> IR -> PMI export (AP242 sidecar today).
+surface profile constraint and semantic dimensions (`dimension.distance`,
+`dimension.angle`). Constraints remain data-only in v1, while dimensions can
+be evaluated with `evaluatePartDimensions`; both flow from DSL -> IR -> PMI
+export (AP242 sidecar today).
 
 ![Tolerancing example](/examples/dsl/tolerancing.iso.png)
 

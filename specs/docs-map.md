@@ -14,6 +14,7 @@ Purpose: define the source of truth for each topic to prevent drift.
 - High-level overview + positioning: `specs/summary.md`
 - Functional tolerancing intent: `specs/functional-tolerancing-intent.md`
 - Feature maturity/staging registry: `specs/feature-staging.md`
+- Runtime execution milestone plan: `specs/webapp-runtime-two-milestones.md`
 - Roadmap ideas (non-MVP): `specs/geometric-abstractions.md`
 
 ## Maintenance Rules

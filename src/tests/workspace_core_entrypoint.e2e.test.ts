@@ -12,6 +12,7 @@ const tests = [
       assert.equal(typeof coreApi.buildPart, "function");
       assert.equal(typeof coreApi.compilePart, "function");
       assert.equal(typeof coreApi.compileDocument, "function");
+      assert.equal(typeof coreApi.evaluatePartDimensions, "function");
       assert.equal(typeof coreApi.dsl, "object");
 
       assert.equal(typeof coreApi.OcctBackend, "undefined");
@@ -25,6 +26,7 @@ const tests = [
       assert.equal(rootApi.buildPart, coreApi.buildPart);
       assert.equal(rootApi.compilePart, coreApi.compilePart);
       assert.equal(rootApi.compileDocument, coreApi.compileDocument);
+      assert.equal(rootApi.evaluatePartDimensions, coreApi.evaluatePartDimensions);
     },
   },
 ];

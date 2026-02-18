@@ -236,8 +236,17 @@ async function waitUntilStateSeen(
 
 function makeRuntimeDoc() {
   const part = dsl.part("runtime-cylinder", [
-    dsl.extrude("cylinder", dsl.profileCircle(28), 90, "body:main"),
-  ]);
+    dsl.sketch2d("sketch-base", [{ name: "profile:base", profile: dsl.profileCircle(28) }]),
+    dsl.extrude(
+      "cylinder",
+      dsl.profileRef("profile:base"),
+      dsl.exprParam("height"),
+      "body:main",
+      ["sketch-base"]
+    ),
+  ], {
+    params: [dsl.paramLength("height", dsl.exprLiteral(90))],
+  });
   const document = dsl.document("runtime-service-doc", [part], dsl.context());
   return { part, document };
 }
@@ -252,8 +261,18 @@ const tests = [
         const capabilities = await fetchJson<{
           apiVersion?: string;
           featureStages?: Record<string, { stage?: string; notes?: string }>;
+          quotas?: {
+            maxBuildSessionsPerTenant?: number;
+            maxBuildsPerSession?: number;
+            buildSessionTtlMs?: number;
+          };
           optionalFeatures?: {
-            partialBuild?: { endpoint?: boolean; execution?: string };
+            partialBuild?: {
+              endpoint?: boolean;
+              execution?: string;
+              requirements?: { sessionScoped?: boolean; changedFeatureIds?: boolean };
+            };
+            buildSessions?: { enabled?: boolean };
             assembly?: { solve?: boolean };
             bom?: { derive?: boolean };
             release?: { preflight?: boolean };
@@ -264,9 +283,21 @@ const tests = [
         assert.equal(capabilities.optionalFeatures?.partialBuild?.endpoint, true);
         assert.equal(
           capabilities.optionalFeatures?.partialBuild?.execution,
-          "hinted_full_rebuild"
+          "incremental"
         );
-        assert.equal(capabilities.optionalFeatures?.assembly?.solve, false);
+        assert.equal(
+          capabilities.optionalFeatures?.partialBuild?.requirements?.sessionScoped,
+          true
+        );
+        assert.equal(
+          capabilities.optionalFeatures?.partialBuild?.requirements?.changedFeatureIds,
+          true
+        );
+        assert.equal(capabilities.optionalFeatures?.buildSessions?.enabled, true);
+        assert.equal(capabilities.optionalFeatures?.assembly?.solve, true);
+        assert.equal((capabilities.quotas?.maxBuildSessionsPerTenant ?? 0) > 0, true);
+        assert.equal((capabilities.quotas?.maxBuildsPerSession ?? 0) > 0, true);
+        assert.equal((capabilities.quotas?.buildSessionTtlMs ?? 0) > 0, true);
         assert.equal(capabilities.optionalFeatures?.bom?.derive, false);
         assert.equal(capabilities.optionalFeatures?.release?.preflight, false);
         assert.equal(capabilities.optionalFeatures?.featureStaging?.registry, true);
@@ -280,6 +311,8 @@ const tests = [
         assert.equal(openapi.openapi, "3.1.0");
         assert.equal(openapi.info?.version, "1.2");
         assert.equal(typeof openapi.paths?.["/v1/build/partial"], "object");
+        assert.equal(typeof openapi.paths?.["/v1/build-sessions"], "object");
+        assert.equal(typeof openapi.paths?.["/v1/assembly/solve"], "object");
 
         const { part, document } = makeRuntimeDoc();
 
@@ -338,6 +371,8 @@ const tests = [
         assert.equal(buildJob1.state, "succeeded");
         assert.equal(buildJob1.result?.docId, docCreate.docId);
         assert.equal(buildJob1.result?.cache?.partBuild?.hit, false);
+        assert.equal(Array.isArray(buildJob1.result?.validation?.dimensions), true);
+        assert.equal(Array.isArray(buildJob1.result?.validation?.assertions), true);
         const partBuildKey1 = String(buildJob1.result?.keys?.partBuildKey ?? "");
         assert.ok(partBuildKey1.length > 0, "Missing partBuildKey in first build");
 
@@ -381,11 +416,78 @@ const tests = [
         assert.equal(partialBuildJob.state, "succeeded");
         assert.equal(
           partialBuildJob.result?.diagnostics?.partialBuild?.buildMode,
-          "hinted_full_rebuild"
+          "incremental"
         );
         assert.deepEqual(
           partialBuildJob.result?.diagnostics?.partialBuild?.requestedChangedFeatureIds,
           ["cylinder"]
+        );
+        assert.deepEqual(
+          partialBuildJob.result?.diagnostics?.partialBuild?.reusedFeatureIds,
+          ["sketch-base", "cylinder"]
+        );
+
+        const buildSession = await fetchJsonWithStatus<{
+          sessionId: string;
+          createdAt: string;
+          expiresAt: string;
+        }>(`${runtime.baseUrl}/v1/build-sessions`, 201, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        assert.ok(buildSession.sessionId.length > 0, "missing build session id");
+
+        const sessionBuildSubmit = await fetchJsonWithStatus<{ id: string; jobId: string }>(
+          `${runtime.baseUrl}/v1/build`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              ...buildPayload,
+              sessionId: buildSession.sessionId,
+            }),
+          }
+        );
+        const sessionBuildJob = await pollJob(runtime.baseUrl, sessionBuildSubmit.jobId);
+        assert.equal(sessionBuildJob.state, "succeeded");
+
+        const sessionPartialSubmit = await fetchJsonWithStatus<{ id: string; jobId: string }>(
+          `${runtime.baseUrl}/v1/build/partial`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              ...buildPayload,
+              sessionId: buildSession.sessionId,
+              params: { height: 95 },
+              partial: {
+                changedFeatureIds: ["cylinder"],
+              },
+            }),
+          }
+        );
+        const sessionPartialJob = await pollJob(runtime.baseUrl, sessionPartialSubmit.jobId);
+        assert.equal(sessionPartialJob.state, "succeeded");
+        assert.equal(
+          sessionPartialJob.result?.diagnostics?.partialBuild?.buildMode,
+          "incremental"
+        );
+        assert.deepEqual(
+          sessionPartialJob.result?.diagnostics?.partialBuild?.reusedFeatureIds,
+          ["sketch-base"]
+        );
+        assert.deepEqual(
+          sessionPartialJob.result?.diagnostics?.partialBuild?.invalidatedFeatureIds,
+          ["cylinder"]
+        );
+
+        await fetchJsonWithStatus<Record<string, unknown>>(
+          `${runtime.baseUrl}/v1/build-sessions/${buildSession.sessionId}`,
+          204,
+          { method: "DELETE" }
         );
 
         const buildId = String(buildJob1.result?.buildId ?? "");
@@ -459,7 +561,12 @@ const tests = [
         assert.ok(meshPreviewAssetUrl.length > 0, "Missing preview mesh URL");
         assert.ok(meshExportAssetUrl.length > 0, "Missing export mesh URL");
 
-        const interactiveMesh = await fetchJson<{ indices?: number[]; positions?: number[] }>(
+        const interactiveMesh = await fetchJson<{
+          indices?: number[];
+          positions?: number[];
+          edgePositions?: number[];
+          edgeIndices?: number[];
+        }>(
           `${runtime.baseUrl}${meshInteractiveAssetUrl}`
         );
         const previewMesh = await fetchJson<{ indices?: number[]; positions?: number[] }>(
@@ -476,6 +583,14 @@ const tests = [
         assert.ok(triInteractive <= triPreview, "Expected interactive <= preview triangle count");
         assert.ok(triPreview <= triExport, "Expected preview <= export triangle count");
         assert.ok(triInteractive < triExport, "Expected interactive < export triangle count");
+        const interactiveEdgeSegments = Math.floor(
+          (interactiveMesh.edgePositions?.length ?? 0) / 6
+        );
+        assert.equal(
+          interactiveMesh.edgeIndices?.length ?? 0,
+          interactiveEdgeSegments,
+          "interactive mesh should provide one edge index per edge segment"
+        );
 
         const previewAssetId = String(meshPreviewJob.result?.mesh?.asset?.id ?? "");
         assert.ok(previewAssetId.length > 0, "Missing preview asset id");
@@ -641,6 +756,223 @@ const tests = [
         assert.ok(observedStates.has("succeeded"), "Expected succeeded state coverage");
         assert.ok(observedStates.has("failed"), "Expected failed state coverage");
         assert.ok(observedStates.has("canceled"), "Expected canceled state coverage");
+      } finally {
+        await runtime.stop();
+      }
+    },
+  },
+  {
+    name: "runtime service: assembly solve endpoint returns solved transforms",
+    fn: async () => {
+      const runtime = await startRuntimeServer();
+      try {
+        const plate = dsl.part(
+          "asm-plate",
+          [dsl.extrude("plate-base", dsl.profileRect(20, 20), 4, "body:main")],
+          {
+            connectors: [
+              dsl.mateConnector(
+                "plate-top",
+                dsl.selectorFace(
+                  [dsl.predPlanar(), dsl.predCreatedBy("plate-base")],
+                  [dsl.rankMaxZ()]
+                ),
+                { normal: "+Z", xAxis: "+X" }
+              ),
+            ],
+          }
+        );
+        const peg = dsl.part(
+          "asm-peg",
+          [dsl.extrude("peg-body", dsl.profileCircle(4), 8, "body:main")],
+          {
+            connectors: [
+              dsl.mateConnector(
+                "peg-bottom",
+                dsl.selectorFace(
+                  [dsl.predPlanar(), dsl.predCreatedBy("peg-body")],
+                  [dsl.rankMinZ()]
+                ),
+                { normal: "-Z", xAxis: "+X" }
+              ),
+            ],
+          }
+        );
+        const assembly = dsl.assembly(
+          "plate-peg",
+          [
+            dsl.assemblyInstance("plate-1", plate.id),
+            dsl.assemblyInstance(
+              "peg-1",
+              peg.id,
+              dsl.transform({ translation: [6, 0, 12] })
+            ),
+          ],
+          {
+            mates: [
+              dsl.mateCoaxial(
+                dsl.assemblyRef("plate-1", "plate-top"),
+                dsl.assemblyRef("peg-1", "peg-bottom")
+              ),
+              dsl.matePlanar(
+                dsl.assemblyRef("plate-1", "plate-top"),
+                dsl.assemblyRef("peg-1", "peg-bottom"),
+                0
+              ),
+            ],
+          }
+        );
+        const document = dsl.document("asm-doc", [plate, peg], dsl.context(), [assembly]);
+
+        const submit = await fetchJsonWithStatus<{ id: string; jobId: string }>(
+          `${runtime.baseUrl}/v1/assembly/solve`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ document, assemblyId: "plate-peg" }),
+          }
+        );
+        const job = await pollJob(runtime.baseUrl, submit.jobId);
+        if (job.state !== "succeeded") {
+          throw new Error(
+            `assembly solve failed: ${JSON.stringify({
+              state: job.state,
+              error: job.error,
+              result: job.result,
+            })}`
+          );
+        }
+        assert.equal(job.state, "succeeded");
+        assert.equal(job.result?.assemblyId, "plate-peg");
+        assert.equal(job.result?.converged, true);
+        assert.equal(Array.isArray(job.result?.instances), true);
+        assert.equal(job.result?.instances?.length, 2);
+        assert.equal(Array.isArray(job.result?.diagnostics?.mateResiduals), true);
+        assert.equal(job.result?.diagnostics?.mateResiduals?.length, 2);
+      } finally {
+        await runtime.stop();
+      }
+    },
+  },
+  {
+    name: "runtime service: build sessions enforce quota, expiry, and tenant isolation",
+    fn: async () => {
+      const runtime = await startRuntimeServerWithEnv({
+        TF_RUNTIME_BUILD_SESSION_TTL_MS: "30",
+        TF_RUNTIME_MAX_BUILD_SESSIONS_PER_TENANT: "1",
+        TF_RUNTIME_MAX_BUILDS_PER_SESSION: "1",
+      });
+      try {
+        const { document } = makeRuntimeDoc();
+        const tenantA = { "x-tf-tenant-id": "tenant-a" };
+        const tenantB = { "x-tf-tenant-id": "tenant-b" };
+
+        const docA = await fetchJsonWithStatus<{ docId: string }>(
+          `${runtime.baseUrl}/v1/documents`,
+          201,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json", ...tenantA },
+            body: JSON.stringify({ document }),
+          }
+        );
+
+        const sessionA = await fetchJsonWithStatus<{ sessionId: string }>(
+          `${runtime.baseUrl}/v1/build-sessions`,
+          201,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json", ...tenantA },
+            body: JSON.stringify({}),
+          }
+        );
+        assert.ok(sessionA.sessionId.length > 0, "missing tenant-a session id");
+
+        const quotaError = await fetchJsonWithStatus<{ error?: { code?: string } }>(
+          `${runtime.baseUrl}/v1/build-sessions`,
+          429,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json", ...tenantA },
+            body: JSON.stringify({}),
+          }
+        );
+        assert.equal(quotaError.error?.code, "quota_exceeded");
+
+        const sessionB = await fetchJsonWithStatus<{ sessionId: string }>(
+          `${runtime.baseUrl}/v1/build-sessions`,
+          201,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json", ...tenantB },
+            body: JSON.stringify({}),
+          }
+        );
+        assert.ok(sessionB.sessionId.length > 0, "missing tenant-b session id");
+
+        const crossTenantDelete = await fetchJsonWithStatus<{ error?: { code?: string } }>(
+          `${runtime.baseUrl}/v1/build-sessions/${sessionA.sessionId}`,
+          404,
+          {
+            method: "DELETE",
+            headers: tenantB,
+          }
+        );
+        assert.equal(crossTenantDelete.error?.code, "build_session_not_found");
+
+        const crossTenantSubmit = await fetchJsonWithStatus<{ id: string; jobId: string }>(
+          `${runtime.baseUrl}/v1/build`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json", ...tenantA },
+            body: JSON.stringify({
+              docId: docA.docId,
+              partId: "runtime-cylinder",
+              sessionId: sessionB.sessionId,
+              partial: { changedFeatureIds: ["cylinder"] },
+            }),
+          }
+        );
+        const crossTenantBuild = await pollJob(
+          runtime.baseUrl,
+          crossTenantSubmit.jobId,
+          30000,
+          "tenant-a"
+        );
+        assert.equal(crossTenantBuild.state, "failed");
+        assert.equal(crossTenantBuild.error?.code, "build_session_not_found");
+
+        await sleep(80);
+
+        const expiredSubmit = await fetchJsonWithStatus<{ id: string; jobId: string }>(
+          `${runtime.baseUrl}/v1/build`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json", ...tenantA },
+            body: JSON.stringify({
+              docId: docA.docId,
+              partId: "runtime-cylinder",
+              sessionId: sessionA.sessionId,
+              partial: { changedFeatureIds: ["cylinder"] },
+            }),
+          }
+        );
+        const expiredBuild = await pollJob(runtime.baseUrl, expiredSubmit.jobId, 30000, "tenant-a");
+        assert.equal(expiredBuild.state, "failed");
+        assert.equal(expiredBuild.error?.code, "build_session_not_found");
+
+        const deleteExpired = await fetchJsonWithStatus<{ error?: { code?: string } }>(
+          `${runtime.baseUrl}/v1/build-sessions/${sessionA.sessionId}`,
+          404,
+          {
+            method: "DELETE",
+            headers: tenantA,
+          }
+        );
+        assert.equal(deleteExpired.error?.code, "build_session_not_found");
       } finally {
         await runtime.stop();
       }

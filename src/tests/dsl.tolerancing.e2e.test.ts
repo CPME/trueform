@@ -65,6 +65,15 @@ const tests = [
         nominal: 10,
         tolerance: 0.1,
       });
+      const dimDistance = dsl.dimensionDistance("dim-dist-1", edge, point, {
+        nominal: 24,
+        plus: 0.2,
+        minus: 0.1,
+      });
+      const dimAngle = dsl.dimensionAngle("dim-ang-1", axis, frame, {
+        nominal: Math.PI / 2,
+        tolerance: 0.01,
+      });
       const thread = dsl.cosmeticThread("thread-1", surface, {
         designation: "M8x1.25-6H",
         internal: true,
@@ -76,6 +85,8 @@ const tests = [
       assert.equal(perp.kind, "constraint.perpendicularity");
       assert.equal(pos.kind, "constraint.position");
       assert.equal(size.kind, "constraint.size");
+      assert.equal(dimDistance.kind, "dimension.distance");
+      assert.equal(dimAngle.kind, "dimension.angle");
       assert.equal(thread.kind, "thread.cosmetic");
     },
   },

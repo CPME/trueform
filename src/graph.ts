@@ -107,6 +107,7 @@ function buildOutputIndex(part: IntentPart): Map<string, ID> {
 function featureResultName(feature: IntentFeature): string | undefined {
   switch (feature.kind) {
     case "feature.extrude":
+    case "feature.plane":
     case "feature.surface":
     case "feature.revolve":
     case "feature.loft":
@@ -196,6 +197,9 @@ function inferDatumDependencies(
     case "feature.extrude":
       addExtrudeAxisDep((feature as { axis?: ExtrudeAxis }).axis, deps, byId);
       break;
+    case "feature.plane":
+      addPlaneRefDep((feature as { plane?: PlaneRef }).plane, deps, byId);
+      break;
     case "feature.sweep":
       addPlaneRefDep((feature as { frame?: PlaneRef }).frame, deps, byId);
       break;
@@ -273,6 +277,11 @@ function featureSelectors(feature: IntentFeature): Selector[] {
     case "datum.frame":
       return [feature.on];
     case "feature.sketch2d":
+      if (feature.plane && isSelector(feature.plane)) {
+        return [feature.plane];
+      }
+      return [];
+    case "feature.plane":
       if (feature.plane && isSelector(feature.plane)) {
         return [feature.plane];
       }

@@ -214,6 +214,16 @@ const tests = [
       assert.equal(extrude.kind, "feature.extrude");
       assert.equal(extrude.result, "body:extrude-1");
       assert.equal("deps" in extrude, false);
+      const planeFeature = dsl.plane("plane-1", 20, 10);
+      assert.equal(planeFeature.kind, "feature.plane");
+      assert.equal(planeFeature.result, "surface:plane-1");
+      const offsetPlane = dsl.plane("plane-2", 15, 12, "surface:offset", {
+        plane: dsl.planeDatum("datum-plane"),
+        origin: [0, 0, 2],
+        deps: ["datum-plane"],
+      });
+      assert.equal(offsetPlane.result, "surface:offset");
+      assert.equal(offsetPlane.deps?.length, 1);
       const surface = dsl.surface("surface-1", dsl.profileRect(2, 3));
       assert.equal(surface.kind, "feature.surface");
       assert.equal(surface.result, "surface:surface-1");

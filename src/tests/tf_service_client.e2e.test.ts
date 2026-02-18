@@ -187,6 +187,72 @@ const tests = [
       assert.ok(partialCall?.body?.includes("changedFeatureIds"), "missing changed feature hints");
     },
   },
+  {
+    name: "tf service client: supports build sessions and assembly solve endpoints",
+    fn: async () => {
+      const calls: FetchCall[] = [];
+      const fakeFetch: typeof fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        const headers = Object.fromEntries(
+          Object.entries((init?.headers as Record<string, string>) ?? {}).map(([k, v]) => [
+            k.toLowerCase(),
+            String(v),
+          ])
+        );
+        calls.push({
+          url,
+          method: String(init?.method ?? "GET"),
+          headers,
+          body: typeof init?.body === "string" ? init.body : undefined,
+        });
+        if (url.endsWith("/v1/build-sessions") && init?.method === "POST") {
+          return makeJsonResponse(201, {
+            sessionId: "session_1",
+            createdAt: "2026-02-18T00:00:00.000Z",
+            expiresAt: "2026-02-18T00:30:00.000Z",
+          });
+        }
+        if (url.endsWith("/v1/build-sessions/session_1") && init?.method === "DELETE") {
+          return new Response(null, { status: 204 });
+        }
+        if (url.endsWith("/v1/assembly/solve")) {
+          return makeJsonResponse(202, {
+            id: "job_asm",
+            jobId: "job_asm",
+            state: "queued",
+          });
+        }
+        return makeJsonResponse(404, { error: "not found" });
+      };
+
+      const client = new TfServiceClient({
+        baseUrl: "http://127.0.0.1:8080",
+        fetch: fakeFetch,
+      });
+
+      const created = await client.createBuildSession();
+      assert.equal(created.sessionId, "session_1");
+      await client.deleteBuildSession(created.sessionId);
+
+      const accepted = await client.assemblySolve({
+        assemblyId: "asm-1",
+        document: { id: "doc-1", parts: [], assemblies: [] },
+      });
+      assert.equal(accepted.id, "job_asm");
+      assert.equal(accepted.jobId, "job_asm");
+
+      const createCall = calls.find(
+        (call) => call.url.endsWith("/v1/build-sessions") && call.method === "POST"
+      );
+      assert.ok(createCall, "missing build session create call");
+      const deleteCall = calls.find(
+        (call) => call.url.endsWith("/v1/build-sessions/session_1") && call.method === "DELETE"
+      );
+      assert.ok(deleteCall, "missing build session delete call");
+      const assemblyCall = calls.find((call) => call.url.endsWith("/v1/assembly/solve"));
+      assert.ok(assemblyCall, "missing assembly solve call");
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {
