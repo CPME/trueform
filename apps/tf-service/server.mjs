@@ -89,16 +89,24 @@ export function createTfServiceServer(options = {}) {
   let assetCounter = 0;
   let buildCounter = 0;
   let sessionCounter = 0;
+  const startedAtMs = Date.now();
 
   let occtPromise;
   let backendSync;
   let backendFingerprintPromise;
+  let backendInitError = null;
 
   async function getBackendAsync() {
-    if (!occtPromise) occtPromise = initOpenCascade();
-    const occt = await occtPromise;
-    if (!backendSync) backendSync = new OcctBackend({ occt });
-    return backendToAsync(backendSync);
+    try {
+      if (!occtPromise) occtPromise = initOpenCascade();
+      const occt = await occtPromise;
+      if (!backendSync) backendSync = new OcctBackend({ occt });
+      backendInitError = null;
+      return backendToAsync(backendSync);
+    } catch (err) {
+      backendInitError = err instanceof Error ? err.message : String(err);
+      throw err;
+    }
   }
 
   async function getBackendFingerprint() {
@@ -430,6 +438,110 @@ export function createTfServiceServer(options = {}) {
       if (selection.kind === "solid") solids.push(selection.id);
     }
     return { faces, edges, solids };
+  }
+
+  function finiteNumber(value) {
+    return typeof value === "number" && Number.isFinite(value);
+  }
+
+  function buildLengthUnit(units) {
+    return typeof units === "string" && units.trim().length > 0 ? units.trim() : undefined;
+  }
+
+  function buildAreaUnit(units) {
+    const lengthUnit = buildLengthUnit(units);
+    return lengthUnit ? `${lengthUnit}^2` : undefined;
+  }
+
+  function inferMeasureUnits(entry) {
+    if (!entry?.docId || !entry?.tenantId) return "mm";
+    const stored = documentStore.get(tenantScopedKey(entry.tenantId, entry.docId));
+    const units = stored?.document?.context?.units;
+    return typeof units === "string" && units.trim().length > 0 ? units.trim() : "mm";
+  }
+
+  function resolveMeasureSelection(entry, target) {
+    const outputs = entry?.result?.final?.outputs;
+    if (outputs instanceof Map && outputs.has(target)) {
+      const output = outputs.get(target);
+      if (
+        output &&
+        (output.kind === "face" ||
+          output.kind === "edge" ||
+          output.kind === "solid" ||
+          output.kind === "surface")
+      ) {
+        return { id: output.id, kind: output.kind, meta: output.meta ?? {} };
+      }
+    }
+
+    const selections = Array.isArray(entry?.result?.final?.selections)
+      ? entry.result.final.selections
+      : [];
+    const hit = selections.find((selection) => selection?.id === target);
+    if (hit) return hit;
+
+    if (outputs instanceof Map) {
+      for (const output of outputs.values()) {
+        if (
+          output &&
+          output.id === target &&
+          (output.kind === "face" ||
+            output.kind === "edge" ||
+            output.kind === "solid" ||
+            output.kind === "surface")
+        ) {
+          return { id: output.id, kind: output.kind, meta: output.meta ?? {} };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function measureMetricsForSelection(selection, units) {
+    const metrics = [];
+    const meta = selection?.meta && typeof selection.meta === "object" ? selection.meta : {};
+    const lengthUnit = buildLengthUnit(units);
+    const areaUnit = buildAreaUnit(units);
+
+    const radius = meta.radius;
+    if (finiteNumber(radius) && radius > 0) {
+      metrics.push({
+        kind: "radius",
+        value: radius,
+        unit: lengthUnit,
+        label: "radius",
+      });
+      metrics.push({
+        kind: "distance",
+        value: radius * 2,
+        unit: lengthUnit,
+        label: "diameter",
+      });
+    }
+
+    const length = meta.length;
+    if (finiteNumber(length) && length > 0) {
+      metrics.push({
+        kind: "distance",
+        value: length,
+        unit: lengthUnit,
+        label: "length",
+      });
+    }
+
+    const area = meta.area;
+    if (finiteNumber(area) && area > 0) {
+      metrics.push({
+        kind: "area",
+        value: area,
+        unit: areaUnit,
+        label: "area",
+      });
+    }
+
+    return metrics;
   }
 
   function summarizeValidation(results) {
@@ -938,11 +1050,21 @@ export function createTfServiceServer(options = {}) {
       } catch (err) {
         if (!partialHints.requested) throw err;
         const message = err instanceof Error ? err.message : String(err);
-        throw new HttpError(400, "build_failed", message, {
-          featureId: extractFeatureIdFromError(err) ?? partialHints.changedFeatureIds[0] ?? null,
-          changedFeatureIds: partialHints.changedFeatureIds,
-          selectorHintKeys: partialHints.selectorHintKeys,
-        });
+        const details =
+          err && typeof err === "object" && err.details && typeof err.details === "object"
+            ? { ...err.details }
+            : {};
+        const featureId = extractFeatureIdFromError(err) ?? partialHints.changedFeatureIds[0] ?? null;
+        if (featureId && typeof details.featureId !== "string") {
+          details.featureId = featureId;
+        }
+        details.changedFeatureIds = partialHints.changedFeatureIds;
+        details.selectorHintKeys = partialHints.selectorHintKeys;
+        const code =
+          err && typeof err === "object" && typeof err.code === "string"
+            ? err.code
+            : "build_failed";
+        throw new HttpError(400, code, message, details);
       }
       if (partBuildKey) {
         throwIfCanceled(ctx);
@@ -1327,6 +1449,100 @@ export function createTfServiceServer(options = {}) {
     };
   }
 
+  async function handleMeasure(tenantId, request) {
+    pruneBuildStore();
+    const buildId =
+      typeof request?.buildId === "string" && request.buildId.trim().length > 0
+        ? request.buildId.trim()
+        : null;
+    const target =
+      typeof request?.target === "string" && request.target.trim().length > 0
+        ? request.target.trim()
+        : null;
+    if (!buildId || !target) {
+      throw new HttpError(
+        400,
+        "invalid_measure_request",
+        "Measure request requires non-empty buildId and target"
+      );
+    }
+
+    const entry = buildStore.get(buildId);
+    if (!entry || entry.tenantId !== tenantId) {
+      throw new HttpError(404, "build_not_found", "Unknown buildId");
+    }
+
+    const selection = resolveMeasureSelection(entry, target);
+    if (!selection) {
+      throw new HttpError(404, "measure_target_not_found", `Unknown target ${target}`, {
+        buildId,
+        target,
+      });
+    }
+
+    const units = inferMeasureUnits(entry);
+    const metrics = measureMetricsForSelection(selection, units);
+    return { target, metrics };
+  }
+
+  async function runtimeHealthPayload(tenantId) {
+    if (!backendSync && !backendInitError) {
+      try {
+        await getBackendAsync();
+      } catch {
+        // Health response reports dependency errors instead of throwing.
+      }
+    }
+
+    let backendFingerprint = null;
+    if (backendSync) {
+      try {
+        backendFingerprint = await getBackendFingerprint();
+      } catch {
+        // Keep health response stable even if fingerprinting fails.
+      }
+    }
+
+    const queueStats =
+      typeof jobQueue.getStats === "function"
+        ? jobQueue.getStats()
+        : {
+            queued: 0,
+            running: 0,
+            succeeded: 0,
+            failed: 0,
+            canceled: 0,
+            retained: 0,
+            maxRetained: JOB_MAX_RETAINED,
+          };
+
+    return {
+      status: backendInitError ? "degraded" : "ok",
+      apiVersion: TF_API_VERSION,
+      tenantId,
+      timestamp: new Date().toISOString(),
+      uptimeMs: Math.max(0, Date.now() - startedAtMs),
+      dependencies: {
+        opencascade: {
+          ready: Boolean(backendSync),
+          error: backendInitError,
+        },
+      },
+      backend: {
+        ready: Boolean(backendSync),
+        fingerprint: backendFingerprint,
+      },
+      queue: queueStats,
+      stores: {
+        documents: countTenantInStore(documentStore, tenantId),
+        builds: countTenantInStore(buildStore, tenantId),
+        assets: countTenantInStore(assetStore, tenantId),
+        artifacts: countTenantInStore(artifactStore, tenantId),
+        buildSessions: countTenantInStore(buildSessionStore, tenantId),
+      },
+    };
+  }
+
   async function enqueueJob(tenantId, handler, payload, timeoutMs) {
     pruneJobOwners();
     assertTenantQuota(
@@ -1416,7 +1632,6 @@ export function createTfServiceServer(options = {}) {
     const { pathname } = url;
     const tenantId = getTenantId(req, url);
     pruneExpiredBuildSessions();
-    pruneExpiredBuildSessions();
     pruneBuildStore();
     pruneAssetStores();
     pruneJobOwners();
@@ -1447,6 +1662,11 @@ export function createTfServiceServer(options = {}) {
           },
           optionalFeatures: TF_RUNTIME_OPTIONAL_FEATURES,
         });
+        return;
+      }
+
+      if (req.method === "GET" && pathname === TF_API_ENDPOINTS.health) {
+        json(res, 200, await runtimeHealthPayload(tenantId));
         return;
       }
 
@@ -1547,6 +1767,12 @@ export function createTfServiceServer(options = {}) {
         const payload = await readJson(req);
         const job = await enqueueAssemblySolve(tenantId, payload);
         json(res, 202, toJobAccepted(job));
+        return;
+      }
+
+      if (req.method === "POST" && pathname === TF_API_ENDPOINTS.measure) {
+        const payload = await readJson(req);
+        json(res, 200, await handleMeasure(tenantId, payload));
         return;
       }
 

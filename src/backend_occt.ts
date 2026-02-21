@@ -2416,6 +2416,12 @@ export class OcctBackend implements Backend {
     if (surfaceType) {
       meta.surfaceType = surfaceType;
     }
+    if (surfaceType === "cylinder") {
+      const cylinder = this.cylinderFromFace(face);
+      if (cylinder && Number.isFinite(cylinder.radius) && cylinder.radius > 0) {
+        meta.radius = cylinder.radius;
+      }
+    }
     if (planar) {
       try {
         const plane = this.planeBasisFromFace(face);
@@ -2444,7 +2450,59 @@ export class OcctBackend implements Backend {
       (bounds.min[2] + bounds.max[2]) / 2,
     ];
     const centerZ = center[2];
-    return {
+    let length: number | undefined;
+    try {
+      const props = this.newOcct("GProp_GProps");
+      const edgeHandle = this.toEdge(edge);
+      const occt = this.occt as any;
+      if (occt.BRepGProp?.LinearProperties_1) {
+        occt.BRepGProp.LinearProperties_1(edgeHandle, props, true);
+        const measured = this.callNumber(props, "Mass");
+        if (Number.isFinite(measured) && measured > 0) {
+          length = measured;
+        }
+      }
+    } catch {
+      // Keep metadata lean if edge length extraction fails.
+    }
+
+    let radius: number | undefined;
+    let curveType: string | undefined;
+    try {
+      const adaptor = this.newOcct("BRepAdaptor_Curve", this.toEdge(edge));
+      const type = this.call(adaptor, "GetType") as { value?: number } | undefined;
+      const types = (this.occt as any).GeomAbs_CurveType;
+      if (types && typeof type?.value === "number") {
+        const value = type.value;
+        const matches = (entry: { value?: number } | undefined) =>
+          typeof entry?.value === "number" && entry.value === value;
+        if (matches(types.GeomAbs_Line)) curveType = "line";
+        else if (matches(types.GeomAbs_Circle)) curveType = "circle";
+        else if (matches(types.GeomAbs_Ellipse)) curveType = "ellipse";
+        else if (matches(types.GeomAbs_Hyperbola)) curveType = "hyperbola";
+        else if (matches(types.GeomAbs_Parabola)) curveType = "parabola";
+        else if (matches(types.GeomAbs_BezierCurve)) curveType = "bezier";
+        else if (matches(types.GeomAbs_BSplineCurve)) curveType = "bspline";
+        else curveType = "other";
+      }
+      if (curveType === "circle") {
+        const circle = this.callWithFallback(adaptor, ["Circle", "Circle_1"], [[]]);
+        const measuredRadius = circle
+          ? this.callWithFallback(circle, ["Radius", "Radius_1"], [[]])
+          : null;
+        if (
+          typeof measuredRadius === "number" &&
+          Number.isFinite(measuredRadius) &&
+          measuredRadius > 0
+        ) {
+          radius = measuredRadius;
+        }
+      }
+    } catch {
+      // Circular radius metadata is optional.
+    }
+
+    const meta: Record<string, unknown> = {
       shape: edge,
       owner,
       ownerKey,
@@ -2454,6 +2512,10 @@ export class OcctBackend implements Backend {
       centerZ,
       featureTags,
     };
+    if (length !== undefined) meta.length = length;
+    if (radius !== undefined) meta.radius = radius;
+    if (curveType) meta.curveType = curveType;
+    return meta;
   }
 
   private faceProperties(face: any): {

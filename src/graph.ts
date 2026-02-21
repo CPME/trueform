@@ -46,17 +46,17 @@ export function buildDependencyGraph(part: IntentPart): Graph {
 
     const selectors = featureSelectors(feature);
     for (const selector of selectors) {
-      const { deps, anchored } = selectorDependencies(
-        selector,
-        feature.id,
-        byId,
-        outputToFeature
-      );
+      const { deps, anchored } = selectorDependencies(selector, feature, byId, outputToFeature);
       for (const dep of deps) inferredDeps.add(dep);
       if (!anchored && explicitDeps.size === 0) {
         throw new CompileError(
           "selector_anchor_missing",
-          `Feature ${feature.id} selector has no anchors and no explicit deps`
+          `Feature ${feature.id} selector has no anchors and no explicit deps`,
+          {
+            featureId: feature.id,
+            featureKind: feature.kind,
+            referenceKind: "selector",
+          }
         );
       }
     }
@@ -172,7 +172,13 @@ function inferPatternDependency(
   if (!hit || (hit.kind !== "pattern.linear" && hit.kind !== "pattern.circular")) {
     throw new CompileError(
       "pattern_missing",
-      `Feature ${feature.id} references missing pattern ${ref}`
+      `Feature ${feature.id} references missing pattern ${ref}`,
+      {
+        featureId: feature.id,
+        featureKind: feature.kind,
+        referenceKind: "pattern",
+        referenceId: ref,
+      }
     );
   }
   return ref;
@@ -185,41 +191,43 @@ function inferDatumDependencies(
   const deps = new Set<ID>();
   switch (feature.kind) {
     case "datum.plane":
-      addAxisSpecDep((feature as { normal?: AxisSpec }).normal, deps, byId);
-      addAxisSpecDep((feature as { xAxis?: AxisSpec }).xAxis, deps, byId);
+      addAxisSpecDep((feature as { normal?: AxisSpec }).normal, deps, byId, feature);
+      addAxisSpecDep((feature as { xAxis?: AxisSpec }).xAxis, deps, byId, feature);
       break;
     case "datum.axis":
-      addAxisSpecDep((feature as { direction?: AxisSpec }).direction, deps, byId);
+      addAxisSpecDep((feature as { direction?: AxisSpec }).direction, deps, byId, feature);
       break;
     case "feature.sketch2d":
-      addPlaneRefDep((feature as { plane?: PlaneRef }).plane, deps, byId);
+      addPlaneRefDep((feature as { plane?: PlaneRef }).plane, deps, byId, feature);
       break;
     case "feature.extrude":
-      addExtrudeAxisDep((feature as { axis?: ExtrudeAxis }).axis, deps, byId);
+      addExtrudeAxisDep((feature as { axis?: ExtrudeAxis }).axis, deps, byId, feature);
       break;
     case "feature.plane":
-      addPlaneRefDep((feature as { plane?: PlaneRef }).plane, deps, byId);
+      addPlaneRefDep((feature as { plane?: PlaneRef }).plane, deps, byId, feature);
       break;
     case "feature.sweep":
-      addPlaneRefDep((feature as { frame?: PlaneRef }).frame, deps, byId);
+      addPlaneRefDep((feature as { frame?: PlaneRef }).frame, deps, byId, feature);
       break;
     case "feature.mirror":
-      addPlaneRefDep((feature as { plane?: PlaneRef }).plane, deps, byId);
+      addPlaneRefDep((feature as { plane?: PlaneRef }).plane, deps, byId, feature);
       break;
     case "feature.draft":
       addPlaneRefDep(
         (feature as { neutralPlane?: PlaneRef }).neutralPlane,
         deps,
-        byId
+        byId,
+        feature
       );
       addAxisSpecDep(
         (feature as { pullDirection?: AxisSpec }).pullDirection,
         deps,
-        byId
+        byId,
+        feature
       );
       break;
     case "feature.thread":
-      addAxisSpecDep((feature as { axis?: AxisSpec }).axis, deps, byId);
+      addAxisSpecDep((feature as { axis?: AxisSpec }).axis, deps, byId, feature);
       break;
     default:
       break;
@@ -230,7 +238,8 @@ function inferDatumDependencies(
 function addPlaneRefDep(
   plane: PlaneRef | undefined,
   deps: Set<ID>,
-  byId: Map<ID, IntentFeature>
+  byId: Map<ID, IntentFeature>,
+  sourceFeature?: IntentFeature
 ) {
   if (!plane || isSelector(plane)) return;
   if (plane.kind !== "plane.datum") return;
@@ -238,7 +247,13 @@ function addPlaneRefDep(
   if (!hit || (hit.kind !== "datum.plane" && hit.kind !== "datum.frame")) {
     throw new CompileError(
       "datum_plane_missing",
-      `Missing datum plane/frame ${plane.ref}`
+      `Missing datum plane/frame ${plane.ref}`,
+      {
+        featureId: sourceFeature?.id,
+        featureKind: sourceFeature?.kind,
+        referenceKind: "datum_plane",
+        referenceId: plane.ref,
+      }
     );
   }
   deps.add(plane.ref);
@@ -247,7 +262,8 @@ function addPlaneRefDep(
 function addAxisSpecDep(
   axis: AxisSpec | undefined,
   deps: Set<ID>,
-  byId: Map<ID, IntentFeature>
+  byId: Map<ID, IntentFeature>,
+  sourceFeature?: IntentFeature
 ) {
   if (!axis || typeof axis === "string") return;
   if (axis.kind !== "axis.datum") return;
@@ -255,7 +271,13 @@ function addAxisSpecDep(
   if (!hit || hit.kind !== "datum.axis") {
     throw new CompileError(
       "datum_axis_missing",
-      `Missing datum axis ${axis.ref}`
+      `Missing datum axis ${axis.ref}`,
+      {
+        featureId: sourceFeature?.id,
+        featureKind: sourceFeature?.kind,
+        referenceKind: "datum_axis",
+        referenceId: axis.ref,
+      }
     );
   }
   deps.add(axis.ref);
@@ -264,12 +286,13 @@ function addAxisSpecDep(
 function addExtrudeAxisDep(
   axis: ExtrudeAxis | undefined,
   deps: Set<ID>,
-  byId: Map<ID, IntentFeature>
+  byId: Map<ID, IntentFeature>,
+  sourceFeature?: IntentFeature
 ) {
   if (!axis || (typeof axis === "object" && axis.kind === "axis.sketch.normal")) {
     return;
   }
-  addAxisSpecDep(axis as AxisSpec, deps, byId);
+  addAxisSpecDep(axis as AxisSpec, deps, byId, sourceFeature);
 }
 
 function featureSelectors(feature: IntentFeature): Selector[] {
@@ -313,7 +336,7 @@ function featureSelectors(feature: IntentFeature): Selector[] {
 
 function selectorDependencies(
   selector: Selector,
-  featureId: ID,
+  feature: IntentFeature,
   byId: Map<ID, IntentFeature>,
   outputToFeature: Map<string, ID>
 ): { deps: Set<ID>; anchored: boolean } {
@@ -332,7 +355,13 @@ function selectorDependencies(
       }
       throw new CompileError(
         "selector_named_missing",
-        `Feature ${featureId} references missing output ${name}`
+        `Feature ${feature.id} references missing output ${name}`,
+        {
+          featureId: feature.id,
+          featureKind: feature.kind,
+          referenceKind: "named_output",
+          referenceId: name,
+        }
       );
     }
     return { deps, anchored: true };
@@ -345,7 +374,13 @@ function selectorDependencies(
     if (!hit) {
       throw new CompileError(
         "pred_created_by_missing",
-        `Feature ${featureId} references missing feature ${predicate.featureId}`
+        `Feature ${feature.id} references missing feature ${predicate.featureId}`,
+        {
+          featureId: feature.id,
+          featureKind: feature.kind,
+          referenceKind: "createdBy",
+          referenceId: predicate.featureId,
+        }
       );
     }
     deps.add(predicate.featureId);
@@ -356,7 +391,7 @@ function selectorDependencies(
     if (rule.kind !== "rank.closestTo") continue;
     const nested = selectorDependencies(
       rule.target,
-      featureId,
+      feature,
       byId,
       outputToFeature
     );

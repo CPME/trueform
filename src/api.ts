@@ -4,6 +4,7 @@ export const TF_API_VERSION = "1.2";
 
 export const TF_API_ENDPOINTS = {
   capabilities: "/v1/capabilities",
+  health: "/v1/health",
   openapi: "/v1/openapi.json",
   documents: "/v1/documents",
   buildSessions: "/v1/build-sessions",
@@ -13,6 +14,7 @@ export const TF_API_ENDPOINTS = {
   buildPartialJobs: "/v1/jobs/build/partial",
   assemblySolve: "/v1/assembly/solve",
   assemblySolveJobs: "/v1/jobs/assembly/solve",
+  measure: "/v1/measure",
   mesh: "/v1/mesh",
   meshJobs: "/v1/jobs/mesh",
   exportStep: "/v1/export/step",
@@ -40,6 +42,9 @@ export const TF_RUNTIME_OPTIONAL_FEATURES = {
     solve: true,
     preview: false,
     validate: false,
+  },
+  measure: {
+    endpoint: true,
   },
   metadata: {
     envelope: false,
@@ -141,6 +146,23 @@ export type RuntimeAssemblySolveRequest = {
   timeoutMs?: number;
 };
 
+export type RuntimeMeasureMetric = {
+  kind: "distance" | "radius" | "area";
+  value: number;
+  unit?: string;
+  label?: string;
+};
+
+export type RuntimeMeasureRequest = {
+  buildId: string;
+  target: string;
+};
+
+export type RuntimeMeasureResponse = {
+  target: string;
+  metrics: RuntimeMeasureMetric[];
+};
+
 export const TF_RUNTIME_OPENAPI = {
   openapi: "3.1.0",
   info: {
@@ -155,6 +177,21 @@ export const TF_RUNTIME_OPENAPI = {
         summary: "Get runtime capabilities",
         responses: {
           "200": { description: "Capabilities response" },
+        },
+      },
+    },
+    "/v1/health": {
+      get: {
+        summary: "Get runtime health and dependency readiness",
+        responses: {
+          "200": {
+            description: "Health response",
+            content: {
+              "application/json": {
+                schema: { type: "object", additionalProperties: true },
+              },
+            },
+          },
         },
       },
     },
@@ -270,6 +307,29 @@ export const TF_RUNTIME_OPENAPI = {
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/JobAccepted" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/v1/measure": {
+      post: {
+        summary: "Measure selection-target metrics for an existing build",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/MeasureRequest" },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Measured metrics",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/MeasureResponse" },
               },
             },
           },
@@ -451,6 +511,38 @@ export const TF_RUNTIME_OPENAPI = {
           assemblyId: { type: "string" },
           timeoutMs: { type: "number" },
           options: { type: "object", additionalProperties: true },
+        },
+      },
+      MeasureMetric: {
+        type: "object",
+        required: ["kind", "value"],
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["distance", "radius", "area"],
+          },
+          value: { type: "number" },
+          unit: { type: "string" },
+          label: { type: "string" },
+        },
+      },
+      MeasureRequest: {
+        type: "object",
+        required: ["buildId", "target"],
+        properties: {
+          buildId: { type: "string" },
+          target: { type: "string" },
+        },
+      },
+      MeasureResponse: {
+        type: "object",
+        required: ["target", "metrics"],
+        properties: {
+          target: { type: "string" },
+          metrics: {
+            type: "array",
+            items: { $ref: "#/components/schemas/MeasureMetric" },
+          },
         },
       },
     },

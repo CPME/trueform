@@ -253,6 +253,61 @@ const tests = [
       assert.ok(assemblyCall, "missing assembly solve call");
     },
   },
+  {
+    name: "tf service client: supports health and measure endpoints",
+    fn: async () => {
+      const calls: FetchCall[] = [];
+      const fakeFetch: typeof fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        const headers = Object.fromEntries(
+          Object.entries((init?.headers as Record<string, string>) ?? {}).map(([k, v]) => [
+            k.toLowerCase(),
+            String(v),
+          ])
+        );
+        calls.push({
+          url,
+          method: String(init?.method ?? "GET"),
+          headers,
+          body: typeof init?.body === "string" ? init.body : undefined,
+        });
+        if (url.endsWith("/v1/health")) {
+          return makeJsonResponse(200, {
+            status: "ok",
+            dependencies: { opencascade: { ready: true } },
+          });
+        }
+        if (url.endsWith("/v1/measure") && init?.method === "POST") {
+          return makeJsonResponse(200, {
+            target: "face:1",
+            metrics: [{ kind: "area", value: 12.5, unit: "mm^2", label: "area" }],
+          });
+        }
+        return makeJsonResponse(404, { error: "not found" });
+      };
+
+      const client = new TfServiceClient({
+        baseUrl: "http://127.0.0.1:8080",
+        fetch: fakeFetch,
+      });
+
+      const health = await client.health<{ status: string }>();
+      assert.equal(health.status, "ok");
+      const measure = await client.measure({ buildId: "build_1", target: "face:1" });
+      assert.equal(measure.target, "face:1");
+      assert.equal(measure.metrics.length, 1);
+      assert.equal(measure.metrics[0]?.kind, "area");
+
+      const healthCall = calls.find((call) => call.url.endsWith("/v1/health"));
+      assert.ok(healthCall, "missing /v1/health call");
+      const measureCall = calls.find(
+        (call) => call.url.endsWith("/v1/measure") && call.method === "POST"
+      );
+      assert.ok(measureCall, "missing /v1/measure call");
+      assert.ok(measureCall?.body?.includes('"buildId":"build_1"'));
+      assert.ok(measureCall?.body?.includes('"target":"face:1"'));
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

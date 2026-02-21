@@ -36,6 +36,16 @@ export type EnqueueOptions = {
   timeoutMs?: number;
 };
 
+export type JobQueueStats = {
+  queued: number;
+  running: number;
+  succeeded: number;
+  failed: number;
+  canceled: number;
+  retained: number;
+  maxRetained: number;
+};
+
 type JobInternal<T> = {
   record: JobRecord<T>;
   task: JobTask<T>;
@@ -118,6 +128,39 @@ export class InMemoryJobQueue {
       return true;
     }
     return false;
+  }
+
+  getStats(): JobQueueStats {
+    this.pruneTerminalJobs();
+    const stats: JobQueueStats = {
+      queued: 0,
+      running: 0,
+      succeeded: 0,
+      failed: 0,
+      canceled: 0,
+      retained: this.jobs.size,
+      maxRetained: this.maxRetainedJobs,
+    };
+    for (const job of this.jobs.values()) {
+      switch (job.record.state) {
+        case "queued":
+          stats.queued += 1;
+          break;
+        case "running":
+          stats.running += 1;
+          break;
+        case "succeeded":
+          stats.succeeded += 1;
+          break;
+        case "failed":
+          stats.failed += 1;
+          break;
+        case "canceled":
+          stats.canceled += 1;
+          break;
+      }
+    }
+    return stats;
   }
 
   private nextId(): string {
@@ -257,9 +300,21 @@ function normalizeError(err: unknown): JobError {
   if (err && typeof err === "object") {
     const message = "message" in err ? String((err as { message?: unknown }).message) : "Unknown error";
     const code = "code" in err ? String((err as { code?: unknown }).code) : "job_failed";
-    const details = "details" in err && typeof (err as { details?: unknown }).details === "object"
-      ? ((err as { details?: Record<string, unknown> }).details ?? undefined)
-      : undefined;
+    const details =
+      "details" in err && typeof (err as { details?: unknown }).details === "object"
+        ? { ...((err as { details?: Record<string, unknown> }).details ?? {}) }
+        : undefined;
+    const featureId =
+      "featureId" in err && typeof (err as { featureId?: unknown }).featureId === "string"
+        ? (err as { featureId: string }).featureId
+        : undefined;
+    if (featureId) {
+      if (details) {
+        if (typeof details.featureId !== "string") details.featureId = featureId;
+      } else {
+        return { code, message, details: { featureId } };
+      }
+    }
     return { code, message, details };
   }
   return { code: "job_failed", message: String(err ?? "Unknown error") };

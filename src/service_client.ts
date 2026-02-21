@@ -5,6 +5,8 @@ import {
   type RuntimeJobAccepted,
   type RuntimeJobRecord,
   type RuntimeJobState,
+  type RuntimeMeasureRequest,
+  type RuntimeMeasureResponse,
 } from "./api.js";
 
 export type JobState = RuntimeJobState;
@@ -252,6 +254,18 @@ export class TfServiceClient {
 
   async metrics<T = unknown>(): Promise<T> {
     return this.requestJson<T>({ method: "GET", path: TF_API_ENDPOINTS.metrics });
+  }
+
+  async health<T = unknown>(): Promise<T> {
+    return this.requestJson<T>({ method: "GET", path: TF_API_ENDPOINTS.health });
+  }
+
+  async measure(payload: RuntimeMeasureRequest): Promise<RuntimeMeasureResponse> {
+    return this.requestJson<RuntimeMeasureResponse>({
+      method: "POST",
+      path: TF_API_ENDPOINTS.measure,
+      body: payload,
+    });
   }
 
   private async requestJson<T>(req: {

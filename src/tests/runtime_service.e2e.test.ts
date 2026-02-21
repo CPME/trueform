@@ -17,7 +17,7 @@ type JobRecord = {
   jobId: string;
   state: string;
   result: any;
-  error: { code?: string; message?: string } | null;
+  error: { code?: string; message?: string; details?: Record<string, unknown> } | null;
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -283,6 +283,7 @@ const tests = [
             };
             buildSessions?: { enabled?: boolean };
             assembly?: { solve?: boolean };
+            measure?: { endpoint?: boolean };
             bom?: { derive?: boolean };
             release?: { preflight?: boolean };
             featureStaging?: { registry?: boolean };
@@ -304,6 +305,7 @@ const tests = [
         );
         assert.equal(capabilities.optionalFeatures?.buildSessions?.enabled, true);
         assert.equal(capabilities.optionalFeatures?.assembly?.solve, true);
+        assert.equal(capabilities.optionalFeatures?.measure?.endpoint, true);
         assert.equal((capabilities.quotas?.maxBuildSessionsPerTenant ?? 0) > 0, true);
         assert.equal((capabilities.quotas?.maxBuildsPerSession ?? 0) > 0, true);
         assert.equal((capabilities.quotas?.buildSessionTtlMs ?? 0) > 0, true);
@@ -312,6 +314,12 @@ const tests = [
         assert.equal(capabilities.optionalFeatures?.featureStaging?.registry, true);
         assert.equal(capabilities.featureStages?.["feature.thread"]?.stage, "staging");
         assert.equal(capabilities.featureStages?.["feature.surface"]?.stage, "staging");
+        const health = await fetchJson<{
+          status?: string;
+          dependencies?: { opencascade?: { ready?: boolean } };
+        }>(`${runtime.baseUrl}/v1/health`);
+        assert.equal(health.status, "ok");
+        assert.equal(health.dependencies?.opencascade?.ready, true);
         const openapi = await fetchJson<{
           openapi?: string;
           info?: { version?: string };
@@ -322,6 +330,8 @@ const tests = [
         assert.equal(typeof openapi.paths?.["/v1/build/partial"], "object");
         assert.equal(typeof openapi.paths?.["/v1/build-sessions"], "object");
         assert.equal(typeof openapi.paths?.["/v1/assembly/solve"], "object");
+        assert.equal(typeof openapi.paths?.["/v1/measure"], "object");
+        assert.equal(typeof openapi.paths?.["/v1/health"], "object");
 
         const { part, document } = makeRuntimeDoc();
 
@@ -382,6 +392,31 @@ const tests = [
         assert.equal(buildJob1.result?.cache?.partBuild?.hit, false);
         assert.equal(Array.isArray(buildJob1.result?.validation?.dimensions), true);
         assert.equal(Array.isArray(buildJob1.result?.validation?.assertions), true);
+        const firstFaceId = String(buildJob1.result?.selections?.faces?.[0] ?? "");
+        assert.ok(firstFaceId.length > 0, "Missing face selection id for measure endpoint");
+        const measureResult = await fetchJsonWithStatus<{
+          target?: string;
+          metrics?: Array<{ kind?: string; value?: number; unit?: string; label?: string }>;
+        }>(`${runtime.baseUrl}/v1/measure`, 200, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            buildId: buildJob1.result?.buildId,
+            target: firstFaceId,
+          }),
+        });
+        assert.equal(measureResult.target, firstFaceId);
+        assert.equal(Array.isArray(measureResult.metrics), true);
+        assert.equal((measureResult.metrics?.length ?? 0) > 0, true);
+        assert.equal(
+          (measureResult.metrics ?? []).some(
+            (metric) =>
+              typeof metric.value === "number" &&
+              Number.isFinite(metric.value) &&
+              metric.value > 0
+          ),
+          true
+        );
         const partBuildKey1 = String(buildJob1.result?.keys?.partBuildKey ?? "");
         assert.ok(partBuildKey1.length > 0, "Missing partBuildKey in first build");
 
@@ -1225,6 +1260,70 @@ const tests = [
           "tenant-a"
         );
         assert.equal(meshJobA1Done.state, "succeeded");
+      } finally {
+        await runtime.stop();
+      }
+    },
+  },
+  {
+    name: "runtime service: mirror/pattern reference failures return deterministic diagnostics",
+    fn: async () => {
+      const runtime = await startRuntimeServer();
+      try {
+        const missingPatternPart = dsl.part("runtime-pattern-missing", [
+          dsl.hole("hole-missing", dsl.selectorNamed("face:seed"), "+Z", 4, 10, {
+            pattern: { kind: "pattern.linear", ref: "missing-pattern" },
+          }),
+        ]);
+        const patternSubmit = await fetchJsonWithStatus<{ id: string; jobId: string; state: string }>(
+          `${runtime.baseUrl}/v1/build`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              part: missingPatternPart,
+              options: { meshProfile: "interactive" },
+            }),
+          }
+        );
+        const patternJob = await pollJob(runtime.baseUrl, patternSubmit.jobId);
+        assert.equal(patternJob.state, "failed");
+        assert.equal(patternJob.error?.code, "pattern_missing");
+        assert.equal(patternJob.error?.details?.featureId, "hole-missing");
+        assert.equal(patternJob.error?.details?.featureKind, "feature.hole");
+        assert.equal(patternJob.error?.details?.referenceKind, "pattern");
+        assert.equal(patternJob.error?.details?.referenceId, "missing-pattern");
+
+        const missingMirrorSourcePart = dsl.part("runtime-mirror-missing", [
+          dsl.extrude("base", dsl.profileRect(10, 8), 6, "body:seed"),
+          dsl.datumPlane("mirror-plane", "+X"),
+          dsl.mirror(
+            "mirror-missing",
+            dsl.selectorNamed("body:missing-source"),
+            dsl.planeDatum("mirror-plane"),
+            "body:mirror"
+          ),
+        ]);
+        const mirrorSubmit = await fetchJsonWithStatus<{ id: string; jobId: string; state: string }>(
+          `${runtime.baseUrl}/v1/build`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              part: missingMirrorSourcePart,
+              options: { meshProfile: "interactive" },
+            }),
+          }
+        );
+        const mirrorJob = await pollJob(runtime.baseUrl, mirrorSubmit.jobId);
+        assert.equal(mirrorJob.state, "failed");
+        assert.equal(mirrorJob.error?.code, "selector_named_missing");
+        assert.equal(mirrorJob.error?.details?.featureId, "mirror-missing");
+        assert.equal(mirrorJob.error?.details?.featureKind, "feature.mirror");
+        assert.equal(mirrorJob.error?.details?.referenceKind, "named_output");
+        assert.equal(mirrorJob.error?.details?.referenceId, "body:missing-source");
       } finally {
         await runtime.stop();
       }

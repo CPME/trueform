@@ -72,14 +72,50 @@ Response:
   "optionalFeatures": {
     "partialBuild": {
       "endpoint": true,
-      "execution": "hinted_full_rebuild"
+      "execution": "incremental",
+      "requirements": {
+        "sessionScoped": true,
+        "changedFeatureIds": true
+      }
     },
-    "buildSessions": { "enabled": false },
-    "assembly": { "solve": false, "preview": false, "validate": false },
+    "buildSessions": { "enabled": true },
+    "assembly": { "solve": true, "preview": false, "validate": false },
+    "measure": { "endpoint": true },
     "bom": { "derive": false },
     "release": { "preflight": false, "bundle": false },
     "pmi": { "stepAp242": false, "supportMatrix": false },
     "featureStaging": { "registry": true }
+  }
+}
+```
+
+## Health
+`GET /v1/health`
+
+Response:
+```json
+{
+  "status": "ok",
+  "apiVersion": "1.2",
+  "tenantId": "public",
+  "timestamp": "2026-02-21T12:00:00.000Z",
+  "uptimeMs": 1642,
+  "dependencies": {
+    "opencascade": {
+      "ready": true,
+      "error": null
+    }
+  },
+  "backend": {
+    "ready": true,
+    "fingerprint": "opencascade.js:40ab6a2ac9e6f6f9"
+  },
+  "queue": {
+    "queued": 0,
+    "running": 0,
+    "succeeded": 2,
+    "failed": 0,
+    "canceled": 0
   }
 }
 ```
@@ -148,6 +184,35 @@ Job result (`GET /v1/jobs/:id`):
 }
 ```
 
+## Measure
+`POST /v1/measure`
+
+Request:
+```json
+{
+  "buildId": "build_456",
+  "target": "face:1"
+}
+```
+
+Response:
+```json
+{
+  "target": "face:1",
+  "metrics": [
+    { "kind": "area", "value": 314.159, "unit": "mm^2", "label": "area" },
+    { "kind": "radius", "value": 10, "unit": "mm", "label": "radius" },
+    { "kind": "distance", "value": 20, "unit": "mm", "label": "diameter" }
+  ]
+}
+```
+
+Notes:
+- `target` accepts runtime output names (for example `body:main`) or resolved selection ids
+  (for example `face:12`, `edge:4`).
+- The endpoint is synchronous and intended for HUD/inspection interactions.
+- Availability is explicitly gated by `/v1/capabilities.optionalFeatures.measure.endpoint`.
+
 ## Mesh (direct)
 `POST /v1/mesh`
 
@@ -195,6 +260,63 @@ Response:
 
 Job result returns `asset.url` for the binary export.
 
+## Mirror/Pattern Runtime Payload Variants
+Mirror and pattern intent should be sent using the same naming as the DSL/IR:
+
+- Mirror:
+  - `kind: "feature.mirror"`
+  - `source`: selector (typically `selector.named("body:...")`)
+  - `plane`: `plane.datum(...)` or selector-backed plane ref
+  - `result`: output name
+- Pattern layout-only:
+  - `kind: "pattern.linear"` with `origin`, `spacing`, `count`
+  - `kind: "pattern.circular"` with `origin`, `axis`, `count`
+  - consumed later by `feature.hole.pattern`
+- Pattern feature/body replication:
+  - same as above plus `source` selector and `result` output name
+
+Diagnostics expectations for broken references:
+- missing pattern refs should report `code: "pattern_missing"` with
+  `error.details.featureId` and `error.details.referenceId`.
+- missing named outputs should report `code: "selector_named_missing"` with
+  `error.details.featureId` and `error.details.referenceId`.
+
+## Stable Payload Fixtures
+Mirror fixture:
+```json
+{
+  "kind": "feature.mirror",
+  "id": "mirror-1",
+  "source": { "kind": "selector.named", "name": "body:seed" },
+  "plane": { "kind": "plane.datum", "ref": "mirror-plane" },
+  "result": "body:mirror"
+}
+```
+
+Linear pattern (feature/body) fixture:
+```json
+{
+  "kind": "pattern.linear",
+  "id": "pattern-f",
+  "origin": { "kind": "selector.named", "name": "face:top" },
+  "spacing": [14, 0],
+  "count": [3, 1],
+  "source": { "kind": "selector.named", "name": "body:seed" },
+  "result": "body:patterned"
+}
+```
+
+Circular pattern (layout) fixture:
+```json
+{
+  "kind": "pattern.circular",
+  "id": "pattern-c",
+  "origin": { "kind": "selector.named", "name": "face:top" },
+  "axis": "+Z",
+  "count": 6
+}
+```
+
 ## Assets
 `GET /v1/assets/mesh/:id`
 `GET /v1/assets/export/:id`
@@ -208,9 +330,13 @@ Mesh payload (matches viewer expectations):
   "positions": [0,0,0, 1,0,0, 1,1,0],
   "indices": [0,1,2],
   "normals": [0,0,1, 0,0,1, 0,0,1],
-  "edgePositions": [0,0,0, 1,0,0]
+  "edgePositions": [0,0,0, 1,0,0],
+  "edgeIndices": [0]
 }
 ```
+
+`edgeIndices` is optional. When present, each entry maps the corresponding
+edge segment in `edgePositions` (6 numbers per segment) to a backend edge index.
 
 ## Selection Metadata Contract
 Selections are backend-agnostic and must provide required metadata keys.
@@ -221,7 +347,7 @@ Required keys by kind:
 - `solid`: `center`, `createdBy`, `ownerKey`
 
 Optional keys:
-- `normal`, `normalVec`, `featureTags`, `role`
+- `normal`, `normalVec`, `featureTags`, `role`, `surfaceType`, `radius`, `length`
 
 Selection metadata is exposed to the client only for selectors and debug overlays.
 
