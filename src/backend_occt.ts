@@ -1170,7 +1170,7 @@ export class OcctBackend implements Backend {
     this.callWithFallback(
       trsf,
       ["SetMirror", "SetMirror_1", "SetMirror_2", "SetMirror_3"],
-      [[ax2], [this.makeAx1(origin, normal)], [origin]]
+      [[ax2]]
     );
 
     const builder = this.newOcct("BRepBuilderAPI_Transform", shape, trsf, true);
@@ -2415,6 +2415,17 @@ export class OcctBackend implements Backend {
     }
     if (surfaceType) {
       meta.surfaceType = surfaceType;
+    }
+    if (planar) {
+      try {
+        const plane = this.planeBasisFromFace(face);
+        meta.planeOrigin = plane.origin;
+        meta.planeXDir = plane.xDir;
+        meta.planeYDir = plane.yDir;
+        meta.planeNormal = plane.normal;
+      } catch {
+        // Preserve existing face metadata even when plane extraction is unavailable.
+      }
     }
     return meta;
   }
