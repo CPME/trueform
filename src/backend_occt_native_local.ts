@@ -25,6 +25,8 @@ import type {
 export type LocalOcctTransportOptions = {
   occt: OcctModule;
   backend?: OcctBackend;
+  shapeRegistryMaxEntries?: number;
+  shapeRegistryIdleMs?: number;
 };
 
 type InflateContext = {
@@ -37,31 +39,54 @@ type DeflateContext = {
 
 class ShapeRegistry {
   private counter = 0;
-  private shapes = new Map<NativeShapeHandle, any>();
+  private shapes = new Map<NativeShapeHandle, { shape: unknown; lastAccessMs: number }>();
   private reverse: WeakMap<object, NativeShapeHandle> = new WeakMap();
 
-  register(shape: any): NativeShapeHandle {
+  register(shape: unknown): NativeShapeHandle {
+    const now = Date.now();
     if (shape && typeof shape === "object") {
       const existing = this.reverse.get(shape as object);
       if (existing && this.shapes.has(existing)) {
+        const current = this.shapes.get(existing);
+        if (current) current.lastAccessMs = now;
         return existing;
       }
     }
     const handle = `shape:${this.counter}`;
     this.counter += 1;
-    this.shapes.set(handle, shape);
+    this.shapes.set(handle, { shape, lastAccessMs: now });
     if (shape && typeof shape === "object") {
       this.reverse.set(shape as object, handle);
     }
     return handle;
   }
 
-  get(handle: NativeShapeHandle): any {
-    const shape = this.shapes.get(handle);
-    if (!shape) {
+  get(handle: NativeShapeHandle): unknown {
+    const entry = this.shapes.get(handle);
+    if (!entry) {
       throw new Error(`Missing shape handle ${handle}`);
     }
-    return shape;
+    entry.lastAccessMs = Date.now();
+    return entry.shape;
+  }
+
+  prune(maxEntries: number, maxIdleMs: number): void {
+    if (this.shapes.size === 0) return;
+    const now = Date.now();
+    if (maxIdleMs > 0) {
+      for (const [handle, entry] of this.shapes) {
+        if (now - entry.lastAccessMs <= maxIdleMs) continue;
+        this.shapes.delete(handle);
+      }
+    }
+    if (this.shapes.size <= maxEntries) return;
+    const byAge = [...this.shapes.entries()].sort(
+      (a, b) => a[1].lastAccessMs - b[1].lastAccessMs
+    );
+    for (const [handle] of byAge) {
+      if (this.shapes.size <= maxEntries) break;
+      this.shapes.delete(handle);
+    }
   }
 
   clear(): void {
@@ -73,10 +98,20 @@ class ShapeRegistry {
 export class LocalOcctTransport implements NativeOcctTransport {
   private backend: OcctBackend;
   private registry: ShapeRegistry;
+  private shapeRegistryMaxEntries: number;
+  private shapeRegistryIdleMs: number;
 
   constructor(options: LocalOcctTransportOptions) {
     this.backend = options.backend ?? new OcctBackend({ occt: options.occt });
     this.registry = new ShapeRegistry();
+    this.shapeRegistryMaxEntries = Math.max(
+      1,
+      Math.floor(options.shapeRegistryMaxEntries ?? 50_000)
+    );
+    this.shapeRegistryIdleMs = Math.max(
+      0,
+      Math.floor(options.shapeRegistryIdleMs ?? 30 * 60 * 1000)
+    );
   }
 
   async execFeature(
@@ -91,8 +126,10 @@ export class LocalOcctTransport implements NativeOcctTransport {
       resolve: (selector, current) =>
         resolveSelector(selector, toResolutionContext(current)),
     });
+    const deflated = deflateKernelResult(result, { registry: this.registry });
+    this.registry.prune(this.shapeRegistryMaxEntries, this.shapeRegistryIdleMs);
     return {
-      result: deflateKernelResult(result, { registry: this.registry }),
+      result: deflated,
     };
   }
 

@@ -1,4 +1,5 @@
 import type { SketchEntity } from "../ir.js";
+import { asVec2, polylineForEntity } from "./polyline.js";
 
 export type SketchSvgTheme = {
   background?: string | null;
@@ -27,7 +28,7 @@ export function buildSketchSvg(
   entitiesInput: SketchEntity[] | Array<Record<string, unknown>>,
   opts: SketchSvgOptions = {}
 ): string {
-  const entities = Array.isArray(entitiesInput) ? entitiesInput : [];
+  const entities = Array.isArray(entitiesInput) ? (entitiesInput as SketchEntity[]) : [];
   const bounds = {
     minX: Infinity,
     minY: Infinity,
@@ -41,7 +42,7 @@ export function buildSketchSvg(
   const constructionPaths: string[] = [];
   const pointMarkers: Array<{ center: [number, number]; radius: number; construction: boolean }> = [];
 
-  for (const entity of entities as any[]) {
+  for (const entity of entities) {
     if (entity.kind === "sketch.point") {
       const radius = 1;
       const point = asVec2(entity.point);
@@ -54,7 +55,12 @@ export function buildSketchSvg(
       });
       continue;
     }
-    const poly = polylineForEntity(entity);
+    const poly = polylineForEntity(entity, {
+      cornerRotationPivot: "origin",
+      slotStart: "right",
+      splineMode: "catmull-rom",
+      splineSteps: 24,
+    });
     if (!poly) continue;
     for (const point of poly.points) updateBounds(bounds, point);
     const path = polylineToPath(poly.points, poly.closed);
@@ -128,23 +134,6 @@ export function buildSketchSvg(
   return lines.join("\n");
 }
 
-function clampCount(value: number, fallback = 1): number {
-  if (!Number.isFinite(value)) return fallback;
-  return Math.max(1, Math.round(value));
-}
-
-function rotatePoint(point: [number, number], angle: number): [number, number] {
-  if (!angle) return point;
-  const [x, y] = point;
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
-  return [x * c - y * s, x * s + y * c];
-}
-
-function addPoint(a: [number, number], b: [number, number]): [number, number] {
-  return [a[0] + b[0], a[1] + b[1]];
-}
-
 function toSvgPoint(point: [number, number]): [number, number] {
   return [point[0], -point[1]];
 }
@@ -164,236 +153,6 @@ function updateBounds(
   if (y > bounds.maxY) bounds.maxY = y;
 }
 
-function sampleArc(
-  center: [number, number],
-  start: [number, number],
-  end: [number, number],
-  direction: "cw" | "ccw"
-): [number, number][] {
-  const cx = center[0];
-  const cy = center[1];
-  const sx = start[0] - cx;
-  const sy = start[1] - cy;
-  const ex = end[0] - cx;
-  const ey = end[1] - cy;
-  const radius = Math.hypot(sx, sy);
-  if (!Number.isFinite(radius) || radius <= 0) {
-    return [start, end];
-  }
-  const startAngle = Math.atan2(sy, sx);
-  const endAngle = Math.atan2(ey, ex);
-  let sweep = endAngle - startAngle;
-  if (direction === "ccw") {
-    if (sweep <= 0) sweep += Math.PI * 2;
-  } else {
-    if (sweep >= 0) sweep -= Math.PI * 2;
-  }
-  const steps = Math.max(6, Math.ceil(Math.abs(sweep) / (Math.PI / 12)));
-  const points: [number, number][] = [];
-  for (let i = 0; i <= steps; i += 1) {
-    const t = i / steps;
-    const angle = startAngle + sweep * t;
-    points.push([cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)]);
-  }
-  return points;
-}
-
-function sampleEllipse(
-  center: [number, number],
-  rx: number,
-  ry: number,
-  rotation = 0,
-  segments = 64
-): [number, number][] {
-  const steps = Math.max(8, segments);
-  const points: [number, number][] = [];
-  for (let i = 0; i < steps; i += 1) {
-    const t = (i / steps) * Math.PI * 2;
-    const local: [number, number] = [rx * Math.cos(t), ry * Math.sin(t)];
-    const rotated = rotatePoint(local, rotation);
-    points.push(addPoint(rotated, center));
-  }
-  return points;
-}
-
-function rectanglePoints(entity: any): [number, number][] {
-  const rotation = num(entity.rotation ?? 0);
-  if (entity.mode === "center") {
-    const center = asVec2(entity.center);
-    const cx = center[0];
-    const cy = center[1];
-    const hw = num(entity.width) / 2;
-    const hh = num(entity.height) / 2;
-    const corners: [number, number][] = [
-      [-hw, -hh],
-      [hw, -hh],
-      [hw, hh],
-      [-hw, hh],
-    ];
-    return corners.map((point) => addPoint(rotatePoint(point, rotation), [cx, cy]));
-  }
-  const origin = asVec2(entity.corner);
-  const w = num(entity.width);
-  const h = num(entity.height);
-  const corners: [number, number][] = [
-    [0, 0],
-    [w, 0],
-    [w, h],
-    [0, h],
-  ];
-  return corners.map((point) => addPoint(rotatePoint(point, rotation), origin));
-}
-
-function polygonPoints(entity: any): [number, number][] {
-  const sides = Math.max(3, clampCount(num(entity.sides), 3));
-  const rotation = num(entity.rotation ?? 0);
-  const center = asVec2(entity.center);
-  const radius = num(entity.radius);
-  const points: [number, number][] = [];
-  for (let i = 0; i < sides; i += 1) {
-    const angle = rotation + (i / sides) * Math.PI * 2;
-    points.push([
-      center[0] + radius * Math.cos(angle),
-      center[1] + radius * Math.sin(angle),
-    ]);
-  }
-  return points;
-}
-
-function slotPoints(entity: any): [number, number][] {
-  const rotation = num(entity.rotation ?? 0);
-  const length = num(entity.length);
-  const width = num(entity.width);
-  const center = asVec2(entity.center);
-  const radius = width / 2;
-  const straight = Math.max(0, length - 2 * radius);
-  const halfStraight = straight / 2;
-  const top = radius;
-  const bottom = -radius;
-  const leftCenter: [number, number] = [-halfStraight, 0];
-  const rightCenter: [number, number] = [halfStraight, 0];
-
-  const points: [number, number][] = [];
-  points.push([halfStraight, top], [-halfStraight, top]);
-
-  const leftArc = sampleArc(
-    leftCenter,
-    [leftCenter[0], top],
-    [leftCenter[0], bottom],
-    "ccw"
-  );
-  leftArc.shift();
-  points.push(...leftArc);
-
-  points.push([halfStraight, bottom]);
-  const rightArc = sampleArc(
-    rightCenter,
-    [rightCenter[0], bottom],
-    [rightCenter[0], top],
-    "ccw"
-  );
-  rightArc.shift();
-  points.push(...rightArc);
-
-  return points.map((point) => addPoint(rotatePoint(point, rotation), center));
-}
-
-function polylineForEntity(entity: SketchEntity): { points: [number, number][]; closed: boolean } | null {
-  switch (entity.kind) {
-    case "sketch.line":
-      return { points: [asVec2(entity.start), asVec2(entity.end)], closed: false };
-    case "sketch.arc":
-      return {
-        points: sampleArc(
-          asVec2(entity.center),
-          asVec2(entity.start),
-          asVec2(entity.end),
-          entity.direction
-        ),
-        closed: false,
-      };
-    case "sketch.circle":
-      return {
-        points: sampleEllipse(
-          asVec2(entity.center),
-          num(entity.radius),
-          num(entity.radius),
-          0,
-          72
-        ),
-        closed: true,
-      };
-    case "sketch.ellipse":
-      return {
-        points: sampleEllipse(
-          asVec2(entity.center),
-          num(entity.radiusX),
-          num(entity.radiusY),
-          num(entity.rotation ?? 0),
-          72
-        ),
-        closed: true,
-      };
-    case "sketch.rectangle":
-      return { points: rectanglePoints(entity), closed: true };
-    case "sketch.slot":
-      return { points: slotPoints(entity), closed: true };
-    case "sketch.polygon":
-      return { points: polygonPoints(entity), closed: true };
-    case "sketch.spline":
-      return {
-        points: sampleSpline(entity.points.map(asVec2), Boolean(entity.closed), 24),
-        closed: Boolean(entity.closed),
-      };
-    default:
-      return null;
-  }
-}
-
-function sampleSpline(
-  points: [number, number][],
-  closed: boolean,
-  steps: number
-): [number, number][] {
-  if (!points || points.length < 2) return points ?? [];
-  const result: [number, number][] = [];
-  const count = points.length;
-  const segmentCount = closed ? count : count - 1;
-  const clampIndex = (i: number) => {
-    if (closed) return (i + count) % count;
-    return Math.max(0, Math.min(count - 1, i));
-  };
-
-  for (let i = 0; i < segmentCount; i += 1) {
-    const p0 = points[clampIndex(i - 1)] ?? [0, 0];
-    const p1 = points[clampIndex(i)] ?? [0, 0];
-    const p2 = points[clampIndex(i + 1)] ?? [0, 0];
-    const p3 = points[clampIndex(i + 2)] ?? [0, 0];
-    for (let s = 0; s < steps; s += 1) {
-      const t = steps === 0 ? 0 : s / steps;
-      const t2 = t * t;
-      const t3 = t2 * t;
-      const x =
-        0.5 *
-        (2 * p1[0] +
-          (-p0[0] + p2[0]) * t +
-          (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
-          (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
-      const y =
-        0.5 *
-        (2 * p1[1] +
-          (-p0[1] + p2[1]) * t +
-          (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
-          (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
-      result.push([x, y]);
-    }
-  }
-  if (!closed) {
-    result.push(points[count - 1] ?? [0, 0]);
-  }
-  return result;
-}
-
 function polylineToPath(points: [number, number][], closed: boolean): string {
   if (!points || points.length === 0) return "";
   const start = toSvgPoint(points[0] ?? [0, 0]);
@@ -404,18 +163,4 @@ function polylineToPath(points: [number, number][], closed: boolean): string {
   }
   if (closed) d += " Z";
   return d;
-}
-
-function num(value: any): number {
-  if (typeof value === "number") return value;
-  if (value && typeof value === "object" && typeof value.value === "number") {
-    return value.value;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function asVec2(input: any): [number, number] {
-  if (!Array.isArray(input)) return [0, 0];
-  return [num(input[0]), num(input[1])];
 }
