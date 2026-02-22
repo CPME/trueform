@@ -106,9 +106,23 @@ function classifyDsl(exampleId) {
   return "Features";
 }
 
+function toExamplesRelativePath(imagePath) {
+  if (typeof imagePath !== "string" || imagePath.length === 0) return imagePath;
+  const marker = "/examples/";
+  const markerIndex = imagePath.lastIndexOf(marker);
+  if (markerIndex >= 0) {
+    return `./${imagePath.slice(markerIndex + marker.length)}`;
+  }
+  const plainPrefix = "examples/";
+  if (imagePath.startsWith(plainPrefix)) {
+    return `./${imagePath.slice(plainPrefix.length)}`;
+  }
+  return imagePath;
+}
+
 function renderCard(example, codeAnchor, category) {
   const title = escapeHtml(example.title);
-  const image = escapeHtml(example.image);
+  const image = escapeHtml(toExamplesRelativePath(example.image));
   return `
     <a class="card" href="#${codeAnchor}">
       <img src="${image}" alt="${title}" loading="lazy" />
