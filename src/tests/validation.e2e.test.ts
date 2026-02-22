@@ -163,6 +163,64 @@ const tests = [
     },
   },
   {
+    name: "validation: staged move face can be blocked",
+    fn: async () => {
+      const part = dsl.part("staged-move-face", [
+        dsl.extrude("base", dsl.profileRect(10, 6), 4, "body:main"),
+        dsl.moveFace(
+          "move-face-1",
+          dsl.selectorNamed("body:main"),
+          dsl.selectorFace([dsl.predCreatedBy("base"), dsl.predPlanar()], [dsl.rankMaxZ()]),
+          "body:moved-face",
+          ["base"],
+          { translation: [0, 0, 1] }
+        ),
+      ]);
+      assert.throws(
+        () => normalizePart(part, undefined, { stagedFeatures: "error" }),
+        /staging feature/i
+      );
+    },
+  },
+  {
+    name: "validation: staged variable fillet can be blocked",
+    fn: async () => {
+      const part = dsl.part("staged-variable-fillet", [
+        dsl.extrude("base", dsl.profileCircle(8), 6, "body:main"),
+        dsl.variableFillet(
+          "fillet-var-1",
+          dsl.selectorNamed("body:main"),
+          [{ edge: dsl.selectorEdge([dsl.predCreatedBy("base")], [dsl.rankMaxZ()]), radius: 1 }],
+          "body:filleted",
+          ["base"]
+        ),
+      ]);
+      assert.throws(
+        () => normalizePart(part, undefined, { stagedFeatures: "error" }),
+        /staging feature/i
+      );
+    },
+  },
+  {
+    name: "validation: staged variable chamfer can be blocked",
+    fn: async () => {
+      const part = dsl.part("staged-variable-chamfer", [
+        dsl.extrude("base", dsl.profileCircle(8), 6, "body:main"),
+        dsl.variableChamfer(
+          "chamfer-var-1",
+          dsl.selectorNamed("body:main"),
+          [{ edge: dsl.selectorEdge([dsl.predCreatedBy("base")], [dsl.rankMinZ()]), distance: 1 }],
+          "body:chamfered",
+          ["base"]
+        ),
+      ]);
+      assert.throws(
+        () => normalizePart(part, undefined, { stagedFeatures: "error" }),
+        /staging feature/i
+      );
+    },
+  },
+  {
     name: "validation: staged features can warn without blocking",
     fn: async () => {
       const part = dsl.part("staged-surface", [

@@ -29,6 +29,7 @@ import {
   Extrude,
   ExtrudeAxis,
   Fillet,
+  VariableFillet,
   Hole,
   Loft,
   Sweep,
@@ -54,12 +55,14 @@ import {
   Mirror,
   DeleteFace,
   ReplaceFace,
+  MoveFace,
   MoveBody,
   SplitBody,
   SplitFace,
   Draft,
   Thicken,
   Thread,
+  VariableChamfer,
 } from "./ir.js";
 
 export type OcctModule = {
@@ -121,6 +124,7 @@ export class OcctBackend implements Backend {
         "feature.mirror",
         "feature.delete.face",
         "feature.replace.face",
+        "feature.move.face",
         "feature.move.body",
         "feature.split.body",
         "feature.split.face",
@@ -129,7 +133,9 @@ export class OcctBackend implements Backend {
         "feature.thread",
         "feature.hole",
         "feature.fillet",
+        "feature.fillet.variable",
         "feature.chamfer",
+        "feature.chamfer.variable",
         "feature.boolean",
         "pattern.linear",
         "pattern.circular",
@@ -212,6 +218,11 @@ export class OcctBackend implements Backend {
           input.feature as ReplaceFace,
           input.upstream
         );
+      case "feature.move.face":
+        return this.execMoveFace(
+          input.feature as MoveFace,
+          input.upstream
+        );
       case "feature.move.body":
         return this.execMoveBody(
           input.feature as MoveBody,
@@ -253,11 +264,21 @@ export class OcctBackend implements Backend {
           input.upstream,
           input.resolve
         );
+      case "feature.fillet.variable":
+        return this.execVariableFillet(
+          input.feature as VariableFillet,
+          input.upstream
+        );
       case "feature.chamfer":
         return this.execChamfer(
           input.feature as any,
           input.upstream,
           input.resolve
+        );
+      case "feature.chamfer.variable":
+        return this.execVariableChamfer(
+          input.feature as VariableChamfer,
+          input.upstream
         );
       case "feature.boolean":
         return this.execBoolean(
@@ -1418,6 +1439,144 @@ export class OcctBackend implements Backend {
     return { outputs, selections };
   }
 
+  private execMoveFace(
+    feature: MoveFace,
+    upstream: KernelResult
+  ): KernelResult {
+    const source = resolveSelectorSet(
+      feature.source,
+      this.toResolutionContext(upstream)
+    );
+    if (source.length === 0) {
+      throw new Error("OCCT backend: move face source selector matched 0 entities");
+    }
+    if (source.length !== 1 || source[0]?.kind !== "solid") {
+      throw new Error("OCCT backend: move face source selector must resolve to one solid");
+    }
+    const sourceSelection = source[0] as KernelSelection;
+    const ownerKey = this.resolveOwnerKey(sourceSelection, upstream);
+    const ownerShape = this.resolveOwnerShape(sourceSelection, upstream);
+    if (!ownerShape) {
+      throw new Error("OCCT backend: move face source missing owner solid");
+    }
+
+    const targets = resolveSelectorSet(
+      feature.faces,
+      this.toResolutionContext(upstream)
+    );
+    if (targets.length === 0) {
+      throw new Error("OCCT backend: move face selector matched 0 entities");
+    }
+    for (const target of targets) {
+      if (target.kind !== "face") {
+        throw new Error("OCCT backend: move face selector must resolve to faces");
+      }
+      const targetOwner =
+        typeof target.meta["ownerKey"] === "string" ? (target.meta["ownerKey"] as string) : "";
+      if (targetOwner && targetOwner !== ownerKey) {
+        throw new Error("OCCT backend: move face targets must belong to source solid");
+      }
+    }
+    const sourceFaces = this.uniqueFaceShapes(targets);
+    if (sourceFaces.length === 0) {
+      throw new Error("OCCT backend: move face resolved no target faces");
+    }
+
+    const transformOrigin = (() => {
+      const origin = feature.origin ?? [0, 0, 0];
+      return [
+        expectNumber(origin[0], "move face origin[0]"),
+        expectNumber(origin[1], "move face origin[1]"),
+        expectNumber(origin[2], "move face origin[2]"),
+      ] as [number, number, number];
+    })();
+
+    const movedFaces = sourceFaces.map((face) => {
+      let moved = face;
+      if (feature.scale !== undefined) {
+        const scale = expectNumber(feature.scale, "move face scale");
+        if (!(scale > 0)) {
+          throw new Error("OCCT backend: move face scale must be positive");
+        }
+        moved = this.transformShapeScale(moved, transformOrigin, scale);
+      }
+      if (feature.rotationAxis !== undefined || feature.rotationAngle !== undefined) {
+        if (feature.rotationAxis === undefined || feature.rotationAngle === undefined) {
+          throw new Error(
+            "OCCT backend: move face rotationAxis and rotationAngle must be provided together"
+          );
+        }
+        const axis = this.resolveAxisSpec(
+          feature.rotationAxis,
+          upstream,
+          "move face rotation axis"
+        );
+        const angle = expectNumber(feature.rotationAngle, "move face rotationAngle");
+        moved = this.transformShapeRotate(moved, transformOrigin, axis, angle);
+      }
+      if (feature.translation !== undefined) {
+        const delta: [number, number, number] = [
+          expectNumber(feature.translation[0], "move face translation[0]"),
+          expectNumber(feature.translation[1], "move face translation[1]"),
+          expectNumber(feature.translation[2], "move face translation[2]"),
+        ];
+        moved = this.transformShapeTranslate(moved, delta);
+      }
+      return moved;
+    });
+
+    const replacements = sourceFaces.map((face, index) => ({
+      from: face,
+      to: movedFaces[index] as any,
+    }));
+    let result =
+      this.replaceFacesWithReshape(ownerShape, replacements) ??
+      this.replaceFacesBySewing(ownerShape, sourceFaces, movedFaces);
+    if (!result) {
+      throw new Error("OCCT backend: failed to move faces");
+    }
+
+    if (feature.heal !== false) {
+      const healed = this.makeSolidFromShells(result);
+      if (healed) {
+        result = this.normalizeSolid(healed);
+      }
+    }
+
+    let outputKind: "solid" | "surface" = this.shapeHasSolid(result)
+      ? "solid"
+      : "surface";
+    if (outputKind === "solid" && !this.isValidShape(result)) {
+      const fallback = this.replaceFacesBySewing(ownerShape, sourceFaces, movedFaces);
+      if (fallback) {
+        result = fallback;
+        outputKind = this.shapeHasSolid(result) ? "solid" : "surface";
+      }
+    }
+    if (outputKind === "solid" && !this.isValidShape(result)) {
+      throw new Error("OCCT backend: move face produced invalid solid");
+    }
+
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:${outputKind}`,
+          kind: outputKind,
+          meta: { shape: result },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      result,
+      feature.id,
+      feature.result,
+      feature.tags,
+      { rootKind: outputKind === "solid" ? "solid" : "face" }
+    );
+    return { outputs, selections };
+  }
+
   private execMoveBody(
     feature: MoveBody,
     upstream: KernelResult
@@ -2479,6 +2638,172 @@ export class OcctBackend implements Backend {
           { name: "Add_1", args: [edge] },
         ])
     );
+  }
+
+  private execVariableFillet(
+    feature: VariableFillet,
+    upstream: KernelResult
+  ): KernelResult {
+    const source = resolveSelectorSet(
+      feature.source,
+      this.toResolutionContext(upstream)
+    );
+    if (source.length !== 1 || source[0]?.kind !== "solid") {
+      throw new Error(
+        "OCCT backend: variable fillet source selector must resolve to one solid"
+      );
+    }
+    const sourceSelection = source[0] as KernelSelection;
+    const ownerKey = this.resolveOwnerKey(sourceSelection, upstream);
+    const ownerShape = this.resolveOwnerShape(sourceSelection, upstream);
+    if (!ownerShape) {
+      throw new Error("OCCT backend: variable fillet source missing owner solid");
+    }
+    const builder = this.makeFilletBuilder(ownerShape);
+    const addedEdges: any[] = [];
+    let addedAny = false;
+    for (const [index, entry] of feature.entries.entries()) {
+      const radius = expectNumber(entry.radius, `variable fillet radius[${index}]`);
+      if (!(radius > 0)) {
+        throw new Error("OCCT backend: variable fillet radius must be positive");
+      }
+      const targets = resolveSelectorSet(
+        entry.edge,
+        this.toResolutionContext(upstream)
+      );
+      if (targets.length === 0) {
+        throw new Error(`OCCT backend: variable fillet entry ${index} matched 0 edges`);
+      }
+      for (const target of targets) {
+        if (target.kind !== "edge") {
+          throw new Error("OCCT backend: variable fillet entries must resolve to edges");
+        }
+        const targetOwner = this.resolveOwnerKey(target as KernelSelection, upstream);
+        if (targetOwner !== ownerKey) {
+          throw new Error(
+            "OCCT backend: variable fillet edges must belong to source solid"
+          );
+        }
+        const edge = this.toEdge(target.meta["shape"]);
+        if (this.containsShape(addedEdges, edge)) continue;
+        const added = tryDynamicMethod(builder, [
+          { name: "Add_2", args: [edge, radius] },
+          { name: "Add_2", args: [radius, edge] },
+          { name: "Add_1", args: [edge] },
+        ]);
+        if (!added) {
+          throw new Error("OCCT backend: failed to add variable fillet edge");
+        }
+        addedEdges.push(edge);
+        addedAny = true;
+      }
+    }
+    if (!addedAny) {
+      throw new Error("OCCT backend: variable fillet resolved no unique edges");
+    }
+    this.tryBuild(builder);
+    const solid = this.readShape(builder);
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:solid`,
+          kind: "solid" as const,
+          meta: { shape: solid },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      solid,
+      feature.id,
+      feature.result,
+      feature.tags
+    );
+    return { outputs, selections };
+  }
+
+  private execVariableChamfer(
+    feature: VariableChamfer,
+    upstream: KernelResult
+  ): KernelResult {
+    const source = resolveSelectorSet(
+      feature.source,
+      this.toResolutionContext(upstream)
+    );
+    if (source.length !== 1 || source[0]?.kind !== "solid") {
+      throw new Error(
+        "OCCT backend: variable chamfer source selector must resolve to one solid"
+      );
+    }
+    const sourceSelection = source[0] as KernelSelection;
+    const ownerKey = this.resolveOwnerKey(sourceSelection, upstream);
+    const ownerShape = this.resolveOwnerShape(sourceSelection, upstream);
+    if (!ownerShape) {
+      throw new Error("OCCT backend: variable chamfer source missing owner solid");
+    }
+    const builder = this.makeChamferBuilder(ownerShape);
+    const addedEdges: any[] = [];
+    let addedAny = false;
+    for (const [index, entry] of feature.entries.entries()) {
+      const distance = expectNumber(
+        entry.distance,
+        `variable chamfer distance[${index}]`
+      );
+      if (!(distance > 0)) {
+        throw new Error("OCCT backend: variable chamfer distance must be positive");
+      }
+      const targets = resolveSelectorSet(
+        entry.edge,
+        this.toResolutionContext(upstream)
+      );
+      if (targets.length === 0) {
+        throw new Error(`OCCT backend: variable chamfer entry ${index} matched 0 edges`);
+      }
+      for (const target of targets) {
+        if (target.kind !== "edge") {
+          throw new Error("OCCT backend: variable chamfer entries must resolve to edges");
+        }
+        const targetOwner = this.resolveOwnerKey(target as KernelSelection, upstream);
+        if (targetOwner !== ownerKey) {
+          throw new Error(
+            "OCCT backend: variable chamfer edges must belong to source solid"
+          );
+        }
+        const edge = this.toEdge(target.meta["shape"]);
+        if (this.containsShape(addedEdges, edge)) continue;
+        const added = tryDynamicMethod(builder, [
+          { name: "Add_2", args: [distance, edge] },
+          { name: "Add_1", args: [edge] },
+        ]);
+        if (!added) {
+          throw new Error("OCCT backend: failed to add variable chamfer edge");
+        }
+        addedEdges.push(edge);
+        addedAny = true;
+      }
+    }
+    if (!addedAny) {
+      throw new Error("OCCT backend: variable chamfer resolved no unique edges");
+    }
+    this.tryBuild(builder);
+    const solid = this.readShape(builder);
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:solid`,
+          kind: "solid" as const,
+          meta: { shape: solid },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      solid,
+      feature.id,
+      feature.result,
+      feature.tags
+    );
+    return { outputs, selections };
   }
 
   private edgeModifierDeps(): EdgeModifierDeps {

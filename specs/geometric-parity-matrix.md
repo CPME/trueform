@@ -23,15 +23,15 @@ Status keys:
 | Base solids | Extrude/revolve/loft/sweep/pipe, primitive profile workflows | `ready` | Surface mode separately tracked as staging. |
 | Surface creation | Surface feature + surface-mode extrude/revolve/loft/sweep | `staging` | Tracked in staging registry. |
 | Hole workflows | Simple, through/blind, counterbore/countersink, patterned holes | `ready` | Advanced wizard semantics still partial. |
-| Dress-up | Fillet/chamfer/shell/thicken | `ready` | Variable and advanced corner controls are still missing. |
+| Dress-up | Fillet/chamfer/shell/thicken | `ready` | Core workflows are ready; variable fillet/chamfer controls are now available in staging. |
 | Draft + thread | Draft faces, modeled thread geometry | `staging` | Explicitly marked staging. |
 | Booleans | Union/subtract/intersect | `ready` | Available in DSL as canonical boolean op. |
 | Patterns + transforms | Linear/circular patterns, mirror | `ready` | Curve/fill/table-driven patterns missing. |
 | Multi-body direct edits | Split body, split face | `ready` | Selector/failure-mode and stability probes are now in place. |
-| Multi-body direct edits | Delete/replace/move face, move/copy body | `staging` | `feature.move.body`, `feature.delete.face`, and `feature.replace.face` landed in staging; move-face semantics still pending. |
+| Multi-body direct edits | Delete/replace/move face, move/copy body | `staging` | `feature.move.body`, `feature.move.face`, `feature.delete.face`, and `feature.replace.face` are now available in staging. |
 | Advanced surfacing | Boundary/fill/trim/untrim/extend/knit/heal | `missing` | High-value surfacing backlog. |
 | Advanced profile ops | Rib/web, wrap/emboss/deform/flex | `missing` | Common in production CAD workflows. |
-| Advanced hole/edge options | Hole wizard standards, variable fillets/chamfers | `missing` | Needed for higher parity. |
+| Advanced hole/edge options | Hole wizard standards, variable fillets/chamfers | `staging` | Variable fillet/chamfer landed in staging; full hole-wizard standards/end-conditions remain missing. |
 
 ## Near-Parity Exit Gates
 

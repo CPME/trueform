@@ -24,19 +24,18 @@ Metrics source:
 | M2: Split backend implementation (`feature.split.body`) | `completed` | Initial OCCT execution landed with staging status + passing probe. |
 | M3: Split face implementation (`feature.split.face`) | `completed` | Initial OCCT execution landed with staging status + passing probe. |
 | M4: Split stabilization + promotion | `completed` | Robust e2e + failure-mode coverage landed; split body/face promoted to ready. |
-| M5: Next high-ROI direct-edit feature (delete/replace/move face/body) | `in_progress` | `feature.move.body`, `feature.delete.face`, and `feature.replace.face` landed in staging with OCCT probes; move-face semantics remain. |
+| M5: Next high-ROI direct-edit feature (delete/replace/move face/body) | `completed` | `feature.move.body`, `feature.move.face`, `feature.delete.face`, and `feature.replace.face` landed in staging with OCCT probes. |
+| M6: Variable edge controls (`feature.fillet.variable`, `feature.chamfer.variable`) | `completed` | Added staged variable fillet/chamfer DSL+IR+OCCT support with parity probes and docs examples. |
 
-## Current Sprint Checklist (Direct-Edit M5)
+## Current Sprint Checklist (Variable Edge M6)
 
-- [x] Add IR/DSL surface for `feature.move.body`.
-- [x] Wire normalize/validation/dependency inference for move body transforms.
-- [x] Implement OCCT backend execution for move body translation/rotation/scale.
-- [x] Add OCCT parity probe coverage for move body copy + transform semantics.
-- [x] Move `move-copy-scale-body` corpus entry from missing to staging.
-- [x] Implement staged `feature.delete.face` with parity probe coverage.
-- [x] Implement staged `feature.replace.face` with parity probe coverage.
-- [ ] Land `feature.move.face` direct-edit support.
-- [ ] Promote move body from staging to ready after broader stress coverage.
+- [x] Add IR schema + staging registry coverage for `feature.fillet.variable`.
+- [x] Add IR schema + staging registry coverage for `feature.chamfer.variable`.
+- [x] Implement OCCT backend execution paths for per-entry variable fillet/chamfer.
+- [x] Add OCCT parity probes for variable fillet/chamfer workflows.
+- [x] Add DSL/docs examples for variable fillet/chamfer helpers.
+- [x] Move `variable-fillet-chamfer` corpus entry from missing to staging.
+- [ ] Implement hole-wizard standards/end-condition parity (remaining advanced hole workflow gap).
 
 ## Progress Log
 
@@ -51,3 +50,5 @@ Metrics source:
 | 2026-02-22 | Implemented `feature.move.body` (translation/rotation/scale), added OCCT probe coverage, and advanced move/copy/scale parity from missing to staging. |
 | 2026-02-22 | Implemented staged `feature.delete.face` (defeaturing + sewing fallback), added OCCT probe coverage, and advanced delete/replace-face parity from missing to staging. |
 | 2026-02-22 | Implemented staged `feature.replace.face` (reshape + sewing fallback), added OCCT probe coverage, and completed delete/replace-face staging support. |
+| 2026-02-22 | Implemented staged `feature.move.face` (reshape + sewing fallback), added OCCT probe coverage, and completed core direct-edit face/body staging coverage. |
+| 2026-02-22 | Implemented staged variable edge controls (`feature.fillet.variable`, `feature.chamfer.variable`) with OCCT parity probes and DSL/docs examples. |

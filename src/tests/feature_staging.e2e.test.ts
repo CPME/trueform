@@ -10,19 +10,25 @@ import { runTests } from "./occt_test_utils.js";
 
 const tests = [
   {
-    name: "feature staging: registry includes draft/delete/replace/move/thread/surface entries",
+    name: "feature staging: registry includes draft/direct-edit/variable-edge/thread/surface entries",
     fn: async () => {
       const keys = listStagedFeatureKeys();
       assert.ok(keys.includes("feature.draft"));
       assert.ok(keys.includes("feature.delete.face"));
       assert.ok(keys.includes("feature.replace.face"));
+      assert.ok(keys.includes("feature.move.face"));
       assert.ok(keys.includes("feature.move.body"));
+      assert.ok(keys.includes("feature.fillet.variable"));
+      assert.ok(keys.includes("feature.chamfer.variable"));
       assert.ok(keys.includes("feature.thread"));
       assert.ok(keys.includes("feature.surface"));
       assert.equal(TF_STAGED_FEATURES["feature.draft"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.delete.face"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.replace.face"]?.stage, "staging");
+      assert.equal(TF_STAGED_FEATURES["feature.move.face"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.move.body"]?.stage, "staging");
+      assert.equal(TF_STAGED_FEATURES["feature.fillet.variable"]?.stage, "staging");
+      assert.equal(TF_STAGED_FEATURES["feature.chamfer.variable"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.thread"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.surface"]?.stage, "staging");
     },
@@ -75,6 +81,48 @@ const tests = [
       );
       const stage = getFeatureStage(replaced);
       assert.equal(stage.key, "feature.replace.face");
+      assert.equal(stage.stage, "staging");
+    },
+  },
+  {
+    name: "feature staging: move face resolves to staging entry",
+    fn: async () => {
+      const moved = dsl.moveFace(
+        "move-face-1",
+        dsl.selectorNamed("body:main"),
+        dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxZ()]),
+        undefined,
+        undefined,
+        { translation: [0, 0, 1] }
+      );
+      const stage = getFeatureStage(moved);
+      assert.equal(stage.key, "feature.move.face");
+      assert.equal(stage.stage, "staging");
+    },
+  },
+  {
+    name: "feature staging: variable fillet resolves to staging entry",
+    fn: async () => {
+      const feature = dsl.variableFillet(
+        "variable-fillet-1",
+        dsl.selectorNamed("body:main"),
+        [{ edge: dsl.selectorEdge([dsl.predCreatedBy("base")], [dsl.rankMaxZ()]), radius: 1 }]
+      );
+      const stage = getFeatureStage(feature);
+      assert.equal(stage.key, "feature.fillet.variable");
+      assert.equal(stage.stage, "staging");
+    },
+  },
+  {
+    name: "feature staging: variable chamfer resolves to staging entry",
+    fn: async () => {
+      const feature = dsl.variableChamfer(
+        "variable-chamfer-1",
+        dsl.selectorNamed("body:main"),
+        [{ edge: dsl.selectorEdge([dsl.predCreatedBy("base")], [dsl.rankMaxZ()]), distance: 1 }]
+      );
+      const stage = getFeatureStage(feature);
+      assert.equal(stage.key, "feature.chamfer.variable");
       assert.equal(stage.stage, "staging");
     },
   },

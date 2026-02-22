@@ -1099,6 +1099,56 @@ function validateFeature(feature: IntentFeature): void {
       );
       return;
     }
+    case "feature.move.face": {
+      const move = feature as {
+        source?: Selector;
+        faces?: Selector;
+        translation?: Point3D;
+        rotationAxis?: AxisSpec;
+        rotationAngle?: Scalar;
+        scale?: Scalar;
+        origin?: Point3D;
+        heal?: unknown;
+        result?: string;
+      };
+      validateSelector(move.source);
+      validateSelector(move.faces);
+      if (move.translation !== undefined) {
+        validatePoint3Scalar(move.translation, "Move face translation");
+      }
+      if (move.rotationAxis !== undefined || move.rotationAngle !== undefined) {
+        validateAxisSpec(move.rotationAxis, "Move face rotation axis is required");
+        validateScalar(move.rotationAngle, "Move face rotation angle");
+      }
+      if (move.scale !== undefined) {
+        validatePositiveScalar(move.scale, "Move face scale");
+      }
+      if (move.origin !== undefined) {
+        validatePoint3Scalar(move.origin, "Move face origin");
+      }
+      if (move.heal !== undefined && typeof move.heal !== "boolean") {
+        throw new CompileError(
+          "validation_move_face_heal",
+          "Move face heal must be a boolean"
+        );
+      }
+      if (
+        move.translation === undefined &&
+        move.rotationAngle === undefined &&
+        move.scale === undefined
+      ) {
+        throw new CompileError(
+          "validation_move_face_transform",
+          "Move face requires translation, rotation, or scale"
+        );
+      }
+      ensureNonEmptyString(
+        move.result,
+        "validation_feature_result",
+        "Move face result is required"
+      );
+      return;
+    }
     case "feature.move.body": {
       const move = feature as {
         source?: Selector;
@@ -1296,10 +1346,68 @@ function validateFeature(feature: IntentFeature): void {
       validateScalar(fillet.radius, "Fillet radius");
       return;
     }
+    case "feature.fillet.variable": {
+      const fillet = feature as {
+        source?: Selector;
+        entries?: Array<{ edge?: Selector; radius?: Scalar }>;
+        result?: string;
+      };
+      validateSelector(fillet.source);
+      const entries = ensureArray<{ edge?: Selector; radius?: Scalar }>(
+        fillet.entries,
+        "validation_variable_fillet_entries",
+        "Variable fillet entries must be an array"
+      );
+      if (entries.length === 0) {
+        throw new CompileError(
+          "validation_variable_fillet_entries",
+          "Variable fillet requires at least one entry"
+        );
+      }
+      for (const entry of entries) {
+        validateSelector(entry.edge);
+        validateScalar(entry.radius, "Variable fillet radius");
+      }
+      ensureNonEmptyString(
+        fillet.result,
+        "validation_feature_result",
+        "Variable fillet result is required"
+      );
+      return;
+    }
     case "feature.chamfer": {
       const chamfer = feature as { edges?: Selector; distance?: Scalar };
       validateSelector(chamfer.edges);
       validateScalar(chamfer.distance, "Chamfer distance");
+      return;
+    }
+    case "feature.chamfer.variable": {
+      const chamfer = feature as {
+        source?: Selector;
+        entries?: Array<{ edge?: Selector; distance?: Scalar }>;
+        result?: string;
+      };
+      validateSelector(chamfer.source);
+      const entries = ensureArray<{ edge?: Selector; distance?: Scalar }>(
+        chamfer.entries,
+        "validation_variable_chamfer_entries",
+        "Variable chamfer entries must be an array"
+      );
+      if (entries.length === 0) {
+        throw new CompileError(
+          "validation_variable_chamfer_entries",
+          "Variable chamfer requires at least one entry"
+        );
+      }
+      for (const entry of entries) {
+        validateSelector(entry.edge);
+        validateScalar(entry.distance, "Variable chamfer distance");
+      }
+      ensureNonEmptyString(
+        chamfer.result,
+        "validation_feature_result",
+        "Variable chamfer result is required"
+      );
       return;
     }
     case "feature.boolean": {

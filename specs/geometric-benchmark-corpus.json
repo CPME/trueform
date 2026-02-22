@@ -182,6 +182,14 @@
       "notes": "feature.move.body now supports translation/rotation/scale in staging."
     },
     {
+      "id": "move-face",
+      "category": "multi-body-direct-edits",
+      "feature": "Move face",
+      "parity": "staging",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.move_face.e2e.probe.js" },
+      "notes": "feature.move.face now supports core translation/rotation/scale workflows in staging."
+    },
+    {
       "id": "advanced-surfacing-boundary-fill-knit",
       "category": "advanced-surfacing",
       "feature": "Boundary/fill/trim/extend/knit workflows",
@@ -197,7 +205,9 @@
       "id": "variable-fillet-chamfer",
       "category": "advanced-hole-and-edge-options",
       "feature": "Variable fillet/chamfer controls",
-      "parity": "missing"
+      "parity": "staging",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.variable_edge.e2e.probe.js" },
+      "notes": "feature.fillet.variable and feature.chamfer.variable support core per-edge entry workflows in staging."
     },
     {
       "id": "hole-wizard-standards",

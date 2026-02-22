@@ -232,6 +232,23 @@ function normalizeFeature(
         clone.origin = normalizePoint3(clone.origin, ctx);
       }
       break;
+    case "feature.move.face":
+      if (clone.translation !== undefined) {
+        clone.translation = normalizePoint3(clone.translation, ctx);
+      }
+      if (clone.rotationAxis !== undefined) {
+        clone.rotationAxis = normalizeAxisSpec(clone.rotationAxis, ctx);
+      }
+      if (clone.rotationAngle !== undefined) {
+        clone.rotationAngle = normalizeScalar(clone.rotationAngle, "angle", ctx);
+      }
+      if (clone.scale !== undefined) {
+        clone.scale = normalizeScalar(clone.scale, "count", ctx);
+      }
+      if (clone.origin !== undefined) {
+        clone.origin = normalizePoint3(clone.origin, ctx);
+      }
+      break;
     case "feature.shell":
       clone.thickness = normalizeScalar(clone.thickness, "length", ctx);
       break;
@@ -312,8 +329,20 @@ function normalizeFeature(
     case "feature.fillet":
       clone.radius = normalizeScalar(clone.radius, "length", ctx);
       break;
+    case "feature.fillet.variable":
+      clone.entries = clone.entries.map((entry) => ({
+        edge: normalizeSelector(entry.edge),
+        radius: normalizeScalar(entry.radius, "length", ctx),
+      }));
+      break;
     case "feature.chamfer":
       clone.distance = normalizeScalar(clone.distance, "length", ctx);
+      break;
+    case "feature.chamfer.variable":
+      clone.entries = clone.entries.map((entry) => ({
+        edge: normalizeSelector(entry.edge),
+        distance: normalizeScalar(entry.distance, "length", ctx),
+      }));
       break;
     case "pattern.linear":
       clone.spacing = [

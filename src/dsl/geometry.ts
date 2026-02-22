@@ -11,6 +11,8 @@ import type {
   ExtrudeAxis,
   FaceQuery,
   Fillet,
+  VariableFillet,
+  VariableFilletEntry,
   Hole,
   ID,
   Loft,
@@ -31,6 +33,7 @@ import type {
   Profile,
   ProfileRef,
   MoveBody,
+  MoveFace,
   DeleteFace,
   ReplaceFace,
   Mirror,
@@ -61,6 +64,8 @@ import type {
   Thicken,
   ThickenDirection,
   Thread,
+  VariableChamfer,
+  VariableChamferEntry,
   ThreadHandedness,
 } from "../ir.js";
 import { compact } from "./utils.js";
@@ -540,6 +545,36 @@ export const replaceFace = (
     deps,
   });
 
+export const moveFace = (
+  id: ID,
+  source: Selector,
+  faces: Selector,
+  result?: string,
+  deps?: ID[],
+  opts?: {
+    translation?: Point3D;
+    rotationAxis?: AxisSpec;
+    rotationAngle?: Scalar;
+    scale?: Scalar;
+    origin?: Point3D;
+    heal?: boolean;
+  }
+): MoveFace =>
+  compact({
+    id,
+    kind: "feature.move.face",
+    source,
+    faces,
+    translation: opts?.translation,
+    rotationAxis: opts?.rotationAxis,
+    rotationAngle: opts?.rotationAngle,
+    scale: opts?.scale,
+    origin: opts?.origin,
+    heal: opts?.heal,
+    result: result ?? `body:${id}`,
+    deps,
+  });
+
 export const splitBody = (
   id: ID,
   source: Selector,
@@ -711,6 +746,22 @@ export const fillet = (
     deps,
   });
 
+export const variableFillet = (
+  id: ID,
+  source: Selector,
+  entries: VariableFilletEntry[],
+  result?: string,
+  deps?: ID[]
+): VariableFillet =>
+  compact({
+    id,
+    kind: "feature.fillet.variable",
+    source,
+    entries,
+    result: result ?? `body:${id}`,
+    deps,
+  });
+
 export const chamfer = (
   id: ID,
   edges: Selector,
@@ -722,6 +773,22 @@ export const chamfer = (
     kind: "feature.chamfer",
     edges,
     distance,
+    deps,
+  });
+
+export const variableChamfer = (
+  id: ID,
+  source: Selector,
+  entries: VariableChamferEntry[],
+  result?: string,
+  deps?: ID[]
+): VariableChamfer =>
+  compact({
+    id,
+    kind: "feature.chamfer.variable",
+    source,
+    entries,
+    result: result ?? `body:${id}`,
     deps,
   });
 

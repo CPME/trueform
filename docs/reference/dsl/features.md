@@ -13,13 +13,16 @@ import {
   mirror,
   deleteFace,
   replaceFace,
+  moveFace,
   moveBody,
   splitBody,
   splitFace,
   thicken,
   hole,
   fillet,
+  variableFillet,
   chamfer,
+  variableChamfer,
   thread,
   draft,
   patternLinear,
@@ -41,6 +44,7 @@ import {
 - `mirror(id, source, plane, result?, deps?) -> Mirror`
 - `deleteFace(id, source, faces, result?, deps?, opts?) -> DeleteFace` (staging)
 - `replaceFace(id, source, faces, tool, result?, deps?, opts?) -> ReplaceFace` (staging)
+- `moveFace(id, source, faces, result?, deps?, opts?) -> MoveFace` (staging)
 - `moveBody(id, source, result?, deps?, opts?) -> MoveBody` (staging)
 - `splitBody(id, source, tool, result?, deps?, opts?) -> SplitBody`
 - `splitFace(id, faces, tool, result?, deps?) -> SplitFace`
@@ -49,7 +53,9 @@ import {
 - `thread(id, axis, length, majorDiameter, pitch, result?, deps?, opts?) -> Thread` (modelled)
 - `hole(id, onFace, axis, diameter, depth, opts?) -> Hole`
 - `fillet(id, edges, radius, deps?) -> Fillet`
+- `variableFillet(id, source, entries, result?, deps?) -> VariableFillet` (staging)
 - `chamfer(id, edges, distance, deps?) -> Chamfer`
+- `variableChamfer(id, source, entries, result?, deps?) -> VariableChamfer` (staging)
 - `booleanOp(id, op, left, right, result?, deps?) -> BooleanOp`
 - `patternLinear(id, origin, spacing, count, depsOrOpts?) -> PatternLinear`
 - `patternCircular(id, origin, axis, count, depsOrOpts?) -> PatternCircular`
@@ -76,11 +82,14 @@ Examples:
 - [Move Body](./examples/features#move-body)
 - [Delete Face](./examples/features#delete-face)
 - [Replace Face](./examples/features#replace-face)
+- [Move Face](./examples/features#move-face)
 - [Draft](./examples/features#draft)
 - [Thicken](./examples/features#thicken)
 - [Hole](./examples/features#hole)
 - [Fillet](./examples/features#fillet)
+- [Variable Fillet](./examples/features#variable-fillet)
 - [Chamfer](./examples/features#chamfer)
+- [Variable Chamfer](./examples/features#variable-chamfer)
 - [Boolean](./examples/features#boolean-union)
 - [Boolean Subtract](./examples/features#boolean-subtract)
 - [Boolean Intersect](./examples/features#boolean-intersect)

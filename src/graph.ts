@@ -118,6 +118,7 @@ function featureResultName(feature: IntentFeature): string | undefined {
     case "feature.mirror":
     case "feature.delete.face":
     case "feature.replace.face":
+    case "feature.move.face":
     case "feature.move.body":
     case "feature.split.body":
     case "feature.split.face":
@@ -125,6 +126,8 @@ function featureResultName(feature: IntentFeature): string | undefined {
     case "feature.shell":
     case "feature.thicken":
     case "feature.thread":
+    case "feature.fillet.variable":
+    case "feature.chamfer.variable":
     case "feature.boolean":
       return feature.result;
     case "pattern.linear":
@@ -218,6 +221,14 @@ function inferDatumDependencies(
       addPlaneRefDep((feature as { plane?: PlaneRef }).plane, deps, byId, feature);
       break;
     case "feature.move.body":
+      addAxisSpecDep(
+        (feature as { rotationAxis?: AxisSpec }).rotationAxis,
+        deps,
+        byId,
+        feature
+      );
+      break;
+    case "feature.move.face":
       addAxisSpecDep(
         (feature as { rotationAxis?: AxisSpec }).rotationAxis,
         deps,
@@ -335,6 +346,8 @@ function featureSelectors(feature: IntentFeature): Selector[] {
       return [feature.source, feature.faces];
     case "feature.replace.face":
       return [feature.source, feature.faces, feature.tool];
+    case "feature.move.face":
+      return [feature.source, feature.faces];
     case "feature.move.body":
       return [feature.source];
     case "feature.split.body":
@@ -349,6 +362,10 @@ function featureSelectors(feature: IntentFeature): Selector[] {
     }
     case "feature.thicken":
       return [feature.surface];
+    case "feature.fillet.variable":
+      return [feature.source, ...feature.entries.map((entry) => entry.edge)];
+    case "feature.chamfer.variable":
+      return [feature.source, ...feature.entries.map((entry) => entry.edge)];
     case "pattern.linear":
     case "pattern.circular":
       return feature.source ? [feature.origin, feature.source] : [feature.origin];

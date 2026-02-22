@@ -119,6 +119,27 @@ const tests = [
         selectors.selectorNamed("surface:tool")
       );
       assert.equal(replaced.kind, "feature.replace.face");
+      const movedFace = features.moveFace(
+        "move-face-1",
+        selectors.selectorNamed("body:main"),
+        selectors.selectorFace([selectors.predPlanar()], [selectors.rankMaxZ()]),
+        undefined,
+        undefined,
+        { translation: [0, 0, 2] }
+      );
+      assert.equal(movedFace.kind, "feature.move.face");
+      const variableFillet = features.variableFillet(
+        "variable-fillet-1",
+        selectors.selectorNamed("body:main"),
+        [{ edge: selectors.selectorEdge([selectors.predCreatedBy("base")]), radius: 1.2 }]
+      );
+      assert.equal(variableFillet.kind, "feature.fillet.variable");
+      const variableChamfer = features.variableChamfer(
+        "variable-chamfer-1",
+        selectors.selectorNamed("body:main"),
+        [{ edge: selectors.selectorEdge([selectors.predCreatedBy("base")]), distance: 0.7 }]
+      );
+      assert.equal(variableChamfer.kind, "feature.chamfer.variable");
       const patternLinear = features.patternLinear(
         "p-l",
         selectors.selectorNamed("body:seed"),

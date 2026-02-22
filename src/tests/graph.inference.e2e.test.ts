@@ -114,6 +114,82 @@ const tests = [
     },
   },
   {
+    name: "graph: move face infers source output and datum axis dependencies",
+    fn: async () => {
+      const part = dsl.part("move-face-deps", [
+        dsl.moveFace(
+          "move-face",
+          dsl.selectorNamed("body:main"),
+          dsl.selectorFace([dsl.predCreatedBy("base"), dsl.predPlanar()], [dsl.rankMaxZ()]),
+          "body:moved",
+          undefined,
+          {
+            rotationAxis: dsl.axisDatum("axis-1"),
+            rotationAngle: Math.PI / 12,
+          }
+        ),
+        dsl.extrude("base", dsl.profileRect(8, 8), 4, "body:main"),
+        dsl.datumAxis("axis-1", "+Z"),
+      ]);
+      const result = compilePart(part);
+      const moveIndex = result.featureOrder.indexOf("move-face");
+      assert.ok(result.featureOrder.indexOf("base") < moveIndex);
+      assert.ok(result.featureOrder.indexOf("axis-1") < moveIndex);
+    },
+  },
+  {
+    name: "graph: variable fillet infers source output dependencies",
+    fn: async () => {
+      const part = dsl.part("variable-fillet-deps", [
+        dsl.variableFillet(
+          "fillet-var",
+          dsl.selectorNamed("body:main"),
+          [
+            {
+              edge: dsl.selectorEdge([dsl.predCreatedBy("base")], [dsl.rankMaxZ()]),
+              radius: 1.2,
+            },
+            {
+              edge: dsl.selectorEdge([dsl.predCreatedBy("base")], [dsl.rankMinZ()]),
+              radius: 0.8,
+            },
+          ],
+          "body:filleted"
+        ),
+        dsl.extrude("base", dsl.profileCircle(8), 6, "body:main"),
+      ]);
+      const result = compilePart(part);
+      const index = result.featureOrder.indexOf("fillet-var");
+      assert.ok(result.featureOrder.indexOf("base") < index);
+    },
+  },
+  {
+    name: "graph: variable chamfer infers source output dependencies",
+    fn: async () => {
+      const part = dsl.part("variable-chamfer-deps", [
+        dsl.variableChamfer(
+          "chamfer-var",
+          dsl.selectorNamed("body:main"),
+          [
+            {
+              edge: dsl.selectorEdge([dsl.predCreatedBy("base")], [dsl.rankMaxZ()]),
+              distance: 1,
+            },
+            {
+              edge: dsl.selectorEdge([dsl.predCreatedBy("base")], [dsl.rankMinZ()]),
+              distance: 0.6,
+            },
+          ],
+          "body:chamfered"
+        ),
+        dsl.extrude("base", dsl.profileCircle(8), 6, "body:main"),
+      ]);
+      const result = compilePart(part);
+      const index = result.featureOrder.indexOf("chamfer-var");
+      assert.ok(result.featureOrder.indexOf("base") < index);
+    },
+  },
+  {
     name: "graph: selector.named missing output throws",
     fn: async () => {
       const part = dsl.part("named-missing", [

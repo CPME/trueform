@@ -1,8 +1,10 @@
 export {
   chamfer,
+  variableChamfer,
   draft,
   extrude,
   fillet,
+  variableFillet,
   hexTubeSweep,
   hole,
   loft,
@@ -10,6 +12,7 @@ export {
   mirror,
   deleteFace,
   replaceFace,
+  moveFace,
   moveBody,
   splitBody,
   splitFace,

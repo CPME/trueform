@@ -369,6 +369,25 @@ const tests = [
       assert.equal(replaceFace.result, "body:replace-face-1");
       assert.equal(replaceFace.heal, true);
       assert.equal(replaceFace.deps?.length, 1);
+      const moveFace = dsl.moveFace(
+        "move-face-1",
+        dsl.selectorNamed("body:base"),
+        dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxZ()]),
+        undefined,
+        ["dep-move-face"],
+        {
+          translation: [0, 0, 2],
+          rotationAxis: "+Z",
+          rotationAngle: 0.1,
+          scale: 1.01,
+          origin: [0, 0, 0],
+          heal: false,
+        }
+      );
+      assert.equal(moveFace.kind, "feature.move.face");
+      assert.equal(moveFace.result, "body:move-face-1");
+      assert.equal(moveFace.heal, false);
+      assert.equal(moveFace.deps?.length, 1);
       const splitBody = dsl.splitBody(
         "split-body-1",
         dsl.selectorNamed("body:base"),
@@ -429,9 +448,25 @@ const tests = [
 
       const fillet = dsl.fillet("fillet-1", selectorEdge, 1);
       assert.equal(fillet.kind, "feature.fillet");
+      const variableFillet = dsl.variableFillet(
+        "fillet-var-1",
+        dsl.selectorNamed("body:base"),
+        [{ edge: selectorEdge, radius: 1.25 }]
+      );
+      assert.equal(variableFillet.kind, "feature.fillet.variable");
+      assert.equal(variableFillet.result, "body:fillet-var-1");
+      assert.equal(variableFillet.entries.length, 1);
 
       const chamfer = dsl.chamfer("chamfer-1", selectorEdge, 2);
       assert.equal(chamfer.kind, "feature.chamfer");
+      const variableChamfer = dsl.variableChamfer(
+        "chamfer-var-1",
+        dsl.selectorNamed("body:base"),
+        [{ edge: selectorEdge, distance: 0.8 }]
+      );
+      assert.equal(variableChamfer.kind, "feature.chamfer.variable");
+      assert.equal(variableChamfer.result, "body:chamfer-var-1");
+      assert.equal(variableChamfer.entries.length, 1);
 
       const booleanOp = dsl.booleanOp(
         "bool-1",

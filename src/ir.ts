@@ -145,6 +145,7 @@ export type IntentFeature =
   | Mirror
   | ReplaceFace
   | MoveBody
+  | MoveFace
   | DeleteFace
   | SplitBody
   | SplitFace
@@ -153,7 +154,9 @@ export type IntentFeature =
   | Thread
   | Hole
   | Fillet
+  | VariableFillet
   | Chamfer
+  | VariableChamfer
   | BooleanOp
   | PatternLinear
   | PatternCircular;
@@ -425,6 +428,19 @@ export type ReplaceFace = FeatureBase & {
   result: string;
 };
 
+export type MoveFace = FeatureBase & {
+  kind: "feature.move.face";
+  source: Selector;
+  faces: Selector;
+  translation?: Point3D;
+  rotationAxis?: AxisSpec;
+  rotationAngle?: Scalar;
+  scale?: Scalar;
+  origin?: Point3D;
+  heal?: boolean;
+  result: string;
+};
+
 export type DeleteFace = FeatureBase & {
   kind: "feature.delete.face";
   source: Selector;
@@ -530,10 +546,34 @@ export type Fillet = FeatureBase & {
   radius: Scalar;
 };
 
+export type VariableFilletEntry = {
+  edge: Selector;
+  radius: Scalar;
+};
+
+export type VariableFillet = FeatureBase & {
+  kind: "feature.fillet.variable";
+  source: Selector;
+  entries: VariableFilletEntry[];
+  result: string;
+};
+
 export type Chamfer = FeatureBase & {
   kind: "feature.chamfer";
   edges: Selector;
   distance: Scalar;
+};
+
+export type VariableChamferEntry = {
+  edge: Selector;
+  distance: Scalar;
+};
+
+export type VariableChamfer = FeatureBase & {
+  kind: "feature.chamfer.variable";
+  source: Selector;
+  entries: VariableChamferEntry[];
+  result: string;
 };
 
 export type BooleanOp = FeatureBase & {

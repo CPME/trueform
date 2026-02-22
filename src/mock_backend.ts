@@ -35,13 +35,16 @@ export class MockBackend implements Backend {
         "feature.mirror",
         "feature.delete.face",
         "feature.replace.face",
+        "feature.move.face",
         "feature.move.body",
         "feature.draft",
         "feature.thicken",
         "feature.thread",
         "feature.hole",
         "feature.fillet",
+        "feature.fillet.variable",
         "feature.chamfer",
+        "feature.chamfer.variable",
         "feature.boolean",
         "pattern.linear",
         "pattern.circular",
@@ -134,6 +137,16 @@ export class MockBackend implements Backend {
         }
         return this.emitSolid(feature);
       }
+      case "feature.move.face": {
+        const source = (feature as { source?: Selector }).source;
+        if (source) {
+          const target = input.resolve(source, input.upstream);
+          if (target.kind === "solid") return this.emitSolid(feature);
+          if (target.kind === "face") return this.emitSurface(feature, "face");
+          if (target.kind === "surface") return this.emitSurface(feature, "surface");
+        }
+        return this.emitSolid(feature);
+      }
       case "feature.shell":
       case "feature.draft":
       case "feature.thicken":
@@ -142,7 +155,9 @@ export class MockBackend implements Backend {
       case "feature.hole":
         return this.emitHole(feature, input.resolve, input.upstream);
       case "feature.fillet":
+      case "feature.fillet.variable":
       case "feature.chamfer":
+      case "feature.chamfer.variable":
       case "feature.boolean":
       case "pattern.linear":
       case "pattern.circular":

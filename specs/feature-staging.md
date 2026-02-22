@@ -21,12 +21,21 @@ clients and agents can avoid treating them as production-stable.
 - `feature.move.body`
   - Status: `staging`
   - Note: move/copy/scale body supports core transforms while edge-case reliability hardening continues.
+- `feature.fillet.variable`
+  - Status: `staging`
+  - Note: variable fillet supports core per-edge radii workflows while broader corner behavior hardening continues.
+- `feature.chamfer.variable`
+  - Status: `staging`
+  - Note: variable chamfer supports core per-edge distance workflows while broader corner behavior hardening continues.
 - `feature.delete.face`
   - Status: `staging`
   - Note: delete face supports core workflows while replace/heal edge-case reliability hardening continues.
 - `feature.replace.face`
   - Status: `staging`
   - Note: replace face supports core workflows while broader surface-matching reliability hardening continues.
+- `feature.move.face`
+  - Status: `staging`
+  - Note: move face supports core workflows while broader healing/topology reliability hardening continues.
 - `feature.surface`
   - Status: `staging`
   - Note: surface workflows are functional but still improving in reliability.

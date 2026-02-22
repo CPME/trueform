@@ -9,13 +9,16 @@ import {
   loft,
   sweep,
   chamfer,
+  variableChamfer,
   datumPlane,
   extrude,
   fillet,
+  variableFillet,
   hole,
   plane,
   mirror,
   moveBody,
+  moveFace,
   deleteFace,
   replaceFace,
   shell,
@@ -356,6 +359,45 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     },
   },
   {
+    id: "variable-fillet",
+    title: "Variable Fillet",
+    part: part("example-variable-fillet", [
+      extrude("base", profileCircle(12), 16, "body:main"),
+      variableFillet(
+        "fillet-var",
+        selectorNamed("body:main"),
+        [
+          {
+            edge: selectorEdge([predCreatedBy("base")], [rankMaxZ()]),
+            radius: 1.8,
+          },
+          {
+            edge: selectorEdge([predCreatedBy("base")], [rankMinZ()]),
+            radius: 0.9,
+          },
+        ],
+        "body:filleted",
+        ["base"]
+      ),
+    ]),
+    render: {
+      layers: [
+        {
+          output: "body:filleted",
+          color: [154, 192, 230],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [32, 40, 52],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+      meshOpts: {
+        includeTangentEdges: true,
+      },
+    },
+  },
+  {
     id: "chamfer",
     title: "Chamfer",
     part: part("example-chamfer", [
@@ -367,6 +409,42 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         ["block"]
       ),
     ]),
+  },
+  {
+    id: "variable-chamfer",
+    title: "Variable Chamfer",
+    part: part("example-variable-chamfer", [
+      extrude("base", profileCircle(12), 16, "body:main"),
+      variableChamfer(
+        "chamfer-var",
+        selectorNamed("body:main"),
+        [
+          {
+            edge: selectorEdge([predCreatedBy("base")], [rankMaxZ()]),
+            distance: 1.2,
+          },
+          {
+            edge: selectorEdge([predCreatedBy("base")], [rankMinZ()]),
+            distance: 0.6,
+          },
+        ],
+        "body:chamfered",
+        ["base"]
+      ),
+    ]),
+    render: {
+      layers: [
+        {
+          output: "body:chamfered",
+          color: [154, 192, 230],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [32, 40, 52],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
   },
   {
     id: "boolean",
@@ -882,6 +960,37 @@ export const dslFeatureExamples: DslFeatureExample[] = [
           color: [230, 140, 70],
           alpha: 0.2,
           wireframe: false,
+          depthTest: true,
+        },
+      ],
+    },
+  },
+  {
+    id: "move-face",
+    title: "Move Face",
+    part: part("example-move-face", [
+      extrude("base", profileRect(56, 32), 18, "body:base"),
+      moveFace(
+        "move-top",
+        selectorNamed("body:base"),
+        selectorFace([predCreatedBy("base"), predPlanar()], [rankMaxZ()]),
+        "surface:main",
+        ["base"],
+        {
+          translation: [0, 0, 2],
+          heal: false,
+        }
+      ),
+    ]),
+    render: {
+      layers: [
+        {
+          output: "surface:main",
+          color: [154, 192, 230],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [32, 40, 52],
+          wireDepthTest: true,
           depthTest: true,
         },
       ],

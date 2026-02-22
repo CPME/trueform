@@ -354,6 +354,32 @@ Notes:
 - `replaceFace` swaps selected source faces using tool face/surface geometry.
 - Replace face is staging behavior and currently optimized for core matching-face workflows.
 
+## Move Face
+
+![Move face example](/examples/dsl/move-face.iso.png)
+
+```ts
+const examplePart = part("example-move-face", [
+  extrude("base", profileRect(56, 32), 18, "body:base"),
+  moveFace(
+    "move-top",
+    selectorNamed("body:base"),
+    selectorFace([predCreatedBy("base"), predPlanar()], [rankMaxZ()]),
+    "surface:main",
+    ["base"],
+    {
+      translation: [0, 0, 2],
+      heal: false,
+    }
+  ),
+]);
+```
+
+Notes:
+- `moveFace` applies transform controls to selected faces on a source solid.
+- `heal: false` keeps an open shell/surface result; `heal: true` attempts to keep a closed solid.
+- Move face is staging behavior and should be validated on target geometries.
+
 ## Draft
 
 ![Draft example](/examples/dsl/draft.iso.png)
@@ -506,6 +532,28 @@ Notes:
 - The docs renderer enables `mesh(..., { includeTangentEdges: true })` for this
   example so smooth fillet transitions remain visible in wireframe.
 
+## Variable Fillet
+
+```ts
+const examplePart = part("example-variable-fillet", [
+  extrude("base", profileCircle(12), 16, "body:main"),
+  variableFillet(
+    "fillet-var",
+    selectorNamed("body:main"),
+    [
+      { edge: selectorEdge([predCreatedBy("base")], [rankMaxZ()]), radius: 1.8 },
+      { edge: selectorEdge([predCreatedBy("base")], [rankMinZ()]), radius: 0.9 },
+    ],
+    "body:filleted",
+    ["base"]
+  ),
+]);
+```
+
+Notes:
+- `variableFillet` applies per-entry radii to selected edge sets on one source body.
+- This feature is staging and should be validated on your target edge/corner blends.
+
 ## Chamfer
 
 ![Chamfer example](/examples/dsl/chamfer.iso.png)
@@ -521,6 +569,28 @@ const examplePart = part("example-chamfer", [
   ),
 ]);
 ```
+
+## Variable Chamfer
+
+```ts
+const examplePart = part("example-variable-chamfer", [
+  extrude("base", profileCircle(12), 16, "body:main"),
+  variableChamfer(
+    "chamfer-var",
+    selectorNamed("body:main"),
+    [
+      { edge: selectorEdge([predCreatedBy("base")], [rankMaxZ()]), distance: 1.2 },
+      { edge: selectorEdge([predCreatedBy("base")], [rankMinZ()]), distance: 0.6 },
+    ],
+    "body:chamfered",
+    ["base"]
+  ),
+]);
+```
+
+Notes:
+- `variableChamfer` applies per-entry distances to selected edge sets on one source body.
+- This feature is staging and should be validated on your target edge/corner blends.
 
 ## Boolean Union
 
