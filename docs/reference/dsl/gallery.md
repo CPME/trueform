@@ -3,7 +3,7 @@
 Click any image to jump to its example.
 
 For the full card-style experience (all previews + source snippets in one place), open:
-[`Examples App`](/examples/index.html)
+[`Examples App`](./examples-app)
 
 ## 3D Features
 
