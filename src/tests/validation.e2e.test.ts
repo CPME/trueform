@@ -105,6 +105,64 @@ const tests = [
     },
   },
   {
+    name: "validation: staged move body can be blocked",
+    fn: async () => {
+      const part = dsl.part("staged-move", [
+        dsl.extrude("base", dsl.profileRect(10, 6), 4, "body:main"),
+        dsl.moveBody(
+          "move-1",
+          dsl.selectorNamed("body:main"),
+          "body:moved",
+          ["base"],
+          { translation: [5, 0, 0] }
+        ),
+      ]);
+      assert.throws(
+        () => normalizePart(part, undefined, { stagedFeatures: "error" }),
+        /staging feature/i
+      );
+    },
+  },
+  {
+    name: "validation: staged delete face can be blocked",
+    fn: async () => {
+      const part = dsl.part("staged-delete-face", [
+        dsl.extrude("base", dsl.profileRect(10, 6), 4, "body:main"),
+        dsl.deleteFace(
+          "delete-1",
+          dsl.selectorNamed("body:main"),
+          dsl.selectorFace([dsl.predCreatedBy("base"), dsl.predPlanar()], [dsl.rankMaxZ()]),
+          "surface:opened",
+          ["base"]
+        ),
+      ]);
+      assert.throws(
+        () => normalizePart(part, undefined, { stagedFeatures: "error" }),
+        /staging feature/i
+      );
+    },
+  },
+  {
+    name: "validation: staged replace face can be blocked",
+    fn: async () => {
+      const part = dsl.part("staged-replace-face", [
+        dsl.extrude("base", dsl.profileRect(10, 6), 4, "body:main"),
+        dsl.replaceFace(
+          "replace-1",
+          dsl.selectorNamed("body:main"),
+          dsl.selectorFace([dsl.predCreatedBy("base"), dsl.predPlanar()], [dsl.rankMaxZ()]),
+          dsl.selectorFace([dsl.predCreatedBy("base"), dsl.predPlanar()], [dsl.rankMaxZ()]),
+          "body:replaced",
+          ["base"]
+        ),
+      ]);
+      assert.throws(
+        () => normalizePart(part, undefined, { stagedFeatures: "error" }),
+        /staging feature/i
+      );
+    },
+  },
+  {
     name: "validation: staged features can warn without blocking",
     fn: async () => {
       const part = dsl.part("staged-surface", [
@@ -139,6 +197,42 @@ const tests = [
     fn: async () => {
       const part = dsl.part("stable-only", [
         dsl.extrude("base", dsl.profileRect(2, 3), 5),
+      ]);
+      assert.doesNotThrow(() =>
+        normalizePart(part, undefined, { stagedFeatures: "error" })
+      );
+    },
+  },
+  {
+    name: "validation: split features pass when staged policy is error",
+    fn: async () => {
+      const part = dsl.part("split-stable", [
+        dsl.sketch2d("sketch-base", [
+          { name: "profile:base", profile: dsl.profileRect(12, 8) },
+        ]),
+        dsl.extrude("base-extrude", dsl.profileRef("profile:base"), 6, "body:main", [
+          "sketch-base",
+        ]),
+        dsl.plane("split-plane", 20, 20, "surface:splitter", {
+          origin: [0, 0, 3],
+          deps: ["base-extrude"],
+        }),
+        dsl.splitBody(
+          "split-body",
+          dsl.selectorNamed("body:main"),
+          dsl.selectorNamed("surface:splitter"),
+          "body:split",
+          ["base-extrude", "split-plane"]
+        ),
+        dsl.splitFace(
+          "split-face",
+          dsl.selectorFace([dsl.predCreatedBy("base-extrude"), dsl.predPlanar()], [
+            dsl.rankMaxArea(),
+          ]),
+          dsl.selectorNamed("surface:splitter"),
+          "body:split-face",
+          ["base-extrude", "split-plane"]
+        ),
       ]);
       assert.doesNotThrow(() =>
         normalizePart(part, undefined, { stagedFeatures: "error" })

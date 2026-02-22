@@ -11,6 +11,11 @@ import {
   pipe,
   shell,
   mirror,
+  deleteFace,
+  replaceFace,
+  moveBody,
+  splitBody,
+  splitFace,
   thicken,
   hole,
   fillet,
@@ -34,6 +39,11 @@ import {
 - `pipe(id, axis, length, outerDiameter, innerDiameter?, result?, opts?) -> Pipe`
 - `shell(id, source, thickness, result?, deps?, opts?) -> Shell`
 - `mirror(id, source, plane, result?, deps?) -> Mirror`
+- `deleteFace(id, source, faces, result?, deps?, opts?) -> DeleteFace` (staging)
+- `replaceFace(id, source, faces, tool, result?, deps?, opts?) -> ReplaceFace` (staging)
+- `moveBody(id, source, result?, deps?, opts?) -> MoveBody` (staging)
+- `splitBody(id, source, tool, result?, deps?, opts?) -> SplitBody`
+- `splitFace(id, faces, tool, result?, deps?) -> SplitFace`
 - `draft(id, source, faces, neutralPlane, pullDirection, angle, result?, deps?) -> Draft` (staging)
 - `thicken(id, surface, thickness, result?, deps?, opts?) -> Thicken`
 - `thread(id, axis, length, majorDiameter, pitch, result?, deps?, opts?) -> Thread` (modelled)
@@ -57,16 +67,25 @@ Examples:
 - [Revolve](./examples/features#revolve)
 - [Loft](./examples/features#loft)
 - [Sweep](./examples/features#sweep)
+- [Sweep (Arbitrary Sketch)](./examples/features#sweep-arbitrary-sketch)
 - [Pipe](./examples/features#pipe)
+- [Pipe Sweep](./examples/features#pipe-sweep)
+- [Thread (Modeled)](./examples/features#thread-modeled)
 - [Shell](./examples/features#shell)
 - [Mirror](./examples/features#mirror)
+- [Move Body](./examples/features#move-body)
+- [Delete Face](./examples/features#delete-face)
+- [Replace Face](./examples/features#replace-face)
 - [Draft](./examples/features#draft)
 - [Thicken](./examples/features#thicken)
 - [Hole](./examples/features#hole)
 - [Fillet](./examples/features#fillet)
 - [Chamfer](./examples/features#chamfer)
 - [Boolean](./examples/features#boolean-union)
+- [Boolean Subtract](./examples/features#boolean-subtract)
+- [Boolean Intersect](./examples/features#boolean-intersect)
 - [Pattern](./examples/features#pattern-featurebody)
+- [Pattern Circular](./examples/features#pattern-circular)
 
 ## Consolidation Notes
 

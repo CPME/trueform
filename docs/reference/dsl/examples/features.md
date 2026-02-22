@@ -19,6 +19,8 @@ Notes:
 
 ## Surface
 
+![Surface example](/examples/dsl/surface.iso.png)
+
 ```ts
 const rect = sketchRectCorner("rect-1", [0, 0], 40, 20);
 const sketch = sketch2d(
@@ -112,6 +114,37 @@ Notes:
 - Use `{ orientation: "frenet" }` to follow the path Frenet frame; the default
   is a fixed frame. If you provide `frame`, orientation is fixed to that frame.
 
+## Sweep (Arbitrary Sketch)
+
+![Arbitrary sketch sweep example](/examples/dsl/sweep-sketch.iso.png)
+
+```ts
+const l1 = sketchLine("line-1", [-5, -4], [5, -4]);
+const l2 = sketchLine("line-2", [5, -4], [0, 6]);
+const l3 = sketchLine("line-3", [0, 6], [-5, -4]);
+const sketch = sketch2d(
+  "sketch-sweep-profile",
+  [{ name: "profile:loop", profile: profileSketchLoop(["line-1", "line-2", "line-3"]) }],
+  { entities: [l1, l2, l3] }
+);
+const path = pathSpline(
+  [
+    [0, 0, 0],
+    [0, 0, 20],
+    [14, 8, 34],
+    [30, 0, 48],
+  ],
+  { degree: 3 }
+);
+
+const examplePart = part("example-sweep-sketch", [
+  sketch,
+  sweep("sweep-sketch-1", profileRef("profile:loop"), path, "body:main", undefined, {
+    orientation: "frenet",
+  }),
+]);
+```
+
 ## Pipe
 
 ![Pipe example](/examples/dsl/pipe.iso.png)
@@ -125,6 +158,32 @@ const examplePart = part("example-pipe", [
 Notes:
 - `pipe` creates a straight cylindrical pipe/tube primitive on a cardinal axis.
 - Use `opts.origin` to place the primitive at an explicit origin.
+
+## Pipe Sweep
+
+![Pipe sweep example](/examples/dsl/pipe-sweep.iso.png)
+
+```ts
+const examplePart = part("example-pipe-sweep", [
+  pipeSweep(
+    "pipe-sweep-1",
+    pathSegments([
+      pathLine([0, 0, 0], [0, 0, 24]),
+      pathArc([0, 0, 24], [24, 0, 48], [24, 0, 24], "ccw"),
+      pathLine([24, 0, 48], [44, 0, 48]),
+      pathArc([44, 0, 48], [64, 20, 48], [64, 0, 48], "ccw"),
+      pathLine([64, 20, 48], [64, 34, 58]),
+    ]),
+    14,
+    8,
+    "body:main"
+  ),
+]);
+```
+
+Notes:
+- Use `pathArc(...)` segments to model explicit elbows.
+- Keep elbow bend radii comfortably larger than tube radius, especially for hollow tubes (`innerDiameter > 0`).
 
 ## Sweeping Tube Profiles (Consolidated)
 
@@ -147,7 +206,8 @@ const examplePart = part("example-tube-sweep", [
 
 Notes:
 - Prefer `sweep` + explicit profile (`profileCircle`, `profilePoly`, sketch profile) as the main path-sweep pattern.
-- `pipeSweep` and `hexTubeSweep` remain available as compatibility helpers.
+- `pipeSweep` remains available as a compatibility helper.
+- Prefer arbitrary sketch profile sweeps over `hexTubeSweep` in docs and gallery examples.
 
 ## Shell
 
@@ -211,7 +271,92 @@ Notes:
   result is visually clear.
 - `plane(...)` creates a finite reference face directly from a datum or planar selector.
 
+## Move Body
+
+![Move body example](/examples/dsl/move-body.iso.png)
+
+```ts
+const examplePart = part("example-move-body", [
+  extrude("base", profileRect(44, 20), 10, "body:base"),
+  moveBody(
+    "move-1",
+    selectorNamed("body:base"),
+    "body:moved",
+    ["base"],
+    {
+      translation: [26, 0, 0],
+      rotationAxis: "+Z",
+      rotationAngle: Math.PI / 18,
+      scale: 0.95,
+      origin: [0, 0, 0],
+    }
+  ),
+  booleanOp(
+    "union-1",
+    "union",
+    selectorNamed("body:base"),
+    selectorNamed("body:moved"),
+    "body:main"
+  ),
+]);
+```
+
+Notes:
+- `moveBody` keeps the source output and writes a transformed copy to `result`.
+- Translation, rotation, and scale can be combined in a single feature.
+
+## Delete Face
+
+![Delete face example](/examples/dsl/delete-face.iso.png)
+
+```ts
+const examplePart = part("example-delete-face", [
+  extrude("base", profileRect(56, 32), 18, "body:base"),
+  deleteFace(
+    "delete-top",
+    selectorNamed("body:base"),
+    selectorFace([predCreatedBy("base"), predPlanar()], [rankMaxZ()]),
+    "surface:main",
+    ["base"],
+    { heal: false }
+  ),
+]);
+```
+
+Notes:
+- `deleteFace(..., { heal: false })` keeps an opened shell/surface result.
+- Delete face is staging behavior and should be validated on target geometries.
+
+## Replace Face
+
+![Replace face example](/examples/dsl/replace-face.iso.png)
+
+```ts
+const examplePart = part("example-replace-face", [
+  extrude("base", profileRect(56, 32), 18, "body:base"),
+  plane("replace-tool", 56, 32, "surface:tool", {
+    origin: [0, 0, 18],
+    deps: ["base"],
+  }),
+  replaceFace(
+    "replace-top",
+    selectorNamed("body:base"),
+    selectorFace([predCreatedBy("base"), predPlanar()], [rankMaxZ()]),
+    selectorNamed("surface:tool"),
+    "body:main",
+    ["base", "replace-tool"],
+    { heal: true }
+  ),
+]);
+```
+
+Notes:
+- `replaceFace` swaps selected source faces using tool face/surface geometry.
+- Replace face is staging behavior and currently optimized for core matching-face workflows.
+
 ## Draft
+
+![Draft example](/examples/dsl/draft.iso.png)
 
 ```ts
 const examplePart = part("example-draft", [
@@ -271,8 +416,21 @@ Notes:
 - Use `{ direction: "reverse" }` to thicken opposite the face normal.
 - For thin-walled solids built from a closed solid, use `shell` instead.
 
-Modelled thread examples are currently kept in sandbox/staging workflows while
-geometry tuning continues. Use cosmetic thread callouts for production docs.
+## Thread (Modeled)
+
+![Modeled thread example](/examples/dsl/thread.iso.png)
+
+```ts
+const examplePart = part("example-thread", [
+  datumAxis("thread-axis", "+Z", [0, 0, 0]),
+  thread("thread-1", axisDatum("thread-axis"), 16, 12, 2, "body:main", undefined, {
+    segmentsPerTurn: 10,
+  }),
+]);
+```
+
+Notes:
+- Modelled thread remains staging behavior; use cosmetic thread callouts where semantic PMI is preferred.
 
 ## Hole
 
@@ -388,6 +546,30 @@ const examplePart = part("example-boolean", [
 ]);
 ```
 
+## Boolean Subtract
+
+![Boolean subtract example](/examples/dsl/boolean-cut.iso.png)
+
+```ts
+const examplePart = part("example-boolean-cut", [
+  extrude("base", profileRect(70, 36), 14, "body:base"),
+  extrude("tool", profileCircle(10, [10, 0, 0]), 14, "body:tool"),
+  cut("subtract-1", selectorNamed("body:base"), selectorNamed("body:tool"), "body:main"),
+]);
+```
+
+## Boolean Intersect
+
+![Boolean intersect example](/examples/dsl/boolean-intersect.iso.png)
+
+```ts
+const examplePart = part("example-boolean-intersect", [
+  extrude("a", profileCircle(16), 26, "body:a"),
+  extrude("b", profileCircle(16, [12, 0, 0]), 26, "body:b"),
+  intersect("intersect-1", selectorNamed("body:a"), selectorNamed("body:b"), "body:main"),
+]);
+```
+
 ## Pattern (Feature/Body)
 
 ![Pattern example](/examples/dsl/pattern.iso.png)
@@ -408,3 +590,35 @@ const examplePart = part("example-pattern", [
   ),
 ]);
 ```
+
+## Pattern (Circular)
+
+![Pattern circular example](/examples/dsl/pattern-circular.iso.png)
+
+```ts
+const examplePart = part("example-pattern-circular", [
+  extrude("center", profileCircle(6), 4, "body:center"),
+  extrude("seed", profileRect(10, 6, [30, 0, 4]), 8, "body:seed"),
+  patternCircular(
+    "pattern-circular-1",
+    selectorFace([predCreatedBy("center"), predPlanar(), predNormal("+Z")], [rankMaxZ()]),
+    "+Z",
+    8,
+    {
+      source: selectorNamed("body:seed"),
+      result: "body:pattern",
+      deps: ["center", "seed"],
+    }
+  ),
+  booleanOp(
+    "pattern-circular-union",
+    "union",
+    selectorNamed("body:center"),
+    selectorNamed("body:pattern"),
+    "body:main"
+  ),
+]);
+```
+
+Notes:
+- The pattern origin should come from a separate center reference (not the seed), otherwise instances rotate in place and overlap.

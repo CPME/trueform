@@ -33,6 +33,9 @@ export class MockBackend implements Backend {
         "feature.shell",
         "feature.pipe",
         "feature.mirror",
+        "feature.delete.face",
+        "feature.replace.face",
+        "feature.move.body",
         "feature.draft",
         "feature.thicken",
         "feature.thread",
@@ -97,6 +100,35 @@ export class MockBackend implements Backend {
         const source = (feature as { source?: Selector }).source;
         if (source) {
           const target = input.resolve(source, input.upstream);
+          if (target.kind === "face") return this.emitSurface(feature, "face");
+          if (target.kind === "surface") return this.emitSurface(feature, "surface");
+        }
+        return this.emitSolid(feature);
+      }
+      case "feature.move.body": {
+        const source = (feature as { source?: Selector }).source;
+        if (source) {
+          const target = input.resolve(source, input.upstream);
+          if (target.kind === "face") return this.emitSurface(feature, "face");
+          if (target.kind === "surface") return this.emitSurface(feature, "surface");
+        }
+        return this.emitSolid(feature);
+      }
+      case "feature.delete.face": {
+        const source = (feature as { source?: Selector }).source;
+        if (source) {
+          const target = input.resolve(source, input.upstream);
+          if (target.kind === "solid") return this.emitSurface(feature, "surface");
+          if (target.kind === "face") return this.emitSurface(feature, "face");
+          if (target.kind === "surface") return this.emitSurface(feature, "surface");
+        }
+        return this.emitSurface(feature, "surface");
+      }
+      case "feature.replace.face": {
+        const source = (feature as { source?: Selector }).source;
+        if (source) {
+          const target = input.resolve(source, input.upstream);
+          if (target.kind === "solid") return this.emitSolid(feature);
           if (target.kind === "face") return this.emitSurface(feature, "face");
           if (target.kind === "surface") return this.emitSurface(feature, "surface");
         }

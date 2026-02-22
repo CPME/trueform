@@ -89,6 +89,36 @@ const tests = [
       assert.equal(extrude.kind, "feature.extrude");
       const plane = features.plane("plane-1", 20, 10);
       assert.equal(plane.kind, "feature.plane");
+      const splitBody = features.splitBody(
+        "split-1",
+        selectors.selectorNamed("body:main"),
+        selectors.selectorFace([selectors.predPlanar()])
+      );
+      assert.equal(splitBody.kind, "feature.split.body");
+      const moved = features.moveBody(
+        "move-1",
+        selectors.selectorNamed("body:main"),
+        undefined,
+        undefined,
+        { translation: [5, 0, 0] }
+      );
+      assert.equal(moved.kind, "feature.move.body");
+      const deleted = features.deleteFace(
+        "delete-1",
+        selectors.selectorNamed("body:main"),
+        selectors.selectorFace([selectors.predPlanar()], [selectors.rankMaxZ()]),
+        undefined,
+        undefined,
+        { heal: false }
+      );
+      assert.equal(deleted.kind, "feature.delete.face");
+      const replaced = features.replaceFace(
+        "replace-1",
+        selectors.selectorNamed("body:main"),
+        selectors.selectorFace([selectors.predPlanar()], [selectors.rankMaxZ()]),
+        selectors.selectorNamed("surface:tool")
+      );
+      assert.equal(replaced.kind, "feature.replace.face");
       const patternLinear = features.patternLinear(
         "p-l",
         selectors.selectorNamed("body:seed"),

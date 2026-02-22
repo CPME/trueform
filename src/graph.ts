@@ -116,6 +116,11 @@ function featureResultName(feature: IntentFeature): string | undefined {
     case "feature.pipeSweep":
     case "feature.hexTubeSweep":
     case "feature.mirror":
+    case "feature.delete.face":
+    case "feature.replace.face":
+    case "feature.move.body":
+    case "feature.split.body":
+    case "feature.split.face":
     case "feature.draft":
     case "feature.shell":
     case "feature.thicken":
@@ -211,6 +216,14 @@ function inferDatumDependencies(
       break;
     case "feature.mirror":
       addPlaneRefDep((feature as { plane?: PlaneRef }).plane, deps, byId, feature);
+      break;
+    case "feature.move.body":
+      addAxisSpecDep(
+        (feature as { rotationAxis?: AxisSpec }).rotationAxis,
+        deps,
+        byId,
+        feature
+      );
       break;
     case "feature.draft":
       addPlaneRefDep(
@@ -318,6 +331,16 @@ function featureSelectors(feature: IntentFeature): Selector[] {
       return [feature.left, feature.right];
     case "feature.mirror":
       return [feature.source];
+    case "feature.delete.face":
+      return [feature.source, feature.faces];
+    case "feature.replace.face":
+      return [feature.source, feature.faces, feature.tool];
+    case "feature.move.body":
+      return [feature.source];
+    case "feature.split.body":
+      return [feature.source, feature.tool];
+    case "feature.split.face":
+      return [feature.faces, feature.tool];
     case "feature.draft":
       return [feature.source, feature.faces];
     case "feature.shell": {

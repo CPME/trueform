@@ -1,0 +1,209 @@
+{
+  "$schema": "trueform.geometric-benchmark.v1",
+  "updated": "2026-02-22",
+  "scoring": {
+    "stagingWeight": 0.5,
+    "compositeWeights": {
+      "coverage": 0.7,
+      "reliability": 0.3
+    }
+  },
+  "entries": [
+    {
+      "id": "sketch-core",
+      "category": "sketch-and-datums",
+      "feature": "Sketch2D core primitives",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.sketch.e2e.test.js" }
+    },
+    {
+      "id": "sketch-curves",
+      "category": "sketch-and-datums",
+      "feature": "Sketch curves/profile conversion",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.sketch_profile_curves.e2e.test.js" }
+    },
+    {
+      "id": "extrude-solid",
+      "category": "base-solids",
+      "feature": "Extrude (solid)",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.extrude.e2e.test.js" }
+    },
+    {
+      "id": "revolve-solid",
+      "category": "base-solids",
+      "feature": "Revolve (solid)",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.revolve.e2e.test.js" }
+    },
+    {
+      "id": "loft-solid",
+      "category": "base-solids",
+      "feature": "Loft (solid)",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.loft.e2e.test.js" }
+    },
+    {
+      "id": "sweep-workflow",
+      "category": "base-solids",
+      "feature": "Sweep-like tube workflow",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.pipe_sweep.e2e.test.js" }
+    },
+    {
+      "id": "pipe-feature",
+      "category": "base-solids",
+      "feature": "Pipe primitive",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.pipe.e2e.test.js" }
+    },
+    {
+      "id": "surface-feature",
+      "category": "surface-creation",
+      "feature": "Surface feature",
+      "parity": "staging",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.surface.e2e.test.js" }
+    },
+    {
+      "id": "revolve-surface-mode",
+      "category": "surface-creation",
+      "feature": "Revolve (surface mode)",
+      "parity": "staging",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.revolve_surface.e2e.test.js" }
+    },
+    {
+      "id": "hole-basic",
+      "category": "hole-workflows",
+      "feature": "Hole (basic/through/blind)",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.hole.e2e.test.js" }
+    },
+    {
+      "id": "hole-secondary",
+      "category": "hole-workflows",
+      "feature": "Hole secondary cases",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.hole.secondary.e2e.test.js" }
+    },
+    {
+      "id": "fillet",
+      "category": "dress-up",
+      "feature": "Fillet",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.fillet.e2e.test.js" }
+    },
+    {
+      "id": "chamfer",
+      "category": "dress-up",
+      "feature": "Chamfer",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.chamfer.e2e.test.js" }
+    },
+    {
+      "id": "shell",
+      "category": "dress-up",
+      "feature": "Shell",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.shell.e2e.test.js" }
+    },
+    {
+      "id": "thicken",
+      "category": "dress-up",
+      "feature": "Thicken",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.thicken.e2e.test.js" }
+    },
+    {
+      "id": "draft",
+      "category": "draft-and-thread",
+      "feature": "Draft",
+      "parity": "staging",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.draft.e2e.test.js" }
+    },
+    {
+      "id": "thread-modeled",
+      "category": "draft-and-thread",
+      "feature": "Modeled thread",
+      "parity": "staging",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.thread.e2e.test.js" }
+    },
+    {
+      "id": "boolean-core",
+      "category": "booleans",
+      "feature": "Boolean union/subtract/intersect",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.boolean.e2e.test.js" }
+    },
+    {
+      "id": "pattern-linear-circular",
+      "category": "patterns-and-transforms",
+      "feature": "Linear/circular patterns",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.pattern.e2e.test.js" }
+    },
+    {
+      "id": "mirror",
+      "category": "patterns-and-transforms",
+      "feature": "Mirror",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.mirror.e2e.test.js" }
+    },
+    {
+      "id": "split-body",
+      "category": "multi-body-direct-edits",
+      "feature": "Split body",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.split.e2e.probe.js" },
+      "notes": "Split-body support validated with stability and failure-mode probes."
+    },
+    {
+      "id": "split-face",
+      "category": "multi-body-direct-edits",
+      "feature": "Split face",
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.split_face.e2e.probe.js" },
+      "notes": "Split-face support validated with stability and failure-mode probes."
+    },
+    {
+      "id": "delete-replace-face",
+      "category": "multi-body-direct-edits",
+      "feature": "Delete face / replace face",
+      "parity": "staging",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.delete_face.e2e.probe.js" },
+      "notes": "Delete face and replace face are available in staging (`feature.delete.face`, `feature.replace.face`)."
+    },
+    {
+      "id": "move-copy-scale-body",
+      "category": "multi-body-direct-edits",
+      "feature": "Move/copy/scale body",
+      "parity": "staging",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.move_body.e2e.probe.js" },
+      "notes": "feature.move.body now supports translation/rotation/scale in staging."
+    },
+    {
+      "id": "advanced-surfacing-boundary-fill-knit",
+      "category": "advanced-surfacing",
+      "feature": "Boundary/fill/trim/extend/knit workflows",
+      "parity": "missing"
+    },
+    {
+      "id": "rib-web",
+      "category": "advanced-profile-ops",
+      "feature": "Rib/web",
+      "parity": "missing"
+    },
+    {
+      "id": "variable-fillet-chamfer",
+      "category": "advanced-hole-and-edge-options",
+      "feature": "Variable fillet/chamfer controls",
+      "parity": "missing"
+    },
+    {
+      "id": "hole-wizard-standards",
+      "category": "advanced-hole-and-edge-options",
+      "feature": "Hole wizard standards/end conditions",
+      "parity": "missing"
+    }
+  ]
+}

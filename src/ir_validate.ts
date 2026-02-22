@@ -1053,6 +1053,130 @@ function validateFeature(feature: IntentFeature): void {
       );
       return;
     }
+    case "feature.delete.face": {
+      const remove = feature as {
+        source?: Selector;
+        faces?: Selector;
+        heal?: unknown;
+        result?: string;
+      };
+      validateSelector(remove.source);
+      validateSelector(remove.faces);
+      if (remove.heal !== undefined && typeof remove.heal !== "boolean") {
+        throw new CompileError(
+          "validation_delete_face_heal",
+          "Delete face heal must be a boolean"
+        );
+      }
+      ensureNonEmptyString(
+        remove.result,
+        "validation_feature_result",
+        "Delete face result is required"
+      );
+      return;
+    }
+    case "feature.replace.face": {
+      const replace = feature as {
+        source?: Selector;
+        faces?: Selector;
+        tool?: Selector;
+        heal?: unknown;
+        result?: string;
+      };
+      validateSelector(replace.source);
+      validateSelector(replace.faces);
+      validateSelector(replace.tool);
+      if (replace.heal !== undefined && typeof replace.heal !== "boolean") {
+        throw new CompileError(
+          "validation_replace_face_heal",
+          "Replace face heal must be a boolean"
+        );
+      }
+      ensureNonEmptyString(
+        replace.result,
+        "validation_feature_result",
+        "Replace face result is required"
+      );
+      return;
+    }
+    case "feature.move.body": {
+      const move = feature as {
+        source?: Selector;
+        translation?: Point3D;
+        rotationAxis?: AxisSpec;
+        rotationAngle?: Scalar;
+        scale?: Scalar;
+        origin?: Point3D;
+        result?: string;
+      };
+      validateSelector(move.source);
+      if (move.translation !== undefined) {
+        validatePoint3Scalar(move.translation, "Move body translation");
+      }
+      if (move.rotationAxis !== undefined || move.rotationAngle !== undefined) {
+        validateAxisSpec(move.rotationAxis, "Move body rotation axis is required");
+        validateScalar(move.rotationAngle, "Move body rotation angle");
+      }
+      if (move.scale !== undefined) {
+        validatePositiveScalar(move.scale, "Move body scale");
+      }
+      if (move.origin !== undefined) {
+        validatePoint3Scalar(move.origin, "Move body origin");
+      }
+      if (
+        move.translation === undefined &&
+        move.rotationAngle === undefined &&
+        move.scale === undefined
+      ) {
+        throw new CompileError(
+          "validation_move_body_transform",
+          "Move body requires translation, rotation, or scale"
+        );
+      }
+      ensureNonEmptyString(
+        move.result,
+        "validation_feature_result",
+        "Move body result is required"
+      );
+      return;
+    }
+    case "feature.split.body": {
+      const split = feature as {
+        source?: Selector;
+        tool?: Selector;
+        keepTool?: unknown;
+        result?: string;
+      };
+      validateSelector(split.source);
+      validateSelector(split.tool);
+      if (split.keepTool !== undefined && typeof split.keepTool !== "boolean") {
+        throw new CompileError(
+          "validation_split_keep_tool",
+          "Split body keepTool must be a boolean"
+        );
+      }
+      ensureNonEmptyString(
+        split.result,
+        "validation_feature_result",
+        "Split body result is required"
+      );
+      return;
+    }
+    case "feature.split.face": {
+      const split = feature as {
+        faces?: Selector;
+        tool?: Selector;
+        result?: string;
+      };
+      validateSelector(split.faces);
+      validateSelector(split.tool);
+      ensureNonEmptyString(
+        split.result,
+        "validation_feature_result",
+        "Split face result is required"
+      );
+      return;
+    }
     case "feature.thicken": {
       const thicken = feature as {
         surface?: Selector;

@@ -327,6 +327,66 @@ const tests = [
         planeDatum
       );
       assert.equal(mirror.kind, "feature.mirror");
+      const moveBody = dsl.moveBody(
+        "move-body-1",
+        dsl.selectorNamed("body:base"),
+        undefined,
+        ["dep-move"],
+        {
+          translation: [10, 0, 2],
+          rotationAxis: dsl.axisVector([0, 0, 1]),
+          rotationAngle: Math.PI / 2,
+          scale: 1.2,
+          origin: [0, 0, 0],
+        }
+      );
+      assert.equal(moveBody.kind, "feature.move.body");
+      assert.equal(moveBody.result, "body:move-body-1");
+      assert.equal(moveBody.deps?.length, 1);
+      assert.deepEqual(moveBody.translation, [10, 0, 2]);
+      const deleteFace = dsl.deleteFace(
+        "delete-face-1",
+        dsl.selectorNamed("body:base"),
+        dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxZ()]),
+        undefined,
+        ["dep-delete"],
+        { heal: false }
+      );
+      assert.equal(deleteFace.kind, "feature.delete.face");
+      assert.equal(deleteFace.result, "body:delete-face-1");
+      assert.equal(deleteFace.heal, false);
+      assert.equal(deleteFace.deps?.length, 1);
+      const replaceFace = dsl.replaceFace(
+        "replace-face-1",
+        dsl.selectorNamed("body:base"),
+        dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxZ()]),
+        dsl.selectorNamed("surface:tool"),
+        undefined,
+        ["dep-replace"],
+        { heal: true }
+      );
+      assert.equal(replaceFace.kind, "feature.replace.face");
+      assert.equal(replaceFace.result, "body:replace-face-1");
+      assert.equal(replaceFace.heal, true);
+      assert.equal(replaceFace.deps?.length, 1);
+      const splitBody = dsl.splitBody(
+        "split-body-1",
+        dsl.selectorNamed("body:base"),
+        dsl.selectorFace([dsl.predPlanar()]),
+        undefined,
+        ["dep-split"],
+        { keepTool: true }
+      );
+      assert.equal(splitBody.kind, "feature.split.body");
+      assert.equal(splitBody.keepTool, true);
+      assert.equal(splitBody.deps?.length, 1);
+      const splitFace = dsl.splitFace(
+        "split-face-1",
+        dsl.selectorFace([dsl.predPlanar()]),
+        dsl.selectorNamed("surface:tool")
+      );
+      assert.equal(splitFace.kind, "feature.split.face");
+      assert.equal(splitFace.result, "body:split-face-1");
 
       const draft = dsl.draft(
         "draft-1",

@@ -13,6 +13,11 @@ import {
 import { resolveSelectorSet } from "./selectors.js";
 import { BackendError } from "./errors.js";
 import { TF_STAGED_FEATURES } from "./feature_staging.js";
+import { tryDynamicMethod } from "./occt/dynamic_call.js";
+import {
+  executeEdgeModifier,
+  type EdgeModifierDeps,
+} from "./occt/edge_modifiers.js";
 import {
   AxisDirection,
   AxisSpec,
@@ -47,6 +52,11 @@ import {
   SketchEntity,
   Surface,
   Mirror,
+  DeleteFace,
+  ReplaceFace,
+  MoveBody,
+  SplitBody,
+  SplitFace,
   Draft,
   Thicken,
   Thread,
@@ -109,6 +119,11 @@ export class OcctBackend implements Backend {
         "feature.pipeSweep",
         "feature.hexTubeSweep",
         "feature.mirror",
+        "feature.delete.face",
+        "feature.replace.face",
+        "feature.move.body",
+        "feature.split.body",
+        "feature.split.face",
         "feature.draft",
         "feature.thicken",
         "feature.thread",
@@ -186,6 +201,31 @@ export class OcctBackend implements Backend {
           input.feature as Mirror,
           input.upstream,
           input.resolve
+        );
+      case "feature.delete.face":
+        return this.execDeleteFace(
+          input.feature as DeleteFace,
+          input.upstream
+        );
+      case "feature.replace.face":
+        return this.execReplaceFace(
+          input.feature as ReplaceFace,
+          input.upstream
+        );
+      case "feature.move.body":
+        return this.execMoveBody(
+          input.feature as MoveBody,
+          input.upstream
+        );
+      case "feature.split.body":
+        return this.execSplitBody(
+          input.feature as SplitBody,
+          input.upstream
+        );
+      case "feature.split.face":
+        return this.execSplitFace(
+          input.feature as SplitFace,
+          input.upstream
         );
       case "feature.draft":
         return this.execDraft(
@@ -943,15 +983,15 @@ export class OcctBackend implements Backend {
       );
     }
 
+    const spine = this.buildPathWire(feature.path);
+    const { start, tangent } = this.pathStartTangent(feature.path);
+    const axis = normalizeVector(tangent);
+    if (!isFiniteVec(axis)) {
+      throw new Error("OCCT backend: pipe sweep path tangent is degenerate");
+    }
+    const plane = this.planeBasisFromNormal(start, axis);
     const mode = feature.mode ?? "solid";
     if (mode === "surface") {
-      const spine = this.buildPathWire(feature.path);
-      const { start, tangent } = this.pathStartTangent(feature.path);
-      const axis = normalizeVector(tangent);
-      if (!isFiniteVec(axis)) {
-        throw new Error("OCCT backend: pipe sweep path tangent is degenerate");
-      }
-      const plane = this.planeBasisFromNormal(start, axis);
       const outerEdge = this.makeCircleEdge(plane.origin, outerRadius, plane.normal);
       const outerWire = this.makeWireFromEdges([outerEdge]);
       const shape = this.makePipeSolid(spine, outerWire, plane, {
@@ -978,42 +1018,15 @@ export class OcctBackend implements Backend {
       return { outputs, selections };
     }
 
-    const segments = this.pathSegments(feature.path);
-    if (segments.length === 0) {
-      throw new Error("OCCT backend: pipe sweep path has no segments");
-    }
-
-    let solid: any | null = null;
-    for (const segment of segments) {
-      const delta = this.subVec(segment.end, segment.start);
-      const length = vecLength(delta);
-      if (length <= 0) continue;
-      const axis = normalizeVector(delta);
-      if (!isFiniteVec(axis)) continue;
-
-      let segmentSolid = this.readShape(
-        this.makeCylinder(outerRadius, length, axis, segment.start)
+    let solid: any;
+    try {
+      const face = this.makeRingFace(plane.origin, plane.normal, outerRadius, innerRadius);
+      solid = this.makePipeSolid(spine, face, plane, { makeSolid: true });
+      solid = this.normalizeSolid(solid);
+    } catch {
+      throw new Error(
+        "OCCT backend: pipe sweep failed to create solid; increase bend radius or reduce diameter"
       );
-      if (innerRadius > 0) {
-        const inner = this.readShape(
-          this.makeCylinder(innerRadius, length, axis, segment.start)
-        );
-        const cut = this.makeBoolean("cut", segmentSolid, inner);
-        segmentSolid = this.readShape(cut);
-        segmentSolid = this.splitByTools(segmentSolid, [segmentSolid, inner]);
-        segmentSolid = this.normalizeSolid(segmentSolid);
-      }
-
-      if (!solid) {
-        solid = segmentSolid;
-      } else {
-        const union = this.makeBoolean("union", solid, segmentSolid);
-        solid = this.readShape(union);
-        solid = this.normalizeSolid(solid);
-      }
-    }
-    if (!solid) {
-      throw new Error("OCCT backend: pipe sweep failed to create solid");
     }
 
     const outputs = new Map([
@@ -1192,6 +1205,491 @@ export class OcctBackend implements Backend {
       mirrored,
       feature.id,
       feature.result,
+      feature.tags,
+      { rootKind: outputKind === "solid" ? "solid" : "face" }
+    );
+    return { outputs, selections };
+  }
+
+  private execDeleteFace(
+    feature: DeleteFace,
+    upstream: KernelResult
+  ): KernelResult {
+    const source = resolveSelectorSet(
+      feature.source,
+      this.toResolutionContext(upstream)
+    );
+    if (source.length === 0) {
+      throw new Error("OCCT backend: delete face source selector matched 0 entities");
+    }
+    if (source.length !== 1 || source[0]?.kind !== "solid") {
+      throw new Error("OCCT backend: delete face source selector must resolve to one solid");
+    }
+    const sourceSelection = source[0] as KernelSelection;
+    const ownerKey = this.resolveOwnerKey(sourceSelection, upstream);
+    const ownerShape = this.resolveOwnerShape(sourceSelection, upstream);
+    if (!ownerShape) {
+      throw new Error("OCCT backend: delete face source missing owner solid");
+    }
+
+    const targets = resolveSelectorSet(
+      feature.faces,
+      this.toResolutionContext(upstream)
+    );
+    if (targets.length === 0) {
+      throw new Error("OCCT backend: delete face selector matched 0 entities");
+    }
+    for (const target of targets) {
+      if (target.kind !== "face") {
+        throw new Error("OCCT backend: delete face selector must resolve to faces");
+      }
+      const targetOwner =
+        typeof target.meta["ownerKey"] === "string" ? (target.meta["ownerKey"] as string) : "";
+      if (targetOwner && targetOwner !== ownerKey) {
+        throw new Error("OCCT backend: delete face targets must belong to source solid");
+      }
+    }
+
+    const removeFaces: any[] = [];
+    const seen = new Set<number>();
+    for (const target of targets) {
+      const faceShape = target.meta["shape"];
+      if (!faceShape) continue;
+      const hash = this.shapeHash(faceShape);
+      if (seen.has(hash)) continue;
+      seen.add(hash);
+      removeFaces.push(faceShape);
+    }
+    if (removeFaces.length === 0) {
+      throw new Error("OCCT backend: delete face resolved no target faces");
+    }
+
+    let result =
+      feature.heal === false
+        ? this.deleteFacesBySewing(ownerShape, removeFaces)
+        : this.deleteFacesWithDefeaturing(ownerShape, removeFaces) ??
+          this.deleteFacesBySewing(ownerShape, removeFaces);
+    if (!result) {
+      throw new Error("OCCT backend: failed to delete faces");
+    }
+
+    if (feature.heal !== false) {
+      const healed = this.makeSolidFromShells(result);
+      if (healed) {
+        result = this.normalizeSolid(healed);
+      }
+    }
+
+    const outputKind: "solid" | "surface" = this.shapeHasSolid(result)
+      ? "solid"
+      : "surface";
+    if (outputKind === "solid" && !this.isValidShape(result)) {
+      throw new Error("OCCT backend: delete face produced invalid solid");
+    }
+
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:${outputKind}`,
+          kind: outputKind,
+          meta: { shape: result },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      result,
+      feature.id,
+      feature.result,
+      feature.tags,
+      { rootKind: outputKind === "solid" ? "solid" : "face" }
+    );
+    return { outputs, selections };
+  }
+
+  private execReplaceFace(
+    feature: ReplaceFace,
+    upstream: KernelResult
+  ): KernelResult {
+    const source = resolveSelectorSet(
+      feature.source,
+      this.toResolutionContext(upstream)
+    );
+    if (source.length === 0) {
+      throw new Error("OCCT backend: replace face source selector matched 0 entities");
+    }
+    if (source.length !== 1 || source[0]?.kind !== "solid") {
+      throw new Error("OCCT backend: replace face source selector must resolve to one solid");
+    }
+    const sourceSelection = source[0] as KernelSelection;
+    const ownerKey = this.resolveOwnerKey(sourceSelection, upstream);
+    const ownerShape = this.resolveOwnerShape(sourceSelection, upstream);
+    if (!ownerShape) {
+      throw new Error("OCCT backend: replace face source missing owner solid");
+    }
+
+    const targets = resolveSelectorSet(
+      feature.faces,
+      this.toResolutionContext(upstream)
+    );
+    if (targets.length === 0) {
+      throw new Error("OCCT backend: replace face selector matched 0 entities");
+    }
+    for (const target of targets) {
+      if (target.kind !== "face") {
+        throw new Error("OCCT backend: replace face selector must resolve to faces");
+      }
+      const targetOwner =
+        typeof target.meta["ownerKey"] === "string" ? (target.meta["ownerKey"] as string) : "";
+      if (targetOwner && targetOwner !== ownerKey) {
+        throw new Error("OCCT backend: replace face targets must belong to source solid");
+      }
+    }
+    const replaceFaces = this.uniqueFaceShapes(targets);
+    if (replaceFaces.length === 0) {
+      throw new Error("OCCT backend: replace face resolved no target faces");
+    }
+
+    const tools = resolveSelectorSet(
+      feature.tool,
+      this.toResolutionContext(upstream)
+    );
+    if (tools.length === 0) {
+      throw new Error("OCCT backend: replace face tool selector matched 0 entities");
+    }
+    for (const tool of tools) {
+      if (tool.kind !== "face" && tool.kind !== "surface") {
+        throw new Error("OCCT backend: replace face tool selector must resolve to face/surface");
+      }
+    }
+    const toolFaces = this.collectToolFaces(tools);
+    if (toolFaces.length === 0) {
+      throw new Error("OCCT backend: replace face tool selector resolved no faces");
+    }
+    if (toolFaces.length !== 1 && toolFaces.length !== replaceFaces.length) {
+      throw new Error(
+        "OCCT backend: replace face tool face count must be 1 or match target face count"
+      );
+    }
+
+    const replacements = replaceFaces.map((face, index) => ({
+      from: face,
+      to: toolFaces[Math.min(index, toolFaces.length - 1)] as any,
+    }));
+
+    let result =
+      this.replaceFacesWithReshape(ownerShape, replacements) ??
+      this.replaceFacesBySewing(ownerShape, replaceFaces, replacements.map((entry) => entry.to));
+    if (!result) {
+      throw new Error("OCCT backend: failed to replace faces");
+    }
+
+    if (feature.heal !== false) {
+      const healed = this.makeSolidFromShells(result);
+      if (healed) {
+        result = this.normalizeSolid(healed);
+      }
+    }
+
+    const outputKind: "solid" | "surface" = this.shapeHasSolid(result)
+      ? "solid"
+      : "surface";
+    if (outputKind === "solid" && !this.isValidShape(result)) {
+      throw new Error("OCCT backend: replace face produced invalid solid");
+    }
+
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:${outputKind}`,
+          kind: outputKind,
+          meta: { shape: result },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      result,
+      feature.id,
+      feature.result,
+      feature.tags,
+      { rootKind: outputKind === "solid" ? "solid" : "face" }
+    );
+    return { outputs, selections };
+  }
+
+  private execMoveBody(
+    feature: MoveBody,
+    upstream: KernelResult
+  ): KernelResult {
+    const sourceSel = resolveSelectorSet(
+      feature.source,
+      this.toResolutionContext(upstream)
+    );
+    if (sourceSel.length === 0) {
+      throw new Error("OCCT backend: move body source selector matched 0 entities");
+    }
+    for (const selection of sourceSel) {
+      if (
+        selection.kind !== "solid" &&
+        selection.kind !== "face" &&
+        selection.kind !== "surface"
+      ) {
+        throw new Error(
+          "OCCT backend: move body source selector must resolve to solid/face/surface"
+        );
+      }
+    }
+    const ownerKeys = new Set<string>();
+    for (const selection of sourceSel) {
+      ownerKeys.add(this.resolveOwnerKey(selection as KernelSelection, upstream));
+    }
+    if (ownerKeys.size !== 1) {
+      throw new Error("OCCT backend: move body source selector must resolve to a single owner");
+    }
+    const ownerShape = this.resolveOwnerShape(sourceSel[0] as KernelSelection, upstream);
+    if (!ownerShape) {
+      throw new Error("OCCT backend: move body source missing owner shape");
+    }
+
+    const transformOrigin = (() => {
+      const origin = feature.origin ?? [0, 0, 0];
+      return [
+        expectNumber(origin[0], "move body origin[0]"),
+        expectNumber(origin[1], "move body origin[1]"),
+        expectNumber(origin[2], "move body origin[2]"),
+      ] as [number, number, number];
+    })();
+
+    let moved = ownerShape;
+    if (feature.scale !== undefined) {
+      const scale = expectNumber(feature.scale, "move body scale");
+      if (!(scale > 0)) {
+        throw new Error("OCCT backend: move body scale must be positive");
+      }
+      moved = this.transformShapeScale(moved, transformOrigin, scale);
+    }
+    if (feature.rotationAxis !== undefined || feature.rotationAngle !== undefined) {
+      if (feature.rotationAxis === undefined || feature.rotationAngle === undefined) {
+        throw new Error(
+          "OCCT backend: move body rotationAxis and rotationAngle must be provided together"
+        );
+      }
+      const axis = this.resolveAxisSpec(
+        feature.rotationAxis,
+        upstream,
+        "move body rotation axis"
+      );
+      const angle = expectNumber(feature.rotationAngle, "move body rotationAngle");
+      moved = this.transformShapeRotate(moved, transformOrigin, axis, angle);
+    }
+    if (feature.translation !== undefined) {
+      const delta: [number, number, number] = [
+        expectNumber(feature.translation[0], "move body translation[0]"),
+        expectNumber(feature.translation[1], "move body translation[1]"),
+        expectNumber(feature.translation[2], "move body translation[2]"),
+      ];
+      moved = this.transformShapeTranslate(moved, delta);
+    }
+
+    const outputKind: "solid" | "face" | "surface" = this.shapeHasSolid(moved)
+      ? "solid"
+      : sourceSel.some((selection) => selection.kind === "surface")
+        ? "surface"
+        : "face";
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:${outputKind}`,
+          kind: outputKind,
+          meta: { shape: moved },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      moved,
+      feature.id,
+      feature.result,
+      feature.tags,
+      { rootKind: outputKind === "solid" ? "solid" : "face" }
+    );
+    return { outputs, selections };
+  }
+
+  private execSplitBody(
+    feature: SplitBody,
+    upstream: KernelResult
+  ): KernelResult {
+    const sourceSel = resolveSelectorSet(
+      feature.source,
+      this.toResolutionContext(upstream)
+    );
+    if (sourceSel.length === 0) {
+      throw new Error("OCCT backend: split body source selector matched 0 entities");
+    }
+    for (const selection of sourceSel) {
+      if (selection.kind !== "solid" && selection.kind !== "face") {
+        throw new Error("OCCT backend: split body source selector must resolve to solid/face");
+      }
+    }
+    const sourceOwnerKeys = new Set<string>();
+    for (const selection of sourceSel) {
+      const key = this.resolveOwnerKey(selection as KernelSelection, upstream);
+      sourceOwnerKeys.add(key);
+    }
+    if (sourceOwnerKeys.size !== 1) {
+      throw new Error("OCCT backend: split body source selector must resolve to a single owner");
+    }
+    const sourceOwner = this.resolveOwnerShape(sourceSel[0] as KernelSelection, upstream);
+    if (!sourceOwner) {
+      throw new Error("OCCT backend: split body source must resolve to a solid owner");
+    }
+
+    const toolSelections = resolveSelectorSet(
+      feature.tool,
+      this.toResolutionContext(upstream)
+    );
+    if (toolSelections.length === 0) {
+      throw new Error("OCCT backend: split body tool selector matched 0 entities");
+    }
+    for (const selection of toolSelections) {
+      if (
+        selection.kind !== "solid" &&
+        selection.kind !== "face" &&
+        selection.kind !== "surface"
+      ) {
+        throw new Error(
+          "OCCT backend: split body tool selector must resolve to solid/face/surface"
+        );
+      }
+    }
+
+    const tools: any[] = [];
+    const seen = new Set<number>();
+    for (const selection of toolSelections) {
+      const shape = selection.meta["shape"];
+      if (!shape) continue;
+      const hash = this.shapeHash(shape);
+      if (seen.has(hash)) continue;
+      seen.add(hash);
+      tools.push(shape);
+    }
+    if (tools.length === 0) {
+      throw new Error("OCCT backend: split body tool selector resolved no shapes");
+    }
+
+    // keepTool is accepted by IR/DSL but does not alter output wiring yet.
+    let split = this.splitByTools(sourceOwner, tools);
+    split = this.unifySameDomain(split);
+    if (!this.isValidShape(split)) {
+      throw new Error("OCCT backend: split body produced invalid result");
+    }
+
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:solid`,
+          kind: "solid" as const,
+          meta: { shape: split },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      split,
+      feature.id,
+      feature.result,
+      feature.tags
+    );
+    return { outputs, selections };
+  }
+
+  private execSplitFace(
+    feature: SplitFace,
+    upstream: KernelResult
+  ): KernelResult {
+    const faceSelections = resolveSelectorSet(
+      feature.faces,
+      this.toResolutionContext(upstream)
+    );
+    if (faceSelections.length === 0) {
+      throw new Error("OCCT backend: split face selector matched 0 entities");
+    }
+    for (const selection of faceSelections) {
+      if (selection.kind !== "face") {
+        throw new Error("OCCT backend: split face selector must resolve to faces");
+      }
+    }
+    const ownerKeys = new Set<string>();
+    for (const selection of faceSelections) {
+      ownerKeys.add(this.resolveOwnerKey(selection as KernelSelection, upstream));
+    }
+    if (ownerKeys.size !== 1) {
+      throw new Error("OCCT backend: split face selector must resolve to a single owner");
+    }
+
+    const ownerKey = this.resolveOwnerKey(faceSelections[0] as KernelSelection, upstream);
+    const ownerShape = this.resolveOwnerShape(faceSelections[0] as KernelSelection, upstream);
+    if (!ownerShape) {
+      throw new Error("OCCT backend: split face target must resolve to an owner shape");
+    }
+
+    const toolSelections = resolveSelectorSet(
+      feature.tool,
+      this.toResolutionContext(upstream)
+    );
+    if (toolSelections.length === 0) {
+      throw new Error("OCCT backend: split face tool selector matched 0 entities");
+    }
+    for (const selection of toolSelections) {
+      if (
+        selection.kind !== "solid" &&
+        selection.kind !== "face" &&
+        selection.kind !== "surface"
+      ) {
+        throw new Error(
+          "OCCT backend: split face tool selector must resolve to solid/face/surface"
+        );
+      }
+    }
+
+    const tools: any[] = [];
+    const seen = new Set<number>();
+    for (const selection of toolSelections) {
+      const shape = selection.meta["shape"];
+      if (!shape) continue;
+      const hash = this.shapeHash(shape);
+      if (seen.has(hash)) continue;
+      seen.add(hash);
+      tools.push(shape);
+    }
+    if (tools.length === 0) {
+      throw new Error("OCCT backend: split face tool selector resolved no shapes");
+    }
+
+    // Initial implementation splits at owner-shape scope and returns the split owner.
+    let split = this.splitByTools(ownerShape, tools);
+    split = this.unifySameDomain(split);
+    if (!this.isValidShape(split)) {
+      throw new Error("OCCT backend: split face produced invalid result");
+    }
+
+    const outputKind: "solid" | "face" = this.shapeHasSolid(split) ? "solid" : "face";
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:${outputKind}`,
+          kind: outputKind,
+          meta: { shape: split },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      split,
+      feature.id,
+      outputKind === "solid" ? feature.result : ownerKey,
       feature.tags,
       { rootKind: outputKind === "solid" ? "solid" : "face" }
     );
@@ -1941,71 +2439,23 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     _resolve: ExecuteInput["resolve"]
   ): KernelResult {
-    const targets = resolveSelectorSet(
-      feature.edges,
-      this.toResolutionContext(upstream)
-    );
-    if (targets.length === 0) {
-      throw new Error("OCCT backend: fillet selector matched 0 edges");
-    }
-    for (const target of targets) {
-      if (target.kind !== "edge") {
-        throw new Error("OCCT backend: fillet selector must resolve to an edge");
-      }
-    }
-    const ownerKey = this.resolveOwnerKey(targets[0] as KernelSelection, upstream);
-    const owner = this.resolveOwnerShape(targets[0] as KernelSelection, upstream);
-    if (!owner) {
-      throw new Error("OCCT backend: fillet target missing owner solid");
-    }
-
     const radius = expectNumber(feature.radius, "feature.radius");
     if (radius <= 0) {
       throw new Error("OCCT backend: fillet radius must be positive");
     }
-
-    const fillet = this.makeFilletBuilder(owner);
-    const add = (fn: string, ...args: unknown[]) => {
-      const method = (fillet as Record<string, unknown>)[fn];
-      if (typeof method === "function") {
-        try {
-          method.apply(fillet, args);
-          return true;
-        } catch {
-          return false;
-        }
-      }
-      return false;
-    };
-    for (const target of targets) {
-      const edge = this.toEdge(target.meta["shape"]);
-      const added =
-        add("Add_2", edge, radius) ||
-        add("Add_2", radius, edge) ||
-        add("Add_1", edge);
-      if (!added) {
-        throw new Error("OCCT backend: failed to add fillet edge");
-      }
-    }
-    this.tryBuild(fillet);
-    const solid = this.readShape(fillet);
-    const outputs = new Map([
-      [
-        ownerKey,
-        {
-          id: `${feature.id}:solid`,
-          kind: "solid" as const,
-          meta: { shape: solid },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      solid,
-      feature.id,
-      ownerKey,
-      feature.tags
+    return executeEdgeModifier(
+      "fillet",
+      feature,
+      upstream,
+      this.edgeModifierDeps(),
+      (owner) => this.makeFilletBuilder(owner),
+      (builder, edge) =>
+        tryDynamicMethod(builder, [
+          { name: "Add_2", args: [edge, radius] },
+          { name: "Add_2", args: [radius, edge] },
+          { name: "Add_1", args: [edge] },
+        ])
     );
-    return { outputs, selections };
   }
 
   private execChamfer(
@@ -2013,70 +2463,35 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     _resolve: ExecuteInput["resolve"]
   ): KernelResult {
-    const targets = resolveSelectorSet(
-      feature.edges,
-      this.toResolutionContext(upstream)
-    );
-    if (targets.length === 0) {
-      throw new Error("OCCT backend: chamfer selector matched 0 edges");
-    }
-    for (const target of targets) {
-      if (target.kind !== "edge") {
-        throw new Error("OCCT backend: chamfer selector must resolve to an edge");
-      }
-    }
-    const ownerKey = this.resolveOwnerKey(targets[0] as KernelSelection, upstream);
-    const owner = this.resolveOwnerShape(targets[0] as KernelSelection, upstream);
-    if (!owner) {
-      throw new Error("OCCT backend: chamfer target missing owner solid");
-    }
-
     const distance = expectNumber(feature.distance, "feature.distance");
     if (distance <= 0) {
       throw new Error("OCCT backend: chamfer distance must be positive");
     }
-
-    const chamfer = this.makeChamferBuilder(owner);
-    const add = (fn: string, ...args: unknown[]) => {
-      const method = (chamfer as Record<string, unknown>)[fn];
-      if (typeof method === "function") {
-        try {
-          method.apply(chamfer, args);
-          return true;
-        } catch {
-          return false;
-        }
-      }
-      return false;
-    };
-    for (const target of targets) {
-      const edge = this.toEdge(target.meta["shape"]);
-      const added =
-        add("Add_2", distance, edge) ||
-        add("Add_1", edge);
-      if (!added) {
-        throw new Error("OCCT backend: failed to add chamfer edge");
-      }
-    }
-    this.tryBuild(chamfer);
-    const solid = this.readShape(chamfer);
-    const outputs = new Map([
-      [
-        ownerKey,
-        {
-          id: `${feature.id}:solid`,
-          kind: "solid" as const,
-          meta: { shape: solid },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      solid,
-      feature.id,
-      ownerKey,
-      feature.tags
+    return executeEdgeModifier(
+      "chamfer",
+      feature,
+      upstream,
+      this.edgeModifierDeps(),
+      (owner) => this.makeChamferBuilder(owner),
+      (builder, edge) =>
+        tryDynamicMethod(builder, [
+          { name: "Add_2", args: [distance, edge] },
+          { name: "Add_1", args: [edge] },
+        ])
     );
-    return { outputs, selections };
+  }
+
+  private edgeModifierDeps(): EdgeModifierDeps {
+    return {
+      toResolutionContext: (state) => this.toResolutionContext(state),
+      resolveOwnerKey: (selection, state) => this.resolveOwnerKey(selection, state),
+      resolveOwnerShape: (selection, state) => this.resolveOwnerShape(selection, state),
+      toEdge: (edge) => this.toEdge(edge),
+      tryBuild: (builder) => this.tryBuild(builder),
+      readShape: (builder) => this.readShape(builder),
+      collectSelections: (shape, featureId, ownerKey, tags) =>
+        this.collectSelections(shape, featureId, ownerKey, tags),
+    };
   }
 
   private execPattern(
@@ -3136,6 +3551,294 @@ export class OcctBackend implements Backend {
     }
   }
 
+  private deleteFacesWithDefeaturing(shape: any, removeFaces: any[]): any | null {
+    let builder: any;
+    try {
+      builder = this.newOcct("BRepAlgoAPI_Defeaturing", shape);
+    } catch {
+      try {
+        builder = this.newOcct("BRepAlgoAPI_Defeaturing");
+      } catch {
+        return null;
+      }
+      try {
+        this.callWithFallback(builder, ["SetShape", "SetShape_1"], [[shape]]);
+      } catch {
+        return null;
+      }
+    }
+
+    const faceList = this.makeShapeList(removeFaces.map((face) => this.toFace(face)));
+    let added = false;
+    try {
+      this.callWithFallback(
+        builder,
+        ["AddFacesToRemove", "AddFacesToRemove_1", "SetFacesToRemove", "SetFacesToRemove_1"],
+        [[faceList]]
+      );
+      added = true;
+    } catch {
+      // Fall back to adding faces one-by-one.
+    }
+    if (!added) {
+      for (const face of removeFaces) {
+        try {
+          this.callWithFallback(
+            builder,
+            ["AddFaceToRemove", "AddFaceToRemove_1", "AddFace", "AddFace_1", "Add", "Add_1"],
+            [[this.toFace(face)]]
+          );
+          added = true;
+        } catch {
+          // Try next method/face.
+        }
+      }
+    }
+    if (!added) return null;
+
+    try {
+      this.tryBuild(builder);
+      return this.readShape(builder);
+    } catch {
+      return null;
+    }
+  }
+
+  private deleteFacesBySewing(shape: any, removeFaces: any[]): any | null {
+    const occt = this.occt as any;
+    let sewing: any;
+    try {
+      sewing = this.newOcct("BRepBuilderAPI_Sewing", 1e-6, true, true, true, false);
+    } catch {
+      try {
+        sewing = this.newOcct("BRepBuilderAPI_Sewing");
+      } catch {
+        return null;
+      }
+    }
+    const add =
+      typeof sewing.Add_1 === "function"
+        ? sewing.Add_1.bind(sewing)
+        : typeof sewing.Add === "function"
+          ? sewing.Add.bind(sewing)
+          : null;
+    if (!add) return null;
+
+    let kept = 0;
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_FACE,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    for (; explorer.More(); explorer.Next()) {
+      const face = this.toFace(explorer.Current());
+      if (this.containsShape(removeFaces, face)) {
+        continue;
+      }
+      try {
+        add(face);
+        kept += 1;
+      } catch {
+        continue;
+      }
+    }
+    if (kept === 0) return null;
+
+    try {
+      const progress = this.makeProgressRange();
+      if (progress !== null && progress !== undefined) {
+        sewing.Perform(progress);
+      } else {
+        sewing.Perform();
+      }
+    } catch {
+      try {
+        sewing.Perform();
+      } catch {
+        return null;
+      }
+    }
+
+    try {
+      return this.callWithFallback(sewing, ["SewedShape", "SewedShape_1"], [[]]);
+    } catch {
+      return null;
+    }
+  }
+
+  private replaceFacesWithReshape(
+    shape: any,
+    replacements: Array<{ from: any; to: any }>
+  ): any | null {
+    let reshape: any;
+    try {
+      reshape = this.newOcct("BRepTools_ReShape");
+    } catch {
+      try {
+        reshape = this.newOcct("ShapeBuild_ReShape");
+      } catch {
+        return null;
+      }
+    }
+
+    let replacedAny = false;
+    for (const replacement of replacements) {
+      const fromFace = this.toFace(replacement.from);
+      const toFace = this.toFace(replacement.to);
+      try {
+        this.callWithFallback(reshape, ["Replace", "Replace_1"], [
+          [fromFace, toFace],
+          [fromFace, toFace, true],
+          [fromFace, toFace, false],
+        ]);
+        replacedAny = true;
+      } catch {
+        continue;
+      }
+    }
+    if (!replacedAny) return null;
+
+    try {
+      return this.callWithFallback(reshape, ["Apply", "Apply_1"], [[shape]]);
+    } catch {
+      return null;
+    }
+  }
+
+  private replaceFacesBySewing(
+    shape: any,
+    removeFaces: any[],
+    replacementFaces: any[]
+  ): any | null {
+    const occt = this.occt as any;
+    let sewing: any;
+    try {
+      sewing = this.newOcct("BRepBuilderAPI_Sewing", 1e-6, true, true, true, false);
+    } catch {
+      try {
+        sewing = this.newOcct("BRepBuilderAPI_Sewing");
+      } catch {
+        return null;
+      }
+    }
+    const add =
+      typeof sewing.Add_1 === "function"
+        ? sewing.Add_1.bind(sewing)
+        : typeof sewing.Add === "function"
+          ? sewing.Add.bind(sewing)
+          : null;
+    if (!add) return null;
+
+    const facesToRemove = this.uniqueShapeList(removeFaces);
+    let added = 0;
+
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_FACE,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    for (; explorer.More(); explorer.Next()) {
+      const face = this.toFace(explorer.Current());
+      if (this.containsShape(facesToRemove, face)) continue;
+      try {
+        add(face);
+        added += 1;
+      } catch {
+        continue;
+      }
+    }
+    for (const face of replacementFaces) {
+      try {
+        add(this.toFace(face));
+        added += 1;
+      } catch {
+        continue;
+      }
+    }
+    if (added === 0) return null;
+
+    try {
+      const progress = this.makeProgressRange();
+      if (progress !== null && progress !== undefined) {
+        sewing.Perform(progress);
+      } else {
+        sewing.Perform();
+      }
+    } catch {
+      try {
+        sewing.Perform();
+      } catch {
+        return null;
+      }
+    }
+    try {
+      return this.callWithFallback(sewing, ["SewedShape", "SewedShape_1"], [[]]);
+    } catch {
+      return null;
+    }
+  }
+
+  private uniqueFaceShapes(selections: KernelSelection[]): any[] {
+    const faces: any[] = [];
+    for (const selection of selections) {
+      const shape = selection.meta["shape"];
+      if (!shape) continue;
+      faces.push(this.toFace(shape));
+    }
+    return this.uniqueShapeList(faces);
+  }
+
+  private collectToolFaces(selections: KernelSelection[]): any[] {
+    const faces: any[] = [];
+    for (const selection of selections) {
+      const shape = selection.meta["shape"];
+      if (!shape) continue;
+      if (selection.kind === "face") {
+        faces.push(this.toFace(shape));
+        continue;
+      }
+      if (selection.kind === "surface") {
+        faces.push(...this.collectFacesFromShape(shape));
+      }
+    }
+    return this.uniqueShapeList(faces);
+  }
+
+  private collectFacesFromShape(shape: any): any[] {
+    const occt = this.occt as any;
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_FACE,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    const faces: any[] = [];
+    for (; explorer.More(); explorer.Next()) {
+      faces.push(this.toFace(explorer.Current()));
+    }
+    return faces;
+  }
+
+  private uniqueShapeList(shapes: any[]): any[] {
+    const unique: any[] = [];
+    for (const shape of shapes) {
+      if (this.containsShape(unique, shape)) continue;
+      unique.push(shape);
+    }
+    return unique;
+  }
+
+  private containsShape(candidates: any[], shape: any): boolean {
+    const hash = this.shapeHash(shape);
+    for (const candidate of candidates) {
+      if (this.shapeHash(candidate) !== hash) continue;
+      if (this.shapesSame(candidate, shape)) return true;
+    }
+    return false;
+  }
+
   private isValidShape(shape: any, kind: KernelObject["kind"] = "solid"): boolean {
     try {
       return this.checkValid({ id: "tmp", kind, meta: { shape } } as KernelObject);
@@ -3684,51 +4387,6 @@ export class OcctBackend implements Backend {
     if (typeof wireBuilder.wire === "function") return wireBuilder.wire();
     if (wireBuilder.Shape) return wireBuilder.Shape();
     throw new Error("OCCT backend: path wire builder missing Wire()");
-  }
-
-  private pathSegments(path: Path3D): EdgeSegment[] {
-    const segments: EdgeSegment[] = [];
-    if (path.kind === "path.spline") {
-      throw new Error("OCCT backend: pipe sweep does not support spline paths");
-    }
-    if (path.kind === "path.polyline") {
-      const points = path.points;
-      for (let i = 0; i < points.length - 1; i += 1) {
-        const startPoint = points[i];
-        const endPoint = points[i + 1];
-        if (!startPoint || !endPoint) continue;
-        const start = this.point3Numbers(startPoint, "path point");
-        const end = this.point3Numbers(endPoint, "path point");
-        segments.push({ edge: this.makeLineEdge(start, end), start, end });
-      }
-      if (path.closed && points.length > 1) {
-        const startPoint = points[points.length - 1];
-        const endPoint = points[0];
-        if (!startPoint || !endPoint) return segments;
-        const start = this.point3Numbers(startPoint, "path point");
-        const end = this.point3Numbers(endPoint, "path point");
-        segments.push({ edge: this.makeLineEdge(start, end), start, end });
-      }
-      return segments;
-    }
-
-    for (const segment of path.segments) {
-      if (segment.kind === "path.line") {
-        const start = this.point3Numbers(segment.start, "path line start");
-        const end = this.point3Numbers(segment.end, "path line end");
-        segments.push({ edge: this.makeLineEdge(start, end), start, end });
-        continue;
-      }
-      if (segment.kind === "path.arc") {
-        const start = this.point3Numbers(segment.start, "path arc start");
-        const end = this.point3Numbers(segment.end, "path arc end");
-        const center = this.point3Numbers(segment.center, "path arc center");
-        const mid = this.arcMidpointFromCenter(start, end, center, segment.direction);
-        segments.push({ edge: this.makeLineEdge(start, mid), start, end: mid });
-        segments.push({ edge: this.makeLineEdge(mid, end), start: mid, end });
-      }
-    }
-    return segments;
   }
 
   private pathStartTangent(path: Path3D): {
@@ -5106,6 +5764,19 @@ export class OcctBackend implements Backend {
       ["SetTranslation", "SetTranslation_1", "SetTranslationPart"],
       [[vec]]
     );
+    const builder = this.newOcct("BRepBuilderAPI_Transform", shape, trsf, true);
+    this.tryBuild(builder);
+    return this.readShape(builder);
+  }
+
+  private transformShapeScale(
+    shape: any,
+    origin: [number, number, number],
+    factor: number
+  ) {
+    const trsf = this.newOcct("gp_Trsf");
+    const pnt = this.makePnt(origin[0], origin[1], origin[2]);
+    this.callWithFallback(trsf, ["SetScale", "SetScale_1"], [[pnt, factor]]);
     const builder = this.newOcct("BRepBuilderAPI_Transform", shape, trsf, true);
     this.tryBuild(builder);
     return this.readShape(builder);

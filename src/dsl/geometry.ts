@@ -30,7 +30,12 @@ import type {
   Predicate,
   Profile,
   ProfileRef,
+  MoveBody,
+  DeleteFace,
+  ReplaceFace,
   Mirror,
+  SplitBody,
+  SplitFace,
   Draft,
   RankRule,
   Revolve,
@@ -467,6 +472,104 @@ export const mirror = (
     kind: "feature.mirror",
     source,
     plane,
+    result: result ?? `body:${id}`,
+    deps,
+  });
+
+export const moveBody = (
+  id: ID,
+  source: Selector,
+  result?: string,
+  deps?: ID[],
+  opts?: {
+    translation?: Point3D;
+    rotationAxis?: AxisSpec;
+    rotationAngle?: Scalar;
+    scale?: Scalar;
+    origin?: Point3D;
+  }
+): MoveBody =>
+  compact({
+    id,
+    kind: "feature.move.body",
+    source,
+    translation: opts?.translation,
+    rotationAxis: opts?.rotationAxis,
+    rotationAngle: opts?.rotationAngle,
+    scale: opts?.scale,
+    origin: opts?.origin,
+    result: result ?? `body:${id}`,
+    deps,
+  });
+
+export const deleteFace = (
+  id: ID,
+  source: Selector,
+  faces: Selector,
+  result?: string,
+  deps?: ID[],
+  opts?: { heal?: boolean }
+): DeleteFace =>
+  compact({
+    id,
+    kind: "feature.delete.face",
+    source,
+    faces,
+    heal: opts?.heal,
+    result: result ?? `body:${id}`,
+    deps,
+  });
+
+export const replaceFace = (
+  id: ID,
+  source: Selector,
+  faces: Selector,
+  tool: Selector,
+  result?: string,
+  deps?: ID[],
+  opts?: { heal?: boolean }
+): ReplaceFace =>
+  compact({
+    id,
+    kind: "feature.replace.face",
+    source,
+    faces,
+    tool,
+    heal: opts?.heal,
+    result: result ?? `body:${id}`,
+    deps,
+  });
+
+export const splitBody = (
+  id: ID,
+  source: Selector,
+  tool: Selector,
+  result?: string,
+  deps?: ID[],
+  opts?: { keepTool?: boolean }
+): SplitBody =>
+  compact({
+    id,
+    kind: "feature.split.body",
+    source,
+    tool,
+    keepTool: opts?.keepTool,
+    result: result ?? `body:${id}`,
+    deps,
+  });
+
+export const splitFace = (
+  id: ID,
+  faces: Selector,
+  tool: Selector,
+  result?: string,
+  deps?: ID[]
+): SplitFace =>
+  compact({
+    id,
+    kind: "feature.split.face",
+    faces,
+    tool,
     result: result ?? `body:${id}`,
     deps,
   });

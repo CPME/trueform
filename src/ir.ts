@@ -143,6 +143,11 @@ export type IntentFeature =
   | PipeSweep
   | HexTubeSweep
   | Mirror
+  | ReplaceFace
+  | MoveBody
+  | DeleteFace
+  | SplitBody
+  | SplitFace
   | Draft
   | Thicken
   | Thread
@@ -397,6 +402,49 @@ export type Mirror = FeatureBase & {
   kind: "feature.mirror";
   source: Selector;
   plane: PlaneRef;
+  result: string;
+};
+
+export type MoveBody = FeatureBase & {
+  kind: "feature.move.body";
+  source: Selector;
+  translation?: Point3D;
+  rotationAxis?: AxisSpec;
+  rotationAngle?: Scalar;
+  scale?: Scalar;
+  origin?: Point3D;
+  result: string;
+};
+
+export type ReplaceFace = FeatureBase & {
+  kind: "feature.replace.face";
+  source: Selector;
+  faces: Selector;
+  tool: Selector;
+  heal?: boolean;
+  result: string;
+};
+
+export type DeleteFace = FeatureBase & {
+  kind: "feature.delete.face";
+  source: Selector;
+  faces: Selector;
+  heal?: boolean;
+  result: string;
+};
+
+export type SplitBody = FeatureBase & {
+  kind: "feature.split.body";
+  source: Selector;
+  tool: Selector;
+  keepTool?: boolean;
+  result: string;
+};
+
+export type SplitFace = FeatureBase & {
+  kind: "feature.split.face";
+  faces: Selector;
+  tool: Selector;
   result: string;
 };
 

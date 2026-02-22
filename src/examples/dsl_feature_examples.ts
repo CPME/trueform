@@ -2,7 +2,9 @@ import { part } from "../dsl/core.js";
 import type { IntentPart } from "../dsl.js";
 import type { MeshOptions } from "../backend.js";
 import {
+  axisDatum,
   booleanOp,
+  datumAxis,
   draft,
   loft,
   sweep,
@@ -13,14 +15,23 @@ import {
   hole,
   plane,
   mirror,
+  moveBody,
+  deleteFace,
+  replaceFace,
   shell,
   planeDatum,
   predCreatedBy,
   predPlanar,
   predNormal,
+  pathArc,
+  pathLine,
   pathPolyline,
+  pathSegments,
+  pathSpline,
+  patternCircular,
   patternLinear,
   pipe,
+  pipeSweep,
   profileCircle,
   profilePoly,
   profileRect,
@@ -35,10 +46,13 @@ import {
   selectorNamed,
   sketch2d,
   sketchLine,
+  sketchProfileLoop,
   sketchRectCorner,
   surface,
   thicken,
+  thread,
 } from "../dsl/geometry.js";
+import { cut, intersect } from "../dsl/booleans.js";
 import {
   datumFeature,
   datumRef,
@@ -96,6 +110,35 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     part: part("example-extrude", [
       extrude("base", profileRect(80, 50), 12, "body:main"),
     ]),
+  },
+  {
+    id: "surface",
+    title: "Surface",
+    part: (() => {
+      const rect = sketchRectCorner("rect-1", [0, 0], 40, 20);
+      const sketch = sketch2d(
+        "sketch-face",
+        [{ name: "profile:rect", profile: profileSketchLoop(["rect-1"]) }],
+        { entities: [rect] }
+      );
+      return part("example-surface", [
+        sketch,
+        surface("face-1", profileRef("profile:rect"), "surface:main"),
+      ]);
+    })(),
+    render: {
+      layers: [
+        {
+          output: "surface:main",
+          color: [154, 192, 230],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [32, 40, 52],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
   },
   {
     id: "revolve",
@@ -175,6 +218,77 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     title: "Pipe",
     part: part("example-pipe", [
       pipe("pipe-1", "+Z", 60, 24, 18, "body:main"),
+    ]),
+  },
+  {
+    id: "sweep-sketch",
+    title: "Sweep (Arbitrary Sketch)",
+    part: (() => {
+      const l1 = sketchLine("line-1", [-5, -4], [5, -4]);
+      const l2 = sketchLine("line-2", [5, -4], [0, 6]);
+      const l3 = sketchLine("line-3", [0, 6], [-5, -4]);
+      const { sketch, profile } = sketchProfileLoop(
+        "sketch-sweep-profile",
+        "profile:loop",
+        ["line-1", "line-2", "line-3"],
+        [l1, l2, l3]
+      );
+      const path = pathSpline(
+        [
+          [0, 0, 0],
+          [0, 0, 20],
+          [14, 8, 34],
+          [30, 0, 48],
+        ],
+        { degree: 3 }
+      );
+      return part("example-sweep-sketch", [
+        sketch,
+        sweep(
+          "sweep-sketch-1",
+          profile,
+          path,
+          "body:main",
+          undefined,
+          { orientation: "frenet" }
+        ),
+      ]);
+    })(),
+  },
+  {
+    id: "pipe-sweep",
+    title: "Pipe Sweep",
+    part: part("example-pipe-sweep", [
+      pipeSweep(
+        "pipe-sweep-1",
+        pathSegments([
+          pathLine([0, 0, 0], [0, 0, 24]),
+          pathArc([0, 0, 24], [24, 0, 48], [24, 0, 24], "ccw"),
+          pathLine([24, 0, 48], [44, 0, 48]),
+          pathArc([44, 0, 48], [64, 20, 48], [64, 0, 48], "ccw"),
+          pathLine([64, 20, 48], [64, 34, 58]),
+        ]),
+        14,
+        8,
+        "body:main"
+      ),
+    ]),
+  },
+  {
+    id: "thread",
+    title: "Thread (Modeled)",
+    part: part("example-thread", [
+      datumAxis("thread-axis", "+Z", [0, 0, 0]),
+      thread(
+        "thread-1",
+        axisDatum("thread-axis"),
+        16,
+        12,
+        2,
+        "body:main",
+        undefined,
+        { segmentsPerTurn: 10 }
+      ),
     ]),
   },
   {
@@ -276,6 +390,46 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     ]),
   },
   {
+    id: "boolean-cut",
+    title: "Boolean Subtract",
+    part: part("example-boolean-cut", [
+      extrude("base", profileRect(70, 36), 14, "body:base"),
+      extrude(
+        "tool",
+        profileCircle(10, [10, 0, 0]),
+        14,
+        "body:tool"
+      ),
+      cut(
+        "subtract-1",
+        selectorNamed("body:base"),
+        selectorNamed("body:tool"),
+        "body:main",
+        ["base", "tool"]
+      ),
+    ]),
+  },
+  {
+    id: "boolean-intersect",
+    title: "Boolean Intersect",
+    part: part("example-boolean-intersect", [
+      extrude("a", profileCircle(16), 26, "body:a"),
+      extrude(
+        "b",
+        profileCircle(16, [12, 0, 0]),
+        26,
+        "body:b"
+      ),
+      intersect(
+        "intersect-1",
+        selectorNamed("body:a"),
+        selectorNamed("body:b"),
+        "body:main",
+        ["a", "b"]
+      ),
+    ]),
+  },
+  {
     id: "pattern",
     title: "Pattern (Feature/Body)",
     part: part("example-pattern", [
@@ -290,6 +444,35 @@ export const dslFeatureExamples: DslFeatureExample[] = [
           result: "body:main",
           deps: ["seed"],
         }
+      ),
+    ]),
+  },
+  {
+    id: "pattern-circular",
+    title: "Pattern (Circular)",
+    part: part("example-pattern-circular", [
+      extrude("center", profileCircle(6), 4, "body:center"),
+      extrude("seed", profileRect(10, 6, [30, 0, 4]), 8, "body:seed"),
+      patternCircular(
+        "pattern-circular-1",
+        selectorFace(
+          [predCreatedBy("center"), predPlanar(), predNormal("+Z")],
+          [rankMaxZ()]
+        ),
+        "+Z",
+        8,
+        {
+          source: selectorNamed("body:seed"),
+          result: "body:pattern",
+          deps: ["center", "seed"],
+        }
+      ),
+      booleanOp(
+        "pattern-circular-union",
+        "union",
+        selectorNamed("body:center"),
+        selectorNamed("body:pattern"),
+        "body:main"
       ),
     ]),
   },
@@ -609,6 +792,102 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     },
   },
   {
+    id: "move-body",
+    title: "Move Body",
+    part: part("example-move-body", [
+      extrude("base", profileRect(44, 20), 10, "body:base"),
+      moveBody(
+        "move-1",
+        selectorNamed("body:base"),
+        "body:moved",
+        ["base"],
+        {
+          translation: [26, 0, 0],
+          rotationAxis: "+Z",
+          rotationAngle: Math.PI / 18,
+          scale: 0.95,
+          origin: [0, 0, 0],
+        }
+      ),
+      booleanOp(
+        "union-1",
+        "union",
+        selectorNamed("body:base"),
+        selectorNamed("body:moved"),
+        "body:main",
+        ["move-1"]
+      ),
+    ]),
+  },
+  {
+    id: "delete-face",
+    title: "Delete Face",
+    part: part("example-delete-face", [
+      extrude("base", profileRect(56, 32), 18, "body:base"),
+      deleteFace(
+        "delete-top",
+        selectorNamed("body:base"),
+        selectorFace([predCreatedBy("base"), predPlanar()], [rankMaxZ()]),
+        "surface:main",
+        ["base"],
+        { heal: false }
+      ),
+    ]),
+    render: {
+      layers: [
+        {
+          output: "surface:main",
+          color: [154, 192, 230],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [32, 40, 52],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
+  },
+  {
+    id: "replace-face",
+    title: "Replace Face",
+    part: part("example-replace-face", [
+      extrude("base", profileRect(56, 32), 18, "body:base"),
+      plane("replace-tool", 56, 32, "surface:tool", {
+        origin: [0, 0, 18],
+        deps: ["base"],
+      }),
+      replaceFace(
+        "replace-top",
+        selectorNamed("body:base"),
+        selectorFace([predCreatedBy("base"), predPlanar()], [rankMaxZ()]),
+        selectorNamed("surface:tool"),
+        "body:main",
+        ["base", "replace-tool"],
+        { heal: true }
+      ),
+    ]),
+    render: {
+      layers: [
+        {
+          output: "body:main",
+          color: [154, 192, 230],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [32, 40, 52],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+        {
+          output: "surface:tool",
+          color: [230, 140, 70],
+          alpha: 0.2,
+          wireframe: false,
+          depthTest: true,
+        },
+      ],
+    },
+  },
+  {
     id: "draft",
     title: "Draft",
     part: part("example-draft", [
@@ -750,7 +1029,9 @@ export const dslFeatureExamples: DslFeatureExample[] = [
           output: "body:main",
           color: [118, 170, 220],
           alpha: 1,
-          wireframe: false,
+          wireframe: true,
+          wireColor: [20, 30, 40],
+          wireDepthTest: true,
           depthTest: true,
         },
       ],

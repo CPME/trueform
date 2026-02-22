@@ -54,6 +54,66 @@ const tests = [
     },
   },
   {
+    name: "graph: move body infers source output and datum axis dependencies",
+    fn: async () => {
+      const part = dsl.part("move-body-deps", [
+        dsl.moveBody(
+          "move",
+          dsl.selectorNamed("body:main"),
+          "body:moved",
+          undefined,
+          {
+            rotationAxis: dsl.axisDatum("axis-1"),
+            rotationAngle: Math.PI / 4,
+          }
+        ),
+        dsl.extrude("base", dsl.profileRect(8, 8), 4, "body:main"),
+        dsl.datumAxis("axis-1", "+Z"),
+      ]);
+      const result = compilePart(part);
+      const moveIndex = result.featureOrder.indexOf("move");
+      assert.ok(result.featureOrder.indexOf("base") < moveIndex);
+      assert.ok(result.featureOrder.indexOf("axis-1") < moveIndex);
+    },
+  },
+  {
+    name: "graph: delete face infers source output dependency",
+    fn: async () => {
+      const part = dsl.part("delete-face-deps", [
+        dsl.deleteFace(
+          "delete-face",
+          dsl.selectorNamed("body:main"),
+          dsl.selectorFace([dsl.predCreatedBy("base"), dsl.predPlanar()], [dsl.rankMaxZ()]),
+          "surface:opened"
+        ),
+        dsl.extrude("base", dsl.profileRect(8, 8), 4, "body:main"),
+      ]);
+      const result = compilePart(part);
+      const deleteIndex = result.featureOrder.indexOf("delete-face");
+      assert.ok(result.featureOrder.indexOf("base") < deleteIndex);
+    },
+  },
+  {
+    name: "graph: replace face infers source and tool output dependencies",
+    fn: async () => {
+      const part = dsl.part("replace-face-deps", [
+        dsl.replaceFace(
+          "replace-face",
+          dsl.selectorNamed("body:main"),
+          dsl.selectorFace([dsl.predCreatedBy("base"), dsl.predPlanar()], [dsl.rankMaxZ()]),
+          dsl.selectorNamed("surface:tool"),
+          "body:replaced"
+        ),
+        dsl.extrude("base", dsl.profileRect(8, 8), 4, "body:main"),
+        dsl.plane("tool", 12, 12, "surface:tool", { origin: [0, 0, 4] }),
+      ]);
+      const result = compilePart(part);
+      const replaceIndex = result.featureOrder.indexOf("replace-face");
+      assert.ok(result.featureOrder.indexOf("base") < replaceIndex);
+      assert.ok(result.featureOrder.indexOf("tool") < replaceIndex);
+    },
+  },
+  {
     name: "graph: selector.named missing output throws",
     fn: async () => {
       const part = dsl.part("named-missing", [

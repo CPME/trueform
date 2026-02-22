@@ -143,6 +143,9 @@ function normalizeFeature(
   if ("faces" in clone && isSelector(clone.faces)) {
     (clone as { faces: Selector }).faces = normalizeSelector(clone.faces as Selector);
   }
+  if ("tool" in clone && isSelector(clone.tool)) {
+    (clone as { tool: Selector }).tool = normalizeSelector(clone.tool as Selector);
+  }
   if ("neutralPlane" in clone && isSelector(clone.neutralPlane)) {
     (clone as { neutralPlane: Selector }).neutralPlane = normalizeSelector(
       clone.neutralPlane as Selector
@@ -211,6 +214,23 @@ function normalizeFeature(
     case "feature.sweep":
       clone.profile = normalizeProfileRef(clone.profile, ctx);
       clone.path = normalizePath3D(clone.path, ctx);
+      break;
+    case "feature.move.body":
+      if (clone.translation !== undefined) {
+        clone.translation = normalizePoint3(clone.translation, ctx);
+      }
+      if (clone.rotationAxis !== undefined) {
+        clone.rotationAxis = normalizeAxisSpec(clone.rotationAxis, ctx);
+      }
+      if (clone.rotationAngle !== undefined) {
+        clone.rotationAngle = normalizeScalar(clone.rotationAngle, "angle", ctx);
+      }
+      if (clone.scale !== undefined) {
+        clone.scale = normalizeScalar(clone.scale, "count", ctx);
+      }
+      if (clone.origin !== undefined) {
+        clone.origin = normalizePoint3(clone.origin, ctx);
+      }
       break;
     case "feature.shell":
       clone.thickness = normalizeScalar(clone.thickness, "length", ctx);
