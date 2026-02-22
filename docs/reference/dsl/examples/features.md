@@ -159,32 +159,6 @@ Notes:
 - `pipe` creates a straight cylindrical pipe/tube primitive on a cardinal axis.
 - Use `opts.origin` to place the primitive at an explicit origin.
 
-## Pipe Sweep
-
-![Pipe sweep example](/examples/dsl/pipe-sweep.iso.png)
-
-```ts
-const examplePart = part("example-pipe-sweep", [
-  pipeSweep(
-    "pipe-sweep-1",
-    pathSegments([
-      pathLine([0, 0, 0], [0, 0, 24]),
-      pathArc([0, 0, 24], [24, 0, 48], [24, 0, 24], "ccw"),
-      pathLine([24, 0, 48], [44, 0, 48]),
-      pathArc([44, 0, 48], [64, 20, 48], [64, 0, 48], "ccw"),
-      pathLine([64, 20, 48], [64, 34, 58]),
-    ]),
-    14,
-    8,
-    "body:main"
-  ),
-]);
-```
-
-Notes:
-- Use `pathArc(...)` segments to model explicit elbows.
-- Keep elbow bend radii comfortably larger than tube radius, especially for hollow tubes (`innerDiameter > 0`).
-
 ## Sweeping Tube Profiles (Consolidated)
 
 ```ts
@@ -442,22 +416,6 @@ Notes:
 - Use `{ direction: "reverse" }` to thicken opposite the face normal.
 - For thin-walled solids built from a closed solid, use `shell` instead.
 
-## Thread (Modeled)
-
-![Modeled thread example](/examples/dsl/thread.iso.png)
-
-```ts
-const examplePart = part("example-thread", [
-  datumAxis("thread-axis", "+Z", [0, 0, 0]),
-  thread("thread-1", axisDatum("thread-axis"), 16, 12, 2, "body:main", undefined, {
-    segmentsPerTurn: 10,
-  }),
-]);
-```
-
-Notes:
-- Modelled thread remains staging behavior; use cosmetic thread callouts where semantic PMI is preferred.
-
 ## Hole
 
 ![Hole example](/examples/dsl/hole.iso.png)
@@ -598,13 +556,8 @@ Notes:
 
 ```ts
 const examplePart = part("example-boolean", [
-  extrude("base", profileRect(50, 26), 12, "body:base"),
-  extrude(
-    "tool",
-    profileRect(26, 26, [12, 0, 0]),
-    12,
-    "body:tool"
-  ),
+  extrude("base", profileCircle(18), 12, "body:base"),
+  extrude("tool", profileRect(20, 12, [16, 0, 0]), 12, "body:tool"),
   booleanOp(
     "union-1",
     "union",
@@ -640,6 +593,9 @@ const examplePart = part("example-boolean-intersect", [
 ]);
 ```
 
+Notes:
+- The docs renderer overlays `body:a` and `body:b` in translucent colors so the intersection volume is easier to read.
+
 ## Pattern (Feature/Body)
 
 ![Pattern example](/examples/dsl/pattern.iso.png)
@@ -667,13 +623,13 @@ const examplePart = part("example-pattern", [
 
 ```ts
 const examplePart = part("example-pattern-circular", [
-  extrude("center", profileCircle(6), 4, "body:center"),
-  extrude("seed", profileRect(10, 6, [30, 0, 4]), 8, "body:seed"),
+  extrude("center", profileCircle(8), 8, "body:center"),
+  extrude("seed", profileRect(18, 6, [13, 0, 0]), 8, "body:seed"),
   patternCircular(
     "pattern-circular-1",
     selectorFace([predCreatedBy("center"), predPlanar(), predNormal("+Z")], [rankMaxZ()]),
     "+Z",
-    8,
+    6,
     {
       source: selectorNamed("body:seed"),
       result: "body:pattern",

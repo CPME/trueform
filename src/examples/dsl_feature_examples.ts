@@ -2,9 +2,7 @@ import { part } from "../dsl/core.js";
 import type { IntentPart } from "../dsl.js";
 import type { MeshOptions } from "../backend.js";
 import {
-  axisDatum,
   booleanOp,
-  datumAxis,
   draft,
   loft,
   sweep,
@@ -26,15 +24,11 @@ import {
   predCreatedBy,
   predPlanar,
   predNormal,
-  pathArc,
-  pathLine,
   pathPolyline,
-  pathSegments,
   pathSpline,
   patternCircular,
   patternLinear,
   pipe,
-  pipeSweep,
   profileCircle,
   profilePoly,
   profileRect,
@@ -53,7 +47,6 @@ import {
   sketchRectCorner,
   surface,
   thicken,
-  thread,
 } from "../dsl/geometry.js";
 import { cut, intersect } from "../dsl/booleans.js";
 import {
@@ -259,42 +252,6 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     })(),
   },
   {
-    id: "pipe-sweep",
-    title: "Pipe Sweep",
-    part: part("example-pipe-sweep", [
-      pipeSweep(
-        "pipe-sweep-1",
-        pathSegments([
-          pathLine([0, 0, 0], [0, 0, 24]),
-          pathArc([0, 0, 24], [24, 0, 48], [24, 0, 24], "ccw"),
-          pathLine([24, 0, 48], [44, 0, 48]),
-          pathArc([44, 0, 48], [64, 20, 48], [64, 0, 48], "ccw"),
-          pathLine([64, 20, 48], [64, 34, 58]),
-        ]),
-        14,
-        8,
-        "body:main"
-      ),
-    ]),
-  },
-  {
-    id: "thread",
-    title: "Thread (Modeled)",
-    part: part("example-thread", [
-      datumAxis("thread-axis", "+Z", [0, 0, 0]),
-      thread(
-        "thread-1",
-        axisDatum("thread-axis"),
-        16,
-        12,
-        2,
-        "body:main",
-        undefined,
-        { segmentsPerTurn: 10 }
-      ),
-    ]),
-  },
-  {
     id: "hole",
     title: "Hole",
     part: part("example-hole", [
@@ -450,13 +407,8 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     id: "boolean",
     title: "Boolean Union",
     part: part("example-boolean", [
-      extrude("base", profileRect(50, 26), 12, "body:base"),
-      extrude(
-        "tool",
-        profileRect(26, 26, [12, 0, 0]),
-        12,
-        "body:tool"
-      ),
+      extrude("base", profileCircle(18), 12, "body:base"),
+      extrude("tool", profileRect(20, 12, [16, 0, 0]), 12, "body:tool"),
       booleanOp(
         "union-1",
         "union",
@@ -506,6 +458,33 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         ["a", "b"]
       ),
     ]),
+    render: {
+      layers: [
+        {
+          output: "body:a",
+          color: [66, 133, 244],
+          alpha: 0.2,
+          wireframe: false,
+          depthTest: true,
+        },
+        {
+          output: "body:b",
+          color: [251, 188, 5],
+          alpha: 0.2,
+          wireframe: false,
+          depthTest: true,
+        },
+        {
+          output: "body:main",
+          color: [52, 168, 83],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [24, 35, 24],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
   },
   {
     id: "pattern",
@@ -529,8 +508,8 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     id: "pattern-circular",
     title: "Pattern (Circular)",
     part: part("example-pattern-circular", [
-      extrude("center", profileCircle(6), 4, "body:center"),
-      extrude("seed", profileRect(10, 6, [30, 0, 4]), 8, "body:seed"),
+      extrude("center", profileCircle(8), 8, "body:center"),
+      extrude("seed", profileRect(18, 6, [13, 0, 0]), 8, "body:seed"),
       patternCircular(
         "pattern-circular-1",
         selectorFace(
@@ -538,7 +517,7 @@ export const dslFeatureExamples: DslFeatureExample[] = [
           [rankMaxZ()]
         ),
         "+Z",
-        8,
+        6,
         {
           source: selectorNamed("body:seed"),
           result: "body:pattern",
@@ -1062,55 +1041,6 @@ export const dslFeatureExamples: DslFeatureExample[] = [
           alpha: 0.25,
           wireframe: true,
           wireColor: [32, 40, 52],
-          wireDepthTest: true,
-          depthTest: true,
-        },
-      ],
-    },
-  },
-  {
-    id: "shell-before",
-    title: "Shell (Before)",
-    part: part("example-shell-before", [
-      extrude("base", profileRect(60, 40), 20, "body:base"),
-    ]),
-    render: {
-      layers: [
-        {
-          output: "body:base",
-          color: [140, 150, 160],
-          alpha: 1,
-          wireframe: true,
-          wireColor: [20, 30, 40],
-          wireDepthTest: true,
-          depthTest: true,
-        },
-      ],
-    },
-  },
-  {
-    id: "shell-after",
-    title: "Shell (After)",
-    part: part("example-shell-after", [
-      extrude("base", profileRect(60, 40), 20, "body:base"),
-      shell("shell-1", selectorNamed("body:base"), 2, "body:main", undefined, {
-        direction: "inside",
-        openFaces: [
-          selectorFace(
-            [predCreatedBy("base"), predPlanar(), predNormal("+Z")],
-            [rankMaxArea()]
-          ),
-        ],
-      }),
-    ]),
-    render: {
-      layers: [
-        {
-          output: "body:main",
-          color: [118, 170, 220],
-          alpha: 1,
-          wireframe: true,
-          wireColor: [20, 30, 40],
           wireDepthTest: true,
           depthTest: true,
         },

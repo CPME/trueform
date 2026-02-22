@@ -1,0 +1,1317 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TrueForm Example Gallery</title>
+    <style>
+      :root {
+        --bg: #0b1320;
+        --panel: #111b2b;
+        --text: #e7edf7;
+        --muted: #9fb0c8;
+        --accent: #4ec9b0;
+        --border: #20324a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+        color: var(--text);
+        background: radial-gradient(circle at top, #14243a, var(--bg) 48%);
+      }
+      main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 56px; }
+      h1 { margin: 0 0 10px; font-size: 28px; }
+      p.lead { margin: 0 0 24px; color: var(--muted); }
+      .section-title { margin: 26px 0 12px; font-size: 20px; }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 14px;
+      }
+      .card {
+        display: block;
+        text-decoration: none;
+        color: inherit;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--panel);
+        transition: transform .12s ease, border-color .12s ease;
+      }
+      .card:hover { transform: translateY(-2px); border-color: var(--accent); }
+      .card img { display: block; width: 100%; aspect-ratio: 4/3; object-fit: cover; background: #0a111c; }
+      .card-body { padding: 10px 12px; }
+      .card-title { font-size: 14px; font-weight: 600; line-height: 1.35; }
+      .card-meta { margin-top: 4px; font-size: 12px; color: var(--muted); }
+      .code-list { margin-top: 36px; display: grid; gap: 16px; }
+      .code-entry {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: #0d1727;
+        padding: 14px;
+      }
+      .code-entry h3 { margin: 0 0 6px; font-size: 17px; }
+      .code-meta { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
+      .code-entry pre {
+        margin: 0;
+        padding: 12px;
+        border-radius: 8px;
+        overflow: auto;
+        background: #070d17;
+        border: 1px solid #1f2a3a;
+      }
+      .back-link {
+        display: inline-block;
+        margin-top: 10px;
+        color: var(--accent);
+        text-decoration: none;
+        font-size: 13px;
+      }
+      @media (max-width: 720px) {
+        main { padding: 20px 12px 42px; }
+        h1 { font-size: 24px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="top">
+      <h1>TrueForm Example Gallery</h1>
+      <p class="lead">All rendered examples in one page. Click any tile to jump to the matching code snippet.</p>
+
+      <h2 class="section-title">DSL Examples</h2>
+      <section class="grid">
+    <a class="card" href="#code-dsl-extrude">
+      <img src="/examples/dsl/extrude.iso.png" alt="Extrude" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Extrude</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-surface">
+      <img src="/examples/dsl/surface.iso.png" alt="Surface" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Surface</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-revolve">
+      <img src="/examples/dsl/revolve.iso.png" alt="Revolve" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Revolve</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-loft">
+      <img src="/examples/dsl/loft.iso.png" alt="Loft" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Loft</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-sweep">
+      <img src="/examples/dsl/sweep.iso.png" alt="Sweep (Surface)" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Sweep (Surface)</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-pipe">
+      <img src="/examples/dsl/pipe.iso.png" alt="Pipe" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Pipe</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-sweep-sketch">
+      <img src="/examples/dsl/sweep-sketch.iso.png" alt="Sweep (Arbitrary Sketch)" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Sweep (Arbitrary Sketch)</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-hole">
+      <img src="/examples/dsl/hole.iso.png" alt="Hole" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Hole</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-hole-advanced">
+      <img src="/examples/dsl/hole-advanced.iso.png" alt="Hole (Counterbore + Countersink)" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Hole (Counterbore + Countersink)</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-fillet">
+      <img src="/examples/dsl/fillet.iso.png" alt="Fillet" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Fillet</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-variable-fillet">
+      <img src="/examples/dsl/variable-fillet.iso.png" alt="Variable Fillet" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Variable Fillet</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-chamfer">
+      <img src="/examples/dsl/chamfer.iso.png" alt="Chamfer" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Chamfer</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-variable-chamfer">
+      <img src="/examples/dsl/variable-chamfer.iso.png" alt="Variable Chamfer" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Variable Chamfer</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-boolean">
+      <img src="/examples/dsl/boolean.iso.png" alt="Boolean Union" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Boolean Union</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-boolean-cut">
+      <img src="/examples/dsl/boolean-cut.iso.png" alt="Boolean Subtract" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Boolean Subtract</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-boolean-intersect">
+      <img src="/examples/dsl/boolean-intersect.iso.png" alt="Boolean Intersect" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Boolean Intersect</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-pattern">
+      <img src="/examples/dsl/pattern.iso.png" alt="Pattern (Feature/Body)" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Pattern (Feature/Body)</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-pattern-circular">
+      <img src="/examples/dsl/pattern-circular.iso.png" alt="Pattern (Circular)" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Pattern (Circular)</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-feature-array">
+      <img src="/examples/dsl/feature-array.iso.png" alt="Feature Array" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Feature Array</div>
+        <div class="card-meta">Generators</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-tolerancing">
+      <img src="/examples/dsl/tolerancing.iso.png" alt="Tolerancing (PMI)" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Tolerancing (PMI)</div>
+        <div class="card-meta">PMI</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-spline-array">
+      <img src="/examples/dsl/spline-array.iso.png" alt="Spline Array" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Spline Array</div>
+        <div class="card-meta">Generators</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-circular-array">
+      <img src="/examples/dsl/circular-array.iso.png" alt="Circular Array" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Circular Array</div>
+        <div class="card-meta">Generators</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-radial-array">
+      <img src="/examples/dsl/radial-array.iso.png" alt="Radial Array" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Radial Array</div>
+        <div class="card-meta">Generators</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-mirror">
+      <img src="/examples/dsl/mirror.iso.png" alt="Mirror" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Mirror</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-move-body">
+      <img src="/examples/dsl/move-body.iso.png" alt="Move Body" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Move Body</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-delete-face">
+      <img src="/examples/dsl/delete-face.iso.png" alt="Delete Face" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Delete Face</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-replace-face">
+      <img src="/examples/dsl/replace-face.iso.png" alt="Replace Face" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Replace Face</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-move-face">
+      <img src="/examples/dsl/move-face.iso.png" alt="Move Face" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Move Face</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-draft">
+      <img src="/examples/dsl/draft.iso.png" alt="Draft" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Draft</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-thicken">
+      <img src="/examples/dsl/thicken.iso.png" alt="Thicken" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Thicken</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-shell">
+      <img src="/examples/dsl/shell.iso.png" alt="Shell" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Shell</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-thread-cosmetic">
+      <img src="/examples/dsl/thread-cosmetic.iso.png" alt="Cosmetic Thread" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Cosmetic Thread</div>
+        <div class="card-meta">PMI</div>
+      </div>
+    </a>
+      </section>
+
+      <h2 class="section-title">Sketch Examples</h2>
+      <section class="grid">
+    <a class="card" href="#code-sketch-line">
+      <img src="/examples/sketch/line.svg" alt="Line" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Line</div>
+        <div class="card-meta">Sketch</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-sketch-arc">
+      <img src="/examples/sketch/arc.svg" alt="Arc" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Arc</div>
+        <div class="card-meta">Sketch</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-sketch-circle">
+      <img src="/examples/sketch/circle.svg" alt="Circle" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Circle</div>
+        <div class="card-meta">Sketch</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-sketch-ellipse">
+      <img src="/examples/sketch/ellipse.svg" alt="Ellipse" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Ellipse</div>
+        <div class="card-meta">Sketch</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-sketch-rect-center">
+      <img src="/examples/sketch/rect-center.svg" alt="Rectangle (Center)" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Rectangle (Center)</div>
+        <div class="card-meta">Sketch</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-sketch-rect-corner">
+      <img src="/examples/sketch/rect-corner.svg" alt="Rectangle (Corner)" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Rectangle (Corner)</div>
+        <div class="card-meta">Sketch</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-sketch-slot">
+      <img src="/examples/sketch/slot.svg" alt="Slot" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Slot</div>
+        <div class="card-meta">Sketch</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-sketch-polygon">
+      <img src="/examples/sketch/polygon.svg" alt="Polygon" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Polygon</div>
+        <div class="card-meta">Sketch</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-sketch-spline">
+      <img src="/examples/sketch/spline.svg" alt="Spline" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Spline</div>
+        <div class="card-meta">Sketch</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-sketch-point">
+      <img src="/examples/sketch/point.svg" alt="Point" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Point</div>
+        <div class="card-meta">Sketch</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-sketch-rect-array">
+      <img src="/examples/sketch/rect-array.svg" alt="Rectangle Array" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Rectangle Array</div>
+        <div class="card-meta">Sketch</div>
+      </div>
+    </a>
+      </section>
+
+      <h2 class="section-title">Example Code</h2>
+      <section class="code-list">
+    <article class="code-entry" id="code-dsl-extrude">
+      <h3>Extrude (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Extrude</p>
+      <pre><code>const examplePart = part(&quot;example-extrude&quot;, [
+  extrude(&quot;base&quot;, profileRect(80, 50), 12, &quot;body:main&quot;),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-surface">
+      <h3>Surface (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Surface</p>
+      <pre><code>const rect = sketchRectCorner(&quot;rect-1&quot;, [0, 0], 40, 20);
+const sketch = sketch2d(
+  &quot;sketch-face&quot;,
+  [{ name: &quot;profile:rect&quot;, profile: profileSketchLoop([&quot;rect-1&quot;]) }],
+  { entities: [rect] }
+);
+
+const examplePart = part(&quot;example-surface&quot;, [
+  sketch,
+  surface(&quot;face-1&quot;, profileRef(&quot;profile:rect&quot;), &quot;surface:main&quot;),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-revolve">
+      <h3>Revolve (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Revolve</p>
+      <pre><code>const examplePart = part(&quot;example-revolve&quot;, [
+  revolve(
+    &quot;ring-revolve&quot;,
+    profileRect(3, 6, [1.5, 3, 0]),
+    &quot;+X&quot;,
+    &quot;full&quot;,
+    &quot;body:main&quot;
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-loft">
+      <h3>Loft (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Loft</p>
+      <pre><code>const examplePart = part(&quot;example-loft&quot;, [
+  loft(
+    &quot;loft-1&quot;,
+    [
+      profileCircle(10, [0, 0, 0]),
+      profilePoly(6, 16, [0, 0, 24], Math.PI / 6),
+    ],
+    &quot;body:main&quot;
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-sweep">
+      <h3>Sweep (Surface) (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Sweep</p>
+      <pre><code>const line = sketchLine(&quot;line-1&quot;, [-8, 0], [8, 0]);
+const sketch = sketch2d(
+  &quot;sketch-sweep&quot;,
+  [
+    {
+      name: &quot;profile:line&quot;,
+      profile: profileSketchLoop([&quot;line-1&quot;], { open: true }),
+    },
+  ],
+  { entities: [line] }
+);
+const path = pathPolyline([
+  [0, 0, 0],
+  [0, 0, 20],
+  [15, 0, 30],
+]);
+
+const examplePart = part(&quot;example-sweep&quot;, [
+  sketch,
+  sweep(&quot;sweep-1&quot;, profileRef(&quot;profile:line&quot;), path, &quot;surface:main&quot;, undefined, {
+    mode: &quot;surface&quot;,
+  }),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-pipe">
+      <h3>Pipe (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Pipe</p>
+      <pre><code>const examplePart = part(&quot;example-pipe&quot;, [
+  pipe(&quot;pipe-1&quot;, &quot;+Z&quot;, 60, 24, 18, &quot;body:main&quot;),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-sweep-sketch">
+      <h3>Sweep (Arbitrary Sketch) (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Sweep (Arbitrary Sketch)</p>
+      <pre><code>const l1 = sketchLine(&quot;line-1&quot;, [-5, -4], [5, -4]);
+const l2 = sketchLine(&quot;line-2&quot;, [5, -4], [0, 6]);
+const l3 = sketchLine(&quot;line-3&quot;, [0, 6], [-5, -4]);
+const sketch = sketch2d(
+  &quot;sketch-sweep-profile&quot;,
+  [{ name: &quot;profile:loop&quot;, profile: profileSketchLoop([&quot;line-1&quot;, &quot;line-2&quot;, &quot;line-3&quot;]) }],
+  { entities: [l1, l2, l3] }
+);
+const path = pathSpline(
+  [
+    [0, 0, 0],
+    [0, 0, 20],
+    [14, 8, 34],
+    [30, 0, 48],
+  ],
+  { degree: 3 }
+);
+
+const examplePart = part(&quot;example-sweep-sketch&quot;, [
+  sketch,
+  sweep(&quot;sweep-sketch-1&quot;, profileRef(&quot;profile:loop&quot;), path, &quot;body:main&quot;, undefined, {
+    orientation: &quot;frenet&quot;,
+  }),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-hole">
+      <h3>Hole (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Hole</p>
+      <pre><code>const examplePart = part(&quot;example-hole&quot;, [
+  extrude(&quot;base&quot;, profileRect(90, 50), 12, &quot;body:main&quot;),
+  hole(
+    &quot;hole-1&quot;,
+    selectorFace([predPlanar()], [rankMaxZ()]),
+    &quot;-Z&quot;,
+    14,
+    &quot;throughAll&quot;,
+    { deps: [&quot;base&quot;] }
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-hole-advanced">
+      <h3>Hole (Counterbore + Countersink) (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Hole</p>
+      <pre><code>const examplePart = part(&quot;example-hole&quot;, [
+  extrude(&quot;base&quot;, profileRect(90, 50), 12, &quot;body:main&quot;),
+  hole(
+    &quot;hole-1&quot;,
+    selectorFace([predPlanar()], [rankMaxZ()]),
+    &quot;-Z&quot;,
+    14,
+    &quot;throughAll&quot;,
+    { deps: [&quot;base&quot;] }
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-fillet">
+      <h3>Fillet (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Fillet</p>
+      <pre><code>const examplePart = part(&quot;example-fillet&quot;, [
+  extrude(&quot;cyl&quot;, profileCircle(14), 28, &quot;body:main&quot;),
+  fillet(
+    &quot;edge-fillet&quot;,
+    selectorEdge([predCreatedBy(&quot;cyl&quot;)], [rankMaxZ()]),
+    3,
+    [&quot;cyl&quot;]
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-variable-fillet">
+      <h3>Variable Fillet (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Variable Fillet</p>
+      <pre><code>const examplePart = part(&quot;example-variable-fillet&quot;, [
+  extrude(&quot;base&quot;, profileCircle(12), 16, &quot;body:main&quot;),
+  variableFillet(
+    &quot;fillet-var&quot;,
+    selectorNamed(&quot;body:main&quot;),
+    [
+      { edge: selectorEdge([predCreatedBy(&quot;base&quot;)], [rankMaxZ()]), radius: 1.8 },
+      { edge: selectorEdge([predCreatedBy(&quot;base&quot;)], [rankMinZ()]), radius: 0.9 },
+    ],
+    &quot;body:filleted&quot;,
+    [&quot;base&quot;]
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-chamfer">
+      <h3>Chamfer (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Chamfer</p>
+      <pre><code>const examplePart = part(&quot;example-chamfer&quot;, [
+  extrude(&quot;block&quot;, profileRect(40, 26), 12, &quot;body:main&quot;),
+  chamfer(
+    &quot;edge-chamfer&quot;,
+    selectorEdge([predCreatedBy(&quot;block&quot;)]),
+    2,
+    [&quot;block&quot;]
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-variable-chamfer">
+      <h3>Variable Chamfer (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Variable Chamfer</p>
+      <pre><code>const examplePart = part(&quot;example-variable-chamfer&quot;, [
+  extrude(&quot;base&quot;, profileCircle(12), 16, &quot;body:main&quot;),
+  variableChamfer(
+    &quot;chamfer-var&quot;,
+    selectorNamed(&quot;body:main&quot;),
+    [
+      { edge: selectorEdge([predCreatedBy(&quot;base&quot;)], [rankMaxZ()]), distance: 1.2 },
+      { edge: selectorEdge([predCreatedBy(&quot;base&quot;)], [rankMinZ()]), distance: 0.6 },
+    ],
+    &quot;body:chamfered&quot;,
+    [&quot;base&quot;]
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-boolean">
+      <h3>Boolean Union (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Boolean Union</p>
+      <pre><code>const examplePart = part(&quot;example-boolean&quot;, [
+  extrude(&quot;base&quot;, profileCircle(18), 12, &quot;body:base&quot;),
+  extrude(&quot;tool&quot;, profileRect(20, 12, [16, 0, 0]), 12, &quot;body:tool&quot;),
+  booleanOp(
+    &quot;union-1&quot;,
+    &quot;union&quot;,
+    selectorNamed(&quot;body:base&quot;),
+    selectorNamed(&quot;body:tool&quot;),
+    &quot;body:main&quot;,
+    [&quot;base&quot;, &quot;tool&quot;]
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-boolean-cut">
+      <h3>Boolean Subtract (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Boolean Subtract</p>
+      <pre><code>const examplePart = part(&quot;example-boolean-cut&quot;, [
+  extrude(&quot;base&quot;, profileRect(70, 36), 14, &quot;body:base&quot;),
+  extrude(&quot;tool&quot;, profileCircle(10, [10, 0, 0]), 14, &quot;body:tool&quot;),
+  cut(&quot;subtract-1&quot;, selectorNamed(&quot;body:base&quot;), selectorNamed(&quot;body:tool&quot;), &quot;body:main&quot;),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-boolean-intersect">
+      <h3>Boolean Intersect (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Boolean Intersect</p>
+      <pre><code>const examplePart = part(&quot;example-boolean-intersect&quot;, [
+  extrude(&quot;a&quot;, profileCircle(16), 26, &quot;body:a&quot;),
+  extrude(&quot;b&quot;, profileCircle(16, [12, 0, 0]), 26, &quot;body:b&quot;),
+  intersect(&quot;intersect-1&quot;, selectorNamed(&quot;body:a&quot;), selectorNamed(&quot;body:b&quot;), &quot;body:main&quot;),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-pattern">
+      <h3>Pattern (Feature/Body) (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Pattern (Feature/Body)</p>
+      <pre><code>const examplePart = part(&quot;example-pattern&quot;, [
+  extrude(&quot;seed&quot;, profileRect(10, 10), 8, &quot;body:seed&quot;),
+  patternLinear(
+    &quot;pattern-1&quot;,
+    selectorFace([predCreatedBy(&quot;seed&quot;), predPlanar(), predNormal(&quot;+Z&quot;)], [rankMaxZ()]),
+    [18, 0],
+    [4, 1],
+    {
+      source: selectorNamed(&quot;body:seed&quot;),
+      result: &quot;body:main&quot;,
+      deps: [&quot;seed&quot;],
+    }
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-pattern-circular">
+      <h3>Pattern (Circular) (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Pattern (Circular)</p>
+      <pre><code>const examplePart = part(&quot;example-pattern-circular&quot;, [
+  extrude(&quot;center&quot;, profileCircle(8), 8, &quot;body:center&quot;),
+  extrude(&quot;seed&quot;, profileRect(18, 6, [13, 0, 0]), 8, &quot;body:seed&quot;),
+  patternCircular(
+    &quot;pattern-circular-1&quot;,
+    selectorFace([predCreatedBy(&quot;center&quot;), predPlanar(), predNormal(&quot;+Z&quot;)], [rankMaxZ()]),
+    &quot;+Z&quot;,
+    6,
+    {
+      source: selectorNamed(&quot;body:seed&quot;),
+      result: &quot;body:pattern&quot;,
+      deps: [&quot;center&quot;, &quot;seed&quot;],
+    }
+  ),
+  booleanOp(
+    &quot;pattern-circular-union&quot;,
+    &quot;union&quot;,
+    selectorNamed(&quot;body:center&quot;),
+    selectorNamed(&quot;body:pattern&quot;),
+    &quot;body:main&quot;
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-feature-array">
+      <h3>Feature Array (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/generators.md -&gt; Feature Array</p>
+      <pre><code>const baseThickness = 6;
+const bossHeight = 8;
+const bossSize = 16;
+
+const base = extrude(
+  &quot;base&quot;,
+  profileRect(120, 80, [0, 0, 0]),
+  baseThickness,
+  &quot;body:base&quot;
+);
+
+const cubes = featureArray(
+  { count: [3, 2], spacing: [36, 36], origin: [-36, -18, baseThickness] },
+  ({ index, offset }) =&gt;
+    extrude(
+      `cube-${index}`,
+      profileRect(bossSize, bossSize, offset),
+      bossHeight,
+      `body:cube-${index}`
+    )
+);
+
+const unions = [];
+let current = &quot;body:base&quot;;
+for (let i = 0; i &lt; cubes.length; i++) {
+  const result = i === cubes.length - 1 ? &quot;body:main&quot; : `body:union-${i}`;
+  unions.push(
+    booleanOp(
+      `union-${i}`,
+      &quot;union&quot;,
+      selectorNamed(current),
+      selectorNamed(`body:cube-${i}`),
+      result
+    )
+  );
+  current = result;
+}
+
+const examplePart = part(&quot;example-feature-array&quot;, [base, ...cubes, ...unions]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-tolerancing">
+      <h3>Tolerancing (PMI) (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/tolerancing.md -&gt; Tolerancing PMI Sidecar</p>
+      <pre><code>import { dsl, buildPart } from &quot;trueform&quot;;
+import { exportStepAp242WithPmi } from &quot;trueform/export&quot;;
+
+const topFace = dsl.selectorFace(
+  [dsl.predPlanar(), dsl.predNormal(&quot;+Z&quot;)],
+  [dsl.rankMaxZ()]
+);
+const bottomFace = dsl.selectorFace(
+  [dsl.predPlanar(), dsl.predNormal(&quot;-Z&quot;)],
+  [dsl.rankMinZ()]
+);
+
+const sideFace = dsl.selectorFace([dsl.predPlanar(), dsl.predNormal(&quot;+X&quot;)]);
+
+const base = dsl.extrude(
+  &quot;base&quot;,
+  dsl.profileRect(120, 70),
+  12,
+  &quot;body:main&quot;
+);
+const hole = dsl.hole(&quot;hole-1&quot;, topFace, &quot;-Z&quot;, 10, &quot;throughAll&quot;, {
+  deps: [&quot;base&quot;],
+});
+const holeFace = dsl.selectorFace(
+  [dsl.predCreatedBy(&quot;hole-1&quot;)],
+  [dsl.rankMaxArea()]
+);
+
+const part = dsl.part(&quot;example-tolerancing&quot;, [base, hole], {
+  datums: [
+    dsl.datumFeature(&quot;datum-A&quot;, &quot;A&quot;, dsl.refSurface(bottomFace)),
+    dsl.datumFeature(&quot;datum-B&quot;, &quot;B&quot;, dsl.refSurface(sideFace)),
+  ],
+  constraints: [
+    dsl.flatnessConstraint(&quot;flat-top&quot;, dsl.refSurface(topFace), 0.05, {
+      requirement: &quot;req-flat-top&quot;,
+    }),
+    dsl.parallelismConstraint(
+      &quot;parallel-top&quot;,
+      dsl.refSurface(topFace),
+      0.08,
+      [dsl.datumRef(&quot;datum-A&quot;)]
+    ),
+    dsl.perpendicularityConstraint(
+      &quot;perp-side&quot;,
+      dsl.refSurface(sideFace),
+      0.1,
+      [dsl.datumRef(&quot;datum-A&quot;)]
+    ),
+    dsl.positionConstraint(
+      &quot;pos-hole&quot;,
+      dsl.refAxis(holeFace),
+      0.2,
+      [dsl.datumRef(&quot;datum-A&quot;), dsl.datumRef(&quot;datum-B&quot;)],
+      { zone: &quot;diameter&quot;, modifiers: [&quot;MMC&quot;] }
+    ),
+    dsl.sizeConstraint(&quot;size-hole&quot;, dsl.refAxis(holeFace), {
+      nominal: 10,
+      tolerance: 0.1,
+      modifiers: [&quot;MMC&quot;],
+    }),
+    dsl.surfaceProfileConstraint(&quot;profile-top&quot;, dsl.refSurface(topFace), 0.03, {
+      referenceFrame: dsl.refFrame(topFace),
+      requirement: &quot;req-profile-top&quot;,
+      capabilities: [&quot;mill-3axis&quot;],
+    }),
+  ],
+});
+
+// After building with a backend:
+// const { step, pmi } = exportStepAp242WithPmi(backend, body, part, { schema: &quot;AP242&quot; });</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-spline-array">
+      <h3>Spline Array (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/generators.md -&gt; Spline Array</p>
+      <pre><code>const baseThickness = 6;
+const bossHeight = 8;
+const bossSize = 12;
+
+const base = extrude(
+  &quot;base&quot;,
+  profileRect(160, 90, [0, 0, 0]),
+  baseThickness,
+  &quot;body:base&quot;
+);
+
+const bosses = featureArrayAlongSpline(
+  {
+    points: [
+      [-60, -20, baseThickness],
+      [-30, 25, baseThickness],
+      [20, -10, baseThickness],
+      [60, 30, baseThickness],
+    ],
+    count: 7,
+    mode: &quot;spline&quot;,
+  },
+  ({ index, offset }) =&gt;
+    extrude(
+      `boss-${index}`,
+      profileRect(bossSize, bossSize, offset),
+      bossHeight,
+      `body:boss-${index}`
+    )
+);
+
+const unions = [];
+let current = &quot;body:base&quot;;
+for (let i = 0; i &lt; bosses.length; i++) {
+  const result = i === bosses.length - 1 ? &quot;body:main&quot; : `body:union-${i}`;
+  unions.push(
+    booleanOp(
+      `union-${i}`,
+      &quot;union&quot;,
+      selectorNamed(current),
+      selectorNamed(`body:boss-${i}`),
+      result
+    )
+  );
+  current = result;
+}
+
+const examplePart = part(&quot;example-spline-array&quot;, [base, ...bosses, ...unions]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-circular-array">
+      <h3>Circular Array (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/generators.md -&gt; Circular Array</p>
+      <pre><code>const baseThickness = 6;
+const bossHeight = 8;
+const bossRadius = 6;
+
+const base = extrude(
+  &quot;base&quot;,
+  profileRect(140, 100, [0, 0, 0]),
+  baseThickness,
+  &quot;body:base&quot;
+);
+
+const bosses = featureCircularArray(
+  { count: 8, radius: 36, center: [0, 0, baseThickness], units: &quot;deg&quot; },
+  ({ index, offset }) =&gt;
+    extrude(
+      `boss-${index}`,
+      profileCircle(bossRadius, offset),
+      bossHeight,
+      `body:boss-${index}`
+    )
+);
+
+const unions = [];
+let current = &quot;body:base&quot;;
+for (let i = 0; i &lt; bosses.length; i++) {
+  const result = i === bosses.length - 1 ? &quot;body:main&quot; : `body:union-${i}`;
+  unions.push(
+    booleanOp(
+      `union-${i}`,
+      &quot;union&quot;,
+      selectorNamed(current),
+      selectorNamed(`body:boss-${i}`),
+      result
+    )
+  );
+  current = result;
+}
+
+const examplePart = part(&quot;example-circular-array&quot;, [base, ...bosses, ...unions]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-radial-array">
+      <h3>Radial Array (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/generators.md -&gt; Radial Array</p>
+      <pre><code>const baseThickness = 6;
+const bossHeight = 8;
+const bossSize = 10;
+
+const base = extrude(
+  &quot;base&quot;,
+  profileRect(160, 110, [0, 0, 0]),
+  baseThickness,
+  &quot;body:base&quot;
+);
+
+const bosses = featureRadialArray(
+  {
+    count: [6, 3],
+    radiusStep: 18,
+    radiusStart: 18,
+    center: [0, 0, baseThickness],
+    angleStep: 60,
+    units: &quot;deg&quot;,
+  },
+  ({ index, offset }) =&gt;
+    extrude(
+      `boss-${index}`,
+      profileRect(bossSize, bossSize, offset),
+      bossHeight,
+      `body:boss-${index}`
+    )
+);
+
+const unions = [];
+let current = &quot;body:base&quot;;
+for (let i = 0; i &lt; bosses.length; i++) {
+  const result = i === bosses.length - 1 ? &quot;body:main&quot; : `body:union-${i}`;
+  unions.push(
+    booleanOp(
+      `union-${i}`,
+      &quot;union&quot;,
+      selectorNamed(current),
+      selectorNamed(`body:boss-${i}`),
+      result
+    )
+  );
+  current = result;
+}
+
+const examplePart = part(&quot;example-radial-array&quot;, [base, ...bosses, ...unions]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-mirror">
+      <h3>Mirror (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Mirror</p>
+      <pre><code>const examplePart = part(&quot;example-mirror&quot;, [
+  datumPlane(&quot;mirror-plane&quot;, &quot;+X&quot;),
+  plane(&quot;mirror-plane-surface&quot;, 80, 52, &quot;surface:mirror-plane&quot;, {
+    plane: planeDatum(&quot;mirror-plane&quot;),
+  }),
+  extrude(&quot;rib&quot;, profileRect(44, 12, [20, 0, 0]), 8, &quot;body:rib&quot;),
+  extrude(&quot;boss&quot;, profileCircle(10, [34, 12, 0]), 16, &quot;body:boss&quot;),
+  booleanOp(
+    &quot;half-union&quot;,
+    &quot;union&quot;,
+    selectorNamed(&quot;body:rib&quot;),
+    selectorNamed(&quot;body:boss&quot;),
+    &quot;body:half&quot;
+  ),
+  mirror(
+    &quot;mirror-1&quot;,
+    selectorNamed(&quot;body:half&quot;),
+    planeDatum(&quot;mirror-plane&quot;),
+    &quot;body:mirror&quot;
+  ),
+  booleanOp(
+    &quot;union-2&quot;,
+    &quot;union&quot;,
+    selectorNamed(&quot;body:half&quot;),
+    selectorNamed(&quot;body:mirror&quot;),
+    &quot;body:main&quot;
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-move-body">
+      <h3>Move Body (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Move Body</p>
+      <pre><code>const examplePart = part(&quot;example-move-body&quot;, [
+  extrude(&quot;base&quot;, profileRect(44, 20), 10, &quot;body:base&quot;),
+  moveBody(
+    &quot;move-1&quot;,
+    selectorNamed(&quot;body:base&quot;),
+    &quot;body:moved&quot;,
+    [&quot;base&quot;],
+    {
+      translation: [26, 0, 0],
+      rotationAxis: &quot;+Z&quot;,
+      rotationAngle: Math.PI / 18,
+      scale: 0.95,
+      origin: [0, 0, 0],
+    }
+  ),
+  booleanOp(
+    &quot;union-1&quot;,
+    &quot;union&quot;,
+    selectorNamed(&quot;body:base&quot;),
+    selectorNamed(&quot;body:moved&quot;),
+    &quot;body:main&quot;
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-delete-face">
+      <h3>Delete Face (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Delete Face</p>
+      <pre><code>const examplePart = part(&quot;example-delete-face&quot;, [
+  extrude(&quot;base&quot;, profileRect(56, 32), 18, &quot;body:base&quot;),
+  deleteFace(
+    &quot;delete-top&quot;,
+    selectorNamed(&quot;body:base&quot;),
+    selectorFace([predCreatedBy(&quot;base&quot;), predPlanar()], [rankMaxZ()]),
+    &quot;surface:main&quot;,
+    [&quot;base&quot;],
+    { heal: false }
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-replace-face">
+      <h3>Replace Face (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Replace Face</p>
+      <pre><code>const examplePart = part(&quot;example-replace-face&quot;, [
+  extrude(&quot;base&quot;, profileRect(56, 32), 18, &quot;body:base&quot;),
+  plane(&quot;replace-tool&quot;, 56, 32, &quot;surface:tool&quot;, {
+    origin: [0, 0, 18],
+    deps: [&quot;base&quot;],
+  }),
+  replaceFace(
+    &quot;replace-top&quot;,
+    selectorNamed(&quot;body:base&quot;),
+    selectorFace([predCreatedBy(&quot;base&quot;), predPlanar()], [rankMaxZ()]),
+    selectorNamed(&quot;surface:tool&quot;),
+    &quot;body:main&quot;,
+    [&quot;base&quot;, &quot;replace-tool&quot;],
+    { heal: true }
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-move-face">
+      <h3>Move Face (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Move Face</p>
+      <pre><code>const examplePart = part(&quot;example-move-face&quot;, [
+  extrude(&quot;base&quot;, profileRect(56, 32), 18, &quot;body:base&quot;),
+  moveFace(
+    &quot;move-top&quot;,
+    selectorNamed(&quot;body:base&quot;),
+    selectorFace([predCreatedBy(&quot;base&quot;), predPlanar()], [rankMaxZ()]),
+    &quot;surface:main&quot;,
+    [&quot;base&quot;],
+    {
+      translation: [0, 0, 2],
+      heal: false,
+    }
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-draft">
+      <h3>Draft (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Draft</p>
+      <pre><code>const examplePart = part(&quot;example-draft&quot;, [
+  extrude(&quot;base&quot;, profileRect(60, 40), 20, &quot;body:base&quot;),
+  datumPlane(&quot;draft-neutral&quot;, &quot;+Z&quot;),
+  draft(
+    &quot;draft-1&quot;,
+    selectorNamed(&quot;body:base&quot;),
+    selectorFace([
+      predCreatedBy(&quot;base&quot;),
+      predPlanar(),
+      predNormal(&quot;+X&quot;),
+    ]),
+    planeDatum(&quot;draft-neutral&quot;),
+    &quot;+Z&quot;,
+    Math.PI / 60,
+    &quot;body:main&quot;
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-thicken">
+      <h3>Thicken (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Thicken</p>
+      <pre><code>const line = sketchLine(&quot;line-1&quot;, [10, 0], [10, 16]);
+const sketch = sketch2d(
+  &quot;sketch-thicken&quot;,
+  [{ name: &quot;profile:open&quot;, profile: profileSketchLoop([&quot;line-1&quot;], { open: true }) }],
+  { plane: planeDatum(&quot;sketch-plane&quot;), entities: [line] }
+);
+
+const examplePart = part(&quot;example-thicken&quot;, [
+  datumPlane(&quot;sketch-plane&quot;, &quot;+Y&quot;),
+  sketch,
+  revolve(
+    &quot;surface-revolve&quot;,
+    profileRef(&quot;profile:open&quot;),
+    &quot;+Z&quot;,
+    &quot;full&quot;,
+    &quot;surface:main&quot;,
+    { mode: &quot;surface&quot; }
+  ),
+  thicken(&quot;thicken-1&quot;, selectorNamed(&quot;surface:main&quot;), 4, &quot;body:main&quot;),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-shell">
+      <h3>Shell (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Shell</p>
+      <pre><code>const topFace = selectorFace(
+  [predCreatedBy(&quot;base&quot;), predPlanar(), predNormal(&quot;+Z&quot;)],
+  [rankMaxArea()]
+);
+
+const examplePart = part(&quot;example-shell&quot;, [
+  extrude(&quot;base&quot;, profileRect(60, 40), 20, &quot;body:base&quot;),
+  shell(&quot;shell-1&quot;, selectorNamed(&quot;body:base&quot;), 2, &quot;body:main&quot;, undefined, {
+    direction: &quot;inside&quot;,
+    openFaces: [topFace],
+  }),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-thread-cosmetic">
+      <h3>Cosmetic Thread (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/tolerancing.md -&gt; Cosmetic Thread</p>
+      <pre><code>const target = refSurface(selectorFace([predCreatedBy(&quot;base&quot;)], [rankMaxArea()]));
+
+const examplePart = part(&quot;example-thread-cosmetic&quot;, [
+  extrude(&quot;base&quot;, profileCircle(10), 24, &quot;body:main&quot;),
+], {
+  cosmeticThreads: [
+    cosmeticThread(&quot;thread-1&quot;, target, {
+      designation: &quot;M8x1.25-6H&quot;,
+      internal: true,
+      length: 12,
+    }),
+  ],
+});</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-sketch-line">
+      <h3>Line (Sketch)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/sketches.md -&gt; Line</p>
+      <pre><code>sketchLine(&quot;line-1&quot;, [-40, -20], [40, 20]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-sketch-arc">
+      <h3>Arc (Sketch)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/sketches.md -&gt; Arc</p>
+      <pre><code>sketchArc(&quot;arc-1&quot;, [30, 0], [0, 30], [0, 0], &quot;ccw&quot;);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-sketch-circle">
+      <h3>Circle (Sketch)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/sketches.md -&gt; Circle</p>
+      <pre><code>sketchCircle(&quot;circle-1&quot;, [0, 0], 22);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-sketch-ellipse">
+      <h3>Ellipse (Sketch)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/sketches.md -&gt; Ellipse</p>
+      <pre><code>sketchEllipse(&quot;ellipse-1&quot;, [0, 0], 26, 12, { rotation: exprLiteral(20, &quot;deg&quot;) });</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-sketch-rect-center">
+      <h3>Rectangle (Center) (Sketch)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/sketches.md -&gt; Rectangle (Center)</p>
+      <pre><code>sketchRectCenter(&quot;rect-center&quot;, [0, 0], 60, 32, { rotation: exprLiteral(10, &quot;deg&quot;) });</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-sketch-rect-corner">
+      <h3>Rectangle (Corner) (Sketch)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/sketches.md -&gt; Rectangle (Corner)</p>
+      <pre><code>sketchRectCorner(&quot;rect-corner&quot;, [-25, -12], 60, 30, { rotation: exprLiteral(-8, &quot;deg&quot;) });</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-sketch-slot">
+      <h3>Slot (Sketch)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/sketches.md -&gt; Slot</p>
+      <pre><code>sketchSlot(&quot;slot-1&quot;, [0, 0], 70, 16, { rotation: exprLiteral(12, &quot;deg&quot;) });</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-sketch-polygon">
+      <h3>Polygon (Sketch)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/sketches.md -&gt; Polygon</p>
+      <pre><code>sketchPolygon(&quot;poly-1&quot;, [0, 0], 24, 6);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-sketch-spline">
+      <h3>Spline (Sketch)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/sketches.md -&gt; Spline</p>
+      <pre><code>sketchSpline(&quot;spline-1&quot;, [
+  [-30, -10],
+  [-10, 20],
+  [10, 10],
+  [30, -15],
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-sketch-point">
+      <h3>Point (Sketch)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/sketches.md -&gt; Point</p>
+      <pre><code>sketchPoint(&quot;point-1&quot;, [0, 0]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-sketch-rect-array">
+      <h3>Rectangle Array (Sketch)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/sketches.md -&gt; Rectangle Array</p>
+      <pre><code>sketchArray(
+  { count: [3, 2], spacing: [28, 18], origin: [-28, -9] },
+  ({ index, offset }) =&gt; sketchRectCenter(`rect-${index}`, offset, 18, 10)
+);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+      </section>
+    </main>
+  </body>
+</html>

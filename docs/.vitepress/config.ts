@@ -12,6 +12,8 @@ export default defineConfig({
       { text: "Guide", link: "/guide/getting-started" },
       { text: "Reference", link: "/reference/architecture" },
       { text: "DSL", link: "/reference/dsl/" },
+      { text: "Gallery", link: "/reference/dsl/gallery" },
+      { text: "Examples App", link: "/examples/index.html" },
       { text: "API", link: "/reference/api" },
     ],
     sidebar: {
@@ -26,6 +28,7 @@ export default defineConfig({
             { text: "Overview", link: "/reference/dsl/" },
             { text: "Quickstart", link: "/reference/dsl/quickstart" },
             { text: "Gallery", link: "/reference/dsl/gallery" },
+            { text: "Examples App", link: "/examples/index.html" },
             { text: "Core", link: "/reference/dsl/core" },
             { text: "Assembly", link: "/reference/dsl/assembly" },
             { text: "Tolerancing", link: "/reference/dsl/tolerancing" },

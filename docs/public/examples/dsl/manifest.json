@@ -6,6 +6,11 @@
       "image": "/examples/dsl/extrude.iso.png"
     },
     {
+      "id": "surface",
+      "title": "Surface",
+      "image": "/examples/dsl/surface.iso.png"
+    },
+    {
       "id": "revolve",
       "title": "Revolve",
       "image": "/examples/dsl/revolve.iso.png"
@@ -26,6 +31,11 @@
       "image": "/examples/dsl/pipe.iso.png"
     },
     {
+      "id": "sweep-sketch",
+      "title": "Sweep (Arbitrary Sketch)",
+      "image": "/examples/dsl/sweep-sketch.iso.png"
+    },
+    {
       "id": "hole",
       "title": "Hole",
       "image": "/examples/dsl/hole.iso.png"
@@ -41,9 +51,19 @@
       "image": "/examples/dsl/fillet.iso.png"
     },
     {
+      "id": "variable-fillet",
+      "title": "Variable Fillet",
+      "image": "/examples/dsl/variable-fillet.iso.png"
+    },
+    {
       "id": "chamfer",
       "title": "Chamfer",
       "image": "/examples/dsl/chamfer.iso.png"
+    },
+    {
+      "id": "variable-chamfer",
+      "title": "Variable Chamfer",
+      "image": "/examples/dsl/variable-chamfer.iso.png"
     },
     {
       "id": "boolean",
@@ -51,9 +71,24 @@
       "image": "/examples/dsl/boolean.iso.png"
     },
     {
+      "id": "boolean-cut",
+      "title": "Boolean Subtract",
+      "image": "/examples/dsl/boolean-cut.iso.png"
+    },
+    {
+      "id": "boolean-intersect",
+      "title": "Boolean Intersect",
+      "image": "/examples/dsl/boolean-intersect.iso.png"
+    },
+    {
       "id": "pattern",
       "title": "Pattern (Feature/Body)",
       "image": "/examples/dsl/pattern.iso.png"
+    },
+    {
+      "id": "pattern-circular",
+      "title": "Pattern (Circular)",
+      "image": "/examples/dsl/pattern-circular.iso.png"
     },
     {
       "id": "feature-array",
@@ -86,6 +121,26 @@
       "image": "/examples/dsl/mirror.iso.png"
     },
     {
+      "id": "move-body",
+      "title": "Move Body",
+      "image": "/examples/dsl/move-body.iso.png"
+    },
+    {
+      "id": "delete-face",
+      "title": "Delete Face",
+      "image": "/examples/dsl/delete-face.iso.png"
+    },
+    {
+      "id": "replace-face",
+      "title": "Replace Face",
+      "image": "/examples/dsl/replace-face.iso.png"
+    },
+    {
+      "id": "move-face",
+      "title": "Move Face",
+      "image": "/examples/dsl/move-face.iso.png"
+    },
+    {
       "id": "draft",
       "title": "Draft",
       "image": "/examples/dsl/draft.iso.png"
@@ -94,16 +149,6 @@
       "id": "thicken",
       "title": "Thicken",
       "image": "/examples/dsl/thicken.iso.png"
-    },
-    {
-      "id": "shell-before",
-      "title": "Shell (Before)",
-      "image": "/examples/dsl/shell-before.iso.png"
-    },
-    {
-      "id": "shell-after",
-      "title": "Shell (After)",
-      "image": "/examples/dsl/shell-after.iso.png"
     },
     {
       "id": "shell",

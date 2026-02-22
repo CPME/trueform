@@ -75,8 +75,6 @@ Examples:
 - [Sweep](./examples/features#sweep)
 - [Sweep (Arbitrary Sketch)](./examples/features#sweep-arbitrary-sketch)
 - [Pipe](./examples/features#pipe)
-- [Pipe Sweep](./examples/features#pipe-sweep)
-- [Thread (Modeled)](./examples/features#thread-modeled)
 - [Shell](./examples/features#shell)
 - [Mirror](./examples/features#mirror)
 - [Move Body](./examples/features#move-body)

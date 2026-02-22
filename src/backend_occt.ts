@@ -1043,12 +1043,18 @@ export class OcctBackend implements Backend {
     try {
       const face = this.makeRingFace(plane.origin, plane.normal, outerRadius, innerRadius);
       solid = this.makePipeSolid(spine, face, plane, { makeSolid: true });
-      solid = this.normalizeSolid(solid);
     } catch {
       throw new Error(
         "OCCT backend: pipe sweep failed to create solid; increase bend radius or reduce diameter"
       );
     }
+    const solidCount = this.countSolids(solid);
+    if (solidCount !== 1) {
+      throw new Error(
+        `OCCT backend: pipe sweep must produce exactly one solid; got ${solidCount}`
+      );
+    }
+    solid = this.normalizeSolid(solid);
 
     const outputs = new Map([
       [
@@ -3809,6 +3815,21 @@ export class OcctBackend implements Backend {
     return best;
   }
 
+  private countSolids(shape: any): number {
+    const occt = this.occt as any;
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_SOLID,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    let count = 0;
+    for (; explorer.More(); explorer.Next()) {
+      count += 1;
+    }
+    return count;
+  }
+
   private reverseShape(shape: any): any {
     const reversedCandidates = ["Reversed", "Reversed_1", "Reversed_2"];
     for (const name of reversedCandidates) {
@@ -3836,14 +3857,7 @@ export class OcctBackend implements Backend {
   }
 
   private shapeHasSolid(shape: any): boolean {
-    const occt = this.occt as any;
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_SOLID,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    return explorer.More();
+    return this.countSolids(shape) > 0;
   }
 
   private makeSolidFromShells(shape: any): any | null {
