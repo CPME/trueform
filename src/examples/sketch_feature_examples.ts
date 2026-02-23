@@ -6,6 +6,7 @@ import {
   sketchCircle,
   sketchEllipse,
   sketchLine,
+  sketchPoint,
   sketchPolygon,
   sketchRectCenter,
   sketchRectCorner,
@@ -122,6 +123,15 @@ export const sketchFeatureExamples: SketchFeatureExample[] = [
             [30, -15],
           ]),
         ],
+      }),
+    ]),
+  },
+  {
+    id: "point",
+    title: "Point",
+    part: part("sketch-point", [
+      sketch2d("sketch-point", [], {
+        entities: [sketchPoint("point-1", [0, 0])],
       }),
     ]),
   },

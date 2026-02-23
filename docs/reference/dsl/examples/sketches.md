@@ -79,3 +79,22 @@ sketchSpline("spline-1", [
   [30, -15],
 ]);
 ```
+
+## Point
+
+![Point sketch](/examples/sketch/point.svg)
+
+```ts
+sketchPoint("point-1", [0, 0]);
+```
+
+## Rectangle Array
+
+![Rectangle array sketch](/examples/sketch/rect-array.svg)
+
+```ts
+sketchArray(
+  { count: [3, 2], spacing: [28, 18], origin: [-28, -9] },
+  ({ index, offset }) => sketchRectCenter(`rect-${index}`, offset, 18, 10)
+);
+```

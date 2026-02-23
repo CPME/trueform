@@ -2,6 +2,8 @@
 
 ## Cosmetic Thread
 
+![Cosmetic thread example](/examples/dsl/thread-cosmetic.iso.png)
+
 ```ts
 const target = refSurface(selectorFace([predCreatedBy("base")], [rankMaxArea()]));
 

@@ -92,6 +92,8 @@ Viewer setup, mesh schema, and options: `tools/viewer/README.md`.
 - Overview and positioning: `specs/summary.md`
 - Technical spec (IR, pipeline, backend boundary): `specs/spec.md`
 - Functional tolerancing intent: `specs/functional-tolerancing-intent.md`
+- Geometric parity matrix + benchmark corpus: `specs/geometric-parity-matrix.md` and `specs/geometric-benchmark-corpus.md`
+- Geometric parity implementation tracker: `specs/geometric-parity-plan.md`
 - Viewer helper + mesh schema: `tools/viewer/README.md`
 - Native OCCT server (experimental): `native/occt_server/README.md`
 - Docs map (source-of-truth guide): `specs/docs-map.md`

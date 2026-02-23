@@ -46,6 +46,11 @@
       "image": "/examples/sketch/spline.svg"
     },
     {
+      "id": "point",
+      "title": "Point",
+      "image": "/examples/sketch/point.svg"
+    },
+    {
       "id": "rect-array",
       "title": "Rectangle Array",
       "image": "/examples/sketch/rect-array.svg"

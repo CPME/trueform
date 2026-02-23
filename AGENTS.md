@@ -79,7 +79,7 @@ Use this when adding a new feature end-to-end to avoid digging:
 
 4. Examples + docs
    - Add/extend DSL example: `src/examples/dsl_feature_examples.ts`.
-   - Update docs: `docs/reference/dsl.md`.
+   - Update docs: relevant page under `docs/reference/dsl/` (typically `features.md` and/or `geometry.md`).
    - Render PNGs + manifest: `npm run docs:examples` (writes to `docs/public/examples/dsl/`).
 
 5. Tests (per-feature)

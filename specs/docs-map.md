@@ -16,6 +16,9 @@ Purpose: define the source of truth for each topic to prevent drift.
 - Feature maturity/staging registry: `specs/feature-staging.md`
 - Runtime execution milestone plan: `specs/webapp-runtime-two-milestones.md`
 - Roadmap ideas (non-MVP): `specs/geometric-abstractions.md`
+- Geometric parity target matrix: `specs/geometric-parity-matrix.md`
+- Geometric benchmark corpus + scoring workflow: `specs/geometric-benchmark-corpus.md`
+- Geometric parity implementation tracker: `specs/geometric-parity-plan.md`
 
 ## Maintenance Rules
 
