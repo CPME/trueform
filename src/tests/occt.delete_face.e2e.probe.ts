@@ -121,6 +121,56 @@ const tests = [
       assert.ok(countFaces(occt, replacedShape) >= 1, "expected replace-face result faces");
     },
   },
+  {
+    name: "occt parity probe: delete/replace face outputs are deterministic across repeated runs",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const part = dsl.part("replace-face-determinism-probe", [
+        dsl.sketch2d("sketch-base", [
+          { name: "profile:base", profile: dsl.profileRect(20, 12) },
+        ]),
+        dsl.extrude("base-extrude", dsl.profileRef("profile:base"), 8, "body:main", [
+          "sketch-base",
+        ]),
+        dsl.plane("replace-tool", 20, 12, "surface:tool", {
+          origin: [0, 0, 8],
+          deps: ["base-extrude"],
+        }),
+        dsl.replaceFace(
+          "replace-top",
+          dsl.selectorNamed("body:main"),
+          dsl.selectorFace([dsl.predCreatedBy("base-extrude"), dsl.predPlanar()], [
+            dsl.rankMaxZ(),
+          ]),
+          dsl.selectorNamed("surface:tool"),
+          "body:replaced",
+          ["base-extrude", "replace-tool"],
+          { heal: true }
+        ),
+      ]);
+
+      const first = buildPart(part, backend);
+      const second = buildPart(part, backend);
+      const firstOut = first.final.outputs.get("body:replaced");
+      const secondOut = second.final.outputs.get("body:replaced");
+      assert.ok(firstOut, "missing first deterministic replace-face output");
+      assert.ok(secondOut, "missing second deterministic replace-face output");
+      const firstShape = firstOut.meta["shape"] as any;
+      const secondShape = secondOut.meta["shape"] as any;
+      assertValidShape(occt, firstShape, "first deterministic replace-face result");
+      assertValidShape(occt, secondShape, "second deterministic replace-face result");
+      assert.equal(
+        countSolids(occt, firstShape),
+        countSolids(occt, secondShape),
+        "expected deterministic solid-count"
+      );
+      assert.equal(
+        countFaces(occt, firstShape),
+        countFaces(occt, secondShape),
+        "expected deterministic face-count"
+      );
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

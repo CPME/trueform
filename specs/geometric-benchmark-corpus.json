@@ -169,9 +169,9 @@
       "id": "delete-replace-face",
       "category": "multi-body-direct-edits",
       "feature": "Delete face / replace face",
-      "parity": "staging",
+      "parity": "ready",
       "probe": { "kind": "dist-test", "path": "dist/tests/occt.delete_face.e2e.probe.js" },
-      "notes": "Delete face and replace face are available in staging (`feature.delete.face`, `feature.replace.face`)."
+      "notes": "Delete/replace face workflows now include healing + deterministic probes and explicit failure-mode tests; promoted to ready."
     },
     {
       "id": "move-copy-scale-body",

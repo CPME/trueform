@@ -183,7 +183,7 @@ const tests = [
     },
   },
   {
-    name: "validation: staged delete face can be blocked",
+    name: "validation: delete face is stable when staged policy is error",
     fn: async () => {
       const part = dsl.part("staged-delete-face", [
         dsl.extrude("base", dsl.profileRect(10, 6), 4, "body:main"),
@@ -195,14 +195,11 @@ const tests = [
           ["base"]
         ),
       ]);
-      assert.throws(
-        () => normalizePart(part, undefined, { stagedFeatures: "error" }),
-        /staging feature/i
-      );
+      assert.doesNotThrow(() => normalizePart(part, undefined, { stagedFeatures: "error" }));
     },
   },
   {
-    name: "validation: staged replace face can be blocked",
+    name: "validation: replace face is stable when staged policy is error",
     fn: async () => {
       const part = dsl.part("staged-replace-face", [
         dsl.extrude("base", dsl.profileRect(10, 6), 4, "body:main"),
@@ -215,10 +212,7 @@ const tests = [
           ["base"]
         ),
       ]);
-      assert.throws(
-        () => normalizePart(part, undefined, { stagedFeatures: "error" }),
-        /staging feature/i
-      );
+      assert.doesNotThrow(() => normalizePart(part, undefined, { stagedFeatures: "error" }));
     },
   },
   {
