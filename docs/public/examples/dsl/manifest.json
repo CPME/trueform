@@ -151,6 +151,11 @@
       "image": "/examples/dsl/thicken.iso.png"
     },
     {
+      "id": "unwrap",
+      "title": "Unwrap (Planar)",
+      "image": "/examples/dsl/unwrap.iso.png"
+    },
+    {
       "id": "shell",
       "title": "Shell",
       "image": "/examples/dsl/shell.iso.png"

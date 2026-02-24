@@ -416,6 +416,29 @@ Notes:
 - Use `{ direction: "reverse" }` to thicken opposite the face normal.
 - For thin-walled solids built from a closed solid, use `shell` instead.
 
+## Unwrap (Planar)
+
+![Unwrap example](/examples/dsl/unwrap.iso.png)
+
+```ts
+const examplePart = part("example-unwrap", [
+  extrude("base", profileRect(80, 50), 12, "body:main"),
+  unwrap(
+    "unwrap-1",
+    selectorFace(
+      [predCreatedBy("base"), predPlanar(), predNormal("+Z")],
+      [rankMaxArea()]
+    ),
+    "surface:flat"
+  ),
+]);
+```
+
+Notes:
+- `unwrap` currently supports planar faces only.
+- The output is flattened onto the world XY plane (`z=0`) as a face output.
+- For non-planar surfaces (for example cylinders), unwrap currently returns a clear error.
+
 ## Hole
 
 ![Hole example](/examples/dsl/hole.iso.png)

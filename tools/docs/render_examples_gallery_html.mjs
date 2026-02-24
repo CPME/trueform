@@ -48,6 +48,7 @@ const dslCodeTargets = {
   "move-face": { doc: "features", heading: "Move Face" },
   draft: { doc: "features", heading: "Draft" },
   thicken: { doc: "features", heading: "Thicken" },
+  unwrap: { doc: "features", heading: "Unwrap (Planar)" },
   shell: { doc: "features", heading: "Shell" },
   "thread-cosmetic": { doc: "tolerancing", heading: "Cosmetic Thread" },
 };

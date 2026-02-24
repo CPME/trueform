@@ -321,6 +321,14 @@
       </div>
     </a>
 
+    <a class="card" href="#code-dsl-unwrap">
+      <img src="./dsl/unwrap.iso.png" alt="Unwrap (Planar)" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Unwrap (Planar)</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
     <a class="card" href="#code-dsl-shell">
       <img src="./dsl/shell.iso.png" alt="Shell" loading="lazy" />
       <div class="card-body">
@@ -1186,6 +1194,23 @@ const examplePart = part(&quot;example-thicken&quot;, [
     { mode: &quot;surface&quot; }
   ),
   thicken(&quot;thicken-1&quot;, selectorNamed(&quot;surface:main&quot;), 4, &quot;body:main&quot;),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-unwrap">
+      <h3>Unwrap (Planar) (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Unwrap (Planar)</p>
+      <pre><code>const examplePart = part(&quot;example-unwrap&quot;, [
+  extrude(&quot;base&quot;, profileRect(80, 50), 12, &quot;body:main&quot;),
+  unwrap(
+    &quot;unwrap-1&quot;,
+    selectorFace(
+      [predCreatedBy(&quot;base&quot;), predPlanar(), predNormal(&quot;+Z&quot;)],
+      [rankMaxArea()]
+    ),
+    &quot;surface:flat&quot;
+  ),
 ]);</code></pre>
       <a class="back-link" href="#top">Back to gallery</a>
     </article>
