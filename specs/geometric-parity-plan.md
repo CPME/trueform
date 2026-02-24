@@ -51,7 +51,7 @@ Interpretation:
 | M5: Direct-edit feature wave (`move/delete/replace`) | `completed` | Core direct-edit features landed in staging with parity probes. |
 | M6: Variable edge controls | `completed` | `feature.fillet.variable` and `feature.chamfer.variable` landed in staging. |
 | M7: Advanced hole parity (`hole-wizard-standards`) | `completed` | Hole-wizard end-condition execution, parity probe, and failure-mode coverage landed; corpus moved to staging. |
-| M8: Stage graduation wave 1 (direct-edit + variable edge + draft) | `planned` | Promote lowest-risk/high-confidence staged features to ready. |
+| M8: Stage graduation wave 1 (direct-edit + variable edge + draft) | `in_progress` | Promote lowest-risk/high-confidence staged features to ready. |
 | M9: Stage graduation wave 2 (thread + surface-mode reliability) | `planned` | Promote remaining staged entries with robust probes. |
 | M10: Advanced profile ops (`rib/web`) | `planned` | Close next declared missing workflow in corpus. |
 | M11: Advanced surfacing slice (`boundary/fill/trim/extend/knit`) | `planned` | Land minimum production-credible subset and probe coverage. |
@@ -77,8 +77,8 @@ Rationale:
 - [x] M7-4: Add failure-mode tests (invalid standard/profile/end-condition combinations).
 - [x] M7-5: Move corpus `hole-wizard-standards` from `missing` to `staging` or `ready`.
 
-- [ ] M8-1: Define promotion checklist template (conformance, failure mode, determinism).
-- [ ] M8-2: Promote `feature.move.body` when reliability probes clear gate.
+- [x] M8-1: Define promotion checklist template (conformance, failure mode, determinism).
+- [x] M8-2: Promote `feature.move.body` when reliability probes clear gate.
 - [ ] M8-3: Promote `feature.move.face` when reliability probes clear gate.
 - [ ] M8-4: Promote `feature.delete.face` + `feature.replace.face` when healing probes clear gate.
 - [ ] M8-5: Promote `feature.fillet.variable` + `feature.chamfer.variable` when corner cases clear gate.
@@ -94,6 +94,16 @@ Promote `staging` -> `ready` only when all are true:
 3. No regression in existing corpus probe results.
 4. Feature no longer requires exceptional consumer handling.
 5. Staging notes removed or reduced to non-blocking edge-case caveats.
+
+### Promotion Checklist Template
+
+Use this checklist in parity-promotion PRs:
+
+- [ ] `Conformance`: targeted parity probe passes for core workflow.
+- [ ] `Failure mode`: negative-path test(s) cover known invalid/unsupported combinations.
+- [ ] `Determinism`: repeated-run test confirms stable outputs/selector metadata.
+- [ ] `Regression`: existing related probe suite remains green.
+- [ ] `Registry/docs`: `src/feature_staging.ts`, `specs/feature-staging.md`, and corpus/matrix status stay aligned.
 
 ## Missing Feature Backlog (Post M8)
 
@@ -130,3 +140,4 @@ npm run parity:geometric:check
 | 2026-02-24 | Rebased parity tracker to explicit M7-M12 near-parity execution plan with quantified gap math. |
 | 2026-02-24 | Completed M7-1: hole-wizard IR/schema/validation surface + DSL helper (`holeWizard`) and focused tests. |
 | 2026-02-24 | Completed M7-2 through M7-5: OCCT hole-wizard end-condition execution, parity probe, failure-mode tests, and corpus status promotion to staging. |
+| 2026-02-24 | Completed M8-1/M8-2: added explicit promotion checklist template and promoted `feature.move.body` to ready with deterministic parity probe coverage. |

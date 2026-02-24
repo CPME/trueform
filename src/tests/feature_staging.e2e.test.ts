@@ -10,14 +10,13 @@ import { runTests } from "./occt_test_utils.js";
 
 const tests = [
   {
-    name: "feature staging: registry includes draft/direct-edit/variable-edge/thread/surface entries",
+    name: "feature staging: registry includes draft/direct-edit-variable-edge/thread/surface entries",
     fn: async () => {
       const keys = listStagedFeatureKeys();
       assert.ok(keys.includes("feature.draft"));
       assert.ok(keys.includes("feature.delete.face"));
       assert.ok(keys.includes("feature.replace.face"));
       assert.ok(keys.includes("feature.move.face"));
-      assert.ok(keys.includes("feature.move.body"));
       assert.ok(keys.includes("feature.fillet.variable"));
       assert.ok(keys.includes("feature.chamfer.variable"));
       assert.ok(keys.includes("feature.thread"));
@@ -26,7 +25,6 @@ const tests = [
       assert.equal(TF_STAGED_FEATURES["feature.delete.face"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.replace.face"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.move.face"]?.stage, "staging");
-      assert.equal(TF_STAGED_FEATURES["feature.move.body"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.fillet.variable"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.chamfer.variable"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.thread"]?.stage, "staging");
@@ -138,7 +136,7 @@ const tests = [
     },
   },
   {
-    name: "feature staging: move body resolves to staging entry",
+    name: "feature staging: move body resolves to stable entry",
     fn: async () => {
       const moved = dsl.moveBody(
         "move-1",
@@ -149,7 +147,7 @@ const tests = [
       );
       const stage = getFeatureStage(moved);
       assert.equal(stage.key, "feature.move.body");
-      assert.equal(stage.stage, "staging");
+      assert.equal(stage.stage, "stable");
     },
   },
   {

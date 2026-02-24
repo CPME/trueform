@@ -1,6 +1,6 @@
 {
   "$schema": "trueform.geometric-benchmark.v1",
-  "updated": "2026-02-22",
+  "updated": "2026-02-24",
   "scoring": {
     "stagingWeight": 0.5,
     "compositeWeights": {
@@ -177,9 +177,9 @@
       "id": "move-copy-scale-body",
       "category": "multi-body-direct-edits",
       "feature": "Move/copy/scale body",
-      "parity": "staging",
+      "parity": "ready",
       "probe": { "kind": "dist-test", "path": "dist/tests/occt.move_body.e2e.probe.js" },
-      "notes": "feature.move.body now supports translation/rotation/scale in staging."
+      "notes": "feature.move.body supports translation/rotation/scale with parity probe determinism checks and is now promoted to ready."
     },
     {
       "id": "move-face",

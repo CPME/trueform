@@ -129,6 +129,58 @@ const tests = [
       );
     },
   },
+  {
+    name: "occt parity probe: move body produces deterministic output across repeated runs",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const part = dsl.part("move-body-determinism-probe", [
+        dsl.sketch2d("sketch-base", [
+          { name: "profile:base", profile: dsl.profileRect(12, 7) },
+        ]),
+        dsl.extrude("base-extrude", dsl.profileRef("profile:base"), 5, "body:main", [
+          "sketch-base",
+        ]),
+        dsl.moveBody(
+          "move-body",
+          dsl.selectorNamed("body:main"),
+          "body:moved",
+          ["base-extrude"],
+          {
+            translation: [4, -2, 3],
+            rotationAxis: "+Z",
+            rotationAngle: Math.PI / 5,
+            scale: 1.1,
+            origin: [0, 0, 0],
+          }
+        ),
+      ]);
+
+      const first = buildPart(part, backend);
+      const second = buildPart(part, backend);
+      const firstOutput = first.final.outputs.get("body:moved");
+      const secondOutput = second.final.outputs.get("body:moved");
+      assert.ok(firstOutput, "missing first moved body");
+      assert.ok(secondOutput, "missing second moved body");
+
+      const firstShape = firstOutput.meta["shape"] as any;
+      const secondShape = secondOutput.meta["shape"] as any;
+      assertValidShape(occt, firstShape, "first deterministic shape");
+      assertValidShape(occt, secondShape, "second deterministic shape");
+
+      const firstVolume = solidVolume(occt, firstShape);
+      const secondVolume = solidVolume(occt, secondShape);
+      assert.ok(
+        approxEqual(firstVolume, secondVolume, 1e-6),
+        `expected deterministic volume (${firstVolume} vs ${secondVolume})`
+      );
+
+      const firstCenter = getSolidCenter(first, "body:moved");
+      const secondCenter = getSolidCenter(second, "body:moved");
+      assert.ok(approxEqual(firstCenter[0], secondCenter[0], 1e-6));
+      assert.ok(approxEqual(firstCenter[1], secondCenter[1], 1e-6));
+      assert.ok(approxEqual(firstCenter[2], secondCenter[2], 1e-6));
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

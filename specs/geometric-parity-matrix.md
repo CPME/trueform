@@ -28,7 +28,7 @@ Status keys:
 | Booleans | Union/subtract/intersect | `ready` | Available in DSL as canonical boolean op. |
 | Patterns + transforms | Linear/circular patterns, mirror | `ready` | Curve/fill/table-driven patterns missing. |
 | Multi-body direct edits | Split body, split face | `ready` | Selector/failure-mode and stability probes are now in place. |
-| Multi-body direct edits | Delete/replace/move face, move/copy body | `staging` | `feature.move.body`, `feature.move.face`, `feature.delete.face`, and `feature.replace.face` are now available in staging. |
+| Multi-body direct edits | Delete/replace/move face, move/copy body | `staging` | `feature.move.body` is now ready; `feature.move.face`, `feature.delete.face`, and `feature.replace.face` remain in staging. |
 | Advanced surfacing | Boundary/fill/trim/untrim/extend/knit/heal | `missing` | High-value surfacing backlog. |
 | Advanced profile ops | Rib/web, wrap/emboss/deform/flex | `missing` | Common in production CAD workflows. |
 | Advanced hole/edge options | Hole wizard standards, variable fillets/chamfers | `staging` | Variable fillet/chamfer and hole-wizard end-condition coverage are in staging; threaded hole-wizard profiles still require dedicated `feature.thread`. |

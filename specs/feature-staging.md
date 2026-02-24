@@ -1,6 +1,6 @@
 # Feature Staging Registry
 
-Updated: 2026-02-22
+Updated: 2026-02-24
 
 Purpose: keep in-development modeling features explicit and machine-readable so
 clients and agents can avoid treating them as production-stable.
@@ -18,9 +18,6 @@ clients and agents can avoid treating them as production-stable.
 - `feature.thread`
   - Status: `staging`
   - Note: modelled thread geometry is under active tuning.
-- `feature.move.body`
-  - Status: `staging`
-  - Note: move/copy/scale body supports core transforms while edge-case reliability hardening continues.
 - `feature.fillet.variable`
   - Status: `staging`
   - Note: variable fillet supports core per-edge radii workflows while broader corner behavior hardening continues.

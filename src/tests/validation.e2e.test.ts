@@ -167,7 +167,7 @@ const tests = [
     },
   },
   {
-    name: "validation: staged move body can be blocked",
+    name: "validation: move body is stable when staged policy is error",
     fn: async () => {
       const part = dsl.part("staged-move", [
         dsl.extrude("base", dsl.profileRect(10, 6), 4, "body:main"),
@@ -179,10 +179,7 @@ const tests = [
           { translation: [5, 0, 0] }
         ),
       ]);
-      assert.throws(
-        () => normalizePart(part, undefined, { stagedFeatures: "error" }),
-        /staging feature/i
-      );
+      assert.doesNotThrow(() => normalizePart(part, undefined, { stagedFeatures: "error" }));
     },
   },
   {
