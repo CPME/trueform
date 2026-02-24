@@ -156,6 +156,11 @@
       "image": "/examples/dsl/unwrap.iso.png"
     },
     {
+      "id": "unwrap-cylinder",
+      "title": "Unwrap (Cylindrical)",
+      "image": "/examples/dsl/unwrap-cylinder.iso.png"
+    },
+    {
       "id": "shell",
       "title": "Shell",
       "image": "/examples/dsl/shell.iso.png"

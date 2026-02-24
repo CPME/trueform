@@ -329,6 +329,14 @@
       </div>
     </a>
 
+    <a class="card" href="#code-dsl-unwrap-cylinder">
+      <img src="./dsl/unwrap-cylinder.iso.png" alt="Unwrap (Cylindrical)" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Unwrap (Cylindrical)</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
     <a class="card" href="#code-dsl-shell">
       <img src="./dsl/shell.iso.png" alt="Shell" loading="lazy" />
       <div class="card-body">
@@ -1211,6 +1219,32 @@ const examplePart = part(&quot;example-thicken&quot;, [
     ),
     &quot;surface:flat&quot;
   ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-unwrap-cylinder">
+      <h3>Unwrap (Cylindrical) (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Unwrap (Cylindrical)</p>
+      <pre><code>const line = sketchLine(&quot;line-1&quot;, [10, 0], [10, 16]);
+const sketch = sketch2d(
+  &quot;sketch-cyl&quot;,
+  [{ name: &quot;profile:open&quot;, profile: profileSketchLoop([&quot;line-1&quot;], { open: true }) }],
+  { plane: planeDatum(&quot;sketch-plane&quot;), entities: [line] }
+);
+
+const examplePart = part(&quot;example-unwrap-cylinder&quot;, [
+  datumPlane(&quot;sketch-plane&quot;, &quot;+Y&quot;),
+  sketch,
+  revolve(
+    &quot;surface-revolve&quot;,
+    profileRef(&quot;profile:open&quot;),
+    &quot;+Z&quot;,
+    &quot;full&quot;,
+    &quot;surface:cyl&quot;,
+    { mode: &quot;surface&quot; }
+  ),
+  unwrap(&quot;unwrap-1&quot;, selectorNamed(&quot;surface:cyl&quot;), &quot;surface:flat&quot;),
 ]);</code></pre>
       <a class="back-link" href="#top">Back to gallery</a>
     </article>

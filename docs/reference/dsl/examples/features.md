@@ -435,9 +435,40 @@ const examplePart = part("example-unwrap", [
 ```
 
 Notes:
-- `unwrap` currently supports planar faces only.
+- `unwrap` currently supports planar and cylindrical faces.
 - The output is flattened onto the world XY plane (`z=0`) as a face output.
-- For non-planar surfaces (for example cylinders), unwrap currently returns a clear error.
+- Unsupported surface classes return a clear error.
+
+## Unwrap (Cylindrical)
+
+![Unwrap cylindrical example](/examples/dsl/unwrap-cylinder.iso.png)
+
+```ts
+const line = sketchLine("line-1", [10, 0], [10, 16]);
+const sketch = sketch2d(
+  "sketch-cyl",
+  [{ name: "profile:open", profile: profileSketchLoop(["line-1"], { open: true }) }],
+  { plane: planeDatum("sketch-plane"), entities: [line] }
+);
+
+const examplePart = part("example-unwrap-cylinder", [
+  datumPlane("sketch-plane", "+Y"),
+  sketch,
+  revolve(
+    "surface-revolve",
+    profileRef("profile:open"),
+    "+Z",
+    "full",
+    "surface:cyl",
+    { mode: "surface" }
+  ),
+  unwrap("unwrap-1", selectorNamed("surface:cyl"), "surface:flat"),
+]);
+```
+
+Notes:
+- Cylindrical unwrap uses cylinder UV extents to emit a rectangular flat pattern.
+- Flat width equals `radius * angleSpan`; flat height equals axial span.
 
 ## Hole
 

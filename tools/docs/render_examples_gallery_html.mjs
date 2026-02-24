@@ -49,6 +49,7 @@ const dslCodeTargets = {
   draft: { doc: "features", heading: "Draft" },
   thicken: { doc: "features", heading: "Thicken" },
   unwrap: { doc: "features", heading: "Unwrap (Planar)" },
+  "unwrap-cylinder": { doc: "features", heading: "Unwrap (Cylindrical)" },
   shell: { doc: "features", heading: "Shell" },
   "thread-cosmetic": { doc: "tolerancing", heading: "Cosmetic Thread" },
 };
