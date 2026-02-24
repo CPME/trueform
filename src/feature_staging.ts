@@ -21,15 +21,6 @@ export const TF_STAGED_FEATURES: Readonly<Record<string, FeatureStageEntry>> = O
     stage: "staging" as const,
     notes: "Draft is available but still maturing across broader face-selection cases.",
   },
-  "feature.fillet.variable": {
-    stage: "staging" as const,
-    notes: "Variable fillet supports core per-edge radii workflows while broader corner behavior matures.",
-  },
-  "feature.chamfer.variable": {
-    stage: "staging" as const,
-    notes:
-      "Variable chamfer supports core per-edge distances workflows while broader corner behavior matures.",
-  },
   "feature.thread": {
     stage: "staging" as const,
     notes: "Modelled thread output is still under active geometry tuning.",

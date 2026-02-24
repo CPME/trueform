@@ -31,7 +31,7 @@ Status keys:
 | Multi-body direct edits | Delete/replace/move face, move/copy body | `ready` | Move/copy body and delete/replace/move face workflows are now promoted to ready with conformance/determinism/failure-mode probes. |
 | Advanced surfacing | Boundary/fill/trim/untrim/extend/knit/heal | `missing` | High-value surfacing backlog. |
 | Advanced profile ops | Rib/web, wrap/emboss/deform/flex | `missing` | Common in production CAD workflows. |
-| Advanced hole/edge options | Hole wizard standards, variable fillets/chamfers | `staging` | Variable fillet/chamfer and hole-wizard end-condition coverage are in staging; threaded hole-wizard profiles still require dedicated `feature.thread`. |
+| Advanced hole/edge options | Hole wizard standards, variable fillets/chamfers | `staging` | Variable fillet/chamfer controls are ready; hole-wizard end-condition coverage remains staging and threaded wizard profiles still require dedicated `feature.thread`. |
 
 ## Near-Parity Exit Gates
 

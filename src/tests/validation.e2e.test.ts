@@ -233,7 +233,7 @@ const tests = [
     },
   },
   {
-    name: "validation: staged variable fillet can be blocked",
+    name: "validation: variable fillet is stable when staged policy is error",
     fn: async () => {
       const part = dsl.part("staged-variable-fillet", [
         dsl.extrude("base", dsl.profileCircle(8), 6, "body:main"),
@@ -245,14 +245,11 @@ const tests = [
           ["base"]
         ),
       ]);
-      assert.throws(
-        () => normalizePart(part, undefined, { stagedFeatures: "error" }),
-        /staging feature/i
-      );
+      assert.doesNotThrow(() => normalizePart(part, undefined, { stagedFeatures: "error" }));
     },
   },
   {
-    name: "validation: staged variable chamfer can be blocked",
+    name: "validation: variable chamfer is stable when staged policy is error",
     fn: async () => {
       const part = dsl.part("staged-variable-chamfer", [
         dsl.extrude("base", dsl.profileCircle(8), 6, "body:main"),
@@ -264,10 +261,7 @@ const tests = [
           ["base"]
         ),
       ]);
-      assert.throws(
-        () => normalizePart(part, undefined, { stagedFeatures: "error" }),
-        /staging feature/i
-      );
+      assert.doesNotThrow(() => normalizePart(part, undefined, { stagedFeatures: "error" }));
     },
   },
   {

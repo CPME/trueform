@@ -10,17 +10,13 @@ import { runTests } from "./occt_test_utils.js";
 
 const tests = [
   {
-    name: "feature staging: registry includes draft/direct-edit-variable-edge/thread/surface entries",
+    name: "feature staging: registry includes draft/thread/surface staging entries",
     fn: async () => {
       const keys = listStagedFeatureKeys();
       assert.ok(keys.includes("feature.draft"));
-      assert.ok(keys.includes("feature.fillet.variable"));
-      assert.ok(keys.includes("feature.chamfer.variable"));
       assert.ok(keys.includes("feature.thread"));
       assert.ok(keys.includes("feature.surface"));
       assert.equal(TF_STAGED_FEATURES["feature.draft"]?.stage, "staging");
-      assert.equal(TF_STAGED_FEATURES["feature.fillet.variable"]?.stage, "staging");
-      assert.equal(TF_STAGED_FEATURES["feature.chamfer.variable"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.thread"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.surface"]?.stage, "staging");
     },
@@ -104,7 +100,7 @@ const tests = [
     },
   },
   {
-    name: "feature staging: variable fillet resolves to staging entry",
+    name: "feature staging: variable fillet resolves to stable entry",
     fn: async () => {
       const feature = dsl.variableFillet(
         "variable-fillet-1",
@@ -113,11 +109,11 @@ const tests = [
       );
       const stage = getFeatureStage(feature);
       assert.equal(stage.key, "feature.fillet.variable");
-      assert.equal(stage.stage, "staging");
+      assert.equal(stage.stage, "stable");
     },
   },
   {
-    name: "feature staging: variable chamfer resolves to staging entry",
+    name: "feature staging: variable chamfer resolves to stable entry",
     fn: async () => {
       const feature = dsl.variableChamfer(
         "variable-chamfer-1",
@@ -126,7 +122,7 @@ const tests = [
       );
       const stage = getFeatureStage(feature);
       assert.equal(stage.key, "feature.chamfer.variable");
-      assert.equal(stage.stage, "staging");
+      assert.equal(stage.stage, "stable");
     },
   },
   {

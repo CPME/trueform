@@ -81,7 +81,7 @@ Rationale:
 - [x] M8-2: Promote `feature.move.body` when reliability probes clear gate.
 - [x] M8-3: Promote `feature.move.face` when reliability probes clear gate.
 - [x] M8-4: Promote `feature.delete.face` + `feature.replace.face` when healing probes clear gate.
-- [ ] M8-5: Promote `feature.fillet.variable` + `feature.chamfer.variable` when corner cases clear gate.
+- [x] M8-5: Promote `feature.fillet.variable` + `feature.chamfer.variable` when corner cases clear gate.
 - [ ] M8-6: Promote `feature.draft` when selector-extreme negative paths are covered.
 - [ ] M8-7: Update `src/feature_staging.ts`, `specs/feature-staging.md`, and corpus parity labels after each promotion.
 
@@ -143,3 +143,4 @@ npm run parity:geometric:check
 | 2026-02-24 | Completed M8-1/M8-2: added explicit promotion checklist template and promoted `feature.move.body` to ready with deterministic parity probe coverage. |
 | 2026-02-24 | Completed M8-3: promoted `feature.move.face` to ready after adding repeated-run determinism probe coverage. |
 | 2026-02-24 | Completed M8-4: promoted `feature.delete.face` and `feature.replace.face` to ready with deterministic and failure-mode test coverage. |
+| 2026-02-24 | Completed M8-5: promoted `feature.fillet.variable` and `feature.chamfer.variable` to ready with deterministic and failure-mode test coverage. |

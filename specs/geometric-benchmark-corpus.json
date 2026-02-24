@@ -205,9 +205,9 @@
       "id": "variable-fillet-chamfer",
       "category": "advanced-hole-and-edge-options",
       "feature": "Variable fillet/chamfer controls",
-      "parity": "staging",
+      "parity": "ready",
       "probe": { "kind": "dist-test", "path": "dist/tests/occt.variable_edge.e2e.probe.js" },
-      "notes": "feature.fillet.variable and feature.chamfer.variable support core per-edge entry workflows in staging."
+      "notes": "Variable fillet/chamfer now include deterministic parity probes and explicit failure-mode tests; promoted to ready."
     },
     {
       "id": "hole-wizard-standards",
