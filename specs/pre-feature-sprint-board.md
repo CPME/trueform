@@ -70,8 +70,8 @@ Feature development may resume only when all are true:
   - Part/build cache keys are wired through runtime build paths with reuse assertions.
 - `PRE-005` completed.
   - Capability/OpenAPI/runtime e2e contracts cover optional endpoint surfaces.
-- `PRE-006` pending.
-  - Packaging split Phase 1 PR2 extraction work remains open.
+- `PRE-006` completed.
+  - Packaging Phase 1 PR2 tracking is closed with package-level typecheck + core parity tests.
 - `PRE-007` completed.
   - Runtime `/v1/metrics` now exposes cache, queue, job-latency, and memory snapshots with e2e checks.
 - `PRE-101` completed.
