@@ -1043,18 +1043,21 @@ export const dslFeatureExamples: DslFeatureExample[] = [
   {
     id: "unwrap",
     title: "Unwrap (Planar)",
-    part: part("example-unwrap", [
-      extrude("base", profileRect(80, 50), 12, "body:main"),
-      unwrap(
-        "unwrap-1",
-        selectorFace(
-          [predCreatedBy("base"), predPlanar(), predNormal("+Z")],
-          [rankMaxArea()]
-        ),
-        "surface:flat",
-        ["base"]
-      ),
-    ]),
+    part: (() => {
+      const rect = sketchRectCorner("rect-1", [0, 0], 80, 50);
+      const sketch = sketch2d(
+        "sketch-unwrap",
+        [{ name: "profile:rect", profile: profileSketchLoop(["rect-1"]) }],
+        { entities: [rect] }
+      );
+      return part("example-unwrap", [
+        sketch,
+        surface("surface-1", profileRef("profile:rect"), "surface:main"),
+        unwrap("unwrap-1", selectorNamed("surface:main"), "surface:flat", [
+          "surface-1",
+        ]),
+      ]);
+    })(),
     render: {
       layers: [
         {
@@ -1097,6 +1100,55 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         ),
         unwrap("unwrap-1", selectorNamed("surface:cyl"), "surface:flat", [
           "surface-revolve",
+        ]),
+      ]);
+    })(),
+    render: {
+      layers: [
+        {
+          output: "surface:flat",
+          color: [154, 192, 230],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [32, 40, 52],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
+  },
+  {
+    id: "unwrap-shell",
+    title: "Unwrap (Developable Face Set)",
+    part: (() => {
+      const line = sketchLine("line-1", [-8, 0], [8, 0]);
+      const sketch = sketch2d(
+        "sketch-sweep",
+        [
+          {
+            name: "profile:open",
+            profile: profileSketchLoop(["line-1"], { open: true }),
+          },
+        ],
+        { entities: [line] }
+      );
+      const path = pathPolyline([
+        [0, 0, 0],
+        [0, 0, 20],
+        [15, 0, 30],
+      ]);
+      return part("example-unwrap-shell", [
+        sketch,
+        sweep(
+          "sweep-1",
+          profileRef("profile:open"),
+          path,
+          "surface:main",
+          undefined,
+          { mode: "surface" }
+        ),
+        unwrap("unwrap-1", selectorNamed("surface:main"), "surface:flat", [
+          "sweep-1",
         ]),
       ]);
     })(),

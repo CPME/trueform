@@ -1998,33 +1998,104 @@ export class OcctBackend implements Backend {
   private execUnwrap(
     feature: Unwrap,
     upstream: KernelResult,
-    resolve: ExecuteInput["resolve"]
+    _resolve: ExecuteInput["resolve"]
   ): KernelResult {
-    const target = resolve(feature.source, upstream);
-    if (target.kind !== "face" && target.kind !== "surface") {
-      throw new Error("OCCT backend: unwrap source must resolve to a face or surface");
-    }
-    const shape = target.meta["shape"];
-    if (!shape) {
-      throw new Error("OCCT backend: unwrap source missing shape");
+    const targets = resolveSelectorSet(feature.source, this.toResolutionContext(upstream));
+    if (targets.length === 0) {
+      throw new Error("OCCT backend: unwrap source selector matched 0 entities");
     }
 
-    let face: any;
-    if (target.kind === "face") {
-      face = this.toFace(shape);
-    } else {
-      if (this.countFaces(shape) !== 1) {
+    const faces: any[] = [];
+    const seenByHash = new Map<number, any[]>();
+    const addFace = (candidate: any) => {
+      const face = this.toFace(candidate);
+      const hash = this.shapeHash(face);
+      const bucket = seenByHash.get(hash);
+      if (bucket?.some((entry) => this.shapesSame(entry, face))) {
+        return;
+      }
+      if (bucket) bucket.push(face);
+      else seenByHash.set(hash, [face]);
+      faces.push(face);
+    };
+
+    for (const target of targets) {
+      if (target.kind === "face") {
+        const shape = target.meta["shape"];
+        if (!shape) {
+          throw new Error("OCCT backend: unwrap source face missing shape");
+        }
+        addFace(shape);
+        continue;
+      }
+      if (target.kind === "surface") {
+        const shape = target.meta["shape"];
+        if (!shape) {
+          throw new Error("OCCT backend: unwrap source surface missing shape");
+        }
+        for (const face of this.listFaces(shape)) {
+          addFace(face);
+        }
+        continue;
+      }
+      if (target.kind === "solid") {
         throw new Error(
-          "OCCT backend: unwrap surface source must resolve to exactly one face"
+          "OCCT backend: unwrap solid source is not supported yet; unwrap selected sheet faces/surfaces first"
         );
       }
-      const extracted = this.firstFace(shape);
-      if (!extracted) {
-        throw new Error("OCCT backend: unwrap surface source has no faces");
-      }
-      face = extracted;
+      throw new Error("OCCT backend: unwrap source must resolve to face/surface selections");
     }
 
+    if (faces.length === 0) {
+      throw new Error("OCCT backend: unwrap source resolved no faces");
+    }
+
+    const patches = faces.map((face) => this.unwrapFacePatch(face));
+    const packed = this.packUnwrapPatches(
+      patches.map((patch) => patch.shape)
+    );
+    const outputShape =
+      packed.length === 1 ? packed[0] : this.makeCompoundFromShapes(packed);
+    if (!this.isValidShape(outputShape)) {
+      throw new Error("OCCT backend: unwrap produced invalid result");
+    }
+
+    const unwrapMeta =
+      patches.length === 1
+        ? patches[0]?.meta
+        : {
+            kind: "multi",
+            faceCount: patches.length,
+            faces: patches.map((patch) => patch.meta),
+          };
+
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:face`,
+          kind: "face" as const,
+          meta: {
+            shape: outputShape,
+            unwrap: unwrapMeta,
+          },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      outputShape,
+      feature.id,
+      feature.result,
+      feature.tags,
+      { rootKind: "face" }
+    );
+    return { outputs, selections };
+  }
+
+  private unwrapFacePatch(face: any): {
+    shape: any;
+    meta: Record<string, unknown>;
+  } {
     const properties = this.faceProperties(face);
     if (properties.planar) {
       const basis = this.planeBasisFromFace(face);
@@ -2079,33 +2150,15 @@ export class OcctBackend implements Backend {
         throw new Error("OCCT backend: unwrap produced invalid result");
       }
       const flatProps = this.faceProperties(flattened);
-
-      const outputs = new Map([
-        [
-          feature.result,
-          {
-            id: `${feature.id}:face`,
-            kind: "face" as const,
-            meta: {
-              shape: flattened,
-              unwrap: {
-                kind: "planar",
-                sourceSurfaceType: properties.surfaceType ?? "plane",
-                sourceArea: properties.area,
-                flatArea: flatProps.area,
-              },
-            },
-          },
-        ],
-      ]);
-      const selections = this.collectSelections(
-        flattened,
-        feature.id,
-        feature.result,
-        feature.tags,
-        { rootKind: "face" }
-      );
-      return { outputs, selections };
+      return {
+        shape: flattened,
+        meta: {
+          kind: "planar",
+          sourceSurfaceType: properties.surfaceType ?? "plane",
+          sourceArea: properties.area,
+          flatArea: flatProps.area,
+        },
+      };
     }
 
     if (properties.surfaceType === "cylinder") {
@@ -2138,40 +2191,46 @@ export class OcctBackend implements Backend {
       if (!this.isValidShape(flattened)) {
         throw new Error("OCCT backend: unwrap produced invalid result");
       }
-
-      const outputs = new Map([
-        [
-          feature.result,
-          {
-            id: `${feature.id}:face`,
-            kind: "face" as const,
-            meta: {
-              shape: flattened,
-              unwrap: {
-                kind: "cylindrical",
-                radius,
-                angleSpan,
-                axialSpan: height,
-                width,
-                height,
-                sourceSurfaceType: properties.surfaceType ?? "cylinder",
-              },
-            },
-          },
-        ],
-      ]);
-      const selections = this.collectSelections(
-        flattened,
-        feature.id,
-        feature.result,
-        feature.tags,
-        { rootKind: "face" }
-      );
-      return { outputs, selections };
+      return {
+        shape: flattened,
+        meta: {
+          kind: "cylindrical",
+          radius,
+          angleSpan,
+          axialSpan: height,
+          width,
+          height,
+          sourceSurfaceType: properties.surfaceType ?? "cylinder",
+        },
+      };
     }
+
     throw new Error(
       "OCCT backend: unwrap currently supports planar or cylindrical faces only"
     );
+  }
+
+  private packUnwrapPatches(shapes: any[]): any[] {
+    if (shapes.length <= 1) return shapes;
+    const packed: any[] = [];
+    let cursorX = 0;
+    let maxHeight = 0;
+    let gap = 1;
+    for (const shape of shapes) {
+      const bounds = this.shapeBounds(shape);
+      const width = Math.max(bounds.max[0] - bounds.min[0], 1e-6);
+      const height = Math.max(bounds.max[1] - bounds.min[1], 1e-6);
+      const moved = this.transformShapeTranslate(shape, [
+        cursorX - bounds.min[0],
+        -bounds.min[1],
+        0,
+      ]);
+      packed.push(moved);
+      maxHeight = Math.max(maxHeight, height);
+      gap = Math.max(gap, maxHeight * 0.05, 0.5);
+      cursorX += width + gap;
+    }
+    return packed;
   }
 
   private execDraft(
@@ -3760,6 +3819,21 @@ export class OcctBackend implements Backend {
     return this.toFace(explorer.Current());
   }
 
+  private listFaces(shape: any): any[] {
+    const occt = this.occt as any;
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_FACE,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    const faces: any[] = [];
+    for (; explorer.More(); explorer.Next()) {
+      faces.push(this.toFace(explorer.Current()));
+    }
+    return faces;
+  }
+
   private countFaces(shape: any): number {
     const occt = this.occt as any;
     const explorer = new occt.TopExp_Explorer_1();
@@ -3771,6 +3845,20 @@ export class OcctBackend implements Backend {
     let count = 0;
     for (; explorer.More(); explorer.Next()) count += 1;
     return count;
+  }
+
+  private makeCompoundFromShapes(shapes: any[]): any {
+    if (shapes.length === 0) {
+      throw new Error("OCCT backend: cannot create compound from empty shape list");
+    }
+    if (shapes.length === 1) return shapes[0];
+    const compound = this.newOcct("TopoDS_Compound");
+    const builder = this.newOcct("BRep_Builder");
+    this.callWithFallback(builder, ["MakeCompound", "MakeCompound_1"], [[compound]]);
+    for (const shape of shapes) {
+      this.callWithFallback(builder, ["Add", "Add_1"], [[compound, shape]]);
+    }
+    return compound;
   }
 
   private axisBounds(

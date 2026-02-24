@@ -14,16 +14,20 @@ const tests = [
     name: "occt e2e: unwrap flattens a planar face onto the XY plane",
     fn: async () => {
       const { occt, backend } = await getBackendContext();
+      const rect = dsl.sketchRectCorner("rect-1", [0, 0], 40, 20);
+      const sketch = dsl.sketch2d(
+        "sketch-face",
+        [{ name: "profile:rect", profile: dsl.profileSketchLoop(["rect-1"]) }],
+        { entities: [rect] }
+      );
       const part = dsl.part("unwrap-planar", [
-        dsl.extrude("base", dsl.profileRect(40, 20), 6, "body:main"),
+        sketch,
+        dsl.surface("surface-1", dsl.profileRef("profile:rect"), "surface:main"),
         dsl.unwrap(
           "unwrap-1",
-          dsl.selectorFace(
-            [dsl.predCreatedBy("base"), dsl.predPlanar(), dsl.predNormal("+Z")],
-            [dsl.rankMaxArea()]
-          ),
+          dsl.selectorNamed("surface:main"),
           "surface:flat",
-          ["base"]
+          ["surface-1"]
         ),
       ]);
 
@@ -46,8 +50,7 @@ const tests = [
       const sourceFace = result.final.selections.find(
         (selection) =>
           selection.kind === "face" &&
-          selection.meta["createdBy"] === "base" &&
-          selection.meta["normal"] === "+Z"
+          selection.meta["createdBy"] === "surface-1"
       );
       const unwrappedFaces = result.final.selections.filter(
         (selection) =>
@@ -158,9 +161,9 @@ const tests = [
     },
   },
   {
-    name: "occt e2e: unwrap rejects unsupported multi-face surfaces",
+    name: "occt e2e: unwrap supports connected multi-face developable surfaces",
     fn: async () => {
-      const { backend } = await getBackendContext();
+      const { occt, backend } = await getBackendContext();
       const line = dsl.sketchLine("line-1", [-8, 0], [8, 0]);
       const sketch = dsl.sketch2d(
         "sketch-sweep",
@@ -191,12 +194,49 @@ const tests = [
         ]),
       ]);
 
+      const result = buildPart(part, backend);
+      const output = result.final.outputs.get("surface:flat");
+      assert.ok(output, "missing unwrap output");
+      const shape = output?.meta["shape"] as any;
+      assert.ok(shape, "missing shape metadata");
+      assertValidShape(occt, shape, "unwrap multi-face surface");
+      assert.ok(countFaces(occt, shape) >= 2, "expected multiple flattened faces");
+      const unwrapMeta = output?.meta["unwrap"] as
+        | { kind?: string; faceCount?: number }
+        | undefined;
+      assert.equal(unwrapMeta?.kind, "multi");
+      assert.ok((unwrapMeta?.faceCount ?? 0) >= 2, "expected multi unwrap metadata");
+    },
+  },
+  {
+    name: "occt e2e: unwrap rejects unsupported surface classes",
+    fn: async () => {
+      const { backend } = await getBackendContext();
+      const part = dsl.part("unwrap-cone", [
+        dsl.loft(
+          "loft-1",
+          [
+            dsl.profileCircle(10, [0, 0, 0]),
+            dsl.profileCircle(5, [0, 0, 15]),
+          ],
+          "surface:unsupported",
+          undefined,
+          { mode: "surface" }
+        ),
+        dsl.unwrap(
+          "unwrap-1",
+          dsl.selectorNamed("surface:unsupported"),
+          "surface:flat",
+          ["loft-1"]
+        ),
+      ]);
+
       assert.throws(
         () => buildPart(part, backend),
         (err) =>
           err instanceof Error &&
           err.message.includes(
-            "unwrap surface source must resolve to exactly one face"
+            "unwrap currently supports planar or cylindrical faces only"
           )
       );
     },
