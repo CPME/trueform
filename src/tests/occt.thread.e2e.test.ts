@@ -16,9 +16,9 @@ const tests = [
     fn: async () => {
       const { occt, backend } = await getBackendContext();
       const part = dsl.part("thread-test", [
-        dsl.thread("thread-1", "+Z", 12, 8, 1.5, "body:main", undefined, {
+        dsl.thread("thread-1", "+Z", 10, 8, 2, "body:main", undefined, {
           minorDiameter: 6.5,
-          segmentsPerTurn: 12,
+          segmentsPerTurn: 6,
         }),
       ]);
 
@@ -54,7 +54,7 @@ const tests = [
       const { occt, backend } = await getBackendContext();
       const part = dsl.part("thread-docs-scale", [
         dsl.thread("thread-1", "+Z", 24, 22, 3.5, "body:main", undefined, {
-          segmentsPerTurn: 12,
+          segmentsPerTurn: 6,
         }),
       ]);
 

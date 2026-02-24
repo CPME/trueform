@@ -17,10 +17,6 @@ const SURFACE_MODE_FEATURE_KINDS = new Set<string>([
 ]);
 
 export const TF_STAGED_FEATURES: Readonly<Record<string, FeatureStageEntry>> = Object.freeze({
-  "feature.thread": {
-    stage: "staging" as const,
-    notes: "Modelled thread output is still under active geometry tuning.",
-  },
   "feature.surface": {
     stage: "staging" as const,
     notes: "Surface workflows are supported but still maturing for reliability.",

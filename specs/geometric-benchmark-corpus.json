@@ -126,8 +126,9 @@
       "id": "thread-modeled",
       "category": "draft-and-thread",
       "feature": "Modeled thread",
-      "parity": "staging",
-      "probe": { "kind": "dist-test", "path": "dist/tests/occt.thread.e2e.test.js" }
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.thread.e2e.test.js" },
+      "notes": "Modeled thread now has deterministic and failure-mode e2e coverage and is promoted to ready."
     },
     {
       "id": "boolean-core",

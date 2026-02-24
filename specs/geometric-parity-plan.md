@@ -52,7 +52,7 @@ Interpretation:
 | M6: Variable edge controls | `completed` | `feature.fillet.variable` and `feature.chamfer.variable` landed in staging. |
 | M7: Advanced hole parity (`hole-wizard-standards`) | `completed` | Hole-wizard end-condition execution, parity probe, and failure-mode coverage landed; corpus moved to staging. |
 | M8: Stage graduation wave 1 (direct-edit + variable edge + draft) | `completed` | Direct-edit, variable-edge, and draft promotions landed with conformance/failure/determinism coverage. |
-| M9: Stage graduation wave 2 (thread + surface-mode reliability) | `planned` | Promote remaining staged entries with robust probes. |
+| M9: Stage graduation wave 2 (thread + surface-mode reliability) | `in_progress` | Thread is promoted to ready; surface-mode reliability promotions remain. |
 | M10: Advanced profile ops (`rib/web`) | `planned` | Close next declared missing workflow in corpus. |
 | M11: Advanced surfacing slice (`boundary/fill/trim/extend/knit`) | `planned` | Land minimum production-credible subset and probe coverage. |
 | M12: Near-parity closure + gate validation | `planned` | Hit `coverage>=0.85`, `reliability>=0.99`, and staging stability gate. |
@@ -145,3 +145,4 @@ npm run parity:geometric:check
 | 2026-02-24 | Completed M8-4: promoted `feature.delete.face` and `feature.replace.face` to ready with deterministic and failure-mode test coverage. |
 | 2026-02-24 | Completed M8-5: promoted `feature.fillet.variable` and `feature.chamfer.variable` to ready with deterministic and failure-mode test coverage. |
 | 2026-02-24 | Completed M8-6/M8-7: promoted `feature.draft` to ready after selector-extreme + determinism coverage and synchronized staging/corpus docs. |
+| 2026-02-24 | M9 progress: promoted modeled thread to ready with deterministic and failure-mode e2e coverage. |

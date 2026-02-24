@@ -12,9 +12,6 @@ clients and agents can avoid treating them as production-stable.
 
 ## Current Staging Entries
 
-- `feature.thread`
-  - Status: `staging`
-  - Note: modelled thread geometry is under active tuning.
 - `feature.surface`
   - Status: `staging`
   - Note: surface workflows are functional but still improving in reliability.

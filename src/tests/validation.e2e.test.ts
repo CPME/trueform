@@ -155,10 +155,17 @@ const tests = [
     },
   },
   {
-    name: "validation: staged features can be blocked",
+    name: "validation: staged surface-mode features can be blocked",
     fn: async () => {
-      const part = dsl.part("staged-thread", [
-        dsl.thread("thread-1", "+Z", 10, 8, 1.5, "body:main"),
+      const part = dsl.part("staged-surface-mode", [
+        dsl.extrude(
+          "surface-extrude",
+          dsl.profileCircle(4),
+          10,
+          "surface:main",
+          undefined,
+          { mode: "surface" }
+        ),
       ]);
       assert.throws(
         () => normalizePart(part, undefined, { stagedFeatures: "error" }),

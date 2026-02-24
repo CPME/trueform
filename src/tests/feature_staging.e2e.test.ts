@@ -10,12 +10,10 @@ import { runTests } from "./occt_test_utils.js";
 
 const tests = [
   {
-    name: "feature staging: registry includes thread/surface staging entries",
+    name: "feature staging: registry includes surface staging entries",
     fn: async () => {
       const keys = listStagedFeatureKeys();
-      assert.ok(keys.includes("feature.thread"));
       assert.ok(keys.includes("feature.surface"));
-      assert.equal(TF_STAGED_FEATURES["feature.thread"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.surface"]?.stage, "staging");
     },
   },
@@ -155,12 +153,12 @@ const tests = [
     },
   },
   {
-    name: "feature staging: thread resolves to staging entry",
+    name: "feature staging: thread resolves to stable entry",
     fn: async () => {
       const thread = dsl.thread("thread-1", "+Z", 10, 8, 1.5);
       const stage = getFeatureStage(thread);
       assert.equal(stage.key, "feature.thread");
-      assert.equal(stage.stage, "staging");
+      assert.equal(stage.stage, "stable");
     },
   },
   {
