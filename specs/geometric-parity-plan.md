@@ -50,7 +50,7 @@ Interpretation:
 | M4: Split stabilization + promotion | `completed` | Robust e2e + failure-mode coverage landed; split body/face promoted to ready. |
 | M5: Direct-edit feature wave (`move/delete/replace`) | `completed` | Core direct-edit features landed in staging with parity probes. |
 | M6: Variable edge controls | `completed` | `feature.fillet.variable` and `feature.chamfer.variable` landed in staging. |
-| M7: Advanced hole parity (`hole-wizard-standards`) | `planned` | Highest ROI missing item in matrix + corpus. |
+| M7: Advanced hole parity (`hole-wizard-standards`) | `completed` | Hole-wizard end-condition execution, parity probe, and failure-mode coverage landed; corpus moved to staging. |
 | M8: Stage graduation wave 1 (direct-edit + variable edge + draft) | `planned` | Promote lowest-risk/high-confidence staged features to ready. |
 | M9: Stage graduation wave 2 (thread + surface-mode reliability) | `planned` | Promote remaining staged entries with robust probes. |
 | M10: Advanced profile ops (`rib/web`) | `planned` | Close next declared missing workflow in corpus. |
@@ -72,10 +72,10 @@ Rationale:
 ## Current Sprint Checklist (M7 + M8)
 
 - [x] M7-1: Add hole-wizard standards/end-condition IR schema and DSL helpers.
-- [ ] M7-2: Implement OCCT backend execution for standards/end conditions.
-- [ ] M7-3: Add hole-wizard parity probe (`src/tests/occt.hole_wizard.e2e.probe.ts`).
-- [ ] M7-4: Add failure-mode tests (invalid standard/profile/end-condition combinations).
-- [ ] M7-5: Move corpus `hole-wizard-standards` from `missing` to `staging` or `ready`.
+- [x] M7-2: Implement OCCT backend execution for standards/end conditions.
+- [x] M7-3: Add hole-wizard parity probe (`src/tests/occt.hole_wizard.e2e.probe.ts`).
+- [x] M7-4: Add failure-mode tests (invalid standard/profile/end-condition combinations).
+- [x] M7-5: Move corpus `hole-wizard-standards` from `missing` to `staging` or `ready`.
 
 - [ ] M8-1: Define promotion checklist template (conformance, failure mode, determinism).
 - [ ] M8-2: Promote `feature.move.body` when reliability probes clear gate.
@@ -97,9 +97,8 @@ Promote `staging` -> `ready` only when all are true:
 
 ## Missing Feature Backlog (Post M8)
 
-1. `hole-wizard-standards` (M7).
-2. `rib/web` (M10).
-3. `advanced-surfacing-boundary-fill-knit` (M11).
+1. `rib/web` (M10).
+2. `advanced-surfacing-boundary-fill-knit` (M11).
 
 ## CI and Reporting Rules
 
@@ -130,3 +129,4 @@ npm run parity:geometric:check
 | 2026-02-22 | Implemented staged variable edge controls (`fillet.variable`, `chamfer.variable`). |
 | 2026-02-24 | Rebased parity tracker to explicit M7-M12 near-parity execution plan with quantified gap math. |
 | 2026-02-24 | Completed M7-1: hole-wizard IR/schema/validation surface + DSL helper (`holeWizard`) and focused tests. |
+| 2026-02-24 | Completed M7-2 through M7-5: OCCT hole-wizard end-condition execution, parity probe, failure-mode tests, and corpus status promotion to staging. |

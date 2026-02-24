@@ -2650,6 +2650,11 @@ export class OcctBackend implements Backend {
       throw new Error("OCCT backend: hole cannot define both counterbore and countersink");
     }
     const wizardEndCondition = this.resolveHoleEndCondition(feature);
+    if (feature.wizard?.threaded === true) {
+      throw new Error(
+        "OCCT backend: hole wizard threaded profiles are not yet supported; use feature.thread"
+      );
+    }
     let counterboreRadius: number | null = null;
     let counterboreDepth = 0;
     if (feature.counterbore) {

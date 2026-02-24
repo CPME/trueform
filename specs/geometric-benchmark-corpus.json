@@ -213,7 +213,9 @@
       "id": "hole-wizard-standards",
       "category": "advanced-hole-and-edge-options",
       "feature": "Hole wizard standards/end conditions",
-      "parity": "missing"
+      "parity": "staging",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.hole_wizard.e2e.probe.js" },
+      "notes": "Hole wizard end-condition behavior (throughAll/upToNext/upToLast) now runs in OCCT with staging coverage; threaded wizard profiles explicitly fail and should use feature.thread."
     }
   ]
 }

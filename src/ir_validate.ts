@@ -1422,6 +1422,16 @@ function validateFeature(feature: IntentFeature): void {
               "Hole wizard blind end condition requires numeric depth"
             );
           }
+          if (
+            (hole.wizard.endCondition === "upToNext" ||
+              hole.wizard.endCondition === "upToLast") &&
+            hole.depth === "throughAll"
+          ) {
+            throw new CompileError(
+              "validation_hole_wizard_end_condition",
+              "Hole wizard upToNext/upToLast end conditions require numeric depth"
+            );
+          }
         }
       }
       return;

@@ -1,6 +1,6 @@
 # Geometric Feature Parity Matrix (Onshape/SolidWorks Baseline)
 
-Updated: 2026-02-22
+Updated: 2026-02-24
 
 Purpose: track TrueForm progress toward near feature parity for geometric part
 modeling workflows commonly used in Onshape/SolidWorks.
@@ -31,7 +31,7 @@ Status keys:
 | Multi-body direct edits | Delete/replace/move face, move/copy body | `staging` | `feature.move.body`, `feature.move.face`, `feature.delete.face`, and `feature.replace.face` are now available in staging. |
 | Advanced surfacing | Boundary/fill/trim/untrim/extend/knit/heal | `missing` | High-value surfacing backlog. |
 | Advanced profile ops | Rib/web, wrap/emboss/deform/flex | `missing` | Common in production CAD workflows. |
-| Advanced hole/edge options | Hole wizard standards, variable fillets/chamfers | `staging` | Variable fillet/chamfer landed in staging; full hole-wizard standards/end-conditions remain missing. |
+| Advanced hole/edge options | Hole wizard standards, variable fillets/chamfers | `staging` | Variable fillet/chamfer and hole-wizard end-condition coverage are in staging; threaded hole-wizard profiles still require dedicated `feature.thread`. |
 
 ## Near-Parity Exit Gates
 

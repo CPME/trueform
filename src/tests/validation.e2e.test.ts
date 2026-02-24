@@ -59,6 +59,40 @@ const tests = [
     },
   },
   {
+    name: "validation: hole wizard upToNext end condition requires numeric depth",
+    fn: async () => {
+      const topFace = dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxZ()]);
+      const part = dsl.part("hole-wizard-invalid-up-to-next", [
+        dsl.extrude("base", dsl.profileRect(20, 12), 8, "body:main"),
+        dsl.hole("hole-1", topFace, "+Z", 5, "throughAll", {
+          deps: ["base"],
+          wizard: { endCondition: "upToNext", standard: "ISO", size: "M6" },
+        }),
+      ]);
+      assert.throws(
+        () => normalizePart(part),
+        /upToNext\/upToLast end conditions require numeric depth/i
+      );
+    },
+  },
+  {
+    name: "validation: hole wizard upToLast end condition requires numeric depth",
+    fn: async () => {
+      const topFace = dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxZ()]);
+      const part = dsl.part("hole-wizard-invalid-up-to-last", [
+        dsl.extrude("base", dsl.profileRect(20, 12), 8, "body:main"),
+        dsl.hole("hole-1", topFace, "+Z", 5, "throughAll", {
+          deps: ["base"],
+          wizard: { endCondition: "upToLast", standard: "ISO", size: "M6" },
+        }),
+      ]);
+      assert.throws(
+        () => normalizePart(part),
+        /upToNext\/upToLast end conditions require numeric depth/i
+      );
+    },
+  },
+  {
     name: "validation: empty feature id throws",
     fn: async () => {
       const badExtrude = {
