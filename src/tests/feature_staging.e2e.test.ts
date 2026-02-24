@@ -10,13 +10,11 @@ import { runTests } from "./occt_test_utils.js";
 
 const tests = [
   {
-    name: "feature staging: registry includes draft/thread/surface staging entries",
+    name: "feature staging: registry includes thread/surface staging entries",
     fn: async () => {
       const keys = listStagedFeatureKeys();
-      assert.ok(keys.includes("feature.draft"));
       assert.ok(keys.includes("feature.thread"));
       assert.ok(keys.includes("feature.surface"));
-      assert.equal(TF_STAGED_FEATURES["feature.draft"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.thread"]?.stage, "staging");
       assert.equal(TF_STAGED_FEATURES["feature.surface"]?.stage, "staging");
     },
@@ -141,7 +139,7 @@ const tests = [
     },
   },
   {
-    name: "feature staging: draft resolves to staging entry",
+    name: "feature staging: draft resolves to stable entry",
     fn: async () => {
       const draft = dsl.draft(
         "draft-1",
@@ -153,7 +151,7 @@ const tests = [
       );
       const stage = getFeatureStage(draft);
       assert.equal(stage.key, "feature.draft");
-      assert.equal(stage.stage, "staging");
+      assert.equal(stage.stage, "stable");
     },
   },
   {

@@ -24,7 +24,7 @@ Status keys:
 | Surface creation | Surface feature + surface-mode extrude/revolve/loft/sweep | `staging` | Tracked in staging registry. |
 | Hole workflows | Simple, through/blind, counterbore/countersink, patterned holes | `ready` | Advanced wizard semantics still partial. |
 | Dress-up | Fillet/chamfer/shell/thicken | `ready` | Core workflows are ready; variable fillet/chamfer controls are now available in staging. |
-| Draft + thread | Draft faces, modeled thread geometry | `staging` | Explicitly marked staging. |
+| Draft + thread | Draft faces, modeled thread geometry | `staging` | Draft is now ready; modeled thread remains staging while geometry tuning continues. |
 | Booleans | Union/subtract/intersect | `ready` | Available in DSL as canonical boolean op. |
 | Patterns + transforms | Linear/circular patterns, mirror | `ready` | Curve/fill/table-driven patterns missing. |
 | Multi-body direct edits | Split body, split face | `ready` | Selector/failure-mode and stability probes are now in place. |

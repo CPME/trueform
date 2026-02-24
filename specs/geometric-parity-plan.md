@@ -51,7 +51,7 @@ Interpretation:
 | M5: Direct-edit feature wave (`move/delete/replace`) | `completed` | Core direct-edit features landed in staging with parity probes. |
 | M6: Variable edge controls | `completed` | `feature.fillet.variable` and `feature.chamfer.variable` landed in staging. |
 | M7: Advanced hole parity (`hole-wizard-standards`) | `completed` | Hole-wizard end-condition execution, parity probe, and failure-mode coverage landed; corpus moved to staging. |
-| M8: Stage graduation wave 1 (direct-edit + variable edge + draft) | `in_progress` | Promote lowest-risk/high-confidence staged features to ready. |
+| M8: Stage graduation wave 1 (direct-edit + variable edge + draft) | `completed` | Direct-edit, variable-edge, and draft promotions landed with conformance/failure/determinism coverage. |
 | M9: Stage graduation wave 2 (thread + surface-mode reliability) | `planned` | Promote remaining staged entries with robust probes. |
 | M10: Advanced profile ops (`rib/web`) | `planned` | Close next declared missing workflow in corpus. |
 | M11: Advanced surfacing slice (`boundary/fill/trim/extend/knit`) | `planned` | Land minimum production-credible subset and probe coverage. |
@@ -82,8 +82,8 @@ Rationale:
 - [x] M8-3: Promote `feature.move.face` when reliability probes clear gate.
 - [x] M8-4: Promote `feature.delete.face` + `feature.replace.face` when healing probes clear gate.
 - [x] M8-5: Promote `feature.fillet.variable` + `feature.chamfer.variable` when corner cases clear gate.
-- [ ] M8-6: Promote `feature.draft` when selector-extreme negative paths are covered.
-- [ ] M8-7: Update `src/feature_staging.ts`, `specs/feature-staging.md`, and corpus parity labels after each promotion.
+- [x] M8-6: Promote `feature.draft` when selector-extreme negative paths are covered.
+- [x] M8-7: Update `src/feature_staging.ts`, `specs/feature-staging.md`, and corpus parity labels after each promotion.
 
 ## Promotion Gate (Per Feature)
 
@@ -144,3 +144,4 @@ npm run parity:geometric:check
 | 2026-02-24 | Completed M8-3: promoted `feature.move.face` to ready after adding repeated-run determinism probe coverage. |
 | 2026-02-24 | Completed M8-4: promoted `feature.delete.face` and `feature.replace.face` to ready with deterministic and failure-mode test coverage. |
 | 2026-02-24 | Completed M8-5: promoted `feature.fillet.variable` and `feature.chamfer.variable` to ready with deterministic and failure-mode test coverage. |
+| 2026-02-24 | Completed M8-6/M8-7: promoted `feature.draft` to ready after selector-extreme + determinism coverage and synchronized staging/corpus docs. |

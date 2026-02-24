@@ -118,8 +118,9 @@
       "id": "draft",
       "category": "draft-and-thread",
       "feature": "Draft",
-      "parity": "staging",
-      "probe": { "kind": "dist-test", "path": "dist/tests/occt.draft.e2e.test.js" }
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.draft.e2e.test.js" },
+      "notes": "Draft now includes selector-extreme failure coverage and repeated-run determinism checks; promoted to ready."
     },
     {
       "id": "thread-modeled",
