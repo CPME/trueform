@@ -67,6 +67,44 @@ async function fetchJsonWithStatus<T>(
   return JSON.parse(text) as T;
 }
 
+async function fetchChunkedMesh(url: string): Promise<Record<string, unknown>> {
+  const res = await fetch(url);
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status} ${res.statusText} for ${url}${text ? `: ${text}` : ""}`);
+  }
+  const out: Record<string, unknown> = {};
+  let meta: Record<string, unknown> | null = null;
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  for (const line of lines) {
+    const event = JSON.parse(line) as {
+      type?: string;
+      payload?: Record<string, unknown>;
+      key?: string;
+      data?: unknown[];
+    };
+    if (event.type === "meta") {
+      meta = event.payload ?? {};
+      continue;
+    }
+    if (event.type === "arrayChunk" && typeof event.key === "string" && Array.isArray(event.data)) {
+      const existing = (out[event.key] as unknown[] | undefined) ?? [];
+      out[event.key] = existing.concat(event.data);
+      continue;
+    }
+    if (event.type === "selectionChunk" && Array.isArray(event.data)) {
+      const existingSelections = (out.selections as unknown[] | undefined) ?? [];
+      out.selections = existingSelections.concat(event.data);
+      continue;
+    }
+    if (event.type === "done") break;
+  }
+  return meta ? { ...meta, ...out } : out;
+}
+
 function triangleCount(mesh: { indices?: number[]; positions?: number[] }): number {
   if (Array.isArray(mesh.indices) && mesh.indices.length >= 3) {
     return Math.floor(mesh.indices.length / 3);
@@ -274,6 +312,7 @@ const tests = [
             maxBuildSessionsPerTenant?: number;
             maxBuildsPerSession?: number;
             buildSessionTtlMs?: number;
+            maxDocVersionsPerKey?: number;
           };
           optionalFeatures?: {
             partialBuild?: {
@@ -309,6 +348,7 @@ const tests = [
         assert.equal((capabilities.quotas?.maxBuildSessionsPerTenant ?? 0) > 0, true);
         assert.equal((capabilities.quotas?.maxBuildsPerSession ?? 0) > 0, true);
         assert.equal((capabilities.quotas?.buildSessionTtlMs ?? 0) > 0, true);
+        assert.equal((capabilities.quotas?.maxDocVersionsPerKey ?? 0) > 0, true);
         assert.equal(capabilities.optionalFeatures?.bom?.derive, false);
         assert.equal(capabilities.optionalFeatures?.release?.preflight, false);
         assert.equal(capabilities.optionalFeatures?.featureStaging?.registry, true);
@@ -332,39 +372,89 @@ const tests = [
         assert.equal(typeof openapi.paths?.["/v1/assembly/solve"], "object");
         assert.equal(typeof openapi.paths?.["/v1/measure"], "object");
         assert.equal(typeof openapi.paths?.["/v1/health"], "object");
+        assert.equal(typeof openapi.paths?.["/v1/documents/{docId}/versions"], "object");
+        assert.equal(typeof openapi.paths?.["/v1/assets/mesh/{assetId}/chunks"], "object");
 
         const { part, document } = makeRuntimeDoc();
 
         const docCreate = await fetchJsonWithStatus<{
           docId: string;
+          docKey: string;
+          version: number;
+          schemaVersion: number;
           inserted: boolean;
           contentHash: string;
         }>(`${runtime.baseUrl}/v1/documents`, 201, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ document }),
+          body: JSON.stringify({ document, docKey: "runtime-doc" }),
         });
         assert.equal(typeof docCreate.docId, "string");
+        assert.equal(docCreate.docKey, "runtime-doc");
+        assert.equal(docCreate.version, 1);
+        assert.equal(docCreate.schemaVersion, 1);
         assert.equal(docCreate.inserted, true);
         assert.equal(docCreate.docId, docCreate.contentHash);
 
         const docCreateAgain = await fetchJsonWithStatus<{
           docId: string;
+          docKey: string;
+          version: number;
           inserted: boolean;
         }>(`${runtime.baseUrl}/v1/documents`, 200, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ document }),
+          body: JSON.stringify({ document, docKey: "runtime-doc" }),
         });
         assert.equal(docCreateAgain.docId, docCreate.docId);
+        assert.equal(docCreateAgain.docKey, "runtime-doc");
+        assert.equal(docCreateAgain.version, 1);
         assert.equal(docCreateAgain.inserted, false);
+
+        const versionedDocument = JSON.parse(JSON.stringify(document));
+        if (Array.isArray(versionedDocument?.parts)) {
+          const targetPart = versionedDocument.parts.find((entry: any) => entry?.id === "runtime-cylinder");
+          if (targetPart && Array.isArray(targetPart.params) && targetPart.params[0]) {
+            targetPart.params[0].default = { kind: "expr.literal", value: 96 };
+          }
+        }
+        const docCreateV2 = await fetchJsonWithStatus<{
+          docId: string;
+          docKey: string;
+          version: number;
+          inserted: boolean;
+        }>(`${runtime.baseUrl}/v1/documents`, 201, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ document: versionedDocument, docKey: "runtime-doc" }),
+        });
+        assert.equal(docCreateV2.inserted, true);
+        assert.equal(docCreateV2.docKey, "runtime-doc");
+        assert.equal(docCreateV2.version, 2);
+        assert.notEqual(docCreateV2.docId, docCreate.docId);
 
         const storedDoc = await fetchJson<{
           docId: string;
+          docKey: string;
+          version: number;
           document: { id: string };
         }>(`${runtime.baseUrl}/v1/documents/${docCreate.docId}`);
         assert.equal(storedDoc.docId, docCreate.docId);
+        assert.equal(storedDoc.docKey, "runtime-doc");
+        assert.equal(storedDoc.version, 1);
         assert.equal(storedDoc.document.id, document.id);
+
+        const storedDocVersions = await fetchJson<{
+          docKey: string;
+          version: number;
+          versions: Array<{ version: number; docId: string }>;
+        }>(`${runtime.baseUrl}/v1/documents/${docCreate.docId}/versions`);
+        assert.equal(storedDocVersions.docKey, "runtime-doc");
+        assert.equal(storedDocVersions.version, 1);
+        assert.deepEqual(
+          storedDocVersions.versions.map((entry) => entry.version),
+          [1, 2]
+        );
 
         const buildPayload = {
           docId: docCreate.docId,
@@ -619,6 +709,9 @@ const tests = [
         const exportMesh = await fetchJson<{ indices?: number[]; positions?: number[] }>(
           `${runtime.baseUrl}${meshExportAssetUrl}`
         );
+        const chunkedInteractiveMesh = await fetchChunkedMesh(
+          `${runtime.baseUrl}${meshInteractiveAssetUrl}/chunks`
+        );
 
         const triInteractive = triangleCount(interactiveMesh);
         const triPreview = triangleCount(previewMesh);
@@ -634,6 +727,25 @@ const tests = [
           interactiveMesh.edgeIndices?.length ?? 0,
           interactiveEdgeSegments,
           "interactive mesh should provide one edge index per edge segment"
+        );
+        assert.equal(
+          Array.isArray(chunkedInteractiveMesh.positions),
+          true,
+          "chunked mesh stream should include positions array"
+        );
+        const chunkedPositions = Array.isArray(chunkedInteractiveMesh.positions)
+          ? (chunkedInteractiveMesh.positions as number[])
+          : [];
+        const chunkedIndices = Array.isArray(chunkedInteractiveMesh.indices)
+          ? (chunkedInteractiveMesh.indices as number[])
+          : [];
+        assert.equal(
+          chunkedPositions.length,
+          interactiveMesh.positions?.length ?? 0
+        );
+        assert.equal(
+          chunkedIndices.length,
+          interactiveMesh.indices?.length ?? 0
         );
 
         const previewAssetId = String(meshPreviewJob.result?.mesh?.asset?.id ?? "");

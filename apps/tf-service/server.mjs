@@ -38,6 +38,7 @@ const JOB_OWNER_RETENTION_MS = Number(
 );
 const MAX_DOC_BYTES = Number(process.env.TF_RUNTIME_MAX_DOCUMENT_BYTES || 2_000_000);
 const MAX_DOCS_PER_TENANT = Number(process.env.TF_RUNTIME_MAX_DOCUMENTS_PER_TENANT || 256);
+const MAX_DOC_VERSIONS_PER_KEY = Number(process.env.TF_RUNTIME_MAX_DOC_VERSIONS_PER_KEY || 256);
 const MAX_ASSETS_PER_TENANT = Number(process.env.TF_RUNTIME_MAX_ASSETS_PER_TENANT || 1024);
 const MAX_PENDING_JOBS_PER_TENANT = Number(
   process.env.TF_RUNTIME_MAX_PENDING_JOBS_PER_TENANT || 32
@@ -71,6 +72,7 @@ export function createTfServiceServer(options = {}) {
   });
 
   const documentStore = new Map();
+  const documentVersionStore = new Map();
   const assetStore = new Map();
   const artifactStore = new Map();
   const buildStore = new Map();
@@ -165,6 +167,73 @@ export function createTfServiceServer(options = {}) {
       "access-control-allow-headers": `content-type,${TENANT_HEADER}`,
     });
     res.end(payload);
+  }
+
+  function writeNdjson(res, payload) {
+    res.write(`${JSON.stringify(payload)}\n`);
+  }
+
+  function streamMeshAssetChunks(res, asset, chunkSize = 12000) {
+    const resolvedChunkSize = Number.isFinite(chunkSize)
+      ? Math.max(256, Math.floor(chunkSize))
+      : 12000;
+    const sourceText = Buffer.isBuffer(asset.data) ? asset.data.toString("utf8") : String(asset.data);
+    const mesh = JSON.parse(sourceText);
+    const arrayKeys = ["positions", "normals", "indices", "edgePositions", "edgeIndices", "faceIds"];
+    const meta = {};
+    for (const [key, value] of Object.entries(mesh)) {
+      if (arrayKeys.includes(key)) continue;
+      meta[key] = value;
+    }
+
+    res.writeHead(200, {
+      "content-type": "application/x-ndjson; charset=utf-8",
+      "cache-control": "no-cache",
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
+      "access-control-allow-headers": `content-type,${TENANT_HEADER}`,
+    });
+
+    writeNdjson(res, {
+      type: "meta",
+      payload: meta,
+      arrays: Object.fromEntries(
+        arrayKeys.map((key) => [key, Array.isArray(mesh[key]) ? mesh[key].length : 0])
+      ),
+    });
+
+    for (const key of arrayKeys) {
+      const values = mesh[key];
+      if (!Array.isArray(values) || values.length === 0) continue;
+      const totalChunks = Math.ceil(values.length / resolvedChunkSize);
+      for (let i = 0; i < values.length; i += resolvedChunkSize) {
+        const chunkIndex = Math.floor(i / resolvedChunkSize);
+        writeNdjson(res, {
+          type: "arrayChunk",
+          key,
+          chunkIndex,
+          totalChunks,
+          data: values.slice(i, i + resolvedChunkSize),
+        });
+      }
+    }
+
+    if (Array.isArray(mesh.selections) && mesh.selections.length > 0) {
+      const selectionChunkSize = 128;
+      const totalChunks = Math.ceil(mesh.selections.length / selectionChunkSize);
+      for (let i = 0; i < mesh.selections.length; i += selectionChunkSize) {
+        const chunkIndex = Math.floor(i / selectionChunkSize);
+        writeNdjson(res, {
+          type: "selectionChunk",
+          chunkIndex,
+          totalChunks,
+          data: mesh.selections.slice(i, i + selectionChunkSize),
+        });
+      }
+    }
+
+    writeNdjson(res, { type: "done" });
+    res.end();
   }
 
   async function readJson(req) {
@@ -704,8 +773,86 @@ export function createTfServiceServer(options = {}) {
     return createHash("sha256").update(input).digest("hex");
   }
 
-  function makeDocumentRecord(tenantId, document) {
-    const canonicalJson = stableStringify(document);
+  function normalizeDocKey(value) {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return null;
+    if (!/^[A-Za-z0-9._:-]{1,128}$/.test(trimmed)) {
+      throw new HttpError(
+        400,
+        "invalid_doc_key",
+        "docKey must match [A-Za-z0-9._:-]{1,128}"
+      );
+    }
+    return trimmed;
+  }
+
+  function migrateDocumentForStorage(document) {
+    const base =
+      document && typeof document === "object"
+        ? JSON.parse(JSON.stringify(document))
+        : document;
+    if (!base || typeof base !== "object") {
+      throw new HttpError(400, "invalid_document", "Document payload must be an object");
+    }
+    const currentVersion =
+      Number.isFinite(Number(base.irVersion)) && Number(base.irVersion) > 0
+        ? Number(base.irVersion)
+        : 1;
+    if (!Number.isFinite(currentVersion) || currentVersion <= 0) {
+      throw new HttpError(400, "invalid_document_version", "Document irVersion must be > 0");
+    }
+    // Migration hook for future persisted IR schema upgrades.
+    base.irVersion = currentVersion;
+    return {
+      document: base,
+      schemaVersion: currentVersion,
+      migrationsApplied: [],
+    };
+  }
+
+  function getDocumentVersionTrack(tenantId, docKey) {
+    const trackKey = tenantScopedKey(tenantId, docKey);
+    const existing = documentVersionStore.get(trackKey);
+    if (existing) return existing;
+    const created = {
+      tenantId,
+      docKey,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      versions: [],
+    };
+    documentVersionStore.set(trackKey, created);
+    return created;
+  }
+
+  function appendDocumentVersion(record) {
+    const track = getDocumentVersionTrack(record.tenantId, record.docKey);
+    const existing = track.versions.find((entry) => entry.docId === record.docId);
+    if (existing) {
+      record.version = existing.version;
+      track.updatedAt = new Date().toISOString();
+      return existing.version;
+    }
+    const nextVersion =
+      track.versions.length > 0 ? Number(track.versions[track.versions.length - 1].version) + 1 : 1;
+    const createdAt = new Date().toISOString();
+    track.versions.push({
+      version: nextVersion,
+      docId: record.docId,
+      createdAt,
+    });
+    if (track.versions.length > MAX_DOC_VERSIONS_PER_KEY) {
+      track.versions = track.versions.slice(track.versions.length - MAX_DOC_VERSIONS_PER_KEY);
+    }
+    track.updatedAt = createdAt;
+    record.version = nextVersion;
+    return nextVersion;
+  }
+
+  function makeDocumentRecord(tenantId, document, docKeyHint) {
+    const migrated = migrateDocumentForStorage(document);
+    const canonicalJson = stableStringify(migrated.document);
     const canonicalDocument = JSON.parse(canonicalJson);
     const bytes = Buffer.byteLength(canonicalJson);
     if (bytes > MAX_DOC_BYTES) {
@@ -717,20 +864,25 @@ export function createTfServiceServer(options = {}) {
     }
     const docId = sha256(canonicalJson);
     const createdAt = new Date().toISOString();
+    const docKey = normalizeDocKey(docKeyHint) ?? docId;
     return {
       id: docId,
       docId,
+      docKey,
+      version: 1,
       tenantId,
       contentHash: docId,
       canonicalJson,
       document: canonicalDocument,
+      schemaVersion: migrated.schemaVersion,
+      migrationsApplied: migrated.migrationsApplied,
       createdAt,
       bytes,
     };
   }
 
-  function storeDocument(tenantId, document) {
-    const next = makeDocumentRecord(tenantId, document);
+  function storeDocument(tenantId, document, docKeyHint) {
+    const next = makeDocumentRecord(tenantId, document, docKeyHint);
     const existing = documentStore.get(tenantScopedKey(tenantId, next.docId));
     if (existing) {
       return { record: existing, inserted: false };
@@ -741,6 +893,7 @@ export function createTfServiceServer(options = {}) {
       MAX_DOCS_PER_TENANT,
       countTenantInStore(documentStore, tenantId)
     );
+    appendDocumentVersion(next);
     documentStore.set(tenantScopedKey(tenantId, next.docId), next);
     return { record: next, inserted: true };
   }
@@ -1587,6 +1740,7 @@ export function createTfServiceServer(options = {}) {
       queue: queueStats,
       stores: {
         documents: countTenantInStore(documentStore, tenantId),
+        documentVersions: countTenantInStore(documentVersionStore, tenantId),
         builds: countTenantInStore(buildStore, tenantId),
         assets: countTenantInStore(assetStore, tenantId),
         artifacts: countTenantInStore(artifactStore, tenantId),
@@ -1727,6 +1881,7 @@ export function createTfServiceServer(options = {}) {
           quotas: {
             maxDocumentBytes: MAX_DOC_BYTES,
             maxDocumentsPerTenant: MAX_DOCS_PER_TENANT,
+            maxDocVersionsPerKey: MAX_DOC_VERSIONS_PER_KEY,
             maxAssetsPerTenant: MAX_ASSETS_PER_TENANT,
             maxPendingJobsPerTenant: MAX_PENDING_JOBS_PER_TENANT,
             maxBuildSessionsPerTenant: MAX_BUILD_SESSIONS_PER_TENANT,
@@ -1758,18 +1913,51 @@ export function createTfServiceServer(options = {}) {
       if (req.method === "POST" && pathname === TF_API_ENDPOINTS.documents) {
         const payload = await readJson(req);
         const document = payload?.document ?? payload;
+        const docKey = payload && typeof payload === "object" ? payload.docKey : undefined;
         if (!document || !Array.isArray(document.parts)) {
           throw new HttpError(400, "invalid_document", "Document payload must include parts[]");
         }
-        const stored = storeDocument(tenantId, document);
+        const stored = storeDocument(tenantId, document, docKey);
         json(res, stored.inserted ? 201 : 200, {
           tenantId,
           docId: stored.record.docId,
+          docKey: stored.record.docKey,
+          version: stored.record.version,
+          schemaVersion: stored.record.schemaVersion,
           contentHash: stored.record.contentHash,
           inserted: stored.inserted,
           createdAt: stored.record.createdAt,
           bytes: stored.record.bytes,
           url: `/v1/documents/${stored.record.docId}`,
+        });
+        return;
+      }
+
+      if (
+        req.method === "GET" &&
+        pathname.startsWith(`${TF_API_ENDPOINTS.documents}/`) &&
+        pathname.endsWith("/versions")
+      ) {
+        const segments = pathname.split("/");
+        const docId = segments.length >= 4 ? segments[3] : null;
+        const stored = docId ? documentStore.get(tenantScopedKey(tenantId, docId)) : null;
+        if (!stored) {
+          json(res, 404, { error: "Document not found" });
+          return;
+        }
+        const track = documentVersionStore.get(tenantScopedKey(tenantId, stored.docKey));
+        json(res, 200, {
+          tenantId,
+          docId: stored.docId,
+          docKey: stored.docKey,
+          version: stored.version,
+          versions:
+            track?.versions?.map((entry) => ({
+              version: entry.version,
+              docId: entry.docId,
+              createdAt: entry.createdAt,
+              url: `/v1/documents/${entry.docId}`,
+            })) ?? [],
         });
         return;
       }
@@ -1784,6 +1972,10 @@ export function createTfServiceServer(options = {}) {
         json(res, 200, {
           tenantId,
           docId: stored.docId,
+          docKey: stored.docKey,
+          version: stored.version,
+          schemaVersion: stored.schemaVersion,
+          migrationsApplied: stored.migrationsApplied,
           contentHash: stored.contentHash,
           createdAt: stored.createdAt,
           bytes: stored.bytes,
@@ -1960,6 +2152,19 @@ export function createTfServiceServer(options = {}) {
         return;
       }
 
+      if (req.method === "GET" && pathname.startsWith("/v1/assets/mesh/") && pathname.endsWith("/chunks")) {
+        const parts = pathname.split("/");
+        const id = parts.length >= 5 ? parts[4] : null;
+        const asset = id ? assetStore.get(id) : null;
+        if (!asset || asset.tenantId !== tenantId) {
+          text(res, 404, "Asset not found");
+          return;
+        }
+        const requestedChunkSize = Number(url.searchParams.get("chunkSize") ?? "");
+        streamMeshAssetChunks(res, asset, requestedChunkSize);
+        return;
+      }
+
       if (req.method === "GET" && pathname.startsWith("/v1/assets/mesh/")) {
         const id = pathname.split("/").pop();
         const asset = id ? assetStore.get(id) : null;
@@ -2015,6 +2220,7 @@ export function createTfServiceServer(options = {}) {
           memory: memorySnapshot(),
           stores: {
             documents: countTenantInStore(documentStore, tenantId),
+            documentVersions: countTenantInStore(documentVersionStore, tenantId),
             builds: countTenantInStore(buildStore, tenantId),
             assets: countTenantInStore(assetStore, tenantId),
             artifacts: countTenantInStore(artifactStore, tenantId),

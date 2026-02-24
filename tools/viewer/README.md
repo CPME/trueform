@@ -103,6 +103,8 @@ Notes:
 ## Runtime API (experimental)
 
 The viewer can now request builds from the runtime server (async) and load the resulting mesh.
+Mesh JSON decoding and selector overlay preparation run in a dedicated web worker
+with IndexedDB-backed asset caching for meshes/selectors/manifests.
 
 Start the runtime server:
 
@@ -118,6 +120,9 @@ Then launch the viewer and either click `Build via API` or open:
 ```text
 http://localhost:8001/?runtime=1&api=http://127.0.0.1:8080
 ```
+
+When available, runtime mesh downloads use chunked NDJSON streaming via:
+`/v1/assets/mesh/{assetId}/chunks` (fallback remains standard mesh JSON asset URLs).
 
 ## Debug outputs
 

@@ -79,6 +79,13 @@ export class TfServiceClient {
     });
   }
 
+  async getDocumentVersions<T = unknown>(docId: string): Promise<T> {
+    return this.requestJson<T>({
+      method: "GET",
+      path: `${TF_API_ENDPOINTS.documents}/${encodeURIComponent(docId)}/versions`,
+    });
+  }
+
   async createBuildSession<T = { sessionId: string; createdAt: string; expiresAt: string }>(): Promise<T> {
     return this.requestJson<T>({
       method: "POST",

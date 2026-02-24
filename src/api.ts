@@ -219,6 +219,40 @@ export const TF_RUNTIME_OPENAPI = {
         },
       },
     },
+    "/v1/documents/{docId}": {
+      get: {
+        summary: "Fetch stored document payload by document id",
+        parameters: [
+          {
+            name: "docId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": { description: "Document payload" },
+          "404": { description: "Document not found" },
+        },
+      },
+    },
+    "/v1/documents/{docId}/versions": {
+      get: {
+        summary: "List version history for a stored document key",
+        parameters: [
+          {
+            name: "docId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": { description: "Document version history" },
+          "404": { description: "Document not found" },
+        },
+      },
+    },
     "/v1/build-sessions": {
       post: {
         summary: "Create build session",
@@ -422,6 +456,36 @@ export const TF_RUNTIME_OPENAPI = {
               },
             },
           },
+        },
+      },
+    },
+    "/v1/assets/mesh/{assetId}/chunks": {
+      get: {
+        summary: "Stream chunked mesh asset payload (NDJSON)",
+        parameters: [
+          {
+            name: "assetId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "chunkSize",
+            in: "query",
+            required: false,
+            schema: { type: "integer", minimum: 256 },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Chunked mesh NDJSON stream",
+            content: {
+              "application/x-ndjson": {
+                schema: { type: "string" },
+              },
+            },
+          },
+          "404": { description: "Asset not found" },
         },
       },
     },

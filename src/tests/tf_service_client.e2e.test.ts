@@ -148,6 +148,57 @@ const tests = [
     },
   },
   {
+    name: "tf service client: supports document version history endpoint",
+    fn: async () => {
+      const calls: FetchCall[] = [];
+      const fakeFetch: typeof fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        const headers = Object.fromEntries(
+          Object.entries((init?.headers as Record<string, string>) ?? {}).map(([k, v]) => [
+            k.toLowerCase(),
+            String(v),
+          ])
+        );
+        calls.push({
+          url,
+          method: String(init?.method ?? "GET"),
+          headers,
+          body: typeof init?.body === "string" ? init.body : undefined,
+        });
+        if (url.endsWith("/v1/documents/doc_1/versions")) {
+          return makeJsonResponse(200, {
+            docId: "doc_1",
+            docKey: "demo-doc",
+            version: 2,
+            versions: [
+              { version: 1, docId: "doc_0" },
+              { version: 2, docId: "doc_1" },
+            ],
+          });
+        }
+        return makeJsonResponse(404, { error: "not found" });
+      };
+
+      const client = new TfServiceClient({
+        baseUrl: "http://127.0.0.1:8080",
+        fetch: fakeFetch,
+      });
+
+      const versions = await client.getDocumentVersions<{
+        docId: string;
+        docKey: string;
+        version: number;
+        versions: Array<{ version: number; docId: string }>;
+      }>("doc_1");
+      assert.equal(versions.docId, "doc_1");
+      assert.equal(versions.docKey, "demo-doc");
+      assert.equal(versions.version, 2);
+      assert.equal(versions.versions.length, 2);
+      const versionCall = calls.find((call) => call.url.endsWith("/v1/documents/doc_1/versions"));
+      assert.ok(versionCall, "missing /v1/documents/{docId}/versions call");
+    },
+  },
+  {
     name: "tf service client: supports build partial endpoint",
     fn: async () => {
       const calls: FetchCall[] = [];

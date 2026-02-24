@@ -57,3 +57,28 @@ Feature development may resume only when all are true:
 2. Runtime capability flags reflect shipped behavior (no stale placeholders).
 3. OpenAPI and `@trueform/service-client` behavior match runtime e2e assertions.
 4. Benchmark trend shows no regression on repeated-edit latency or memory stability.
+
+## Status Snapshot (2026-02-24)
+
+- `PRE-001` completed.
+  - Incremental execution + reuse diagnostics are active in executor and runtime e2e.
+- `PRE-002` completed.
+  - Build session lifecycle endpoints + tenant isolation coverage are active.
+- `PRE-003` completed.
+  - Partial diagnostics include invalidated/reused/failed feature fields.
+- `PRE-004` completed.
+  - Part/build cache keys are wired through runtime build paths with reuse assertions.
+- `PRE-005` completed.
+  - Capability/OpenAPI/runtime e2e contracts cover optional endpoint surfaces.
+- `PRE-006` pending.
+  - Packaging split Phase 1 PR2 extraction work remains open.
+- `PRE-007` completed.
+  - Runtime `/v1/metrics` now exposes cache, queue, job-latency, and memory snapshots with e2e checks.
+- `PRE-101` completed.
+  - Viewer mesh decode + selection overlay prep run through `tools/viewer/mesh-worker.js` with fallback.
+- `PRE-102` completed.
+  - Viewer JSON assets (mesh/selector/manifest) now use IndexedDB cache with deterministic TTL invalidation.
+- `PRE-103` completed.
+  - Runtime mesh assets support chunked NDJSON stream at `/v1/assets/mesh/{assetId}/chunks`.
+- `PRE-104` completed (baseline).
+  - Documents support logical `docKey` version history with migration hooks and `/v1/documents/{docId}/versions`.

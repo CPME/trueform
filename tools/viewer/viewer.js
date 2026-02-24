@@ -68,6 +68,29 @@ scene.add(modelGroup);
 const selectorGroup = new THREE.Group();
 scene.add(selectorGroup);
 const geometryCache = new Map();
+const meshWorker =
+  typeof Worker !== "undefined"
+    ? new Worker(new URL("./mesh-worker.js", import.meta.url), { type: "module" })
+    : null;
+let workerRequestId = 0;
+const workerPending = new Map();
+const VIEWER_CACHE_DB = "trueform-viewer-cache";
+const VIEWER_CACHE_VERSION = 1;
+const VIEWER_CACHE_STORE = "json-assets";
+const VIEWER_CACHE_TTL_MS = 30_000;
+let viewerCacheDbPromise = null;
+
+if (meshWorker) {
+  meshWorker.addEventListener("message", (event) => {
+    const payload = event.data && typeof event.data === "object" ? event.data : null;
+    if (!payload || typeof payload.id !== "number") return;
+    const pending = workerPending.get(payload.id);
+    if (!pending) return;
+    workerPending.delete(payload.id);
+    if (payload.ok) pending.resolve(payload.result);
+    else pending.reject(new Error(String(payload.error ?? "Worker task failed")));
+  });
+}
 
 const params = new URLSearchParams(window.location.search);
 const fileParam = params.get("file");
@@ -299,6 +322,154 @@ if (refOverlay) {
 
 initOverlay();
 
+async function runWorkerTask(kind, payload) {
+  if (!meshWorker) {
+    throw new Error("Mesh worker unavailable");
+  }
+  const id = workerRequestId + 1;
+  workerRequestId = id;
+  return new Promise((resolve, reject) => {
+    workerPending.set(id, { resolve, reject });
+    meshWorker.postMessage({ id, kind, payload });
+  });
+}
+
+async function decodeJsonText(text) {
+  if (meshWorker) {
+    try {
+      return await runWorkerTask("decodeJsonText", { text });
+    } catch {
+      // Fall through to local parse.
+    }
+  }
+  return JSON.parse(text);
+}
+
+async function prepareSelectionOverlayData(selections, center, radius) {
+  if (meshWorker) {
+    try {
+      return await runWorkerTask("prepareSelectionOverlay", {
+        selections,
+        center,
+        radius,
+      });
+    } catch {
+      // Fall through to local compute.
+    }
+  }
+  const summary = summarizeSelections(selections);
+  return {
+    summary,
+    text: formatSelectionSummary(summary, selections),
+    markerRadius: Math.max(radius * 0.02, 0.6),
+    markers: selections
+      .map((selection) => {
+        if (!selection || typeof selection !== "object") return null;
+        const kind = selection.kind || "face";
+        const meta = selection.meta || {};
+        const point = Array.isArray(meta.center) ? meta.center : null;
+        if (!point || point.length < 3) return null;
+        const normalVec = Array.isArray(meta.normalVec) ? meta.normalVec : null;
+        return {
+          id: selection.id || "",
+          kind,
+          position: [point[0] - center.x, point[1] - center.y, point[2] - center.z],
+          normalVec:
+            Array.isArray(normalVec) && normalVec.length >= 3
+              ? [normalVec[0], normalVec[1], normalVec[2]]
+              : null,
+        };
+      })
+      .filter(Boolean),
+  };
+}
+
+function openViewerCacheDb() {
+  if (viewerCacheDbPromise) return viewerCacheDbPromise;
+  if (typeof indexedDB === "undefined") return Promise.resolve(null);
+  viewerCacheDbPromise = new Promise((resolve) => {
+    try {
+      const request = indexedDB.open(VIEWER_CACHE_DB, VIEWER_CACHE_VERSION);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(VIEWER_CACHE_STORE)) {
+          db.createObjectStore(VIEWER_CACHE_STORE, { keyPath: "url" });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+      request.onblocked = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+  return viewerCacheDbPromise;
+}
+
+async function getCachedJson(url) {
+  const db = await openViewerCacheDb();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(VIEWER_CACHE_STORE, "readonly");
+      const store = tx.objectStore(VIEWER_CACHE_STORE);
+      const req = store.get(url);
+      req.onsuccess = () => resolve(req.result ?? null);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function putCachedJson(url, data) {
+  const db = await openViewerCacheDb();
+  if (!db) return;
+  await new Promise((resolve) => {
+    try {
+      const tx = db.transaction(VIEWER_CACHE_STORE, "readwrite");
+      const store = tx.objectStore(VIEWER_CACHE_STORE);
+      const req = store.put({
+        url,
+        storedAtMs: Date.now(),
+        data,
+      });
+      req.onsuccess = () => resolve();
+      req.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+async function fetchJsonAsset(url, options = {}) {
+  const ttlMs =
+    Number.isFinite(options.ttlMs) && options.ttlMs > 0 ? Number(options.ttlMs) : VIEWER_CACHE_TTL_MS;
+  const cacheKey = String(url);
+  const cached = await getCachedJson(cacheKey);
+  if (cached && Number.isFinite(cached.storedAtMs)) {
+    const ageMs = Date.now() - Number(cached.storedAtMs);
+    if (ageMs <= ttlMs && cached.data) {
+      return { data: cached.data, source: "idb" };
+    }
+  }
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    const data = await decodeJsonText(text);
+    await putCachedJson(cacheKey, data);
+    return { data, source: "network" };
+  } catch (err) {
+    if (cached && cached.data) {
+      return { data: cached.data, source: "idb-stale" };
+    }
+    throw err;
+  }
+}
+
 function resize() {
   const { clientWidth, clientHeight } = renderer.domElement;
   const width = clientWidth || window.innerWidth;
@@ -322,26 +493,24 @@ function animate() {
 
 animate();
 
-function loadAssetFromUrl(source) {
+async function loadAssetFromUrl(source) {
   currentLabel = source;
   statusEl.textContent = `Loading ${source}`;
-  const fileUrl = new URL(source, window.location.href).toString();
-  fetch(fileUrl)
-    .then((res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
-    })
-    .then((data) => {
-      if (isAssemblyData(data)) {
-        return loadAssemblyData(data, source);
-      }
+  try {
+    const fileUrl = new URL(source, window.location.href).toString();
+    const { data, source: cacheSource } = await fetchJsonAsset(fileUrl);
+    if (isAssemblyData(data)) {
+      await loadAssemblyData(data, source);
+    } else {
       loadMeshData(data, source);
-      return null;
-    })
-    .catch((err) => {
-      statusEl.textContent = `Failed to load ${source}`;
-      console.error(err);
-    });
+    }
+    if (cacheSource === "idb" || cacheSource === "idb-stale") {
+      statusEl.textContent = `${statusEl.textContent} (${cacheSource})`;
+    }
+  } catch (err) {
+    statusEl.textContent = `Failed to load ${source}`;
+    console.error(err);
+  }
 }
 
 function updateUrlFileParam(source) {
@@ -378,55 +547,46 @@ function isAssemblyData(data) {
   return false;
 }
 
-function loadAssetManifest() {
+async function loadAssetManifest() {
   if (!assetSelect) return;
-  const manifestUrl = "./assets/manifest.json";
-  fetch(manifestUrl)
-    .then((res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
-    })
-    .then((data) => {
-      const assets = Array.isArray(data?.assets)
-        ? data.assets
-        : Array.isArray(data)
-          ? data
-          : [];
-      const cleaned = assets
-        .filter((item) => typeof item === "string")
-        .map((item) => item.trim())
-        .filter(Boolean);
-      assetSelect.innerHTML = "";
-      if (cleaned.length === 0) {
-        const opt = document.createElement("option");
-        opt.value = "";
-        opt.textContent = "No assets found";
-        assetSelect.appendChild(opt);
-        assetSelect.disabled = true;
-        return;
-      }
-      for (const asset of cleaned) {
-        const opt = document.createElement("option");
-        opt.value = asset;
-        const label = asset.split("/").pop() || asset;
-        opt.textContent = label;
-        assetSelect.appendChild(opt);
-      }
-      assetSelect.disabled = false;
-      if (cleaned.includes(filename)) {
-        assetSelect.value = filename;
-      } else {
-        assetSelect.value = cleaned[0];
-      }
-    })
-    .catch(() => {
+  const manifestUrl = new URL("./assets/manifest.json", window.location.href).toString();
+  try {
+    const { data } = await fetchJsonAsset(manifestUrl);
+    const assets = Array.isArray(data?.assets) ? data.assets : Array.isArray(data) ? data : [];
+    const cleaned = assets
+      .filter((item) => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    assetSelect.innerHTML = "";
+    if (cleaned.length === 0) {
       const opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "Manifest missing";
-      assetSelect.innerHTML = "";
+      opt.textContent = "No assets found";
       assetSelect.appendChild(opt);
       assetSelect.disabled = true;
-    });
+      return;
+    }
+    for (const asset of cleaned) {
+      const opt = document.createElement("option");
+      opt.value = asset;
+      const label = asset.split("/").pop() || asset;
+      opt.textContent = label;
+      assetSelect.appendChild(opt);
+    }
+    assetSelect.disabled = false;
+    if (cleaned.includes(filename)) {
+      assetSelect.value = filename;
+    } else {
+      assetSelect.value = cleaned[0];
+    }
+  } catch {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "Manifest missing";
+    assetSelect.innerHTML = "";
+    assetSelect.appendChild(opt);
+    assetSelect.disabled = true;
+  }
 }
 
 async function buildViaApi(source) {
@@ -474,7 +634,7 @@ async function buildViaApi(source) {
   }
   const resolved = resolveApiAssetUrl(apiBase, meshUrl);
   statusEl.textContent = "Loading mesh from runtime…";
-  const meshData = await fetchJson(resolved);
+  const meshData = await fetchRuntimeMeshAsset(resolved);
   loadMeshData(meshData, `${source} (runtime)`);
 }
 
@@ -532,12 +692,52 @@ function resolveApiAssetUrl(apiBase, assetUrl) {
   return `${base}/${assetUrl}`;
 }
 
-async function fetchJson(url) {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status} for ${url}`);
+async function fetchRuntimeMeshAsset(assetUrl) {
+  try {
+    return await fetchChunkedMeshAsset(`${assetUrl.replace(/\/+$/, "")}/chunks`);
+  } catch {
+    const { data } = await fetchJsonAsset(assetUrl, { ttlMs: 5_000 });
+    return data;
   }
-  return res.json();
+}
+
+async function fetchChunkedMeshAsset(chunksUrl) {
+  const res = await fetch(chunksUrl);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status} for ${chunksUrl}`);
+  }
+  const text = await res.text();
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const out = {};
+  let meta = null;
+  for (const line of lines) {
+    const event = JSON.parse(line);
+    if (!event || typeof event !== "object") continue;
+    if (event.type === "meta") {
+      meta = event.payload && typeof event.payload === "object" ? event.payload : {};
+      continue;
+    }
+    if (event.type === "arrayChunk" && typeof event.key === "string" && Array.isArray(event.data)) {
+      const next = out[event.key] || [];
+      out[event.key] = next.concat(event.data);
+      continue;
+    }
+    if (event.type === "selectionChunk" && Array.isArray(event.data)) {
+      const nextSelections = out.selections || [];
+      out.selections = nextSelections.concat(event.data);
+      continue;
+    }
+    if (event.type === "done") {
+      break;
+    }
+  }
+  if (meta && typeof meta === "object") {
+    return { ...meta, ...out };
+  }
+  return out;
 }
 
 function loadMeshData(meshData, label) {
@@ -816,11 +1016,7 @@ async function loadMeshAsset(meshUrl) {
   const cached = geometryCache.get(meshUrl);
   if (cached) return cached;
   const fileUrl = new URL(meshUrl, window.location.href).toString();
-  const res = await fetch(fileUrl);
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status} for ${meshUrl}`);
-  }
-  const meshData = await res.json();
+  const { data: meshData } = await fetchJsonAsset(fileUrl);
   const geometry = buildGeometry(meshData);
   if (!geometry) {
     throw new Error(`Mesh missing position data: ${meshUrl}`);
@@ -945,7 +1141,7 @@ async function loadSelectors(meshData, label, center, radius) {
     ? meshData.selections
     : null;
   if (directSelections) {
-    applySelectors(directSelections, center, radius);
+    await applySelectors(directSelections, center, radius);
     return;
   }
 
@@ -958,17 +1154,14 @@ async function loadSelectors(meshData, label, center, radius) {
     return;
   }
 
-  const res = await fetch(new URL(selectorsUrl, window.location.href).toString());
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status} for selectors`);
-  }
-  const data = await res.json();
+  const selectorsUrlAbs = new URL(selectorsUrl, window.location.href).toString();
+  const { data } = await fetchJsonAsset(selectorsUrlAbs);
   const selections = Array.isArray(data?.selections)
     ? data.selections
     : Array.isArray(data)
       ? data
       : [];
-  applySelectors(selections, center, radius);
+  await applySelectors(selections, center, radius);
 }
 
 function selectorsUrlForLabel(label) {
@@ -977,14 +1170,17 @@ function selectorsUrlForLabel(label) {
   return label.replace(".mesh.json", ".selectors.json");
 }
 
-function applySelectors(selections, center, radius) {
+async function applySelectors(selections, center, radius) {
   if (!Array.isArray(selections)) selections = [];
-  const summary = summarizeSelections(selections);
+  const overlay = await prepareSelectionOverlayData(selections, center, radius);
+  const summary = overlay.summary;
   if (selectorInfo) {
-    selectorInfo.textContent = formatSelectionSummary(summary, selections);
+    selectorInfo.textContent = overlay.text || formatSelectionSummary(summary, selections);
   }
 
-  const baseSize = Math.max(radius * 0.02, 0.6);
+  const baseSize = Number.isFinite(overlay.markerRadius)
+    ? Math.max(Number(overlay.markerRadius), 0.2)
+    : Math.max(radius * 0.02, 0.6);
   const geometries = {
     face: new THREE.SphereGeometry(baseSize, 10, 10),
     edge: new THREE.SphereGeometry(baseSize * 0.7, 10, 10),
@@ -996,33 +1192,24 @@ function applySelectors(selections, center, radius) {
     solid: new THREE.MeshBasicMaterial({ color: "#8b5cf6" }),
   };
 
-  for (const selection of selections) {
-    if (!selection || typeof selection !== "object") continue;
-    const kind = selection.kind || "face";
-    const meta = selection.meta || {};
-    const point = Array.isArray(meta.center) ? meta.center : null;
+  for (const markerData of overlay.markers || []) {
+    if (!markerData || typeof markerData !== "object") continue;
+    const kind = markerData.kind || "face";
+    const point = Array.isArray(markerData.position) ? markerData.position : null;
     if (!point || point.length < 3) continue;
     const geom = geometries[kind] || geometries.face;
     const mat = materials[kind] || materials.face;
     const marker = new THREE.Mesh(geom, mat);
-    marker.position.set(
-      point[0] - center.x,
-      point[1] - center.y,
-      point[2] - center.z
-    );
-    marker.userData = { selection };
+    marker.position.set(point[0], point[1], point[2]);
+    marker.userData = { selectionId: markerData.id, kind };
     selectorGroup.add(marker);
 
-    if (kind === "face" && Array.isArray(meta.normalVec)) {
-      const [nx, ny, nz] = meta.normalVec;
+    if (kind === "face" && Array.isArray(markerData.normalVec)) {
+      const [nx, ny, nz] = markerData.normalVec;
       const len = Math.max(baseSize * 2, 1.5);
       const arrow = new THREE.ArrowHelper(
         new THREE.Vector3(nx, ny, nz).normalize(),
-        new THREE.Vector3(
-          point[0] - center.x,
-          point[1] - center.y,
-          point[2] - center.z
-        ),
+        new THREE.Vector3(point[0], point[1], point[2]),
         len,
         0x2dd4bf
       );
