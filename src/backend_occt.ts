@@ -64,6 +64,7 @@ import {
   Unwrap,
   Thread,
   VariableChamfer,
+  HoleEndCondition,
 } from "./ir.js";
 
 export type OcctModule = {
@@ -2025,79 +2026,132 @@ export class OcctBackend implements Backend {
     }
 
     const properties = this.faceProperties(face);
-    if (!properties.planar) {
-      throw new Error("OCCT backend: unwrap currently supports planar faces only");
-    }
-    const basis = this.planeBasisFromFace(face);
-    let flattened = face;
+    if (properties.planar) {
+      const basis = this.planeBasisFromFace(face);
+      let flattened = face;
 
-    const origin = basis.origin;
-    if (vecLength(origin) > 1e-9) {
-      flattened = this.transformShapeTranslate(flattened, [
-        -origin[0],
-        -origin[1],
-        -origin[2],
+      const origin = basis.origin;
+      if (vecLength(origin) > 1e-9) {
+        flattened = this.transformShapeTranslate(flattened, [
+          -origin[0],
+          -origin[1],
+          -origin[2],
+        ]);
+      }
+
+      const targetNormal: [number, number, number] = [0, 0, 1];
+      const sourceNormal = normalizeVector(basis.normal);
+      let sourceX = normalizeVector(basis.xDir);
+      const rawAxis = cross(sourceNormal, targetNormal);
+      const axisLen = vecLength(rawAxis);
+      const alignDot = clamp(dot(sourceNormal, targetNormal), -1, 1);
+      let alignAxis: [number, number, number] = [0, 0, 1];
+      let alignAngle = 0;
+      if (axisLen > 1e-9) {
+        alignAxis = normalizeVector(rawAxis);
+        alignAngle = Math.atan2(axisLen, alignDot);
+      } else if (alignDot < 0) {
+        const fallback: [number, number, number] =
+          Math.abs(sourceNormal[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+        alignAxis = normalizeVector(cross(sourceNormal, fallback));
+        if (!isFiniteVec(alignAxis)) {
+          alignAxis = [1, 0, 0];
+        }
+        alignAngle = Math.PI;
+      }
+
+      if (Math.abs(alignAngle) > 1e-12) {
+        flattened = this.transformShapeRotate(flattened, [0, 0, 0], alignAxis, alignAngle);
+        sourceX = rotateAroundAxis(sourceX, alignAxis, alignAngle);
+      }
+
+      const xProj: [number, number, number] = [sourceX[0], sourceX[1], 0];
+      const xProjLen = vecLength(xProj);
+      if (xProjLen > 1e-9) {
+        const xUnit: [number, number, number] = [xProj[0] / xProjLen, xProj[1] / xProjLen, 0];
+        const spin = Math.atan2(-xUnit[1], clamp(xUnit[0], -1, 1));
+        if (Math.abs(spin) > 1e-12) {
+          flattened = this.transformShapeRotate(flattened, [0, 0, 0], [0, 0, 1], spin);
+        }
+      }
+
+      if (!this.isValidShape(flattened)) {
+        throw new Error("OCCT backend: unwrap produced invalid result");
+      }
+
+      const outputs = new Map([
+        [
+          feature.result,
+          {
+            id: `${feature.id}:face`,
+            kind: "face" as const,
+            meta: { shape: flattened },
+          },
+        ],
       ]);
-    }
-
-    const targetNormal: [number, number, number] = [0, 0, 1];
-    const sourceNormal = normalizeVector(basis.normal);
-    let sourceX = normalizeVector(basis.xDir);
-    const rawAxis = cross(sourceNormal, targetNormal);
-    const axisLen = vecLength(rawAxis);
-    const alignDot = clamp(dot(sourceNormal, targetNormal), -1, 1);
-    let alignAxis: [number, number, number] = [0, 0, 1];
-    let alignAngle = 0;
-    if (axisLen > 1e-9) {
-      alignAxis = normalizeVector(rawAxis);
-      alignAngle = Math.atan2(axisLen, alignDot);
-    } else if (alignDot < 0) {
-      const fallback: [number, number, number] =
-        Math.abs(sourceNormal[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
-      alignAxis = normalizeVector(cross(sourceNormal, fallback));
-      if (!isFiniteVec(alignAxis)) {
-        alignAxis = [1, 0, 0];
-      }
-      alignAngle = Math.PI;
-    }
-
-    if (Math.abs(alignAngle) > 1e-12) {
-      flattened = this.transformShapeRotate(flattened, [0, 0, 0], alignAxis, alignAngle);
-      sourceX = rotateAroundAxis(sourceX, alignAxis, alignAngle);
-    }
-
-    const xProj: [number, number, number] = [sourceX[0], sourceX[1], 0];
-    const xProjLen = vecLength(xProj);
-    if (xProjLen > 1e-9) {
-      const xUnit: [number, number, number] = [xProj[0] / xProjLen, xProj[1] / xProjLen, 0];
-      const spin = Math.atan2(-xUnit[1], clamp(xUnit[0], -1, 1));
-      if (Math.abs(spin) > 1e-12) {
-        flattened = this.transformShapeRotate(flattened, [0, 0, 0], [0, 0, 1], spin);
-      }
-    }
-
-    if (!this.isValidShape(flattened)) {
-      throw new Error("OCCT backend: unwrap produced invalid result");
-    }
-
-    const outputs = new Map([
-      [
+      const selections = this.collectSelections(
+        flattened,
+        feature.id,
         feature.result,
-        {
-          id: `${feature.id}:face`,
-          kind: "face" as const,
-          meta: { shape: flattened },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      flattened,
-      feature.id,
-      feature.result,
-      feature.tags,
-      { rootKind: "face" }
+        feature.tags,
+        { rootKind: "face" }
+      );
+      return { outputs, selections };
+    }
+
+    if (properties.surfaceType === "cylinder") {
+      const cylinder = this.cylinderFromFace(face);
+      const uv = this.surfaceUvExtents(face);
+      if (!cylinder || !uv) {
+        throw new Error("OCCT backend: unwrap cylindrical source missing geometry metadata");
+      }
+      const radius = cylinder.radius;
+      if (!(Number.isFinite(radius) && radius > 1e-9)) {
+        throw new Error("OCCT backend: unwrap cylindrical source has invalid radius");
+      }
+      const angleSpan = Math.abs(uv.uMax - uv.uMin);
+      const vSpan = Math.abs(uv.vMax - uv.vMin);
+      const width = radius * angleSpan;
+      const height = vSpan;
+      if (!(width > 1e-9) || !(height > 1e-9)) {
+        throw new Error("OCCT backend: unwrap cylindrical source has degenerate span");
+      }
+
+      const corners: [number, number, number][] = [
+        [0, 0, 0],
+        [width, 0, 0],
+        [width, height, 0],
+        [0, height, 0],
+      ];
+      const wire = this.makePolygonWire(corners);
+      const faceBuilder = this.makeFaceFromWire(wire);
+      const flattened = this.readShape(faceBuilder);
+      if (!this.isValidShape(flattened)) {
+        throw new Error("OCCT backend: unwrap produced invalid result");
+      }
+
+      const outputs = new Map([
+        [
+          feature.result,
+          {
+            id: `${feature.id}:face`,
+            kind: "face" as const,
+            meta: { shape: flattened },
+          },
+        ],
+      ]);
+      const selections = this.collectSelections(
+        flattened,
+        feature.id,
+        feature.result,
+        feature.tags,
+        { rootKind: "face" }
+      );
+      return { outputs, selections };
+    }
+    throw new Error(
+      "OCCT backend: unwrap currently supports planar or cylindrical faces only"
     );
-    return { outputs, selections };
   }
 
   private execDraft(
@@ -2572,13 +2626,10 @@ export class OcctBackend implements Backend {
         axisDir = [-normalDir[0], -normalDir[1], -normalDir[2]];
       }
     }
-    const length =
-      feature.depth === "throughAll"
-        ? this.throughAllDepth(owner, axisDir)
-        : expectNumber(feature.depth, "feature.depth");
     if (feature.counterbore && feature.countersink) {
       throw new Error("OCCT backend: hole cannot define both counterbore and countersink");
     }
+    const wizardEndCondition = this.resolveHoleEndCondition(feature);
     let counterboreRadius: number | null = null;
     let counterboreDepth = 0;
     if (feature.counterbore) {
@@ -2599,9 +2650,6 @@ export class OcctBackend implements Backend {
       }
       if (counterboreDepth <= 0) {
         throw new Error("OCCT backend: counterbore depth must be positive");
-      }
-      if (feature.depth !== "throughAll" && counterboreDepth > length) {
-        throw new Error("OCCT backend: counterbore depth exceeds hole depth");
       }
     }
     let countersinkRadius: number | null = null;
@@ -2632,9 +2680,6 @@ export class OcctBackend implements Backend {
       if (!Number.isFinite(countersinkDepth) || countersinkDepth <= 0) {
         throw new Error("OCCT backend: countersink depth must be positive");
       }
-      if (feature.depth !== "throughAll" && countersinkDepth > length) {
-        throw new Error("OCCT backend: countersink depth exceeds hole depth");
-      }
     }
     const centers = feature.pattern
       ? this.patternCenters(feature.pattern.ref, position2, plane, upstream)
@@ -2649,6 +2694,23 @@ export class OcctBackend implements Backend {
       return this.normalizeSolid(next);
     };
     for (const origin of centers) {
+      const length = this.resolveHoleDepth(
+        feature,
+        owner,
+        axisDir,
+        origin,
+        radius,
+        wizardEndCondition
+      );
+      if (!(length > 0)) {
+        throw new Error("OCCT backend: hole depth must be positive");
+      }
+      if (counterboreDepth > 0 && counterboreDepth > length) {
+        throw new Error("OCCT backend: counterbore depth exceeds hole depth");
+      }
+      if (countersinkDepth > 0 && countersinkDepth > length) {
+        throw new Error("OCCT backend: countersink depth exceeds hole depth");
+      }
       const tools = [
         this.readShape(this.makeCylinder(radius, length, axisDir, origin)),
       ];
@@ -2688,6 +2750,134 @@ export class OcctBackend implements Backend {
       feature.tags
     );
     return { outputs, selections };
+  }
+
+  private resolveHoleEndCondition(feature: Hole): HoleEndCondition {
+    if (feature.wizard?.endCondition) {
+      return feature.wizard.endCondition;
+    }
+    return feature.depth === "throughAll" ? "throughAll" : "blind";
+  }
+
+  private resolveHoleDepth(
+    feature: Hole,
+    owner: any,
+    axisDir: [number, number, number],
+    origin: [number, number, number],
+    holeRadius: number,
+    endCondition: HoleEndCondition
+  ): number {
+    if (endCondition === "blind") {
+      return expectNumber(feature.depth, "feature.depth");
+    }
+    if (endCondition === "throughAll" || endCondition === "upToLast") {
+      return this.depthToBodyLimit(owner, axisDir, origin, holeRadius, "last");
+    }
+    return this.depthToBodyLimit(owner, axisDir, origin, holeRadius, "next");
+  }
+
+  private depthToBodyLimit(
+    shape: any,
+    axisDir: [number, number, number],
+    origin: [number, number, number],
+    holeRadius: number,
+    mode: "next" | "last"
+  ): number {
+    const probeDepth = this.depthToBodyLimitByProbe(shape, axisDir, origin, holeRadius, mode);
+    if (probeDepth !== null) return probeDepth;
+    const boundsDepth = this.depthToBodyLimitByBounds(shape, axisDir, origin, mode);
+    if (boundsDepth !== null) return boundsDepth;
+    return this.throughAllDepth(shape, axisDir, origin);
+  }
+
+  private depthToBodyLimitByProbe(
+    shape: any,
+    axisDir: [number, number, number],
+    origin: [number, number, number],
+    holeRadius: number,
+    mode: "next" | "last"
+  ): number | null {
+    const axis = normalizeVector(axisDir);
+    if (!isFiniteVec(axis)) return null;
+    const maxDepth = this.depthToBodyLimitByBounds(shape, axis, origin, "last");
+    if (!(maxDepth !== null && maxDepth > 0)) return null;
+
+    const probeRadius = Math.max(0.05, Math.min(0.5, holeRadius * 0.25));
+    const probeHeight = maxDepth + this.holeDepthMargin(maxDepth);
+    if (!(probeHeight > 0)) return null;
+
+    let probe: any;
+    let intersected: any;
+    try {
+      probe = this.readShape(this.makeCylinder(probeRadius, probeHeight, axis, origin));
+      intersected = this.readShape(this.makeBoolean("intersect", shape, probe));
+    } catch {
+      return null;
+    }
+
+    const ranges = this.collectSolidProjectionRanges(intersected, axis);
+    if (ranges.length === 0) return null;
+    const start = dot(origin, axis);
+    const eps = 1e-6;
+    const distances: number[] = [];
+    for (const range of ranges) {
+      const entry = Math.max(range.min, start);
+      const exit = range.max;
+      const depth = exit - entry;
+      if (exit > start + eps && depth > eps) {
+        distances.push(exit - start);
+      }
+    }
+    if (distances.length === 0) return null;
+    const base = mode === "next" ? Math.min(...distances) : Math.max(...distances);
+    if (!(base > 0)) return null;
+    return base + this.holeDepthMargin(base);
+  }
+
+  private depthToBodyLimitByBounds(
+    shape: any,
+    axisDir: [number, number, number],
+    origin: [number, number, number],
+    mode: "next" | "last"
+  ): number | null {
+    const axis = normalizeVector(axisDir);
+    if (!isFiniteVec(axis)) return null;
+    const extents = this.axisBounds(axis, this.shapeBounds(shape));
+    if (!extents) return null;
+    const start = dot(origin, axis);
+    const span = extents.max - extents.min;
+    if (!(span > 0)) return null;
+    const next = extents.max - start;
+    if (!(next > 1e-6)) return null;
+    const base = mode === "last" ? next : next;
+    return base + this.holeDepthMargin(base);
+  }
+
+  private collectSolidProjectionRanges(
+    shape: any,
+    axis: [number, number, number]
+  ): Array<{ min: number; max: number }> {
+    const occt = this.occt as any;
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_SOLID,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    const ranges: Array<{ min: number; max: number }> = [];
+    for (; explorer.More(); explorer.Next()) {
+      const solid = explorer.Current();
+      const bounds = this.axisBounds(axis, this.shapeBounds(solid));
+      if (bounds) {
+        ranges.push({ min: bounds.min, max: bounds.max });
+      }
+    }
+    ranges.sort((a, b) => a.min - b.min);
+    return ranges;
+  }
+
+  private holeDepthMargin(depth: number): number {
+    return Math.max(0.05, depth * 0.02);
   }
 
   private execBoolean(
@@ -3640,6 +3830,30 @@ export class OcctBackend implements Backend {
     }
   }
 
+  private surfaceUvExtents(
+    face: any
+  ): { uMin: number; uMax: number; vMin: number; vMax: number } | null {
+    try {
+      const faceHandle = this.toFace(face);
+      const adaptor = this.newOcct("BRepAdaptor_Surface", faceHandle, true);
+      const u0 = this.callNumber(adaptor, "FirstUParameter");
+      const u1 = this.callNumber(adaptor, "LastUParameter");
+      const v0 = this.callNumber(adaptor, "FirstVParameter");
+      const v1 = this.callNumber(adaptor, "LastVParameter");
+      if (![u0, u1, v0, v1].every((value) => Number.isFinite(value))) {
+        return null;
+      }
+      return {
+        uMin: Math.min(u0, u1),
+        uMax: Math.max(u0, u1),
+        vMin: Math.min(v0, v1),
+        vMax: Math.max(v0, v1),
+      };
+    } catch {
+      return null;
+    }
+  }
+
   private tryThickenCylindricalFace(face: any, offset: number): any | null {
     if (!Number.isFinite(offset) || offset === 0) return null;
     const cylinder = this.cylinderFromFace(face);
@@ -3679,7 +3893,15 @@ export class OcctBackend implements Backend {
     ];
   }
 
-  private throughAllDepth(shape: any, axisDir: [number, number, number]): number {
+  private throughAllDepth(
+    shape: any,
+    axisDir: [number, number, number],
+    origin?: [number, number, number]
+  ): number {
+    if (origin) {
+      const byBounds = this.depthToBodyLimitByBounds(shape, axisDir, origin, "last");
+      if (byBounds !== null) return byBounds;
+    }
     const bounds = this.shapeBounds(shape);
     const lenX = bounds.max[0] - bounds.min[0];
     const lenY = bounds.max[1] - bounds.min[1];

@@ -70,9 +70,9 @@ const tests = [
     },
   },
   {
-    name: "occt e2e: unwrap rejects non-planar surfaces",
+    name: "occt e2e: unwrap flattens cylindrical surfaces",
     fn: async () => {
-      const { backend } = await getBackendContext();
+      const { occt, backend } = await getBackendContext();
       const line = dsl.sketchLine("line-1", [10, 0], [10, 16]);
       const sketch = dsl.sketch2d(
         "sketch-cyl",
@@ -103,11 +103,73 @@ const tests = [
         ),
       ]);
 
+      const result = buildPart(part, backend);
+      const output = result.final.outputs.get("surface:flat");
+      assert.ok(output, "missing unwrap output");
+      assert.equal(output.kind, "face");
+      const shape = output.meta["shape"] as any;
+      assert.ok(shape, "missing shape metadata");
+      assertValidShape(occt, shape, "unwrap cylinder face");
+      assert.equal(countSolids(occt, shape), 0);
+      assert.ok(countFaces(occt, shape) >= 1, "expected face output");
+
+      const unwrappedFace = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["ownerKey"] === "surface:flat" &&
+          selection.meta["createdBy"] === "unwrap-1"
+      );
+      assert.ok(unwrappedFace, "missing unwrapped face metadata");
+      const area = unwrappedFace?.meta["area"];
+      assert.equal(typeof area, "number");
+      const expectedArea = 2 * Math.PI * 10 * 16;
+      assert.ok(
+        Math.abs((area as number) - expectedArea) < 1e-2,
+        "unwrap should preserve cylindrical lateral area"
+      );
+    },
+  },
+  {
+    name: "occt e2e: unwrap rejects unsupported multi-face surfaces",
+    fn: async () => {
+      const { backend } = await getBackendContext();
+      const line = dsl.sketchLine("line-1", [-8, 0], [8, 0]);
+      const sketch = dsl.sketch2d(
+        "sketch-sweep",
+        [
+          {
+            name: "profile:open",
+            profile: dsl.profileSketchLoop(["line-1"], { open: true }),
+          },
+        ],
+        { entities: [line] }
+      );
+      const part = dsl.part("unwrap-unsupported", [
+        sketch,
+        dsl.sweep(
+          "sweep-1",
+          dsl.profileRef("profile:open"),
+          dsl.pathPolyline([
+            [0, 0, 0],
+            [0, 0, 20],
+            [15, 0, 30],
+          ]),
+          "surface:main",
+          undefined,
+          { mode: "surface" }
+        ),
+        dsl.unwrap("unwrap-1", dsl.selectorNamed("surface:main"), "surface:flat", [
+          "sweep-1",
+        ]),
+      ]);
+
       assert.throws(
         () => buildPart(part, backend),
         (err) =>
           err instanceof Error &&
-          err.message.includes("unwrap currently supports planar faces only")
+          err.message.includes(
+            "unwrap surface source must resolve to exactly one face"
+          )
       );
     },
   },

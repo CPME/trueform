@@ -1070,6 +1070,51 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     },
   },
   {
+    id: "unwrap-cylinder",
+    title: "Unwrap (Cylindrical)",
+    part: (() => {
+      const line = sketchLine("line-1", [10, 0], [10, 16]);
+      const sketch = sketch2d(
+        "sketch-cyl",
+        [
+          {
+            name: "profile:open",
+            profile: profileSketchLoop(["line-1"], { open: true }),
+          },
+        ],
+        { plane: planeDatum("sketch-plane"), entities: [line] }
+      );
+      return part("example-unwrap-cylinder", [
+        datumPlane("sketch-plane", "+Y"),
+        sketch,
+        revolve(
+          "surface-revolve",
+          profileRef("profile:open"),
+          "+Z",
+          "full",
+          "surface:cyl",
+          { mode: "surface" }
+        ),
+        unwrap("unwrap-1", selectorNamed("surface:cyl"), "surface:flat", [
+          "surface-revolve",
+        ]),
+      ]);
+    })(),
+    render: {
+      layers: [
+        {
+          output: "surface:flat",
+          color: [154, 192, 230],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [32, 40, 52],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
+  },
+  {
     id: "shell",
     title: "Shell",
     part: part("example-shell", [
