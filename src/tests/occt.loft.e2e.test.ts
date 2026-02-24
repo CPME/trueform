@@ -29,7 +29,7 @@ const tests = [
       const result = buildPart(part, backend);
       const body = result.final.outputs.get("body:main");
       assert.ok(body, "missing body:main output");
-      assert.equal(body.kind, "surface");
+      assert.equal(body.kind, "solid");
       const shape = body.meta["shape"] as any;
       assert.ok(shape, "missing shape metadata");
       assertValidShape(occt, shape, "loft solid");

@@ -55,7 +55,7 @@ Interpretation:
 | M9: Stage graduation wave 2 (thread + surface-mode reliability) | `in_progress` | Thread plus `feature.surface`/surface-mode revolve are promoted; remaining surface-mode entries still staged. |
 | M10: Advanced profile ops (`rib/web`) | `planned` | Close next declared missing workflow in corpus. |
 | M11: Advanced surfacing slice (`boundary/fill/trim/extend/knit`) | `planned` | Land minimum production-credible subset and probe coverage. |
-| M12: Near-parity closure + gate validation | `planned` | Hit `coverage>=0.85`, `reliability>=0.99`, and staging stability gate. |
+| M12: Near-parity closure + gate validation | `in_progress` | Coverage/reliability gates are now met; remaining work is missing-feature closure (`rib/web`, advanced surfacing). |
 
 ## Execution Order (Near-Parity Path)
 
@@ -148,3 +148,4 @@ npm run parity:geometric:check
 | 2026-02-24 | M9 progress: promoted modeled thread to ready with deterministic and failure-mode e2e coverage. |
 | 2026-02-24 | M9 progress: promoted `feature.surface` and surface-mode revolve to ready with determinism and negative-path coverage. |
 | 2026-02-24 | Coverage gate exceeded in latest `--no-run` snapshot: `0.914` (`ready=26`, `staging=1`, `missing=2`); reliability gate still pending probe-run measurement. |
+| 2026-02-24 | Full probe run now passes reliability gate: `1.000` (27/27). Remaining near-parity gap is missing-feature implementation (`rib/web`, advanced surfacing). |
