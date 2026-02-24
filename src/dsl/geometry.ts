@@ -62,6 +62,7 @@ import type {
   Shell,
   Sweep,
   Thicken,
+  Unwrap,
   ThickenDirection,
   Thread,
   VariableChamfer,
@@ -646,6 +647,20 @@ export const thicken = (
     thickness,
     direction: opts?.direction,
     result: result ?? `body:${id}`,
+    deps,
+  });
+
+export const unwrap = (
+  id: ID,
+  source: Selector,
+  result?: string,
+  deps?: ID[]
+): Unwrap =>
+  compact({
+    id,
+    kind: "feature.unwrap",
+    source,
+    result: result ?? `surface:${id}`,
     deps,
   });
 

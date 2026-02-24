@@ -1246,6 +1246,19 @@ function validateFeature(feature: IntentFeature): void {
       );
       return;
     }
+    case "feature.unwrap": {
+      const unwrap = feature as {
+        source?: Selector;
+        result?: string;
+      };
+      validateSelector(unwrap.source);
+      ensureNonEmptyString(
+        unwrap.result,
+        "validation_feature_result",
+        "Unwrap result is required"
+      );
+      return;
+    }
     case "feature.thread": {
       const thread = feature as {
         axis?: AxisSpec;

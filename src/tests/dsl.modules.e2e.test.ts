@@ -128,6 +128,11 @@ const tests = [
         { translation: [0, 0, 2] }
       );
       assert.equal(movedFace.kind, "feature.move.face");
+      const unwrap = features.unwrap(
+        "unwrap-1",
+        selectors.selectorFace([selectors.predPlanar()], [selectors.rankMaxZ()])
+      );
+      assert.equal(unwrap.kind, "feature.unwrap");
       const variableFillet = features.variableFillet(
         "variable-fillet-1",
         selectors.selectorNamed("body:main"),

@@ -1577,6 +1577,19 @@ export const IR_SCHEMA = {
       },
       additionalProperties: false,
     },
+    Unwrap: {
+      type: "object",
+      required: ["id", "kind", "source", "result"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "feature.unwrap" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        source: { $ref: "#/$defs/Selector" },
+        result: { type: "string" },
+      },
+      additionalProperties: false,
+    },
     Thread: {
       type: "object",
       required: ["id", "kind", "axis", "length", "majorDiameter", "pitch", "result"],
@@ -1827,6 +1840,7 @@ export const IR_SCHEMA = {
         { $ref: "#/$defs/SplitFace" },
         { $ref: "#/$defs/Draft" },
         { $ref: "#/$defs/Thicken" },
+        { $ref: "#/$defs/Unwrap" },
         { $ref: "#/$defs/Thread" },
         { $ref: "#/$defs/Hole" },
         { $ref: "#/$defs/Fillet" },

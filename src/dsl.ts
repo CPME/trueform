@@ -101,6 +101,7 @@ import {
   sketchSlot,
   sketchSpline,
   thicken,
+  unwrap,
   thread,
 } from "./dsl/geometry.js";
 import {
@@ -212,6 +213,7 @@ export const dsl = {
   chamfer,
   variableChamfer,
   thicken,
+  unwrap,
   shell,
   thread,
   booleanOp,
@@ -351,6 +353,7 @@ export {
   variableFillet,
   chamfer,
   variableChamfer,
+  unwrap,
   booleanOp,
   patternLinear,
   patternCircular,

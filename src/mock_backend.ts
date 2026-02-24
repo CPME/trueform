@@ -39,6 +39,7 @@ export class MockBackend implements Backend {
         "feature.move.body",
         "feature.draft",
         "feature.thicken",
+        "feature.unwrap",
         "feature.thread",
         "feature.hole",
         "feature.fillet",
@@ -150,8 +151,11 @@ export class MockBackend implements Backend {
       case "feature.shell":
       case "feature.draft":
       case "feature.thicken":
+      case "feature.unwrap":
       case "feature.thread":
-        return this.emitSolid(feature);
+        return feature.kind === "feature.unwrap"
+          ? this.emitSurface(feature, "face")
+          : this.emitSolid(feature);
       case "feature.hole":
         return this.emitHole(feature, input.resolve, input.upstream);
       case "feature.fillet":

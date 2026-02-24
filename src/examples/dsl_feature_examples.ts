@@ -47,6 +47,7 @@ import {
   sketchRectCorner,
   surface,
   thicken,
+  unwrap,
 } from "../dsl/geometry.js";
 import { cut, intersect } from "../dsl/booleans.js";
 import {
@@ -1031,6 +1032,35 @@ export const dslFeatureExamples: DslFeatureExample[] = [
           output: "surface:main",
           color: [90, 120, 160],
           alpha: 0.25,
+          wireframe: true,
+          wireColor: [32, 40, 52],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
+  },
+  {
+    id: "unwrap",
+    title: "Unwrap (Planar)",
+    part: part("example-unwrap", [
+      extrude("base", profileRect(80, 50), 12, "body:main"),
+      unwrap(
+        "unwrap-1",
+        selectorFace(
+          [predCreatedBy("base"), predPlanar(), predNormal("+Z")],
+          [rankMaxArea()]
+        ),
+        "surface:flat",
+        ["base"]
+      ),
+    ]),
+    render: {
+      layers: [
+        {
+          output: "surface:flat",
+          color: [154, 192, 230],
+          alpha: 1,
           wireframe: true,
           wireColor: [32, 40, 52],
           wireDepthTest: true,

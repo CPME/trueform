@@ -151,6 +151,7 @@ export type IntentFeature =
   | SplitFace
   | Draft
   | Thicken
+  | Unwrap
   | Thread
   | Hole
   | Fillet
@@ -479,6 +480,12 @@ export type Thicken = FeatureBase & {
   surface: Selector;
   thickness: Scalar;
   direction?: ThickenDirection;
+  result: string;
+};
+
+export type Unwrap = FeatureBase & {
+  kind: "feature.unwrap";
+  source: Selector;
   result: string;
 };
 

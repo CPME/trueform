@@ -61,6 +61,7 @@ import {
   SplitFace,
   Draft,
   Thicken,
+  Unwrap,
   Thread,
   VariableChamfer,
 } from "./ir.js";
@@ -146,6 +147,7 @@ export class OcctBackend implements Backend {
         "feature.split.face",
         "feature.draft",
         "feature.thicken",
+        "feature.unwrap",
         "feature.thread",
         "feature.hole",
         "feature.fillet",
@@ -263,6 +265,12 @@ export class OcctBackend implements Backend {
       case "feature.thicken":
         return this.execThicken(
           input.feature as Thicken,
+          input.upstream,
+          input.resolve
+        );
+      case "feature.unwrap":
+        return this.execUnwrap(
+          input.feature as Unwrap,
           input.upstream,
           input.resolve
         );
@@ -1986,6 +1994,112 @@ export class OcctBackend implements Backend {
     return { outputs, selections };
   }
 
+  private execUnwrap(
+    feature: Unwrap,
+    upstream: KernelResult,
+    resolve: ExecuteInput["resolve"]
+  ): KernelResult {
+    const target = resolve(feature.source, upstream);
+    if (target.kind !== "face" && target.kind !== "surface") {
+      throw new Error("OCCT backend: unwrap source must resolve to a face or surface");
+    }
+    const shape = target.meta["shape"];
+    if (!shape) {
+      throw new Error("OCCT backend: unwrap source missing shape");
+    }
+
+    let face: any;
+    if (target.kind === "face") {
+      face = this.toFace(shape);
+    } else {
+      if (this.countFaces(shape) !== 1) {
+        throw new Error(
+          "OCCT backend: unwrap surface source must resolve to exactly one face"
+        );
+      }
+      const extracted = this.firstFace(shape);
+      if (!extracted) {
+        throw new Error("OCCT backend: unwrap surface source has no faces");
+      }
+      face = extracted;
+    }
+
+    const properties = this.faceProperties(face);
+    if (!properties.planar) {
+      throw new Error("OCCT backend: unwrap currently supports planar faces only");
+    }
+    const basis = this.planeBasisFromFace(face);
+    let flattened = face;
+
+    const origin = basis.origin;
+    if (vecLength(origin) > 1e-9) {
+      flattened = this.transformShapeTranslate(flattened, [
+        -origin[0],
+        -origin[1],
+        -origin[2],
+      ]);
+    }
+
+    const targetNormal: [number, number, number] = [0, 0, 1];
+    const sourceNormal = normalizeVector(basis.normal);
+    let sourceX = normalizeVector(basis.xDir);
+    const rawAxis = cross(sourceNormal, targetNormal);
+    const axisLen = vecLength(rawAxis);
+    const alignDot = clamp(dot(sourceNormal, targetNormal), -1, 1);
+    let alignAxis: [number, number, number] = [0, 0, 1];
+    let alignAngle = 0;
+    if (axisLen > 1e-9) {
+      alignAxis = normalizeVector(rawAxis);
+      alignAngle = Math.atan2(axisLen, alignDot);
+    } else if (alignDot < 0) {
+      const fallback: [number, number, number] =
+        Math.abs(sourceNormal[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+      alignAxis = normalizeVector(cross(sourceNormal, fallback));
+      if (!isFiniteVec(alignAxis)) {
+        alignAxis = [1, 0, 0];
+      }
+      alignAngle = Math.PI;
+    }
+
+    if (Math.abs(alignAngle) > 1e-12) {
+      flattened = this.transformShapeRotate(flattened, [0, 0, 0], alignAxis, alignAngle);
+      sourceX = rotateAroundAxis(sourceX, alignAxis, alignAngle);
+    }
+
+    const xProj: [number, number, number] = [sourceX[0], sourceX[1], 0];
+    const xProjLen = vecLength(xProj);
+    if (xProjLen > 1e-9) {
+      const xUnit: [number, number, number] = [xProj[0] / xProjLen, xProj[1] / xProjLen, 0];
+      const spin = Math.atan2(-xUnit[1], clamp(xUnit[0], -1, 1));
+      if (Math.abs(spin) > 1e-12) {
+        flattened = this.transformShapeRotate(flattened, [0, 0, 0], [0, 0, 1], spin);
+      }
+    }
+
+    if (!this.isValidShape(flattened)) {
+      throw new Error("OCCT backend: unwrap produced invalid result");
+    }
+
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:face`,
+          kind: "face" as const,
+          meta: { shape: flattened },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      flattened,
+      feature.id,
+      feature.result,
+      feature.tags,
+      { rootKind: "face" }
+    );
+    return { outputs, selections };
+  }
+
   private execDraft(
     feature: Draft,
     upstream: KernelResult,
@@ -3429,6 +3543,19 @@ export class OcctBackend implements Backend {
     );
     if (!explorer.More()) return null;
     return this.toFace(explorer.Current());
+  }
+
+  private countFaces(shape: any): number {
+    const occt = this.occt as any;
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_FACE,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    let count = 0;
+    for (; explorer.More(); explorer.Next()) count += 1;
+    return count;
   }
 
   private axisBounds(

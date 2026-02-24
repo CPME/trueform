@@ -58,6 +58,17 @@ const tests = [
     },
   },
   {
+    name: "feature staging: unwrap resolves to stable entry",
+    fn: async () => {
+      const unwrap = dsl.unwrap(
+        "unwrap-1",
+        dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxZ()])
+      );
+      const stage = getFeatureStage(unwrap);
+      assert.equal(stage.stage, "stable");
+    },
+  },
+  {
     name: "feature staging: delete face resolves to staging entry",
     fn: async () => {
       const deleted = dsl.deleteFace(

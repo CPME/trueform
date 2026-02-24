@@ -125,6 +125,7 @@ function featureResultName(feature: IntentFeature): string | undefined {
     case "feature.draft":
     case "feature.shell":
     case "feature.thicken":
+    case "feature.unwrap":
     case "feature.thread":
     case "feature.fillet.variable":
     case "feature.chamfer.variable":
@@ -362,6 +363,8 @@ function featureSelectors(feature: IntentFeature): Selector[] {
     }
     case "feature.thicken":
       return [feature.surface];
+    case "feature.unwrap":
+      return [feature.source];
     case "feature.fillet.variable":
       return [feature.source, ...feature.entries.map((entry) => entry.edge)];
     case "feature.chamfer.variable":

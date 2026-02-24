@@ -25,6 +25,7 @@ export {
   surface,
   sweep,
   thicken,
+  unwrap,
   thread,
 } from "./geometry.js";
 
