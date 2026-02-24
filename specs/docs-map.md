@@ -20,6 +20,7 @@ Purpose: define the source of truth for each topic to prevent drift.
 - Geometric parity target matrix: `specs/geometric-parity-matrix.md`
 - Geometric benchmark corpus + scoring workflow: `specs/geometric-benchmark-corpus.md`
 - Geometric parity implementation tracker: `specs/geometric-parity-plan.md`
+- Unwrap implementation tracker: `specs/unwrap-progress-2026-02-24.md`
 
 ## Maintenance Rules
 
