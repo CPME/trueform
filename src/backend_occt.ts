@@ -2006,6 +2006,7 @@ export class OcctBackend implements Backend {
     }
 
     const faces: any[] = [];
+    const precomputedPatches: Array<{ shape: any; meta: Record<string, unknown> }> = [];
     const seenByHash = new Map<number, any[]>();
     const addFace = (candidate: any) => {
       const face = this.toFace(candidate);
@@ -2039,18 +2040,23 @@ export class OcctBackend implements Backend {
         continue;
       }
       if (target.kind === "solid") {
-        throw new Error(
-          "OCCT backend: unwrap solid source is not supported yet; unwrap selected sheet faces/surfaces first"
-        );
+        const shape = target.meta["shape"];
+        if (!shape) {
+          throw new Error("OCCT backend: unwrap source solid missing shape");
+        }
+        precomputedPatches.push(...this.extractSheetPatchesFromSolid(shape));
+        continue;
       }
-      throw new Error("OCCT backend: unwrap source must resolve to face/surface selections");
+      throw new Error("OCCT backend: unwrap source must resolve to face/surface/solid selections");
     }
 
-    if (faces.length === 0) {
+    if (faces.length === 0 && precomputedPatches.length === 0) {
       throw new Error("OCCT backend: unwrap source resolved no faces");
     }
 
-    const patches = faces.map((face) => this.unwrapFacePatch(face));
+    const patches = precomputedPatches.concat(
+      faces.map((face) => this.unwrapFacePatch(face))
+    );
     const packed = this.packUnwrapPatches(
       patches.map((patch) => patch.shape)
     );
@@ -2207,6 +2213,196 @@ export class OcctBackend implements Backend {
 
     throw new Error(
       "OCCT backend: unwrap currently supports planar or cylindrical faces only"
+    );
+  }
+
+  private extractSheetPatchesFromSolid(
+    solid: any
+  ): Array<{ shape: any; meta: Record<string, unknown> }> {
+    const bounds = this.shapeBounds(solid);
+    const dims = [
+      Math.abs(bounds.max[0] - bounds.min[0]),
+      Math.abs(bounds.max[1] - bounds.min[1]),
+      Math.abs(bounds.max[2] - bounds.min[2]),
+    ].sort((a, b) => a - b);
+    const minDim = dims[0] ?? 0;
+    const maxDim = dims[dims.length - 1] ?? 0;
+    if (!(maxDim > 1e-6)) {
+      throw new Error("OCCT backend: unwrap solid source has degenerate bounds");
+    }
+    const thinRatio = minDim / maxDim;
+    if (thinRatio > 0.35) {
+      throw new Error(
+        "OCCT backend: unwrap solid source is not recognized as thin sheet"
+      );
+    }
+
+    const faces = this.listFaces(solid);
+    if (faces.length === 0) {
+      throw new Error("OCCT backend: unwrap solid source has no faces");
+    }
+
+    type PlanarEntry = {
+      face: any;
+      area: number;
+      center: [number, number, number];
+      normal: [number, number, number];
+    };
+    const planar: PlanarEntry[] = [];
+    for (const face of faces) {
+      const props = this.faceProperties(face);
+      if (!props.planar) continue;
+      const normal = props.normalVec
+        ? normalizeVector(props.normalVec)
+        : normalizeVector(this.planeBasisFromFace(face).normal);
+      if (!isFiniteVec(normal)) continue;
+      planar.push({
+        face,
+        area: Math.max(props.area, 0),
+        center: props.center,
+        normal,
+      });
+    }
+
+    let bestPlanar: { a: PlanarEntry; b: PlanarEntry; thickness: number; score: number } | null =
+      null;
+    for (let i = 0; i < planar.length; i += 1) {
+      const a = planar[i];
+      if (!a) continue;
+      for (let j = i + 1; j < planar.length; j += 1) {
+        const b = planar[j];
+        if (!b) continue;
+        const align = Math.abs(dot(a.normal, b.normal));
+        if (align < 0.98) continue;
+        const maxArea = Math.max(a.area, b.area, 1e-9);
+        const areaRatio = Math.min(a.area, b.area) / maxArea;
+        if (areaRatio < 0.6) continue;
+        const delta = this.subVec(b.center, a.center);
+        const thickness = Math.abs(dot(delta, a.normal));
+        if (!(thickness > 1e-6)) continue;
+        const score = Math.min(a.area, b.area) / thickness;
+        if (!bestPlanar || score > bestPlanar.score) {
+          bestPlanar = { a, b, thickness, score };
+        }
+      }
+    }
+    if (bestPlanar) {
+      const primary =
+        bestPlanar.a.area >= bestPlanar.b.area ? bestPlanar.a.face : bestPlanar.b.face;
+      const patch = this.unwrapFacePatch(primary);
+      patch.meta = {
+        ...patch.meta,
+        sheetExtraction: {
+          source: "solid",
+          method: "pairedPlanarFaces",
+          thickness: bestPlanar.thickness,
+          thinRatio,
+        },
+      };
+      return [patch];
+    }
+
+    type CylEntry = {
+      face: any;
+      radius: number;
+      axis: [number, number, number];
+      uv: { uMin: number; uMax: number; vMin: number; vMax: number };
+    };
+    const cylinders: CylEntry[] = [];
+    for (const face of faces) {
+      const cyl = this.cylinderFromFace(face);
+      const uv = this.surfaceUvExtents(face);
+      if (!cyl || !uv) continue;
+      const axis = normalizeVector(cyl.axis);
+      if (!isFiniteVec(axis)) continue;
+      cylinders.push({
+        face,
+        radius: cyl.radius,
+        axis,
+        uv,
+      });
+    }
+
+    let bestCyl:
+      | {
+          a: CylEntry;
+          b: CylEntry;
+          thickness: number;
+          angleSpan: number;
+          axialSpan: number;
+          score: number;
+        }
+      | null = null;
+    for (let i = 0; i < cylinders.length; i += 1) {
+      const a = cylinders[i];
+      if (!a) continue;
+      for (let j = i + 1; j < cylinders.length; j += 1) {
+        const b = cylinders[j];
+        if (!b) continue;
+        if (Math.abs(dot(a.axis, b.axis)) < 0.995) continue;
+        const angleA = Math.abs(a.uv.uMax - a.uv.uMin);
+        const angleB = Math.abs(b.uv.uMax - b.uv.uMin);
+        const axialA = Math.abs(a.uv.vMax - a.uv.vMin);
+        const axialB = Math.abs(b.uv.vMax - b.uv.vMin);
+        const avgAngle = (angleA + angleB) / 2;
+        const avgAxial = (axialA + axialB) / 2;
+        if (Math.abs(angleA - angleB) > Math.max(1e-3, avgAngle * 0.01)) continue;
+        if (Math.abs(axialA - axialB) > Math.max(1e-3, avgAxial * 0.01)) continue;
+        const thickness = Math.abs(a.radius - b.radius);
+        if (!(thickness > 1e-6)) continue;
+        const score = avgAngle * avgAxial;
+        if (!bestCyl || score > bestCyl.score) {
+          bestCyl = {
+            a,
+            b,
+            thickness,
+            angleSpan: avgAngle,
+            axialSpan: avgAxial,
+            score,
+          };
+        }
+      }
+    }
+    if (bestCyl) {
+      const radius = (bestCyl.a.radius + bestCyl.b.radius) / 2;
+      const width = radius * bestCyl.angleSpan;
+      const height = bestCyl.axialSpan;
+      if (!(width > 1e-6) || !(height > 1e-6)) {
+        throw new Error("OCCT backend: extracted cylindrical sheet has degenerate span");
+      }
+      const corners: [number, number, number][] = [
+        [0, 0, 0],
+        [width, 0, 0],
+        [width, height, 0],
+        [0, height, 0],
+      ];
+      const wire = this.makePolygonWire(corners);
+      const faceBuilder = this.makeFaceFromWire(wire);
+      const shape = this.readShape(faceBuilder);
+      return [
+        {
+          shape,
+          meta: {
+            kind: "cylindrical",
+            radius,
+            angleSpan: bestCyl.angleSpan,
+            axialSpan: height,
+            width,
+            height,
+            sourceSurfaceType: "cylinder",
+            sheetExtraction: {
+              source: "solid",
+              method: "pairedCylinders",
+              thickness: bestCyl.thickness,
+              thinRatio,
+            },
+          },
+        },
+      ];
+    }
+
+    throw new Error(
+      "OCCT backend: unwrap solid source is not recognized as thin sheet"
     );
   }
 

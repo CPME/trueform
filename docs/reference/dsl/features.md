@@ -51,7 +51,7 @@ import {
 - `splitFace(id, faces, tool, result?, deps?) -> SplitFace`
 - `draft(id, source, faces, neutralPlane, pullDirection, angle, result?, deps?) -> Draft` (staging)
 - `thicken(id, surface, thickness, result?, deps?, opts?) -> Thicken`
-- `unwrap(id, source, result?, deps?) -> Unwrap` (planar and cylindrical faces)
+- `unwrap(id, source, result?, deps?) -> Unwrap` (planar/cylindrical faces and thin-sheet solids)
 - `thread(id, axis, length, majorDiameter, pitch, result?, deps?, opts?) -> Thread` (modelled)
 - `hole(id, onFace, axis, diameter, depth, opts?) -> Hole`
 - `fillet(id, edges, radius, deps?) -> Fillet`
@@ -87,6 +87,7 @@ Examples:
 - [Thicken](./examples/features#thicken)
 - [Unwrap](./examples/features#unwrap-planar)
 - [Unwrap (Cylindrical)](./examples/features#unwrap-cylindrical)
+- [Unwrap (Thin Solid)](./examples/features#unwrap-thin-solid)
 - [Unwrap (Developable Face Set)](./examples/features#unwrap-developable-face-set)
 - [Hole](./examples/features#hole)
 - [Fillet](./examples/features#fillet)

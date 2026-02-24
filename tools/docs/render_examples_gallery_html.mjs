@@ -50,6 +50,7 @@ const dslCodeTargets = {
   thicken: { doc: "features", heading: "Thicken" },
   unwrap: { doc: "features", heading: "Unwrap (Planar)" },
   "unwrap-cylinder": { doc: "features", heading: "Unwrap (Cylindrical)" },
+  "unwrap-solid": { doc: "features", heading: "Unwrap (Thin Solid)" },
   "unwrap-shell": { doc: "features", heading: "Unwrap (Developable Face Set)" },
   shell: { doc: "features", heading: "Shell" },
   "thread-cosmetic": { doc: "tolerancing", heading: "Cosmetic Thread" },

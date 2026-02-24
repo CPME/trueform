@@ -161,6 +161,11 @@
       "image": "/examples/dsl/unwrap-cylinder.iso.png"
     },
     {
+      "id": "unwrap-solid",
+      "title": "Unwrap (Thin Solid)",
+      "image": "/examples/dsl/unwrap-solid.iso.png"
+    },
+    {
       "id": "unwrap-shell",
       "title": "Unwrap (Developable Face Set)",
       "image": "/examples/dsl/unwrap-shell.iso.png"

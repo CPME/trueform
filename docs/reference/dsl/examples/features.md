@@ -436,7 +436,7 @@ const examplePart = part("example-unwrap", [
 ```
 
 Notes:
-- `unwrap` currently supports planar and cylindrical faces.
+- `unwrap` currently supports planar/cylindrical faces and thin-sheet solids.
 - The output is flattened onto the world XY plane (`z=0`) as a face output.
 - Unsupported surface classes return a clear error.
 - Output metadata includes `meta.unwrap` (mode + basic flat/source metrics).
@@ -472,6 +472,22 @@ Notes:
 - Cylindrical unwrap uses cylinder UV extents to emit a rectangular flat pattern.
 - Flat width equals `radius * angleSpan`; flat height equals axial span.
 - Output metadata includes those values under `meta.unwrap`.
+
+## Unwrap (Thin Solid)
+
+![Unwrap thin solid example](/examples/dsl/unwrap-solid.iso.png)
+
+```ts
+const examplePart = part("example-unwrap-solid", [
+  extrude("base", profileRect(80, 50), 4, "body:main"),
+  unwrap("unwrap-1", selectorNamed("body:main"), "surface:flat"),
+]);
+```
+
+Notes:
+- Solid unwrap detects thin-sheet solids using paired opposite faces.
+- Current extractor supports planar and cylindrical thin-wall patterns.
+- Non-sheet solids return a clear error.
 
 ## Unwrap (Developable Face Set)
 

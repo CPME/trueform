@@ -337,6 +337,14 @@
       </div>
     </a>
 
+    <a class="card" href="#code-dsl-unwrap-solid">
+      <img src="./dsl/unwrap-solid.iso.png" alt="Unwrap (Thin Solid)" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Unwrap (Thin Solid)</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
     <a class="card" href="#code-dsl-unwrap-shell">
       <img src="./dsl/unwrap-shell.iso.png" alt="Unwrap (Developable Face Set)" loading="lazy" />
       <div class="card-body">
@@ -1254,6 +1262,16 @@ const examplePart = part(&quot;example-unwrap-cylinder&quot;, [
     { mode: &quot;surface&quot; }
   ),
   unwrap(&quot;unwrap-1&quot;, selectorNamed(&quot;surface:cyl&quot;), &quot;surface:flat&quot;),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-unwrap-solid">
+      <h3>Unwrap (Thin Solid) (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Unwrap (Thin Solid)</p>
+      <pre><code>const examplePart = part(&quot;example-unwrap-solid&quot;, [
+  extrude(&quot;base&quot;, profileRect(80, 50), 4, &quot;body:main&quot;),
+  unwrap(&quot;unwrap-1&quot;, selectorNamed(&quot;body:main&quot;), &quot;surface:flat&quot;),
 ]);</code></pre>
       <a class="back-link" href="#top">Back to gallery</a>
     </article>

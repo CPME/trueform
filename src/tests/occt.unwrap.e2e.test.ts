@@ -79,6 +79,40 @@ const tests = [
     },
   },
   {
+    name: "occt e2e: unwrap extracts and flattens thin planar solids",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const part = dsl.part("unwrap-solid-planar", [
+        dsl.extrude("base", dsl.profileRect(80, 50), 4, "body:main"),
+        dsl.unwrap("unwrap-1", dsl.selectorNamed("body:main"), "surface:flat", [
+          "base",
+        ]),
+      ]);
+
+      const result = buildPart(part, backend);
+      const output = result.final.outputs.get("surface:flat");
+      assert.ok(output, "missing unwrap output");
+      const shape = output.meta["shape"] as any;
+      assert.ok(shape, "missing shape metadata");
+      assertValidShape(occt, shape, "unwrap solid planar");
+      assert.equal(countSolids(occt, shape), 0);
+      assert.ok(countFaces(occt, shape) >= 1, "expected face output");
+
+      const unwrapMeta = output.meta["unwrap"] as
+        | {
+            kind?: string;
+            sheetExtraction?: { method?: string; thickness?: number };
+          }
+        | undefined;
+      assert.equal(unwrapMeta?.kind, "planar");
+      assert.equal(unwrapMeta?.sheetExtraction?.method, "pairedPlanarFaces");
+      assert.ok(
+        Math.abs((unwrapMeta?.sheetExtraction?.thickness ?? 0) - 4) < 1e-6,
+        "expected extracted solid thickness to match source depth"
+      );
+    },
+  },
+  {
     name: "occt e2e: unwrap flattens cylindrical surfaces",
     fn: async () => {
       const { occt, backend } = await getBackendContext();
@@ -237,6 +271,27 @@ const tests = [
           err instanceof Error &&
           err.message.includes(
             "unwrap currently supports planar or cylindrical faces only"
+          )
+      );
+    },
+  },
+  {
+    name: "occt e2e: unwrap rejects non-sheet solids",
+    fn: async () => {
+      const { backend } = await getBackendContext();
+      const part = dsl.part("unwrap-solid-nonsheet", [
+        dsl.extrude("base", dsl.profileRect(20, 20), 20, "body:main"),
+        dsl.unwrap("unwrap-1", dsl.selectorNamed("body:main"), "surface:flat", [
+          "base",
+        ]),
+      ]);
+
+      assert.throws(
+        () => buildPart(part, backend),
+        (err) =>
+          err instanceof Error &&
+          err.message.includes(
+            "unwrap solid source is not recognized as thin sheet"
           )
       );
     },

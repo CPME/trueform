@@ -1118,6 +1118,27 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     },
   },
   {
+    id: "unwrap-solid",
+    title: "Unwrap (Thin Solid)",
+    part: part("example-unwrap-solid", [
+      extrude("base", profileRect(80, 50), 4, "body:main"),
+      unwrap("unwrap-1", selectorNamed("body:main"), "surface:flat", ["base"]),
+    ]),
+    render: {
+      layers: [
+        {
+          output: "surface:flat",
+          color: [154, 192, 230],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [32, 40, 52],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
+  },
+  {
     id: "unwrap-shell",
     title: "Unwrap (Developable Face Set)",
     part: (() => {
