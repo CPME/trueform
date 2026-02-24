@@ -452,6 +452,27 @@ const tests = [
       assert.equal(holePatterned.kind, "feature.hole");
       assert.deepEqual(holePatterned.position, [2, 3]);
 
+      const holeWizard = dsl.holeWizard("hole-wz-1", selectorFace, "+Z", 5, {
+        endCondition: "throughAll",
+        standard: "ISO",
+        series: "coarse",
+        size: "M6",
+        fitClass: "H7",
+        threaded: true,
+      });
+      assert.equal(holeWizard.kind, "feature.hole");
+      assert.equal(holeWizard.depth, "throughAll");
+      assert.equal(holeWizard.wizard?.endCondition, "throughAll");
+      assert.equal(holeWizard.wizard?.standard, "ISO");
+      assert.throws(
+        () =>
+          dsl.holeWizard("hole-wz-2", selectorFace, "+Z", 5, {
+            endCondition: "blind",
+            standard: "ISO",
+          }),
+        /depth is required/i
+      );
+
       const fillet = dsl.fillet("fillet-1", selectorEdge, 1);
       assert.equal(fillet.kind, "feature.fillet");
       const variableFillet = dsl.variableFillet(

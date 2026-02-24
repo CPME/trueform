@@ -13,6 +13,7 @@ import {
   FTIDatum,
   FlatnessConstraint,
   GeometryRef,
+  HoleEndCondition,
   ID,
   IntentAssembly,
   IntentAssertion,
@@ -1316,6 +1317,15 @@ function validateFeature(feature: IntentFeature): void {
         position?: Point2D;
         counterbore?: { diameter?: Scalar; depth?: Scalar };
         countersink?: { diameter?: Scalar; angle?: Scalar };
+        wizard?: {
+          standard?: string;
+          series?: string;
+          size?: string;
+          fitClass?: string;
+          threadClass?: string;
+          threaded?: boolean;
+          endCondition?: HoleEndCondition;
+        };
       };
       validateSelector(hole.onFace);
       ensureAxis(hole.axis, "Hole axis is required");
@@ -1350,6 +1360,69 @@ function validateFeature(feature: IntentFeature): void {
         );
         validateScalar(hole.countersink.diameter, "Hole countersink diameter");
         validateScalar(hole.countersink.angle, "Hole countersink angle");
+      }
+      if (hole.wizard !== undefined) {
+        ensureObject(
+          hole.wizard,
+          "validation_hole_wizard",
+          "Hole wizard must be an object"
+        );
+        if (hole.wizard.standard !== undefined) {
+          ensureNonEmptyString(
+            hole.wizard.standard,
+            "validation_hole_wizard_standard",
+            "Hole wizard standard must be a string"
+          );
+        }
+        if (hole.wizard.series !== undefined) {
+          ensureNonEmptyString(
+            hole.wizard.series,
+            "validation_hole_wizard_series",
+            "Hole wizard series must be a string"
+          );
+        }
+        if (hole.wizard.size !== undefined) {
+          ensureNonEmptyString(
+            hole.wizard.size,
+            "validation_hole_wizard_size",
+            "Hole wizard size must be a string"
+          );
+        }
+        if (hole.wizard.fitClass !== undefined) {
+          ensureNonEmptyString(
+            hole.wizard.fitClass,
+            "validation_hole_wizard_fit_class",
+            "Hole wizard fit class must be a string"
+          );
+        }
+        if (hole.wizard.threadClass !== undefined) {
+          ensureNonEmptyString(
+            hole.wizard.threadClass,
+            "validation_hole_wizard_thread_class",
+            "Hole wizard thread class must be a string"
+          );
+        }
+        if (hole.wizard.threaded !== undefined && typeof hole.wizard.threaded !== "boolean") {
+          throw new CompileError(
+            "validation_hole_wizard_threaded",
+            "Hole wizard threaded must be a boolean"
+          );
+        }
+        if (hole.wizard.endCondition !== undefined) {
+          validateHoleEndCondition(hole.wizard.endCondition);
+          if (hole.wizard.endCondition === "throughAll" && hole.depth !== "throughAll") {
+            throw new CompileError(
+              "validation_hole_wizard_end_condition",
+              "Hole wizard throughAll end condition requires depth 'throughAll'"
+            );
+          }
+          if (hole.wizard.endCondition === "blind" && hole.depth === "throughAll") {
+            throw new CompileError(
+              "validation_hole_wizard_end_condition",
+              "Hole wizard blind end condition requires numeric depth"
+            );
+          }
+        }
       }
       return;
     }
@@ -2671,6 +2744,21 @@ function validateThreadHandedness(handedness: unknown): void {
   throw new CompileError(
     "validation_thread_handedness",
     "Thread handedness must be \"right\" or \"left\""
+  );
+}
+
+function validateHoleEndCondition(endCondition: unknown): void {
+  if (
+    endCondition === "blind" ||
+    endCondition === "throughAll" ||
+    endCondition === "upToNext" ||
+    endCondition === "upToLast"
+  ) {
+    return;
+  }
+  throw new CompileError(
+    "validation_hole_end_condition",
+    "Hole endCondition must be one of blind, throughAll, upToNext, upToLast"
   );
 }
 

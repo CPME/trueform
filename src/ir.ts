@@ -34,6 +34,7 @@ export type ExtrudeAxis = AxisSpec | { kind: "axis.sketch.normal" };
 export type ExtrudeMode = "solid" | "surface";
 export type ThickenDirection = "normal" | "reverse";
 export type ThreadHandedness = "right" | "left";
+export type HoleEndCondition = "blind" | "throughAll" | "upToNext" | "upToLast";
 
 export type ParamDef = {
   id: ID;
@@ -535,6 +536,16 @@ export type HoleCountersink = {
   angle: Scalar;
 };
 
+export type HoleWizard = {
+  standard?: string;
+  series?: string;
+  size?: string;
+  fitClass?: string;
+  threadClass?: string;
+  threaded?: boolean;
+  endCondition?: HoleEndCondition;
+};
+
 export type Hole = FeatureBase & {
   kind: "feature.hole";
   onFace: Selector;
@@ -545,6 +556,7 @@ export type Hole = FeatureBase & {
   position?: Point2D;
   counterbore?: HoleCounterbore;
   countersink?: HoleCountersink;
+  wizard?: HoleWizard;
 };
 
 export type Fillet = FeatureBase & {

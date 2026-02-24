@@ -159,6 +159,16 @@ const tests = [
         4
       );
       assert.equal(patternCircular.kind, "pattern.circular");
+      const wizardHole = features.holeWizard(
+        "hole-wizard-1",
+        selectors.selectorFace([selectors.predPlanar()], [selectors.rankMaxZ()]),
+        "+Z",
+        5,
+        { endCondition: "throughAll", standard: "ISO", size: "M6" }
+      );
+      assert.equal(wizardHole.kind, "feature.hole");
+      assert.equal(wizardHole.wizard?.standard, "ISO");
+      assert.equal(wizardHole.depth, "throughAll");
 
       const left = selectors.selectorNamed("body:left");
       const right = selectors.selectorNamed("body:right");
@@ -175,6 +185,15 @@ const tests = [
         5
       );
       assert.equal(extrudeLegacy.kind, "feature.extrude");
+      const wizardHoleLegacy = geometry.holeWizard(
+        "hole-wizard-legacy",
+        selectors.selectorFace([selectors.predPlanar()], [selectors.rankMaxZ()]),
+        "+Z",
+        4,
+        { depth: 8, endCondition: "blind", threadClass: "6H" }
+      );
+      assert.equal(wizardHoleLegacy.kind, "feature.hole");
+      assert.equal(wizardHoleLegacy.wizard?.endCondition, "blind");
     },
   },
 ];

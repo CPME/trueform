@@ -7,6 +7,7 @@ export {
   variableFillet,
   hexTubeSweep,
   hole,
+  holeWizard,
   loft,
   plane,
   mirror,

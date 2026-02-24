@@ -31,6 +31,34 @@ const tests = [
     },
   },
   {
+    name: "validation: hole wizard throughAll end condition requires throughAll depth",
+    fn: async () => {
+      const topFace = dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxZ()]);
+      const part = dsl.part("hole-wizard-invalid-throughall", [
+        dsl.extrude("base", dsl.profileRect(20, 12), 8, "body:main"),
+        dsl.hole("hole-1", topFace, "+Z", 5, 6, {
+          deps: ["base"],
+          wizard: { endCondition: "throughAll", standard: "ISO", size: "M6" },
+        }),
+      ]);
+      assert.throws(() => normalizePart(part), /throughAll end condition requires depth/i);
+    },
+  },
+  {
+    name: "validation: hole wizard blind end condition requires numeric depth",
+    fn: async () => {
+      const topFace = dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxZ()]);
+      const part = dsl.part("hole-wizard-invalid-blind", [
+        dsl.extrude("base", dsl.profileRect(20, 12), 8, "body:main"),
+        dsl.hole("hole-1", topFace, "+Z", 5, "throughAll", {
+          deps: ["base"],
+          wizard: { endCondition: "blind", standard: "ISO", size: "M6" },
+        }),
+      ]);
+      assert.throws(() => normalizePart(part), /blind end condition requires numeric depth/i);
+    },
+  },
+  {
     name: "validation: empty feature id throws",
     fn: async () => {
       const badExtrude = {

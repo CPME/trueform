@@ -14,6 +14,8 @@ import type {
   VariableFillet,
   VariableFilletEntry,
   Hole,
+  HoleEndCondition,
+  HoleWizard,
   ID,
   Loft,
   NamedOutput,
@@ -730,6 +732,7 @@ export const hole = (
     position?: Point2D;
     counterbore?: Hole["counterbore"];
     countersink?: Hole["countersink"];
+    wizard?: HoleWizard;
     deps?: ID[];
   }
 ): Hole =>
@@ -744,8 +747,54 @@ export const hole = (
     position: opts?.position,
     counterbore: opts?.counterbore,
     countersink: opts?.countersink,
+    wizard: opts?.wizard,
     deps: opts?.deps,
   });
+
+export const holeWizard = (
+  id: ID,
+  onFace: Selector,
+  axis: Hole["axis"],
+  diameter: number,
+  opts?: {
+    depth?: Hole["depth"];
+    endCondition?: HoleEndCondition;
+    standard?: string;
+    series?: string;
+    size?: string;
+    fitClass?: string;
+    threadClass?: string;
+    threaded?: boolean;
+    pattern?: PatternRef;
+    position?: Point2D;
+    counterbore?: Hole["counterbore"];
+    countersink?: Hole["countersink"];
+    deps?: ID[];
+  }
+): Hole => {
+  const endCondition =
+    opts?.endCondition ?? (opts?.depth === "throughAll" ? "throughAll" : "blind");
+  const depth = opts?.depth ?? (endCondition === "throughAll" ? "throughAll" : undefined);
+  if (depth === undefined) {
+    throw new Error("holeWizard: depth is required unless endCondition is throughAll");
+  }
+  return hole(id, onFace, axis, diameter, depth, {
+    pattern: opts?.pattern,
+    position: opts?.position,
+    counterbore: opts?.counterbore,
+    countersink: opts?.countersink,
+    wizard: compact({
+      standard: opts?.standard,
+      series: opts?.series,
+      size: opts?.size,
+      fitClass: opts?.fitClass,
+      threadClass: opts?.threadClass,
+      threaded: opts?.threaded,
+      endCondition,
+    }),
+    deps: opts?.deps,
+  });
+};
 
 export const fillet = (
   id: ID,

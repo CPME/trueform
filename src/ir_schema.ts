@@ -143,6 +143,7 @@ export const IR_SCHEMA = {
     SweepOrientation: { enum: ["frenet", "fixed"] },
     ThickenDirection: { enum: ["normal", "reverse"] },
     ThreadHandedness: { enum: ["right", "left"] },
+    HoleEndCondition: { enum: ["blind", "throughAll", "upToNext", "upToLast"] },
 
     ParamDef: {
       type: "object",
@@ -1631,6 +1632,19 @@ export const IR_SCHEMA = {
       },
       additionalProperties: false,
     },
+    HoleWizard: {
+      type: "object",
+      properties: {
+        standard: { type: "string" },
+        series: { type: "string" },
+        size: { type: "string" },
+        fitClass: { type: "string" },
+        threadClass: { type: "string" },
+        threaded: { type: "boolean" },
+        endCondition: { $ref: "#/$defs/HoleEndCondition" },
+      },
+      additionalProperties: false,
+    },
     Hole: {
       type: "object",
       required: ["id", "kind", "onFace", "axis", "diameter", "depth"],
@@ -1652,6 +1666,7 @@ export const IR_SCHEMA = {
         position: { $ref: "#/$defs/Point2D" },
         counterbore: { $ref: "#/$defs/HoleCounterbore" },
         countersink: { $ref: "#/$defs/HoleCountersink" },
+        wizard: { $ref: "#/$defs/HoleWizard" },
       },
       additionalProperties: false,
     },
