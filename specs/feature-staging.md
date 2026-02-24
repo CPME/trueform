@@ -30,9 +30,6 @@ clients and agents can avoid treating them as production-stable.
 - `feature.replace.face`
   - Status: `staging`
   - Note: replace face supports core workflows while broader surface-matching reliability hardening continues.
-- `feature.move.face`
-  - Status: `staging`
-  - Note: move face supports core workflows while broader healing/topology reliability hardening continues.
 - `feature.surface`
   - Status: `staging`
   - Note: surface workflows are functional but still improving in reliability.

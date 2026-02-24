@@ -79,7 +79,7 @@ Rationale:
 
 - [x] M8-1: Define promotion checklist template (conformance, failure mode, determinism).
 - [x] M8-2: Promote `feature.move.body` when reliability probes clear gate.
-- [ ] M8-3: Promote `feature.move.face` when reliability probes clear gate.
+- [x] M8-3: Promote `feature.move.face` when reliability probes clear gate.
 - [ ] M8-4: Promote `feature.delete.face` + `feature.replace.face` when healing probes clear gate.
 - [ ] M8-5: Promote `feature.fillet.variable` + `feature.chamfer.variable` when corner cases clear gate.
 - [ ] M8-6: Promote `feature.draft` when selector-extreme negative paths are covered.
@@ -141,3 +141,4 @@ npm run parity:geometric:check
 | 2026-02-24 | Completed M7-1: hole-wizard IR/schema/validation surface + DSL helper (`holeWizard`) and focused tests. |
 | 2026-02-24 | Completed M7-2 through M7-5: OCCT hole-wizard end-condition execution, parity probe, failure-mode tests, and corpus status promotion to staging. |
 | 2026-02-24 | Completed M8-1/M8-2: added explicit promotion checklist template and promoted `feature.move.body` to ready with deterministic parity probe coverage. |
+| 2026-02-24 | Completed M8-3: promoted `feature.move.face` to ready after adding repeated-run determinism probe coverage. |

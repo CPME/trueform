@@ -73,6 +73,51 @@ const tests = [
       assert.ok(countFaces(occt, movedShape) >= 1, "expected moved-face result faces");
     },
   },
+  {
+    name: "occt parity probe: move face is deterministic across repeated runs",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const part = dsl.part("move-face-probe-determinism", [
+        dsl.sketch2d("sketch-base", [
+          { name: "profile:base", profile: dsl.profileRect(20, 12) },
+        ]),
+        dsl.extrude("base-extrude", dsl.profileRef("profile:base"), 8, "body:main", [
+          "sketch-base",
+        ]),
+        dsl.moveFace(
+          "move-top",
+          dsl.selectorNamed("body:main"),
+          dsl.selectorFace([dsl.predCreatedBy("base-extrude"), dsl.predPlanar()], [
+            dsl.rankMaxZ(),
+          ]),
+          "body:moved",
+          ["base-extrude"],
+          { translation: [0, 0, 1], heal: true }
+        ),
+      ]);
+
+      const first = buildPart(part, backend);
+      const second = buildPart(part, backend);
+      const firstMoved = first.final.outputs.get("body:moved");
+      const secondMoved = second.final.outputs.get("body:moved");
+      assert.ok(firstMoved, "missing first deterministic move-face result");
+      assert.ok(secondMoved, "missing second deterministic move-face result");
+      const firstShape = firstMoved.meta["shape"] as any;
+      const secondShape = secondMoved.meta["shape"] as any;
+      assertValidShape(occt, firstShape, "first deterministic move-face result");
+      assertValidShape(occt, secondShape, "second deterministic move-face result");
+      assert.equal(
+        countSolids(occt, firstShape),
+        countSolids(occt, secondShape),
+        "expected deterministic solid-count"
+      );
+      assert.equal(
+        countFaces(occt, firstShape),
+        countFaces(occt, secondShape),
+        "expected deterministic face-count"
+      );
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

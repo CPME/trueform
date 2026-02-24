@@ -29,10 +29,6 @@ export const TF_STAGED_FEATURES: Readonly<Record<string, FeatureStageEntry>> = O
     stage: "staging" as const,
     notes: "Replace face supports core workflows while broader surface matching cases mature.",
   },
-  "feature.move.face": {
-    stage: "staging" as const,
-    notes: "Move face supports core workflows while broader healing and topology cases mature.",
-  },
   "feature.fillet.variable": {
     stage: "staging" as const,
     notes: "Variable fillet supports core per-edge radii workflows while broader corner behavior matures.",

@@ -185,9 +185,9 @@
       "id": "move-face",
       "category": "multi-body-direct-edits",
       "feature": "Move face",
-      "parity": "staging",
+      "parity": "ready",
       "probe": { "kind": "dist-test", "path": "dist/tests/occt.move_face.e2e.probe.js" },
-      "notes": "feature.move.face now supports core translation/rotation/scale workflows in staging."
+      "notes": "feature.move.face supports translation workflows with healing/open-surface paths plus deterministic parity checks and is now promoted to ready."
     },
     {
       "id": "advanced-surfacing-boundary-fill-knit",
