@@ -337,22 +337,6 @@
       </div>
     </a>
 
-    <a class="card" href="#code-dsl-unwrap-solid">
-      <img src="./dsl/unwrap-solid.iso.png" alt="Unwrap (Thin Solid)" loading="lazy" />
-      <div class="card-body">
-        <div class="card-title">Unwrap (Thin Solid)</div>
-        <div class="card-meta">Features</div>
-      </div>
-    </a>
-
-    <a class="card" href="#code-dsl-unwrap-shell">
-      <img src="./dsl/unwrap-shell.iso.png" alt="Unwrap (Developable Face Set)" loading="lazy" />
-      <div class="card-body">
-        <div class="card-title">Unwrap (Developable Face Set)</div>
-        <div class="card-meta">Features</div>
-      </div>
-    </a>
-
     <a class="card" href="#code-dsl-shell">
       <img src="./dsl/shell.iso.png" alt="Shell" loading="lazy" />
       <div class="card-body">
@@ -1262,42 +1246,6 @@ const examplePart = part(&quot;example-unwrap-cylinder&quot;, [
     { mode: &quot;surface&quot; }
   ),
   unwrap(&quot;unwrap-1&quot;, selectorNamed(&quot;surface:cyl&quot;), &quot;surface:flat&quot;),
-]);</code></pre>
-      <a class="back-link" href="#top">Back to gallery</a>
-    </article>
-
-    <article class="code-entry" id="code-dsl-unwrap-solid">
-      <h3>Unwrap (Thin Solid) (DSL)</h3>
-      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Unwrap (Thin Solid)</p>
-      <pre><code>const examplePart = part(&quot;example-unwrap-solid&quot;, [
-  extrude(&quot;base&quot;, profileRect(80, 50), 4, &quot;body:main&quot;),
-  unwrap(&quot;unwrap-1&quot;, selectorNamed(&quot;body:main&quot;), &quot;surface:flat&quot;),
-]);</code></pre>
-      <a class="back-link" href="#top">Back to gallery</a>
-    </article>
-
-    <article class="code-entry" id="code-dsl-unwrap-shell">
-      <h3>Unwrap (Developable Face Set) (DSL)</h3>
-      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Unwrap (Developable Face Set)</p>
-      <pre><code>const line = sketchLine(&quot;line-1&quot;, [-8, 0], [8, 0]);
-const sketch = sketch2d(
-  &quot;sketch-sweep&quot;,
-  [{ name: &quot;profile:open&quot;, profile: profileSketchLoop([&quot;line-1&quot;], { open: true }) }],
-  { entities: [line] }
-);
-
-const path = pathPolyline([
-  [0, 0, 0],
-  [0, 0, 20],
-  [15, 0, 30],
-]);
-
-const examplePart = part(&quot;example-unwrap-shell&quot;, [
-  sketch,
-  sweep(&quot;sweep-1&quot;, profileRef(&quot;profile:open&quot;), path, &quot;surface:main&quot;, undefined, {
-    mode: &quot;surface&quot;,
-  }),
-  unwrap(&quot;unwrap-1&quot;, selectorNamed(&quot;surface:main&quot;), &quot;surface:flat&quot;),
 ]);</code></pre>
       <a class="back-link" href="#top">Back to gallery</a>
     </article>

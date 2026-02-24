@@ -113,6 +113,30 @@ type FaceSurfaceClass =
 
 type FaceSurfaceMap = Map<number, Array<{ face: any; surface: FaceSurfaceClass }>>;
 
+type UnwrapPointProjector = (
+  point: [number, number, number]
+) => [number, number, number] | null;
+
+type UnwrapPatch = {
+  shape: any;
+  meta: Record<string, unknown>;
+  sourceFace?: any;
+  projectPoint?: UnwrapPointProjector;
+};
+
+type UnwrapAdjacencyEdge = {
+  a: number;
+  b: number;
+  start: [number, number, number];
+  end: [number, number, number];
+};
+
+type Unwrap2DTransform = {
+  angle: number;
+  tx: number;
+  ty: number;
+};
+
 export class OcctBackend implements Backend {
   private occt: OcctModule;
   private selectionSeq = 0;
@@ -2006,7 +2030,7 @@ export class OcctBackend implements Backend {
     }
 
     const faces: any[] = [];
-    const precomputedPatches: Array<{ shape: any; meta: Record<string, unknown> }> = [];
+    const precomputedPatches: UnwrapPatch[] = [];
     const seenByHash = new Map<number, any[]>();
     const addFace = (candidate: any) => {
       const face = this.toFace(candidate);
@@ -2054,12 +2078,12 @@ export class OcctBackend implements Backend {
       throw new Error("OCCT backend: unwrap source resolved no faces");
     }
 
-    const patches = precomputedPatches.concat(
-      faces.map((face) => this.unwrapFacePatch(face))
-    );
+    const facePatches = faces.map((face) => this.unwrapFacePatch(face));
+    const faceComponents = this.layoutConnectedUnwrapFacePatches(facePatches);
     const packed = this.packUnwrapPatches(
-      patches.map((patch) => patch.shape)
+      faceComponents.concat(precomputedPatches.map((patch) => patch.shape))
     );
+    const patches = precomputedPatches.concat(facePatches);
     const outputShape =
       packed.length === 1 ? packed[0] : this.makeCompoundFromShapes(packed);
     if (!this.isValidShape(outputShape)) {
@@ -2098,10 +2122,7 @@ export class OcctBackend implements Backend {
     return { outputs, selections };
   }
 
-  private unwrapFacePatch(face: any): {
-    shape: any;
-    meta: Record<string, unknown>;
-  } {
+  private unwrapFacePatch(face: any): UnwrapPatch {
     const properties = this.faceProperties(face);
     if (properties.planar) {
       const basis = this.planeBasisFromFace(face);
@@ -2144,9 +2165,10 @@ export class OcctBackend implements Backend {
 
       const xProj: [number, number, number] = [sourceX[0], sourceX[1], 0];
       const xProjLen = vecLength(xProj);
+      let spin = 0;
       if (xProjLen > 1e-9) {
         const xUnit: [number, number, number] = [xProj[0] / xProjLen, xProj[1] / xProjLen, 0];
-        const spin = Math.atan2(-xUnit[1], clamp(xUnit[0], -1, 1));
+        spin = Math.atan2(-xUnit[1], clamp(xUnit[0], -1, 1));
         if (Math.abs(spin) > 1e-12) {
           flattened = this.transformShapeRotate(flattened, [0, 0, 0], [0, 0, 1], spin);
         }
@@ -2156,7 +2178,27 @@ export class OcctBackend implements Backend {
         throw new Error("OCCT backend: unwrap produced invalid result");
       }
       const flatProps = this.faceProperties(flattened);
+      const projectPoint: UnwrapPointProjector = (point) => {
+        if (!point.every((value) => Number.isFinite(value))) return null;
+        const translated: [number, number, number] = [
+          point[0] - origin[0],
+          point[1] - origin[1],
+          point[2] - origin[2],
+        ];
+        const aligned =
+          Math.abs(alignAngle) > 1e-12
+            ? rotateAroundAxis(translated, alignAxis, alignAngle)
+            : translated;
+        const spun =
+          Math.abs(spin) > 1e-12
+            ? rotateAroundAxis(aligned, [0, 0, 1], spin)
+            : aligned;
+        if (!spun.every((value) => Number.isFinite(value))) return null;
+        return [spun[0], spun[1], 0];
+      };
       return {
+        sourceFace: face,
+        projectPoint,
         shape: flattened,
         meta: {
           kind: "planar",
@@ -2197,7 +2239,32 @@ export class OcctBackend implements Backend {
       if (!this.isValidShape(flattened)) {
         throw new Error("OCCT backend: unwrap produced invalid result");
       }
+      const axis = normalizeVector(cylinder.axis);
+      const xRef = this.cylinderReferenceXDirection(cylinder);
+      const yRef = normalizeVector(cross(axis, xRef));
+      const axisValid = isFiniteVec(axis);
+      const xRefValid = isFiniteVec(xRef);
+      const yRefValid = isFiniteVec(yRef);
+      const projectPoint: UnwrapPointProjector = (point) => {
+        if (!axisValid || !xRefValid || !yRefValid) return null;
+        if (!point.every((value) => Number.isFinite(value))) return null;
+        const rel = this.subVec(point, cylinder.origin);
+        const axial = dot(rel, axis);
+        const radial = this.subVec(rel, this.scaleVec(axis, axial));
+        const radialLen = vecLength(radial);
+        if (!(radialLen > 1e-9)) return null;
+        const cosAngle = dot(radial, xRef) / radialLen;
+        const sinAngle = dot(radial, yRef) / radialLen;
+        let u = Math.atan2(sinAngle, cosAngle);
+        u = this.closestPeriodicParameter(u, uv.uMin, uv.uMax);
+        const x = radius * (u - uv.uMin);
+        const y = axial - uv.vMin;
+        if (!(Number.isFinite(x) && Number.isFinite(y))) return null;
+        return [x, y, 0];
+      };
       return {
+        sourceFace: face,
+        projectPoint,
         shape: flattened,
         meta: {
           kind: "cylindrical",
@@ -2218,7 +2285,7 @@ export class OcctBackend implements Backend {
 
   private extractSheetPatchesFromSolid(
     solid: any
-  ): Array<{ shape: any; meta: Record<string, unknown> }> {
+  ): UnwrapPatch[] {
     const bounds = this.shapeBounds(solid);
     const dims = [
       Math.abs(bounds.max[0] - bounds.min[0]),
@@ -2404,6 +2471,230 @@ export class OcctBackend implements Backend {
     throw new Error(
       "OCCT backend: unwrap solid source is not recognized as thin sheet"
     );
+  }
+
+  private layoutConnectedUnwrapFacePatches(patches: UnwrapPatch[]): any[] {
+    if (patches.length <= 1) return patches.map((patch) => patch.shape);
+    const edges = this.buildUnwrapAdjacencyEdges(patches);
+    if (edges.length === 0) return patches.map((patch) => patch.shape);
+
+    const edgesByPatch = new Map<number, UnwrapAdjacencyEdge[]>();
+    for (const edge of edges) {
+      const listA = edgesByPatch.get(edge.a) ?? [];
+      listA.push(edge);
+      edgesByPatch.set(edge.a, listA);
+      const listB = edgesByPatch.get(edge.b) ?? [];
+      listB.push(edge);
+      edgesByPatch.set(edge.b, listB);
+    }
+
+    const transforms = new Map<number, Unwrap2DTransform>();
+    const visited = new Set<number>();
+    const components: number[][] = [];
+    for (let i = 0; i < patches.length; i += 1) {
+      if (visited.has(i)) continue;
+      const component: number[] = [];
+      const root: Unwrap2DTransform = { angle: 0, tx: 0, ty: 0 };
+      transforms.set(i, root);
+      const queue = [i];
+      visited.add(i);
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (current === undefined) break;
+        component.push(current);
+        const currentPatch = patches[current];
+        const currentTransform = transforms.get(current) ?? root;
+        const projectorA = currentPatch?.projectPoint;
+        if (!projectorA) continue;
+        const neighbors = edgesByPatch.get(current) ?? [];
+        for (const edge of neighbors) {
+          const neighbor = edge.a === current ? edge.b : edge.a;
+          if (visited.has(neighbor)) continue;
+          const neighborPatch = patches[neighbor];
+          const projectorB = neighborPatch?.projectPoint;
+          if (!projectorB) continue;
+          const a0 = projectorA(edge.start);
+          const a1 = projectorA(edge.end);
+          const b0 = projectorB(edge.start);
+          const b1 = projectorB(edge.end);
+          if (!a0 || !a1 || !b0 || !b1) continue;
+          const target0 = this.applyUnwrapTransform2D(currentTransform, a0);
+          const target1 = this.applyUnwrapTransform2D(currentTransform, a1);
+          const fit = this.fitUnwrapEdgeTransform2D(b0, b1, target0, target1);
+          if (!fit) continue;
+          transforms.set(neighbor, fit);
+          visited.add(neighbor);
+          queue.push(neighbor);
+        }
+      }
+      components.push(component);
+    }
+
+    const transformed = patches.map((patch, index) => {
+      const transform = transforms.get(index);
+      if (!transform) return patch.shape;
+      return this.transformShapeInUnwrapPlane(patch.shape, transform);
+    });
+
+    return components.map((indices) => {
+      const shapes = indices.map((index) => transformed[index]).filter(Boolean);
+      if (shapes.length === 0) return null;
+      if (shapes.length === 1) return shapes[0];
+      return this.makeCompoundFromShapes(shapes);
+    }).filter((shape): shape is any => shape !== null);
+  }
+
+  private buildUnwrapAdjacencyEdges(patches: UnwrapPatch[]): UnwrapAdjacencyEdge[] {
+    const entries: Array<{ index: number; face: any }> = [];
+    for (let i = 0; i < patches.length; i += 1) {
+      const patch = patches[i];
+      if (!patch?.sourceFace || !patch.projectPoint) continue;
+      entries.push({ index: i, face: this.toFace(patch.sourceFace) });
+    }
+    if (entries.length < 2) return [];
+
+    const compound = this.makeCompoundFromShapes(entries.map((entry) => entry.face));
+    const adjacency = this.buildEdgeAdjacency(compound);
+    if (!adjacency) return [];
+
+    const byFaceHash = new Map<number, Array<{ index: number; face: any }>>();
+    for (const entry of entries) {
+      const hash = this.shapeHash(entry.face);
+      const bucket = byFaceHash.get(hash) ?? [];
+      bucket.push(entry);
+      byFaceHash.set(hash, bucket);
+    }
+    const lookupIndex = (face: any): number | null => {
+      const hash = this.shapeHash(face);
+      const bucket = byFaceHash.get(hash);
+      if (!bucket) return null;
+      for (const entry of bucket) {
+        if (this.shapesSame(entry.face, face)) return entry.index;
+      }
+      return null;
+    };
+
+    const edges: UnwrapAdjacencyEdge[] = [];
+    const seenPair = new Set<string>();
+    for (const bucket of adjacency.values()) {
+      for (const item of bucket) {
+        if (!item || item.faces.length !== 2) continue;
+        const a = lookupIndex(item.faces[0]);
+        const b = lookupIndex(item.faces[1]);
+        if (a === null || b === null || a === b) continue;
+        const endpoints = this.edgeEndpoints(item.edge);
+        if (!endpoints) continue;
+        const lo = Math.min(a, b);
+        const hi = Math.max(a, b);
+        const edgeHash = this.shapeHash(item.edge);
+        const key = `${lo}:${hi}:${edgeHash}`;
+        if (seenPair.has(key)) continue;
+        seenPair.add(key);
+        edges.push({
+          a: lo,
+          b: hi,
+          start: endpoints.start,
+          end: endpoints.end,
+        });
+      }
+    }
+    return edges;
+  }
+
+  private edgeEndpoints(
+    edge: any
+  ): { start: [number, number, number]; end: [number, number, number] } | null {
+    try {
+      const adaptor = this.newOcct("BRepAdaptor_Curve", this.toEdge(edge));
+      const first = this.callNumber(adaptor, "FirstParameter");
+      const last = this.callNumber(adaptor, "LastParameter");
+      if (!Number.isFinite(first) || !Number.isFinite(last)) return null;
+      const start = this.pointToArray(this.call(adaptor, "Value", first));
+      const end = this.pointToArray(this.call(adaptor, "Value", last));
+      if (![...start, ...end].every((value) => Number.isFinite(value))) return null;
+      return { start, end };
+    } catch {
+      return null;
+    }
+  }
+
+  private applyUnwrapTransform2D(
+    transform: Unwrap2DTransform,
+    point: [number, number, number]
+  ): [number, number, number] {
+    const cos = Math.cos(transform.angle);
+    const sin = Math.sin(transform.angle);
+    const x = cos * point[0] - sin * point[1] + transform.tx;
+    const y = sin * point[0] + cos * point[1] + transform.ty;
+    return [x, y, point[2]];
+  }
+
+  private fitUnwrapEdgeTransform2D(
+    sourceStart: [number, number, number],
+    sourceEnd: [number, number, number],
+    targetStart: [number, number, number],
+    targetEnd: [number, number, number]
+  ): Unwrap2DTransform | null {
+    const targetVec: [number, number] = [
+      targetEnd[0] - targetStart[0],
+      targetEnd[1] - targetStart[1],
+    ];
+    const targetLen = Math.hypot(targetVec[0], targetVec[1]);
+    if (!(targetLen > 1e-9)) return null;
+    const candidates: Array<[[number, number, number], [number, number, number]]> = [
+      [sourceStart, sourceEnd],
+      [sourceEnd, sourceStart],
+    ];
+    let best: Unwrap2DTransform | null = null;
+    let bestErr = Infinity;
+    for (const candidate of candidates) {
+      const s0 = candidate[0];
+      const s1 = candidate[1];
+      const sourceVec: [number, number] = [s1[0] - s0[0], s1[1] - s0[1]];
+      const sourceLen = Math.hypot(sourceVec[0], sourceVec[1]);
+      if (!(sourceLen > 1e-9)) continue;
+      const angle = Math.atan2(
+        sourceVec[0] * targetVec[1] - sourceVec[1] * targetVec[0],
+        sourceVec[0] * targetVec[0] + sourceVec[1] * targetVec[1]
+      );
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const rotS0x = cos * s0[0] - sin * s0[1];
+      const rotS0y = sin * s0[0] + cos * s0[1];
+      const tx = targetStart[0] - rotS0x;
+      const ty = targetStart[1] - rotS0y;
+      const mappedS1x = cos * s1[0] - sin * s1[1] + tx;
+      const mappedS1y = sin * s1[0] + cos * s1[1] + ty;
+      const err = Math.hypot(mappedS1x - targetEnd[0], mappedS1y - targetEnd[1]);
+      if (err < bestErr) {
+        bestErr = err;
+        best = { angle, tx, ty };
+      }
+    }
+    if (!best) return null;
+    const tolerance = Math.max(targetLen, 1) * 1e-5;
+    if (!(bestErr <= tolerance)) return null;
+    return best;
+  }
+
+  private transformShapeInUnwrapPlane(shape: any, transform: Unwrap2DTransform): any {
+    let out = shape;
+    if (Math.abs(transform.angle) > 1e-12) {
+      out = this.transformShapeRotate(out, [0, 0, 0], [0, 0, 1], transform.angle);
+    }
+    if (Math.abs(transform.tx) > 1e-12 || Math.abs(transform.ty) > 1e-12) {
+      out = this.transformShapeTranslate(out, [transform.tx, transform.ty, 0]);
+    }
+    return out;
+  }
+
+  private closestPeriodicParameter(value: number, min: number, max: number): number {
+    const period = Math.PI * 2;
+    const center = (min + max) / 2;
+    const shifted = value + Math.round((center - value) / period) * period;
+    if (shifted < min) return shifted + period;
+    if (shifted > max) return shifted - period;
+    return shifted;
   }
 
   private packUnwrapPatches(shapes: any[]): any[] {
@@ -4085,6 +4376,8 @@ export class OcctBackend implements Backend {
   private cylinderFromFace(face: any): {
     origin: [number, number, number];
     axis: [number, number, number];
+    xDir?: [number, number, number];
+    yDir?: [number, number, number];
     radius: number;
   } | null {
     try {
@@ -4104,16 +4397,53 @@ export class OcctBackend implements Backend {
       const loc = axis
         ? this.callWithFallback(axis, ["Location", "Location_1"], [[]])
         : null;
+      const position = this.callWithFallback(
+        cylinder,
+        ["Position", "Position_1", "Position_2"],
+        [[]]
+      );
+      let xDir: [number, number, number] | undefined;
+      let yDir: [number, number, number] | undefined;
+      if (position) {
+        const x = this.callWithFallback(position, ["XDirection", "XDirection_1"], [[]]);
+        const y = this.callWithFallback(position, ["YDirection", "YDirection_1"], [[]]);
+        if (x) xDir = this.dirToArray(x);
+        if (y) yDir = this.dirToArray(y);
+      }
       const radius = this.callWithFallback(cylinder, ["Radius", "Radius_1"], [[]]);
       if (!dir || !loc || typeof radius !== "number") return null;
       return {
         origin: this.pointToArray(loc),
         axis: this.dirToArray(dir),
+        xDir,
+        yDir,
         radius,
       };
     } catch {
       return null;
     }
+  }
+
+  private cylinderReferenceXDirection(cylinder: {
+    axis: [number, number, number];
+    xDir?: [number, number, number];
+    yDir?: [number, number, number];
+  }): [number, number, number] {
+    const axis = normalizeVector(cylinder.axis);
+    if (!isFiniteVec(axis)) return [1, 0, 0];
+
+    const candidates: Array<[number, number, number] | undefined> = [
+      cylinder.xDir,
+      cylinder.yDir ? cross(cylinder.yDir, axis) : undefined,
+      Math.abs(axis[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0],
+    ];
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      const projected = this.subVec(candidate, this.scaleVec(axis, dot(candidate, axis)));
+      const normalized = normalizeVector(projected);
+      if (isFiniteVec(normalized)) return normalized;
+    }
+    return [1, 0, 0];
   }
 
   private cylinderVExtents(

@@ -9,6 +9,49 @@ import {
   runTests,
 } from "./occt_test_utils.js";
 
+function countCoincidentVerticesAcrossFaces(occt: any, shape: any): number {
+  const counts = new Map<string, number>();
+  const faceExplorer = new occt.TopExp_Explorer_1();
+  faceExplorer.Init(
+    shape,
+    occt.TopAbs_ShapeEnum.TopAbs_FACE,
+    occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+  );
+  for (; faceExplorer.More(); faceExplorer.Next()) {
+    const face = faceExplorer.Current();
+    const vertexKeys = new Set<string>();
+    const vertexExplorer = new occt.TopExp_Explorer_1();
+    vertexExplorer.Init(
+      face,
+      occt.TopAbs_ShapeEnum.TopAbs_VERTEX,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    for (; vertexExplorer.More(); vertexExplorer.Next()) {
+      const rawVertex = vertexExplorer.Current();
+      try {
+        const vertex = occt.TopoDS.Vertex_1(rawVertex);
+        const point = occt.BRep_Tool.Pnt(vertex);
+        const key = [
+          Math.round(point.X() * 1e5),
+          Math.round(point.Y() * 1e5),
+          Math.round(point.Z() * 1e5),
+        ].join(":");
+        vertexKeys.add(key);
+      } catch {
+        // Skip vertices that fail coordinate extraction.
+      }
+    }
+    for (const key of vertexKeys) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+  let coincident = 0;
+  for (const occurrences of counts.values()) {
+    if (occurrences >= 2) coincident += 1;
+  }
+  return coincident;
+}
+
 const tests = [
   {
     name: "occt e2e: unwrap flattens a planar face onto the XY plane",
@@ -235,6 +278,11 @@ const tests = [
       assert.ok(shape, "missing shape metadata");
       assertValidShape(occt, shape, "unwrap multi-face surface");
       assert.ok(countFaces(occt, shape) >= 2, "expected multiple flattened faces");
+      const sharedVertices = countCoincidentVerticesAcrossFaces(occt, shape);
+      assert.ok(
+        sharedVertices >= 2,
+        "expected connected unwrap output to keep coincident seam vertices between faces"
+      );
       const unwrapMeta = output?.meta["unwrap"] as
         | { kind?: string; faceCount?: number }
         | undefined;
