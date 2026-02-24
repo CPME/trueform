@@ -421,16 +421,17 @@ Notes:
 ![Unwrap example](/examples/dsl/unwrap.iso.png)
 
 ```ts
+const rect = sketchRectCorner("rect-1", [0, 0], 80, 50);
+const sketch = sketch2d(
+  "sketch-unwrap",
+  [{ name: "profile:rect", profile: profileSketchLoop(["rect-1"]) }],
+  { entities: [rect] }
+);
+
 const examplePart = part("example-unwrap", [
-  extrude("base", profileRect(80, 50), 12, "body:main"),
-  unwrap(
-    "unwrap-1",
-    selectorFace(
-      [predCreatedBy("base"), predPlanar(), predNormal("+Z")],
-      [rankMaxArea()]
-    ),
-    "surface:flat"
-  ),
+  sketch,
+  surface("surface-1", profileRef("profile:rect"), "surface:main"),
+  unwrap("unwrap-1", selectorNamed("surface:main"), "surface:flat"),
 ]);
 ```
 
@@ -471,6 +472,38 @@ Notes:
 - Cylindrical unwrap uses cylinder UV extents to emit a rectangular flat pattern.
 - Flat width equals `radius * angleSpan`; flat height equals axial span.
 - Output metadata includes those values under `meta.unwrap`.
+
+## Unwrap (Developable Face Set)
+
+![Unwrap developable face set example](/examples/dsl/unwrap-shell.iso.png)
+
+```ts
+const line = sketchLine("line-1", [-8, 0], [8, 0]);
+const sketch = sketch2d(
+  "sketch-sweep",
+  [{ name: "profile:open", profile: profileSketchLoop(["line-1"], { open: true }) }],
+  { entities: [line] }
+);
+
+const path = pathPolyline([
+  [0, 0, 0],
+  [0, 0, 20],
+  [15, 0, 30],
+]);
+
+const examplePart = part("example-unwrap-shell", [
+  sketch,
+  sweep("sweep-1", profileRef("profile:open"), path, "surface:main", undefined, {
+    mode: "surface",
+  }),
+  unwrap("unwrap-1", selectorNamed("surface:main"), "surface:flat"),
+]);
+```
+
+Notes:
+- `unwrap` accepts face-set selectors (for example a multi-face surface output).
+- The current layout packs each flattened patch in XY while preserving each face's intrinsic dimensions.
+- Metadata uses `meta.unwrap.kind = "multi"` and includes per-face records.
 
 ## Hole
 

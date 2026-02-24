@@ -87,6 +87,7 @@ Examples:
 - [Thicken](./examples/features#thicken)
 - [Unwrap](./examples/features#unwrap-planar)
 - [Unwrap (Cylindrical)](./examples/features#unwrap-cylindrical)
+- [Unwrap (Developable Face Set)](./examples/features#unwrap-developable-face-set)
 - [Hole](./examples/features#hole)
 - [Fillet](./examples/features#fillet)
 - [Variable Fillet](./examples/features#variable-fillet)
