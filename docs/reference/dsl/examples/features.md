@@ -438,6 +438,7 @@ Notes:
 - `unwrap` currently supports planar and cylindrical faces.
 - The output is flattened onto the world XY plane (`z=0`) as a face output.
 - Unsupported surface classes return a clear error.
+- Output metadata includes `meta.unwrap` (mode + basic flat/source metrics).
 
 ## Unwrap (Cylindrical)
 
@@ -469,6 +470,7 @@ const examplePart = part("example-unwrap-cylinder", [
 Notes:
 - Cylindrical unwrap uses cylinder UV extents to emit a rectangular flat pattern.
 - Flat width equals `radius * angleSpan`; flat height equals axial span.
+- Output metadata includes those values under `meta.unwrap`.
 
 ## Hole
 

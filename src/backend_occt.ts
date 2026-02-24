@@ -2078,6 +2078,7 @@ export class OcctBackend implements Backend {
       if (!this.isValidShape(flattened)) {
         throw new Error("OCCT backend: unwrap produced invalid result");
       }
+      const flatProps = this.faceProperties(flattened);
 
       const outputs = new Map([
         [
@@ -2085,7 +2086,15 @@ export class OcctBackend implements Backend {
           {
             id: `${feature.id}:face`,
             kind: "face" as const,
-            meta: { shape: flattened },
+            meta: {
+              shape: flattened,
+              unwrap: {
+                kind: "planar",
+                sourceSurfaceType: properties.surfaceType ?? "plane",
+                sourceArea: properties.area,
+                flatArea: flatProps.area,
+              },
+            },
           },
         ],
       ]);
@@ -2136,7 +2145,18 @@ export class OcctBackend implements Backend {
           {
             id: `${feature.id}:face`,
             kind: "face" as const,
-            meta: { shape: flattened },
+            meta: {
+              shape: flattened,
+              unwrap: {
+                kind: "cylindrical",
+                radius,
+                angleSpan,
+                axialSpan: height,
+                width,
+                height,
+                sourceSurfaceType: properties.surfaceType ?? "cylinder",
+              },
+            },
           },
         ],
       ]);

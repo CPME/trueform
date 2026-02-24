@@ -33,6 +33,12 @@ const tests = [
       assert.equal(output.kind, "face");
       const shape = output.meta["shape"] as any;
       assert.ok(shape, "missing shape metadata");
+      const unwrapMeta = output.meta["unwrap"] as
+        | { kind?: string; sourceArea?: number; flatArea?: number }
+        | undefined;
+      assert.equal(unwrapMeta?.kind, "planar");
+      assert.equal(typeof unwrapMeta?.sourceArea, "number");
+      assert.equal(typeof unwrapMeta?.flatArea, "number");
       assertValidShape(occt, shape, "unwrap face");
       assert.equal(countSolids(occt, shape), 0);
       assert.ok(countFaces(occt, shape) >= 1, "expected face output");
@@ -109,6 +115,20 @@ const tests = [
       assert.equal(output.kind, "face");
       const shape = output.meta["shape"] as any;
       assert.ok(shape, "missing shape metadata");
+      const unwrapMeta = output.meta["unwrap"] as
+        | {
+            kind?: string;
+            radius?: number;
+            angleSpan?: number;
+            axialSpan?: number;
+            width?: number;
+            height?: number;
+          }
+        | undefined;
+      assert.equal(unwrapMeta?.kind, "cylindrical");
+      assert.equal(typeof unwrapMeta?.radius, "number");
+      assert.equal(typeof unwrapMeta?.width, "number");
+      assert.equal(typeof unwrapMeta?.height, "number");
       assertValidShape(occt, shape, "unwrap cylinder face");
       assert.equal(countSolids(occt, shape), 0);
       assert.ok(countFaces(occt, shape) >= 1, "expected face output");
@@ -126,6 +146,14 @@ const tests = [
       assert.ok(
         Math.abs((area as number) - expectedArea) < 1e-2,
         "unwrap should preserve cylindrical lateral area"
+      );
+      assert.ok(
+        Math.abs((unwrapMeta?.width as number) - 2 * Math.PI * 10) < 1e-3,
+        "unwrap metadata width should match circumference"
+      );
+      assert.ok(
+        Math.abs((unwrapMeta?.height as number) - 16) < 1e-6,
+        "unwrap metadata height should match axial span"
       );
     },
   },
