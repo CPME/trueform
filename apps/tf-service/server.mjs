@@ -85,6 +85,13 @@ export function createTfServiceServer(options = {}) {
     mesh: { hit: 0, miss: 0 },
     export: { hit: 0, miss: 0 },
   };
+  const jobLatencyStats = {
+    build: makeLatencyBucket(),
+    mesh: makeLatencyBucket(),
+    exportStep: makeLatencyBucket(),
+    exportStl: makeLatencyBucket(),
+    assemblySolve: makeLatencyBucket(),
+  };
 
   let assetCounter = 0;
   let buildCounter = 0;
@@ -802,6 +809,51 @@ export function createTfServiceServer(options = {}) {
         totals: { ...bucket },
       })
     );
+  }
+
+  function makeLatencyBucket() {
+    return {
+      count: 0,
+      succeeded: 0,
+      failed: 0,
+      canceled: 0,
+      timeout: 0,
+      totalMs: 0,
+      avgMs: 0,
+      maxMs: 0,
+      lastMs: 0,
+    };
+  }
+
+  function recordLatency(bucket, durationMs, state, errorCode = null) {
+    if (!bucket) return;
+    const ms = Number.isFinite(durationMs) ? Math.max(0, durationMs) : 0;
+    bucket.count += 1;
+    bucket.totalMs += ms;
+    bucket.avgMs = bucket.count > 0 ? Number((bucket.totalMs / bucket.count).toFixed(3)) : 0;
+    bucket.lastMs = Number(ms.toFixed(3));
+    bucket.maxMs = Number(Math.max(bucket.maxMs, ms).toFixed(3));
+    if (state === "succeeded") {
+      bucket.succeeded += 1;
+      return;
+    }
+    if (state === "canceled") {
+      bucket.canceled += 1;
+      return;
+    }
+    if (errorCode === "job_timeout") bucket.timeout += 1;
+    bucket.failed += 1;
+  }
+
+  function memorySnapshot() {
+    const usage = process.memoryUsage();
+    return {
+      rssBytes: usage.rss,
+      heapTotalBytes: usage.heapTotal,
+      heapUsedBytes: usage.heapUsed,
+      externalBytes: usage.external,
+      arrayBuffersBytes: usage.arrayBuffers,
+    };
   }
 
   function storeAsset(tenantId, type, data, contentType, metadata = {}) {
@@ -1543,7 +1595,7 @@ export function createTfServiceServer(options = {}) {
     };
   }
 
-  async function enqueueJob(tenantId, handler, payload, timeoutMs) {
+  async function enqueueJob(tenantId, kind, handler, payload, timeoutMs) {
     pruneJobOwners();
     assertTenantQuota(
       tenantId,
@@ -1551,8 +1603,22 @@ export function createTfServiceServer(options = {}) {
       MAX_PENDING_JOBS_PER_TENANT,
       countPendingJobsForTenant(tenantId)
     );
+    const bucket = jobLatencyStats[kind];
     const job = jobQueue.enqueue(
-      async (ctx) => handler(tenantId, payload, ctx),
+      async (ctx) => {
+        const startedAtMs = Date.now();
+        try {
+          const result = await handler(tenantId, payload, ctx);
+          recordLatency(bucket, Date.now() - startedAtMs, "succeeded");
+          return result;
+        } catch (err) {
+          const code =
+            err && typeof err === "object" && typeof err.code === "string" ? err.code : null;
+          const state = code === "job_canceled" ? "canceled" : "failed";
+          recordLatency(bucket, Date.now() - startedAtMs, state, code);
+          throw err;
+        }
+      },
       timeoutMs ? { timeoutMs } : {}
     );
     jobOwners.set(job.id, { tenantId, completedAtMs: null });
@@ -1561,22 +1627,29 @@ export function createTfServiceServer(options = {}) {
 
   function enqueueBuild(tenantId, payload) {
     const timeoutMs = payload?.timeoutMs ?? payload?.options?.timeoutMs;
-    return enqueueJob(tenantId, handleBuild, payload, timeoutMs);
+    return enqueueJob(tenantId, "build", handleBuild, payload, timeoutMs);
   }
 
   function enqueueMesh(tenantId, payload) {
     const timeoutMs = payload?.timeoutMs;
-    return enqueueJob(tenantId, handleMesh, payload, timeoutMs);
+    return enqueueJob(tenantId, "mesh", handleMesh, payload, timeoutMs);
   }
 
   function enqueueAssemblySolve(tenantId, payload) {
     const timeoutMs = payload?.timeoutMs ?? payload?.options?.timeoutMs;
-    return enqueueJob(tenantId, handleAssemblySolve, payload, timeoutMs);
+    return enqueueJob(tenantId, "assemblySolve", handleAssemblySolve, payload, timeoutMs);
   }
 
   function enqueueExport(tenantId, payload, kind) {
     const timeoutMs = payload?.timeoutMs;
-    return enqueueJob(tenantId, (ownerTenantId, request, ctx) => handleExport(ownerTenantId, request, kind, ctx), payload, timeoutMs);
+    const metricKind = kind === "step" ? "exportStep" : "exportStl";
+    return enqueueJob(
+      tenantId,
+      metricKind,
+      (ownerTenantId, request, ctx) => handleExport(ownerTenantId, request, kind, ctx),
+      payload,
+      timeoutMs
+    );
   }
 
   function assertTenantJobAccess(tenantId, jobId) {
@@ -1921,9 +1994,25 @@ export function createTfServiceServer(options = {}) {
       }
 
       if (req.method === "GET" && pathname === "/v1/metrics") {
+        const queueStats =
+          typeof jobQueue.getStats === "function"
+            ? jobQueue.getStats()
+            : {
+                queued: 0,
+                running: 0,
+                succeeded: 0,
+                failed: 0,
+                canceled: 0,
+                retained: 0,
+                maxRetained: JOB_MAX_RETAINED,
+              };
         json(res, 200, {
           tenantId,
+          timestamp: new Date().toISOString(),
           cache: cacheStats,
+          jobLatencyMs: jobLatencyStats,
+          queue: queueStats,
+          memory: memorySnapshot(),
           stores: {
             documents: countTenantInStore(documentStore, tenantId),
             builds: countTenantInStore(buildStore, tenantId),

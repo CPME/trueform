@@ -929,6 +929,33 @@ const tests = [
         assert.ok(observedStates.has("succeeded"), "Expected succeeded state coverage");
         assert.ok(observedStates.has("failed"), "Expected failed state coverage");
         assert.ok(observedStates.has("canceled"), "Expected canceled state coverage");
+
+        const metrics = await fetchJson<{
+          cache?: {
+            partBuild?: { hit?: number; miss?: number };
+            mesh?: { hit?: number; miss?: number };
+            export?: { hit?: number; miss?: number };
+          };
+          jobLatencyMs?: {
+            build?: { count?: number; succeeded?: number; failed?: number; avgMs?: number };
+            mesh?: { count?: number; succeeded?: number; avgMs?: number };
+            exportStep?: { count?: number; succeeded?: number; avgMs?: number };
+          };
+          queue?: { failed?: number };
+          memory?: { rssBytes?: number; heapUsedBytes?: number };
+        }>(`${runtime.baseUrl}/v1/metrics`);
+        assert.equal((metrics.cache?.partBuild?.hit ?? 0) >= 1, true);
+        assert.equal((metrics.cache?.partBuild?.miss ?? 0) >= 1, true);
+        assert.equal((metrics.cache?.mesh?.hit ?? 0) >= 1, true);
+        assert.equal((metrics.cache?.export?.hit ?? 0) >= 1, true);
+        assert.equal((metrics.jobLatencyMs?.build?.count ?? 0) >= 1, true);
+        assert.equal((metrics.jobLatencyMs?.build?.succeeded ?? 0) >= 1, true);
+        assert.equal((metrics.queue?.failed ?? 0) >= 1, true);
+        assert.equal((metrics.jobLatencyMs?.mesh?.count ?? 0) >= 1, true);
+        assert.equal((metrics.jobLatencyMs?.exportStep?.count ?? 0) >= 1, true);
+        assert.equal((metrics.jobLatencyMs?.build?.avgMs ?? 0) > 0, true);
+        assert.equal((metrics.memory?.rssBytes ?? 0) > 0, true);
+        assert.equal((metrics.memory?.heapUsedBytes ?? 0) > 0, true);
       } finally {
         await runtime.stop();
       }
