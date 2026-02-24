@@ -224,6 +224,7 @@ Request:
   "profile": "interactive",
   "options": {
     "includeEdges": true,
+    "hideTangentEdges": true,
     "edgeSegmentLength": 2
   }
 }

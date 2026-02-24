@@ -95,6 +95,22 @@ type EdgeSegment = {
   closed?: boolean;
 };
 
+type FaceSurfaceClass =
+  | "plane"
+  | "cylinder"
+  | "cone"
+  | "sphere"
+  | "torus"
+  | "bspline"
+  | "bezier"
+  | "extrusion"
+  | "revolution"
+  | "offset"
+  | "other"
+  | "unknown";
+
+type FaceSurfaceMap = Map<number, Array<{ face: any; surface: FaceSurfaceClass }>>;
+
 export class OcctBackend implements Backend {
   private occt: OcctModule;
   private selectionSeq = 0;
@@ -6629,6 +6645,85 @@ export class OcctBackend implements Backend {
     return [];
   }
 
+  private buildFaceSurfaceMap(shape: any): FaceSurfaceMap | null {
+    const occt = this.occt as any;
+    if (!occt.TopExp_Explorer_1) return null;
+    const surfaces: FaceSurfaceMap = new Map();
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_FACE,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    for (; explorer.More(); explorer.Next()) {
+      const face = this.toFace(explorer.Current());
+      const hash = this.shapeHash(face);
+      const bucket = surfaces.get(hash) ?? [];
+      if (!bucket.some((entry) => this.shapesSame(entry.face, face))) {
+        bucket.push({
+          face,
+          surface: this.faceSurfaceClass(face),
+        });
+      }
+      if (!surfaces.has(hash)) surfaces.set(hash, bucket);
+    }
+    return surfaces;
+  }
+
+  private faceSurfaceClass(face: any): FaceSurfaceClass {
+    try {
+      const faceHandle = this.toFace(face);
+      const adaptor = this.newOcct("BRepAdaptor_Surface", faceHandle, true);
+      const type = this.call(adaptor, "GetType") as { value?: number } | undefined;
+      const types = (this.occt as any).GeomAbs_SurfaceType;
+      if (!types || typeof type?.value !== "number") return "unknown";
+      const value = type.value;
+      const matches = (entry: { value?: number } | undefined) =>
+        typeof entry?.value === "number" && entry.value === value;
+      if (matches(types.GeomAbs_Plane)) return "plane";
+      if (matches(types.GeomAbs_Cylinder)) return "cylinder";
+      if (matches(types.GeomAbs_Cone)) return "cone";
+      if (matches(types.GeomAbs_Sphere)) return "sphere";
+      if (matches(types.GeomAbs_Torus)) return "torus";
+      if (matches(types.GeomAbs_BSplineSurface)) return "bspline";
+      if (matches(types.GeomAbs_BezierSurface)) return "bezier";
+      if (matches(types.GeomAbs_SurfaceOfExtrusion)) return "extrusion";
+      if (matches(types.GeomAbs_SurfaceOfRevolution)) return "revolution";
+      if (matches(types.GeomAbs_OffsetSurface)) return "offset";
+      return "other";
+    } catch {
+      return "unknown";
+    }
+  }
+
+  private surfaceClassForFace(
+    surfaces: FaceSurfaceMap | null,
+    face: any
+  ): FaceSurfaceClass | null {
+    if (!surfaces) return null;
+    const hash = this.shapeHash(face);
+    const bucket = surfaces.get(hash);
+    if (!bucket) return null;
+    for (const entry of bucket) {
+      if (this.shapesSame(entry.face, face)) {
+        return entry.surface;
+      }
+    }
+    return null;
+  }
+
+  private includeSmoothFeatureEdge(
+    faces: any[],
+    surfaces: FaceSurfaceMap | null
+  ): boolean {
+    if (faces.length !== 2) return false;
+    const a = this.surfaceClassForFace(surfaces, faces[0]);
+    const b = this.surfaceClassForFace(surfaces, faces[1]);
+    if (!a || !b) return false;
+    if (a === "unknown" || b === "unknown") return false;
+    return a !== b;
+  }
+
   private call(target: any, name: string, ...args: unknown[]) {
     const fn = target?.[name];
     if (typeof fn !== "function") {
@@ -6650,7 +6745,11 @@ export class OcctBackend implements Backend {
     opts: MeshOptions
   ): { positions: number[]; edgeIndices: number[] } {
     const occt = this.occt as any;
+    const includeAllTangentEdges = opts.includeTangentEdges === true;
+    const hideAllTangentEdges = opts.hideTangentEdges === true && !includeAllTangentEdges;
     const adjacency = this.buildEdgeAdjacency(shape);
+    const surfaces =
+      includeAllTangentEdges || hideAllTangentEdges ? null : this.buildFaceSurfaceMap(shape);
     const explorer = new occt.TopExp_Explorer_1();
     explorer.Init(
       shape,
@@ -6671,9 +6770,11 @@ export class OcctBackend implements Backend {
       }
       if (faces.length >= 2) {
         const continuity = this.edgeContinuityValue(edge, faces[0], faces[1]);
-        if (!opts.includeTangentEdges && continuity !== null && continuity > 0) {
-          edgeIndex += 1;
-          continue;
+        if (!includeAllTangentEdges && continuity !== null && continuity > 0) {
+          if (hideAllTangentEdges || !this.includeSmoothFeatureEdge(faces, surfaces)) {
+            edgeIndex += 1;
+            continue;
+          }
         }
       }
       const points = this.sampleEdgePoints(edge, opts);

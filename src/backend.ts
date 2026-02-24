@@ -46,6 +46,7 @@ export type MeshOptions = {
   parallel?: boolean;
   includeEdges?: boolean;
   includeTangentEdges?: boolean;
+  hideTangentEdges?: boolean;
   edgeSegmentLength?: number;
   edgeMaxSegments?: number;
 };

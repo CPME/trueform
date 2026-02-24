@@ -487,8 +487,7 @@ const examplePart = part("example-fillet", [
 ```
 
 Notes:
-- The docs renderer enables `mesh(..., { includeTangentEdges: true })` for this
-  example so smooth fillet transitions remain visible in wireframe.
+- Smooth fillet transitions are included in default B-Rep wireframe extraction.
 
 ## Variable Fillet
 

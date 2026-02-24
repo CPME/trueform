@@ -52,11 +52,12 @@ const tests = [
     },
   },
   {
-    name: "occt e2e: mesh can include tangent edges for fillet wireframe",
+    name: "occt e2e: mesh includes fillet wireframe edges by default",
     fn: async () => {
       const { backend } = await getBackendContext();
+      const height = 20;
       const part = dsl.part("fillet-cylinder-wire", [
-        dsl.extrude("cyl", dsl.profileCircle(10), 20, "body:main"),
+        dsl.extrude("cyl", dsl.profileCircle(10), height, "body:main"),
         dsl.fillet(
           "edge-fillet",
           dsl.selectorEdge(
@@ -83,11 +84,55 @@ const tests = [
         includeEdges: true,
         includeTangentEdges: true,
       });
+      const hiddenTangentMesh = backend.mesh(output, {
+        linearDeflection: 0.2,
+        angularDeflection: 0.2,
+        includeEdges: true,
+        hideTangentEdges: true,
+      });
+      const explicitIncludeMesh = backend.mesh(output, {
+        linearDeflection: 0.2,
+        angularDeflection: 0.2,
+        includeEdges: true,
+        includeTangentEdges: true,
+        hideTangentEdges: true,
+      });
       const defaultEdges = defaultMesh.edgePositions?.length ?? 0;
       const tangentEdges = tangentMesh.edgePositions?.length ?? 0;
+      const hiddenEdges = hiddenTangentMesh.edgePositions?.length ?? 0;
+      const explicitIncludeEdges = explicitIncludeMesh.edgePositions?.length ?? 0;
       assert.ok(
-        tangentEdges > defaultEdges,
-        `expected tangent edges to increase edge segments (default=${defaultEdges}, tangent=${tangentEdges})`
+        defaultEdges > 0,
+        "expected default wireframe edge segments for fillet body"
+      );
+
+      const defaultPositions = defaultMesh.edgePositions ?? [];
+      let topSegments = 0;
+      for (let i = 0; i + 5 < defaultPositions.length; i += 6) {
+        const za = defaultPositions[i + 2] ?? 0;
+        const zb = defaultPositions[i + 5] ?? 0;
+        const zMid = (za + zb) / 2;
+        if (zMid > height * 0.75) {
+          topSegments += 1;
+        }
+      }
+      assert.ok(
+        topSegments > 0,
+        `expected fillet wireframe segments near top blend zone, got ${topSegments}`
+      );
+
+      assert.ok(
+        tangentEdges >= defaultEdges,
+        `expected includeTangentEdges to keep or add segments (default=${defaultEdges}, tangent=${tangentEdges})`
+      );
+      assert.ok(
+        hiddenEdges < defaultEdges,
+        `expected hideTangentEdges to drop smooth transition edges (default=${defaultEdges}, hidden=${hiddenEdges})`
+      );
+      assert.equal(
+        explicitIncludeEdges,
+        tangentEdges,
+        "expected includeTangentEdges to override hideTangentEdges when both are set"
       );
     },
   },

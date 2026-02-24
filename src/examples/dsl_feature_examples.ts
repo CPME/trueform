@@ -309,11 +309,6 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         ["cyl"]
       ),
     ]),
-    render: {
-      meshOpts: {
-        includeTangentEdges: true,
-      },
-    },
   },
   {
     id: "variable-fillet",
@@ -349,9 +344,6 @@ export const dslFeatureExamples: DslFeatureExample[] = [
           depthTest: true,
         },
       ],
-      meshOpts: {
-        includeTangentEdges: true,
-      },
     },
   },
   {
