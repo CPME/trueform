@@ -12,12 +12,7 @@ clients and agents can avoid treating them as production-stable.
 
 ## Current Staging Entries
 
-- `feature.surface`
-  - Status: `staging`
-  - Note: surface workflows are functional but still improving in reliability.
 - `feature.extrude:mode.surface`
-  - Status: `staging`
-- `feature.revolve:mode.surface`
   - Status: `staging`
 - `feature.loft:mode.surface`
   - Status: `staging`

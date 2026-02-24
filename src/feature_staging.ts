@@ -17,17 +17,9 @@ const SURFACE_MODE_FEATURE_KINDS = new Set<string>([
 ]);
 
 export const TF_STAGED_FEATURES: Readonly<Record<string, FeatureStageEntry>> = Object.freeze({
-  "feature.surface": {
-    stage: "staging" as const,
-    notes: "Surface workflows are supported but still maturing for reliability.",
-  },
   "feature.extrude:mode.surface": {
     stage: "staging" as const,
     notes: "Surface-mode extrude remains in staging while robustness improves.",
-  },
-  "feature.revolve:mode.surface": {
-    stage: "staging" as const,
-    notes: "Surface-mode revolve remains in staging while robustness improves.",
   },
   "feature.loft:mode.surface": {
     stage: "staging" as const,

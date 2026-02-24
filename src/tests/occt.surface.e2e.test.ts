@@ -122,6 +122,61 @@ const tests = [
       assert.ok(countFaces(occt, shape) > 0, "expected surface to have faces");
     },
   },
+  {
+    name: "occt e2e: surface fails for open profile input",
+    fn: async () => {
+      const { backend } = await getBackendContext();
+      const line = dsl.sketchLine("line-1", [0, 0], [20, 0]);
+      const sketch = dsl.sketch2d(
+        "sketch-open",
+        [
+          {
+            name: "profile:open",
+            profile: dsl.profileSketchLoop(["line-1"], { open: true }),
+          },
+        ],
+        { entities: [line] }
+      );
+      const part = dsl.part("surface-open-invalid", [
+        sketch,
+        dsl.surface("surface-1", dsl.profileRef("profile:open"), "surface:main"),
+      ]);
+      assert.throws(() => buildPart(part, backend), /face|wire|closed|profile/i);
+    },
+  },
+  {
+    name: "occt e2e: surface output is deterministic across repeated runs",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const rect = dsl.sketchRectCorner("rect-1", [-10, -5], 20, 10);
+      const sketch = dsl.sketch2d(
+        "sketch-surface",
+        [
+          {
+            name: "profile:rect",
+            profile: dsl.profileSketchLoop(["rect-1"]),
+          },
+        ],
+        { entities: [rect] }
+      );
+      const part = dsl.part("surface-determinism", [
+        sketch,
+        dsl.surface("surface-1", dsl.profileRef("profile:rect"), "surface:main"),
+      ]);
+      const first = buildPart(part, backend);
+      const second = buildPart(part, backend);
+      const firstOut = first.final.outputs.get("surface:main");
+      const secondOut = second.final.outputs.get("surface:main");
+      assert.ok(firstOut, "missing first deterministic surface output");
+      assert.ok(secondOut, "missing second deterministic surface output");
+      const firstShape = firstOut.meta["shape"] as any;
+      const secondShape = secondOut.meta["shape"] as any;
+      assertValidShape(occt, firstShape, "first deterministic surface output");
+      assertValidShape(occt, secondShape, "second deterministic surface output");
+      assert.equal(countSolids(occt, firstShape), countSolids(occt, secondShape));
+      assert.equal(countFaces(occt, firstShape), countFaces(occt, secondShape));
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

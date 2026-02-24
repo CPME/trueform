@@ -62,15 +62,17 @@
       "id": "surface-feature",
       "category": "surface-creation",
       "feature": "Surface feature",
-      "parity": "staging",
-      "probe": { "kind": "dist-test", "path": "dist/tests/occt.surface.e2e.test.js" }
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.surface.e2e.test.js" },
+      "notes": "feature.surface now has determinism and open-profile failure coverage and is promoted to ready."
     },
     {
       "id": "revolve-surface-mode",
       "category": "surface-creation",
       "feature": "Revolve (surface mode)",
-      "parity": "staging",
-      "probe": { "kind": "dist-test", "path": "dist/tests/occt.revolve_surface.e2e.test.js" }
+      "parity": "ready",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.revolve_surface.e2e.test.js" },
+      "notes": "Surface-mode revolve now includes determinism and missing-profile failure coverage and is promoted to ready."
     },
     {
       "id": "hole-basic",

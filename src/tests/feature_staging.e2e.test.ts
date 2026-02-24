@@ -10,11 +10,18 @@ import { runTests } from "./occt_test_utils.js";
 
 const tests = [
   {
-    name: "feature staging: registry includes surface staging entries",
+    name: "feature staging: registry includes only remaining surface-mode staging entries",
     fn: async () => {
       const keys = listStagedFeatureKeys();
-      assert.ok(keys.includes("feature.surface"));
-      assert.equal(TF_STAGED_FEATURES["feature.surface"]?.stage, "staging");
+      assert.ok(!keys.includes("feature.surface"));
+      assert.ok(!keys.includes("feature.revolve:mode.surface"));
+      assert.ok(keys.includes("feature.extrude:mode.surface"));
+      assert.ok(keys.includes("feature.loft:mode.surface"));
+      assert.ok(keys.includes("feature.sweep:mode.surface"));
+      assert.ok(keys.includes("feature.pipeSweep:mode.surface"));
+      assert.ok(keys.includes("feature.hexTubeSweep:mode.surface"));
+      assert.equal(TF_STAGED_FEATURES["feature.surface"]?.stage, undefined);
+      assert.equal(TF_STAGED_FEATURES["feature.revolve:mode.surface"]?.stage, undefined);
     },
   },
   {
@@ -183,6 +190,31 @@ const tests = [
       const extrudeSolid = dsl.extrude("ext-2", dsl.profileCircle(4), 10);
       assert.equal(featureStageKey(extrudeSolid), "feature.extrude");
       assert.equal(getFeatureStage(extrudeSolid).stage, "stable");
+    },
+  },
+  {
+    name: "feature staging: surface feature resolves to stable entry",
+    fn: async () => {
+      const surface = dsl.surface("surface-1", dsl.profileRef("profile:rect"), "surface:main");
+      const stage = getFeatureStage(surface);
+      assert.equal(stage.key, "feature.surface");
+      assert.equal(stage.stage, "stable");
+    },
+  },
+  {
+    name: "feature staging: revolve surface mode resolves to stable entry",
+    fn: async () => {
+      const revolve = dsl.revolve(
+        "rev-1",
+        dsl.profileRef("profile:open"),
+        "+Z",
+        "full",
+        "surface:main",
+        { mode: "surface" }
+      );
+      const stage = getFeatureStage(revolve);
+      assert.equal(stage.key, "feature.revolve:mode.surface");
+      assert.equal(stage.stage, "stable");
     },
   },
 ];

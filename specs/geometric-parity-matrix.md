@@ -21,7 +21,7 @@ Status keys:
 | --- | --- | --- | --- |
 | Sketch + datums | 2D sketch primitives, datum planes/axes/frames | `ready` | Core available in DSL/IR. |
 | Base solids | Extrude/revolve/loft/sweep/pipe, primitive profile workflows | `ready` | Surface mode separately tracked as staging. |
-| Surface creation | Surface feature + surface-mode extrude/revolve/loft/sweep | `staging` | Tracked in staging registry. |
+| Surface creation | Surface feature + surface-mode extrude/revolve/loft/sweep | `staging` | `feature.surface` and surface-mode revolve are ready; extrude/loft/sweep/pipe/hex surface modes remain staged. |
 | Hole workflows | Simple, through/blind, counterbore/countersink, patterned holes | `ready` | Advanced wizard semantics still partial. |
 | Dress-up | Fillet/chamfer/shell/thicken | `ready` | Core workflows are ready; variable fillet/chamfer controls are now available in staging. |
 | Draft + thread | Draft faces, modeled thread geometry | `ready` | Draft and modeled thread workflows are now promoted to ready with determinism/failure-mode coverage. |
