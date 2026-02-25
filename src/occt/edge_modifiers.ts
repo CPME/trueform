@@ -5,6 +5,7 @@ import { resolveSelectorSet } from "../selectors.js";
 export type EdgeModifierFeature = {
   id: string;
   edges: Selector;
+  result?: string;
   tags?: string[];
 };
 
@@ -65,9 +66,10 @@ export function executeEdgeModifier(
 
   deps.tryBuild(builder);
   const solid = deps.readShape(builder);
+  const outputKey = feature.result ?? ownerKey;
   const outputs = new Map([
     [
-      ownerKey,
+      outputKey,
       {
         id: `${feature.id}:solid`,
         kind: "solid" as const,
@@ -75,6 +77,6 @@ export function executeEdgeModifier(
       },
     ],
   ]);
-  const selections = deps.collectSelections(solid, feature.id, ownerKey, feature.tags);
+  const selections = deps.collectSelections(solid, feature.id, outputKey, feature.tags);
   return { outputs, selections };
 }

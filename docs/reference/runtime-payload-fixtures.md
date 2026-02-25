@@ -40,6 +40,22 @@ Stable fixtures for UI/runtime integration tests.
 }
 ```
 
+## Chamfer with Named Result (Modifier Output)
+
+```json
+{
+  "kind": "feature.chamfer",
+  "id": "chamfer-1",
+  "edges": {
+    "kind": "selector.edge",
+    "predicates": [{ "kind": "pred.createdBy", "featureId": "base" }],
+    "rank": [{ "kind": "rank.maxZ" }]
+  },
+  "distance": 1,
+  "result": "body:chamfer-1"
+}
+```
+
 ## Plane Reference (Named Alias)
 
 ```json

@@ -127,6 +127,9 @@ function featureResultName(feature: IntentFeature): string | undefined {
     case "feature.thicken":
     case "feature.unwrap":
     case "feature.thread":
+    case "feature.hole":
+    case "feature.fillet":
+    case "feature.chamfer":
     case "feature.fillet.variable":
     case "feature.chamfer.variable":
     case "feature.boolean":

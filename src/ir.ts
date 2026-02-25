@@ -557,12 +557,14 @@ export type Hole = FeatureBase & {
   counterbore?: HoleCounterbore;
   countersink?: HoleCountersink;
   wizard?: HoleWizard;
+  result?: string;
 };
 
 export type Fillet = FeatureBase & {
   kind: "feature.fillet";
   edges: Selector;
   radius: Scalar;
+  result?: string;
 };
 
 export type VariableFilletEntry = {
@@ -581,6 +583,7 @@ export type Chamfer = FeatureBase & {
   kind: "feature.chamfer";
   edges: Selector;
   distance: Scalar;
+  result?: string;
 };
 
 export type VariableChamferEntry = {

@@ -54,9 +54,9 @@ import {
 - `unwrap(id, source, result?, deps?) -> Unwrap` (planar/cylindrical faces and thin-sheet solids)
 - `thread(id, axis, length, majorDiameter, pitch, result?, deps?, opts?) -> Thread` (modelled)
 - `hole(id, onFace, axis, diameter, depth, opts?) -> Hole`
-- `fillet(id, edges, radius, deps?) -> Fillet`
+- `fillet(id, edges, radius, depsOrOpts?) -> Fillet`
 - `variableFillet(id, source, entries, result?, deps?) -> VariableFillet` (staging)
-- `chamfer(id, edges, distance, deps?) -> Chamfer`
+- `chamfer(id, edges, distance, depsOrOpts?) -> Chamfer`
 - `variableChamfer(id, source, entries, result?, deps?) -> VariableChamfer` (staging)
 - `booleanOp(id, op, left, right, result?, deps?) -> BooleanOp`
 - `patternLinear(id, origin, spacing, count, depsOrOpts?) -> PatternLinear`

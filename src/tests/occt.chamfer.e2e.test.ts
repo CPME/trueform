@@ -48,6 +48,39 @@ const tests = [
       );
     },
   },
+  {
+    name: "occt e2e: chamfer can publish named result for downstream selectors",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const part = dsl.part("chamfer-named-result", [
+        dsl.extrude("base", dsl.profileRect(20, 20), 8, "body:seed"),
+        dsl.chamfer(
+          "chamfer-1",
+          dsl.selectorEdge([dsl.predCreatedBy("base")], [dsl.rankMaxZ()]),
+          1,
+          { result: "body:chamfer-1" }
+        ),
+        dsl.extrude("tool", dsl.profileRect(8, 8, [6, 0, 0]), 8, "body:tool"),
+        dsl.booleanOp(
+          "union-1",
+          "union",
+          dsl.selectorNamed("body:chamfer-1"),
+          dsl.selectorNamed("body:tool"),
+          "body:main"
+        ),
+      ]);
+
+      const result = buildPart(part, backend);
+      const chamferBody = result.steps[1]?.result.outputs.get("body:chamfer-1");
+      assert.ok(chamferBody, "missing chamfer named output");
+      const finalBody = result.final.outputs.get("body:main");
+      assert.ok(finalBody, "missing boolean output body:main");
+
+      const finalShape = finalBody.meta["shape"] as any;
+      assert.ok(finalShape, "missing final shape metadata");
+      assertValidShape(occt, finalShape, "chamfer named-output union solid");
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

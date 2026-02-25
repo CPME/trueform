@@ -733,6 +733,7 @@ export const hole = (
     counterbore?: Hole["counterbore"];
     countersink?: Hole["countersink"];
     wizard?: HoleWizard;
+    result?: string;
     deps?: ID[];
   }
 ): Hole =>
@@ -748,6 +749,7 @@ export const hole = (
     counterbore: opts?.counterbore,
     countersink: opts?.countersink,
     wizard: opts?.wizard,
+    result: opts?.result,
     deps: opts?.deps,
   });
 
@@ -769,6 +771,7 @@ export const holeWizard = (
     position?: Point2D;
     counterbore?: Hole["counterbore"];
     countersink?: Hole["countersink"];
+    result?: string;
     deps?: ID[];
   }
 ): Hole => {
@@ -783,6 +786,7 @@ export const holeWizard = (
     position: opts?.position,
     counterbore: opts?.counterbore,
     countersink: opts?.countersink,
+    result: opts?.result,
     wizard: compact({
       standard: opts?.standard,
       series: opts?.series,
@@ -800,14 +804,15 @@ export const fillet = (
   id: ID,
   edges: Selector,
   radius: number,
-  deps?: ID[]
+  depsOrOpts?: ID[] | { deps?: ID[]; result?: string }
 ): Fillet =>
   compact({
     id,
     kind: "feature.fillet",
     edges,
     radius,
-    deps,
+    deps: Array.isArray(depsOrOpts) ? depsOrOpts : depsOrOpts?.deps,
+    result: Array.isArray(depsOrOpts) ? undefined : depsOrOpts?.result,
   });
 
 export const variableFillet = (
@@ -830,14 +835,15 @@ export const chamfer = (
   id: ID,
   edges: Selector,
   distance: number,
-  deps?: ID[]
+  depsOrOpts?: ID[] | { deps?: ID[]; result?: string }
 ): Chamfer =>
   compact({
     id,
     kind: "feature.chamfer",
     edges,
     distance,
-    deps,
+    deps: Array.isArray(depsOrOpts) ? depsOrOpts : depsOrOpts?.deps,
+    result: Array.isArray(depsOrOpts) ? undefined : depsOrOpts?.result,
   });
 
 export const variableChamfer = (

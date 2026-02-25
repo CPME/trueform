@@ -299,6 +299,13 @@ Diagnostics expectations for broken references:
 - canonical named aliases via `selector.named`: `Top`, `Bottom`, `Front`, `Back`, `Right`, `Left`.
 - named datum ids via `selector.named("<datum-id>")` (runtime maps to `datum:<datum-id>`).
 
+## Modifier Named Outputs
+`feature.hole`, `feature.fillet`, and `feature.chamfer` accept optional `result` names.
+
+- When `result` is provided, the modified body is published under that name.
+- When omitted, runtime preserves the owner output key behavior for backward compatibility.
+- Downstream `selector.named(...)` references to modifier outputs should target explicit `result` names for deterministic graph dependency inference.
+
 ## Stable Payload Fixtures
 Mirror fixture:
 ```json

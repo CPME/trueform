@@ -54,6 +54,89 @@ const tests = [
     },
   },
   {
+    name: "graph: selector.named resolves chamfer result outputs",
+    fn: async () => {
+      const part = dsl.part("named-chamfer-output", [
+        dsl.booleanOp(
+          "union",
+          "union",
+          dsl.selectorNamed("body:chamfer-1"),
+          dsl.selectorNamed("body:tool"),
+          "body:main"
+        ),
+        dsl.chamfer(
+          "chamfer-1",
+          dsl.selectorEdge([dsl.predCreatedBy("base")], [dsl.rankMaxZ()]),
+          1,
+          { result: "body:chamfer-1" }
+        ),
+        dsl.extrude("base", dsl.profileRect(14, 14), 6, "body:seed"),
+        dsl.extrude("tool", dsl.profileRect(6, 6), 6, "body:tool"),
+      ]);
+      const result = compilePart(part);
+      const unionIndex = result.featureOrder.indexOf("union");
+      assert.ok(result.featureOrder.indexOf("base") < result.featureOrder.indexOf("chamfer-1"));
+      assert.ok(result.featureOrder.indexOf("chamfer-1") < unionIndex);
+      assert.ok(result.featureOrder.indexOf("tool") < unionIndex);
+    },
+  },
+  {
+    name: "graph: selector.named resolves fillet result outputs",
+    fn: async () => {
+      const part = dsl.part("named-fillet-output", [
+        dsl.booleanOp(
+          "union",
+          "union",
+          dsl.selectorNamed("body:fillet-1"),
+          dsl.selectorNamed("body:tool"),
+          "body:main"
+        ),
+        dsl.fillet(
+          "fillet-1",
+          dsl.selectorEdge([dsl.predCreatedBy("base")], [dsl.rankMaxZ()]),
+          1,
+          { result: "body:fillet-1" }
+        ),
+        dsl.extrude("base", dsl.profileRect(14, 14), 6, "body:seed"),
+        dsl.extrude("tool", dsl.profileRect(6, 6), 6, "body:tool"),
+      ]);
+      const result = compilePart(part);
+      const unionIndex = result.featureOrder.indexOf("union");
+      assert.ok(result.featureOrder.indexOf("base") < result.featureOrder.indexOf("fillet-1"));
+      assert.ok(result.featureOrder.indexOf("fillet-1") < unionIndex);
+      assert.ok(result.featureOrder.indexOf("tool") < unionIndex);
+    },
+  },
+  {
+    name: "graph: selector.named resolves hole result outputs",
+    fn: async () => {
+      const part = dsl.part("named-hole-output", [
+        dsl.booleanOp(
+          "union",
+          "union",
+          dsl.selectorNamed("body:hole-1"),
+          dsl.selectorNamed("body:tool"),
+          "body:main"
+        ),
+        dsl.hole(
+          "hole-1",
+          dsl.selectorFace([dsl.predCreatedBy("base"), dsl.predPlanar()], [dsl.rankMaxZ()]),
+          "-Z",
+          4,
+          "throughAll",
+          { result: "body:hole-1" }
+        ),
+        dsl.extrude("base", dsl.profileRect(14, 14), 6, "body:seed"),
+        dsl.extrude("tool", dsl.profileRect(6, 6), 6, "body:tool"),
+      ]);
+      const result = compilePart(part);
+      const unionIndex = result.featureOrder.indexOf("union");
+      assert.ok(result.featureOrder.indexOf("base") < result.featureOrder.indexOf("hole-1"));
+      assert.ok(result.featureOrder.indexOf("hole-1") < unionIndex);
+      assert.ok(result.featureOrder.indexOf("tool") < unionIndex);
+    },
+  },
+  {
     name: "graph: move body infers source output and datum axis dependencies",
     fn: async () => {
       const part = dsl.part("move-body-deps", [

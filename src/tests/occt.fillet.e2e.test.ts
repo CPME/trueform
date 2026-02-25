@@ -184,6 +184,39 @@ const tests = [
       );
     },
   },
+  {
+    name: "occt e2e: fillet can publish named result for downstream selectors",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const part = dsl.part("fillet-named-result", [
+        dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:seed"),
+        dsl.fillet(
+          "fillet-1",
+          dsl.selectorEdge([dsl.predCreatedBy("base")], [dsl.rankMaxZ()]),
+          1,
+          { result: "body:fillet-1" }
+        ),
+        dsl.extrude("tool", dsl.profileRect(8, 8, [6, 0, 0]), 10, "body:tool"),
+        dsl.booleanOp(
+          "union-1",
+          "union",
+          dsl.selectorNamed("body:fillet-1"),
+          dsl.selectorNamed("body:tool"),
+          "body:main"
+        ),
+      ]);
+
+      const result = buildPart(part, backend);
+      const filletBody = result.steps[1]?.result.outputs.get("body:fillet-1");
+      assert.ok(filletBody, "missing fillet named output");
+      const finalBody = result.final.outputs.get("body:main");
+      assert.ok(finalBody, "missing boolean output body:main");
+
+      const finalShape = finalBody.meta["shape"] as any;
+      assert.ok(finalShape, "missing final shape metadata");
+      assertValidShape(occt, finalShape, "fillet named-output union solid");
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

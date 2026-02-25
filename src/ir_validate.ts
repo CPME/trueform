@@ -1317,6 +1317,7 @@ function validateFeature(feature: IntentFeature): void {
         position?: Point2D;
         counterbore?: { diameter?: Scalar; depth?: Scalar };
         countersink?: { diameter?: Scalar; angle?: Scalar };
+        result?: string;
         wizard?: {
           standard?: string;
           series?: string;
@@ -1434,12 +1435,26 @@ function validateFeature(feature: IntentFeature): void {
           }
         }
       }
+      if (hole.result !== undefined) {
+        ensureNonEmptyString(
+          hole.result,
+          "validation_feature_result",
+          "Hole result must be a non-empty string"
+        );
+      }
       return;
     }
     case "feature.fillet": {
-      const fillet = feature as { edges?: Selector; radius?: Scalar };
+      const fillet = feature as { edges?: Selector; radius?: Scalar; result?: string };
       validateSelector(fillet.edges);
       validateScalar(fillet.radius, "Fillet radius");
+      if (fillet.result !== undefined) {
+        ensureNonEmptyString(
+          fillet.result,
+          "validation_feature_result",
+          "Fillet result must be a non-empty string"
+        );
+      }
       return;
     }
     case "feature.fillet.variable": {
@@ -1472,9 +1487,16 @@ function validateFeature(feature: IntentFeature): void {
       return;
     }
     case "feature.chamfer": {
-      const chamfer = feature as { edges?: Selector; distance?: Scalar };
+      const chamfer = feature as { edges?: Selector; distance?: Scalar; result?: string };
       validateSelector(chamfer.edges);
       validateScalar(chamfer.distance, "Chamfer distance");
+      if (chamfer.result !== undefined) {
+        ensureNonEmptyString(
+          chamfer.result,
+          "validation_feature_result",
+          "Chamfer result must be a non-empty string"
+        );
+      }
       return;
     }
     case "feature.chamfer.variable": {

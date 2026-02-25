@@ -448,9 +448,11 @@ const tests = [
       const holePatterned = dsl.hole("hole-2", selectorFace, "+Z", 5, 10, {
         pattern: { kind: "pattern.linear", ref: "pattern-l" },
         position: [2, 3],
+        result: "body:hole-2",
       });
       assert.equal(holePatterned.kind, "feature.hole");
       assert.deepEqual(holePatterned.position, [2, 3]);
+      assert.equal(holePatterned.result, "body:hole-2");
 
       const holeWizard = dsl.holeWizard("hole-wz-1", selectorFace, "+Z", 5, {
         endCondition: "throughAll",
@@ -473,8 +475,11 @@ const tests = [
         /depth is required/i
       );
 
-      const fillet = dsl.fillet("fillet-1", selectorEdge, 1);
+      const fillet = dsl.fillet("fillet-1", selectorEdge, 1, {
+        result: "body:fillet-1",
+      });
       assert.equal(fillet.kind, "feature.fillet");
+      assert.equal(fillet.result, "body:fillet-1");
       const variableFillet = dsl.variableFillet(
         "fillet-var-1",
         dsl.selectorNamed("body:base"),
@@ -484,8 +489,11 @@ const tests = [
       assert.equal(variableFillet.result, "body:fillet-var-1");
       assert.equal(variableFillet.entries.length, 1);
 
-      const chamfer = dsl.chamfer("chamfer-1", selectorEdge, 2);
+      const chamfer = dsl.chamfer("chamfer-1", selectorEdge, 2, {
+        result: "body:chamfer-1",
+      });
       assert.equal(chamfer.kind, "feature.chamfer");
+      assert.equal(chamfer.result, "body:chamfer-1");
       const variableChamfer = dsl.variableChamfer(
         "chamfer-var-1",
         dsl.selectorNamed("body:base"),

@@ -53,6 +53,35 @@ const tests = [
       assert.equal(solidCount, 1, "expected a single solid output");
     },
   },
+  {
+    name: "occt e2e: hole can publish named result output",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const part = dsl.part("plate-hole-named-result", [
+        dsl.extrude("base", dsl.profileRect(80, 40), 10, "body:seed"),
+        dsl.hole(
+          "hole-1",
+          dsl.selectorFace(
+            [dsl.predCreatedBy("base"), dsl.predPlanar(), dsl.predNormal("+Z")],
+            [dsl.rankMaxArea()]
+          ),
+          "-Z",
+          10,
+          "throughAll",
+          { result: "body:hole-1" }
+        ),
+      ]);
+
+      const result = buildPart(part, backend);
+      const finalBody = result.final.outputs.get("body:hole-1");
+      assert.ok(finalBody, "missing named hole output body:hole-1");
+
+      const finalShape = finalBody.meta["shape"] as any;
+      assert.ok(finalShape, "missing named hole shape metadata");
+      assertValidShape(occt, finalShape, "hole named output solid");
+      assert.equal(countSolids(occt, finalShape), 1);
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

@@ -29,6 +29,7 @@ import {
   Extrude,
   ExtrudeAxis,
   Fillet,
+  Chamfer,
   VariableFillet,
   Hole,
   Loft,
@@ -3683,9 +3684,10 @@ export class OcctBackend implements Backend {
       }
     }
 
+    const outputKey = feature.result ?? ownerKey;
     const outputs = new Map([
       [
-        ownerKey,
+        outputKey,
         {
           id: `${feature.id}:solid`,
           kind: "solid" as const,
@@ -3696,7 +3698,7 @@ export class OcctBackend implements Backend {
     const selections = this.collectSelections(
       solid,
       feature.id,
-      ownerKey,
+      outputKey,
       feature.tags
     );
     return { outputs, selections };
@@ -3894,7 +3896,7 @@ export class OcctBackend implements Backend {
   }
 
   private execChamfer(
-    feature: { id: string; edges: Selector; distance: number; tags?: string[] },
+    feature: Chamfer,
     upstream: KernelResult,
     _resolve: ExecuteInput["resolve"]
   ): KernelResult {
