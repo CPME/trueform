@@ -656,12 +656,14 @@ export const unwrap = (
   id: ID,
   source: Selector,
   result?: string,
-  deps?: ID[]
+  deps?: ID[],
+  opts?: { mode?: Unwrap["mode"] }
 ): Unwrap =>
   compact({
     id,
     kind: "feature.unwrap",
     source,
+    mode: opts?.mode,
     result: result ?? `surface:${id}`,
     deps,
   });

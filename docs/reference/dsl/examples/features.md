@@ -436,7 +436,8 @@ const examplePart = part("example-unwrap", [
 ```
 
 Notes:
-- `unwrap` currently supports planar/cylindrical faces and thin-sheet solids.
+- `unwrap` defaults to `mode: "strict"` for reliable input classes.
+- Use `opts.mode: "experimental"` for broader, best-effort unwrap behavior.
 - The output is flattened onto the world XY plane (`z=0`) as a face output.
 - Unsupported surface classes return a clear error.
 - Output metadata includes `meta.unwrap` (mode + basic flat/source metrics).
@@ -472,6 +473,22 @@ Notes:
 - Cylindrical unwrap uses cylinder UV extents to emit a rectangular flat pattern.
 - Flat width equals `radius * angleSpan`; flat height equals axial span.
 - Output metadata includes those values under `meta.unwrap`.
+
+## Unwrap (Box Net)
+
+![Unwrap box net example](/examples/dsl/unwrap-box.iso.png)
+
+```ts
+const examplePart = part("example-unwrap-box", [
+  extrude("base", profileRect(48, 32), 20, "body:main"),
+  unwrap("unwrap-1", selectorNamed("body:main"), "surface:flat"),
+]);
+```
+
+Notes:
+- In strict mode, axis-aligned cuboids produce a deterministic representative net.
+- This example renders with a transparent background to match docs styling.
+- For broader solid classes, set `unwrap(..., ..., ..., ..., { mode: "experimental" })`.
 
 ## Hole
 

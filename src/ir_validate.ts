@@ -1250,9 +1250,13 @@ function validateFeature(feature: IntentFeature): void {
     case "feature.unwrap": {
       const unwrap = feature as {
         source?: Selector;
+        mode?: unknown;
         result?: string;
       };
       validateSelector(unwrap.source);
+      if (unwrap.mode !== undefined) {
+        validateUnwrapMode(unwrap.mode);
+      }
       ensureNonEmptyString(
         unwrap.result,
         "validation_feature_result",
@@ -2744,6 +2748,14 @@ function validateExtrudeMode(mode: unknown): void {
   throw new CompileError(
     "validation_extrude_mode",
     "Extrude mode must be \"solid\" or \"surface\""
+  );
+}
+
+function validateUnwrapMode(mode: unknown): void {
+  if (mode === "strict" || mode === "experimental") return;
+  throw new CompileError(
+    "validation_unwrap_mode",
+    "Unwrap mode must be \"strict\" or \"experimental\""
   );
 }
 

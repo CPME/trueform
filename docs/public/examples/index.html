@@ -337,6 +337,14 @@
       </div>
     </a>
 
+    <a class="card" href="#code-dsl-unwrap-box">
+      <img src="./dsl/unwrap-box.iso.png" alt="Unwrap (Box Net)" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Unwrap (Box Net)</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
     <a class="card" href="#code-dsl-shell">
       <img src="./dsl/shell.iso.png" alt="Shell" loading="lazy" />
       <div class="card-body">
@@ -1246,6 +1254,16 @@ const examplePart = part(&quot;example-unwrap-cylinder&quot;, [
     { mode: &quot;surface&quot; }
   ),
   unwrap(&quot;unwrap-1&quot;, selectorNamed(&quot;surface:cyl&quot;), &quot;surface:flat&quot;),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-unwrap-box">
+      <h3>Unwrap (Box Net) (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Unwrap (Box Net)</p>
+      <pre><code>const examplePart = part(&quot;example-unwrap-box&quot;, [
+  extrude(&quot;base&quot;, profileRect(48, 32), 20, &quot;body:main&quot;),
+  unwrap(&quot;unwrap-1&quot;, selectorNamed(&quot;body:main&quot;), &quot;surface:flat&quot;),
 ]);</code></pre>
       <a class="back-link" href="#top">Back to gallery</a>
     </article>

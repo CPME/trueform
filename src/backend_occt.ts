@@ -2025,6 +2025,7 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     _resolve: ExecuteInput["resolve"]
   ): KernelResult {
+    const mode = feature.mode ?? "strict";
     const targets = resolveSelectorSet(feature.source, this.toResolutionContext(upstream));
     if (targets.length === 0) {
       throw new Error("OCCT backend: unwrap source selector matched 0 entities");
@@ -2059,7 +2060,13 @@ export class OcctBackend implements Backend {
         if (!shape) {
           throw new Error("OCCT backend: unwrap source surface missing shape");
         }
-        for (const face of this.listFaces(shape)) {
+        const surfaceFaces = this.listFaces(shape);
+        if (mode === "strict" && surfaceFaces.length !== 1) {
+          throw new Error(
+            "OCCT backend: unwrap_input_unsupported_topology: strict mode supports only single-face surface unwrap; use mode experimental for multi-face surfaces"
+          );
+        }
+        for (const face of surfaceFaces) {
           addFace(face);
         }
         continue;
@@ -2069,7 +2076,7 @@ export class OcctBackend implements Backend {
         if (!shape) {
           throw new Error("OCCT backend: unwrap source solid missing shape");
         }
-        precomputedPatches.push(...this.extractSheetPatchesFromSolid(shape));
+        precomputedPatches.push(...this.extractSheetPatchesFromSolid(shape, mode));
         continue;
       }
       throw new Error("OCCT backend: unwrap source must resolve to face/surface/solid selections");
@@ -2077,6 +2084,23 @@ export class OcctBackend implements Backend {
 
     if (faces.length === 0 && precomputedPatches.length === 0) {
       throw new Error("OCCT backend: unwrap source resolved no faces");
+    }
+    if (mode === "strict") {
+      if (precomputedPatches.length > 0 && faces.length > 0) {
+        throw new Error(
+          "OCCT backend: unwrap_input_unsupported_topology: strict mode does not support mixed solid and face/surface unwrap sources"
+        );
+      }
+      if (precomputedPatches.length === 0 && faces.length !== 1) {
+        throw new Error(
+          "OCCT backend: unwrap_input_unsupported_topology: strict mode supports only single-face unwrap for face/surface sources"
+        );
+      }
+      if (precomputedPatches.length > 1) {
+        throw new Error(
+          "OCCT backend: unwrap_input_unsupported_topology: strict mode expects one solid source output"
+        );
+      }
     }
 
     const facePatches = faces.map((face) => this.unwrapFacePatch(face));
@@ -2283,7 +2307,8 @@ export class OcctBackend implements Backend {
   }
 
   private extractSheetPatchesFromSolid(
-    solid: any
+    solid: any,
+    mode: "strict" | "experimental" = "strict"
   ): UnwrapPatch[] {
     const bounds = this.shapeBounds(solid);
     const dims = [
@@ -2313,22 +2338,28 @@ export class OcctBackend implements Backend {
       if (boxNet) {
         return [boxNet];
       }
-      const polyhedral = this.extractPlanarPolyhedralPatchesFromSolid(solid, faces);
-      if (polyhedral) {
-        return polyhedral.map((patch) => ({
-          ...patch,
-          meta: {
-            ...patch.meta,
-            solidExtraction: {
-              source: "solid",
-              method: "planarPolyhedron",
-              thinRatio,
+      if (mode === "experimental") {
+        const polyhedral = this.extractPlanarPolyhedralPatchesFromSolid(solid, faces);
+        if (polyhedral) {
+          return polyhedral.map((patch) => ({
+            ...patch,
+            meta: {
+              ...patch.meta,
+              solidExtraction: {
+                source: "solid",
+                method: "planarPolyhedron",
+                thinRatio,
+              },
             },
-          },
-        }));
+          }));
+        }
       }
       throw new Error(
-        "OCCT backend: unwrap solid source must be thin sheet or planar polyhedron"
+        `OCCT backend: unwrap_input_unsupported_topology: ${
+          mode === "strict"
+            ? "strict mode supports thin sheets, axis-aligned boxes, and full cylinders; use mode experimental for broader solid unwrap"
+            : "solid source is unsupported for experimental unwrap (non-thin and non-planar-polyhedral)"
+        }`
       );
     }
 
@@ -2492,7 +2523,11 @@ export class OcctBackend implements Backend {
     }
 
     throw new Error(
-      "OCCT backend: unwrap solid source is not recognized as thin sheet"
+      `OCCT backend: unwrap_input_unsupported_topology: ${
+        mode === "strict"
+          ? "strict mode requires thin-sheet solids (or explicit supported templates)"
+          : "solid source is not recognized as thin sheet"
+      }`
     );
   }
 

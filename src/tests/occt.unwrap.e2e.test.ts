@@ -349,9 +349,13 @@ const tests = [
           "body:main",
           ["union-2", "slot-up"]
         ),
-        dsl.unwrap("unwrap-1", dsl.selectorNamed("body:main"), "surface:flat", [
-          "cut-1",
-        ]),
+        dsl.unwrap(
+          "unwrap-1",
+          dsl.selectorNamed("body:main"),
+          "surface:flat",
+          ["cut-1"],
+          { mode: "experimental" }
+        ),
       ]);
 
       const result = buildPart(part, backend);
@@ -504,9 +508,13 @@ const tests = [
           undefined,
           { mode: "surface" }
         ),
-        dsl.unwrap("unwrap-1", dsl.selectorNamed("surface:main"), "surface:flat", [
-          "sweep-1",
-        ]),
+        dsl.unwrap(
+          "unwrap-1",
+          dsl.selectorNamed("surface:main"),
+          "surface:flat",
+          ["sweep-1"],
+          { mode: "experimental" }
+        ),
       ]);
 
       const result = buildPart(part, backend);
@@ -582,8 +590,50 @@ const tests = [
         (err) =>
           err instanceof Error &&
           err.message.includes(
-            "unwrap solid source must be thin sheet or planar polyhedron"
+            "unwrap_input_unsupported_topology"
           )
+      );
+    },
+  },
+  {
+    name: "occt e2e: unwrap strict mode rejects multi-face surfaces",
+    fn: async () => {
+      const { backend } = await getBackendContext();
+      const line = dsl.sketchLine("line-1", [-8, 0], [8, 0]);
+      const sketch = dsl.sketch2d(
+        "sketch-sweep",
+        [
+          {
+            name: "profile:open",
+            profile: dsl.profileSketchLoop(["line-1"], { open: true }),
+          },
+        ],
+        { entities: [line] }
+      );
+      const part = dsl.part("unwrap-strict-multiface", [
+        sketch,
+        dsl.sweep(
+          "sweep-1",
+          dsl.profileRef("profile:open"),
+          dsl.pathPolyline([
+            [0, 0, 0],
+            [0, 0, 20],
+            [15, 0, 30],
+          ]),
+          "surface:main",
+          undefined,
+          { mode: "surface" }
+        ),
+        dsl.unwrap("unwrap-1", dsl.selectorNamed("surface:main"), "surface:flat", [
+          "sweep-1",
+        ]),
+      ]);
+
+      assert.throws(
+        () => buildPart(part, backend),
+        (err) =>
+          err instanceof Error &&
+          err.message.includes("unwrap_input_unsupported_topology")
       );
     },
   },

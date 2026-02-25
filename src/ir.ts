@@ -33,6 +33,7 @@ export type AxisSpec =
 export type ExtrudeAxis = AxisSpec | { kind: "axis.sketch.normal" };
 export type ExtrudeMode = "solid" | "surface";
 export type ThickenDirection = "normal" | "reverse";
+export type UnwrapMode = "strict" | "experimental";
 export type ThreadHandedness = "right" | "left";
 export type HoleEndCondition = "blind" | "throughAll" | "upToNext" | "upToLast";
 
@@ -487,6 +488,7 @@ export type Thicken = FeatureBase & {
 export type Unwrap = FeatureBase & {
   kind: "feature.unwrap";
   source: Selector;
+  mode?: UnwrapMode;
   result: string;
 };
 

@@ -1118,6 +1118,30 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     },
   },
   {
+    id: "unwrap-box",
+    title: "Unwrap (Box Net)",
+    part: part("example-unwrap-box", [
+      extrude("base", profileRect(48, 32), 20, "body:main"),
+      unwrap("unwrap-1", selectorNamed("body:main"), "surface:flat", ["base"]),
+    ]),
+    render: {
+      renderOpts: {
+        backgroundAlpha: 0,
+      },
+      layers: [
+        {
+          output: "surface:flat",
+          color: [154, 192, 230],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [32, 40, 52],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
+  },
+  {
     id: "shell",
     title: "Shell",
     part: part("example-shell", [

@@ -51,7 +51,7 @@ import {
 - `splitFace(id, faces, tool, result?, deps?) -> SplitFace`
 - `draft(id, source, faces, neutralPlane, pullDirection, angle, result?, deps?) -> Draft` (staging)
 - `thicken(id, surface, thickness, result?, deps?, opts?) -> Thicken`
-- `unwrap(id, source, result?, deps?) -> Unwrap` (planar/cylindrical faces and thin-sheet solids)
+- `unwrap(id, source, result?, deps?, opts?) -> Unwrap` (strict/default and experimental modes)
 - `thread(id, axis, length, majorDiameter, pitch, result?, deps?, opts?) -> Thread` (modelled)
 - `hole(id, onFace, axis, diameter, depth, opts?) -> Hole`
 - `fillet(id, edges, radius, depsOrOpts?) -> Fillet`
@@ -87,6 +87,7 @@ Examples:
 - [Thicken](./examples/features#thicken)
 - [Unwrap](./examples/features#unwrap-planar)
 - [Unwrap (Cylindrical)](./examples/features#unwrap-cylindrical)
+- [Unwrap (Box Net)](./examples/features#unwrap-box-net)
 - [Hole](./examples/features#hole)
 - [Fillet](./examples/features#fillet)
 - [Variable Fillet](./examples/features#variable-fillet)
@@ -103,6 +104,11 @@ Examples:
 - Prefer `sweep` + explicit `profileCircle(...)` / `profilePoly(...)` for path sweeps.
 - Prefer `booleanOp(..., "union" | "subtract" | "intersect", ...)` as the canonical boolean surface.
 - `pipeSweep`, `hexTubeSweep`, `union`, `cut`, and `intersect` remain as compatibility aliases.
+
+Unwrap options (`opts`):
+- `mode?: "strict" | "experimental"` (default: `"strict"`).
+- `strict`: reliable templates only (single-face planar/cylindrical, full cylinder solids, axis-aligned box nets, thin-sheet solids).
+- `experimental`: broader best-effort unwrap for complex multi-face/solid inputs.
 
 ## Thread
 

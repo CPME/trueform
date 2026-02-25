@@ -422,10 +422,14 @@ const tests = [
       assert.equal(thicken.kind, "feature.thicken");
       const unwrap = dsl.unwrap(
         "unwrap-1",
-        dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxZ()])
+        dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxZ()]),
+        undefined,
+        undefined,
+        { mode: "experimental" }
       );
       assert.equal(unwrap.kind, "feature.unwrap");
       assert.equal(unwrap.result, "surface:unwrap-1");
+      assert.equal(unwrap.mode, "experimental");
 
       const shell = dsl.shell("shell-1", dsl.selectorNamed("body:base"), 2);
       assert.equal(shell.kind, "feature.shell");
