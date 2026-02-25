@@ -85,8 +85,6 @@ Examples:
 - [Move Face](./examples/features#move-face)
 - [Draft](./examples/features#draft)
 - [Thicken](./examples/features#thicken)
-- [Unwrap](./examples/features#unwrap-planar)
-- [Unwrap (Cylindrical)](./examples/features#unwrap-cylindrical)
 - [Unwrap (Box Net)](./examples/features#unwrap-box-net)
 - [Hole](./examples/features#hole)
 - [Fillet](./examples/features#fillet)

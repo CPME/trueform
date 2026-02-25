@@ -151,16 +151,6 @@
       "image": "/examples/dsl/thicken.iso.png"
     },
     {
-      "id": "unwrap",
-      "title": "Unwrap (Planar)",
-      "image": "/examples/dsl/unwrap.iso.png"
-    },
-    {
-      "id": "unwrap-cylinder",
-      "title": "Unwrap (Cylindrical)",
-      "image": "/examples/dsl/unwrap-cylinder.iso.png"
-    },
-    {
       "id": "unwrap-box",
       "title": "Unwrap (Box Net)",
       "image": "/examples/dsl/unwrap-box.iso.png"
