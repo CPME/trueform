@@ -24,6 +24,7 @@ steps so work can resume cleanly in the next session.
 6. Connected-face alignment + docs gating: `3bf56e1`
 7. Cube-style solid unwrap net fallback: `d7a66fa`
 8. Full solid-cylinder net (side + caps): `c2d3364`
+9. Deterministic seam ordering + stitch fallback + determinism test: `932b0ac`
 
 ## Current Behavior
 
@@ -47,8 +48,9 @@ steps so work can resume cleanly in the next session.
 1. Multi-face unwrap for complex swept surfaces can still look janky in
    some cases (edge choices can create awkward overlaps even with deterministic
    ordering and fallback placement).
-2. Full solid cylinder unfolding with cap handling is not implemented.
-   Current cylinder unwrap behavior is lateral face/surface flattening.
+2. Complex enclosed boxy solids (many planar faces from stacked extrusions +
+   boolean ops) are now covered by e2e test, but current visual layout can
+   still overlap heavily and look unusable.
 3. Box/cube representative net is deterministic only for axis-aligned
    rectangular solids; arbitrarily oriented boxes use planar-polyhedral fallback.
 4. No dedicated “before vs after unwrap” checked-in examples yet; current

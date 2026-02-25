@@ -296,6 +296,104 @@ const tests = [
     },
   },
   {
+    name: "occt e2e: unwrap handles complex enclosed boxy solids",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const part = dsl.part("unwrap-complex-boxy-solid", [
+        dsl.extrude("base", dsl.profileRect(80, 60), 40, "body:base"),
+        dsl.extrude("tier-1", dsl.profileRect(50, 35), 20, "body:tier1"),
+        dsl.moveBody(
+          "tier-1-up",
+          dsl.selectorNamed("body:tier1"),
+          "body:tier1-up",
+          ["tier-1"],
+          { translation: [0, 0, 40] }
+        ),
+        dsl.booleanOp(
+          "union-1",
+          "union",
+          dsl.selectorNamed("body:base"),
+          dsl.selectorNamed("body:tier1-up"),
+          "body:union1",
+          ["base", "tier-1-up"]
+        ),
+        dsl.extrude("tier-2", dsl.profileRect(24, 20), 16, "body:tier2"),
+        dsl.moveBody(
+          "tier-2-up",
+          dsl.selectorNamed("body:tier2"),
+          "body:tier2-up",
+          ["tier-2"],
+          { translation: [18, 0, 60] }
+        ),
+        dsl.booleanOp(
+          "union-2",
+          "union",
+          dsl.selectorNamed("body:union1"),
+          dsl.selectorNamed("body:tier2-up"),
+          "body:union2",
+          ["union-1", "tier-2-up"]
+        ),
+        dsl.extrude("slot", dsl.profileRect(16, 12), 80, "body:slot"),
+        dsl.moveBody(
+          "slot-up",
+          dsl.selectorNamed("body:slot"),
+          "body:slot-up",
+          ["slot"],
+          { translation: [-12, 0, 10] }
+        ),
+        dsl.booleanOp(
+          "cut-1",
+          "subtract",
+          dsl.selectorNamed("body:union2"),
+          dsl.selectorNamed("body:slot-up"),
+          "body:main",
+          ["union-2", "slot-up"]
+        ),
+        dsl.unwrap("unwrap-1", dsl.selectorNamed("body:main"), "surface:flat", [
+          "cut-1",
+        ]),
+      ]);
+
+      const result = buildPart(part, backend);
+      const output = result.final.outputs.get("surface:flat");
+      assert.ok(output, "missing unwrap output");
+      const shape = output.meta["shape"] as any;
+      assert.ok(shape, "missing shape metadata");
+      assertValidShape(occt, shape, "unwrap complex boxy solid");
+      assert.equal(countSolids(occt, shape), 0);
+      const faceCount = countFaces(occt, shape);
+      assert.ok(faceCount >= 12, `expected many flattened faces, got ${faceCount}`);
+
+      const sourceFaces = result.final.selections.filter(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["ownerKey"] === "body:main" &&
+          selection.meta["createdBy"] === "cut-1"
+      );
+      const flatFaces = result.final.selections.filter(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["ownerKey"] === "surface:flat" &&
+          selection.meta["createdBy"] === "unwrap-1"
+      );
+      assert.ok(sourceFaces.length >= 12, "expected complex source to have many faces");
+      assert.ok(flatFaces.length >= 12, "expected many unwrapped faces");
+
+      const sourceArea = sourceFaces.reduce((sum, face) => {
+        const area = face.meta["area"];
+        return sum + (typeof area === "number" ? area : 0);
+      }, 0);
+      const flatArea = flatFaces.reduce((sum, face) => {
+        const area = face.meta["area"];
+        return sum + (typeof area === "number" ? area : 0);
+      }, 0);
+      assert.ok(
+        Math.abs(flatArea - sourceArea) < Math.max(1e-2, sourceArea * 1e-5),
+        "unwrap should preserve total surface area for complex planar solids"
+      );
+    },
+  },
+  {
     name: "occt e2e: unwrap flattens cylindrical surfaces",
     fn: async () => {
       const { occt, backend } = await getBackendContext();
