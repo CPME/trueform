@@ -6,7 +6,7 @@ steps so work can resume cleanly in the next session.
 ## Latest State
 
 - Branch: `main`
-- Last unwrap-focused commit: `3bf56e1`
+- Last unwrap-focused commit: `d7a66fa`
 - Public docs exposure status:
   - `unwrap-solid` and `unwrap-shell` examples are removed from docs examples
     and gallery output until quality sign-off.
@@ -22,17 +22,20 @@ steps so work can resume cleanly in the next session.
 4. Multi-face developable input support: `e1aadaf`
 5. Thin-solid sheet extraction wrapper: `45152d4`
 6. Connected-face alignment + docs gating: `3bf56e1`
+7. Cube-style solid unwrap net fallback: `d7a66fa`
 
 ## Current Behavior
 
 - Supported unwrap source selections:
   - `face`
   - `surface` (single or multi-face)
-  - `solid` (thin-sheet detection path)
+  - `solid` (thin-sheet, planar-polyhedral, and box-net paths)
 - Supported source geometry classes:
   - Planar faces
   - Cylindrical faces
   - Thin solids via paired planar/cylindrical face extraction
+  - Axis-aligned rectangular solids (cube/cuboid) via deterministic net layout
+  - Planar polyhedral solids (fallback connected layout)
 - Unwrap output:
   - Face or compound face output on XY plane
   - Metadata under `meta.unwrap`
@@ -40,12 +43,15 @@ steps so work can resume cleanly in the next session.
 ## Known Gaps
 
 1. Multi-face unwrap can still produce visually confusing layouts for some
-   swept surfaces; geometry is aligned by adjacency, but not yet seam-stitched
+   swept surfaces; geometry is aligned by adjacency, but not seam-stitched
    into a single topologically merged sheet where possible.
 2. Full solid cylinder unfolding with cap handling is not implemented.
    Current cylinder unwrap behavior is lateral face/surface flattening.
-3. No dedicated “before vs after unwrap” checked-in examples yet; current
-   review snapshots were generated privately.
+3. Box/cube representative net is deterministic only for axis-aligned
+   rectangular solids; arbitrarily oriented boxes currently use generic
+   planar-polyhedral fallback.
+4. No dedicated “before vs after unwrap” checked-in examples yet; current
+   review snapshots are generated privately under `/tmp/unwrap-review`.
 
 ## Resume Checklist
 
@@ -64,4 +70,4 @@ npm run build -- --pretty false
 node dist/tests/occt.unwrap.e2e.test.js
 ```
 
-Expected: all 6 unwrap tests pass.
+Expected: all 7 unwrap tests pass.
