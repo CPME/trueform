@@ -307,6 +307,7 @@ const tests = [
         const observedStates = new Set<string>();
         const capabilities = await fetchJson<{
           apiVersion?: string;
+          featureKinds?: string[];
           featureStages?: Record<string, { stage?: string; notes?: string }>;
           quotas?: {
             maxBuildSessionsPerTenant?: number;
@@ -352,8 +353,18 @@ const tests = [
         assert.equal(capabilities.optionalFeatures?.bom?.derive, false);
         assert.equal(capabilities.optionalFeatures?.release?.preflight, false);
         assert.equal(capabilities.optionalFeatures?.featureStaging?.registry, true);
-        assert.equal(capabilities.featureStages?.["feature.thread"]?.stage, "staging");
-        assert.equal(capabilities.featureStages?.["feature.surface"]?.stage, "staging");
+        assert.equal((capabilities.featureKinds?.length ?? 0) > 0, true);
+        for (const featureKind of capabilities.featureKinds ?? []) {
+          const stage = capabilities.featureStages?.[featureKind]?.stage;
+          assert.equal(
+            stage === "stable" || stage === "staging",
+            true,
+            `Missing explicit stage for ${featureKind}`
+          );
+        }
+        assert.equal(capabilities.featureStages?.["feature.thread"]?.stage, "stable");
+        assert.equal(capabilities.featureStages?.["feature.surface"]?.stage, "stable");
+        assert.equal(capabilities.featureStages?.["feature.extrude:mode.surface"]?.stage, "staging");
         const health = await fetchJson<{
           status?: string;
           dependencies?: { opencascade?: { ready?: boolean } };

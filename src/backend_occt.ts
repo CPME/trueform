@@ -5397,15 +5397,24 @@ export class OcctBackend implements Backend {
     resolve: ExecuteInput["resolve"]
   ): PlaneBasis {
     if (this.isSelectorRef(planeRef)) {
-      const target = resolve(planeRef as Selector, upstream);
-      if (target.kind !== "face") {
-        throw new Error("OCCT backend: plane reference must resolve to a face");
+      try {
+        const target = resolve(planeRef as Selector, upstream);
+        if (target.kind !== "face") {
+          throw new Error("OCCT backend: plane reference must resolve to a face");
+        }
+        const face = target.meta["shape"];
+        if (!face) {
+          throw new Error("OCCT backend: plane reference missing face shape");
+        }
+        return this.planeBasisFromFace(face);
+      } catch (err) {
+        if ((planeRef as Selector).kind === "selector.named") {
+          const selector = planeRef as { kind: "selector.named"; name: string };
+          const fallback = this.namedPlaneBasisFallback(selector.name, upstream);
+          if (fallback) return fallback;
+        }
+        throw err;
       }
-      const face = target.meta["shape"];
-      if (!face) {
-        throw new Error("OCCT backend: plane reference missing face shape");
-      }
-      return this.planeBasisFromFace(face);
     }
     if (planeRef.kind === "plane.datum") {
       const datum = upstream.outputs.get(this.datumKey(planeRef.ref));
@@ -5424,6 +5433,64 @@ export class OcctBackend implements Backend {
       };
     }
     throw new Error("OCCT backend: unsupported plane reference");
+  }
+
+  private namedPlaneBasisFallback(name: string, upstream: KernelResult): PlaneBasis | null {
+    const canonical = this.canonicalPlaneBasis(name);
+    if (canonical) return canonical;
+    return this.namedDatumPlaneBasis(name, upstream);
+  }
+
+  private canonicalPlaneBasis(name: string): PlaneBasis | null {
+    const normalized = name.trim().toLowerCase();
+    if (normalized === "top") {
+      return { origin: [0, 0, 0], xDir: [1, 0, 0], yDir: [0, 1, 0], normal: [0, 0, 1] };
+    }
+    if (normalized === "bottom") {
+      return { origin: [0, 0, 0], xDir: [1, 0, 0], yDir: [0, -1, 0], normal: [0, 0, -1] };
+    }
+    if (normalized === "front") {
+      return { origin: [0, 0, 0], xDir: [1, 0, 0], yDir: [0, 0, -1], normal: [0, 1, 0] };
+    }
+    if (normalized === "back") {
+      return { origin: [0, 0, 0], xDir: [1, 0, 0], yDir: [0, 0, 1], normal: [0, -1, 0] };
+    }
+    if (normalized === "right") {
+      return { origin: [0, 0, 0], xDir: [0, 1, 0], yDir: [0, 0, 1], normal: [1, 0, 0] };
+    }
+    if (normalized === "left") {
+      return { origin: [0, 0, 0], xDir: [0, 1, 0], yDir: [0, 0, -1], normal: [-1, 0, 0] };
+    }
+    return null;
+  }
+
+  private namedDatumPlaneBasis(name: string, upstream: KernelResult): PlaneBasis | null {
+    const tokens = this.namedDatumKeys(name);
+    for (const key of tokens) {
+      const datum = upstream.outputs.get(key);
+      if (!datum || datum.kind !== "datum") continue;
+      const meta = datum.meta as Record<string, unknown>;
+      if (meta.type !== "plane" && meta.type !== "frame") continue;
+      return {
+        origin: meta.origin as [number, number, number],
+        xDir: meta.xDir as [number, number, number],
+        yDir: meta.yDir as [number, number, number],
+        normal: meta.normal as [number, number, number],
+      };
+    }
+    return null;
+  }
+
+  private namedDatumKeys(name: string): string[] {
+    const trimmed = name.trim();
+    if (!trimmed) return [];
+    const keys = new Set<string>();
+    if (trimmed.startsWith("datum:")) {
+      keys.add(trimmed);
+    } else {
+      keys.add(this.datumKey(trimmed));
+    }
+    return Array.from(keys);
   }
 
   private planeBasisFromFace(face: any): PlaneBasis {

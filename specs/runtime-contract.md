@@ -55,15 +55,20 @@ Response:
 {
   "apiVersion": "1.2",
   "backend": "opencascade.js",
-  "featureKinds": ["feature.extrude", "feature.loft"],
+  "featureKinds": ["feature.extrude", "feature.loft", "feature.surface"],
   "featureStages": {
-    "feature.thread": {
-      "stage": "staging",
-      "notes": "Modelled thread output is still under active geometry tuning."
+    "feature.extrude": {
+      "stage": "stable"
+    },
+    "feature.loft": {
+      "stage": "stable"
     },
     "feature.surface": {
+      "stage": "stable"
+    },
+    "feature.extrude:mode.surface": {
       "stage": "staging",
-      "notes": "Surface workflows are supported but still maturing for reliability."
+      "notes": "Surface-mode extrude remains in staging while robustness improves."
     }
   },
   "exports": { "step": true, "stl": true },
@@ -88,6 +93,10 @@ Response:
   }
 }
 ```
+
+Notes:
+- `featureStages` includes an explicit `stage` entry for every `featureKinds` item.
+- Additional keys may appear for mode-specific variants (for example `feature.extrude:mode.surface`).
 
 ## Health
 `GET /v1/health`
@@ -281,6 +290,14 @@ Diagnostics expectations for broken references:
   `error.details.featureId` and `error.details.referenceId`.
 - missing named outputs should report `code: "selector_named_missing"` with
   `error.details.featureId` and `error.details.referenceId`.
+
+## Plane Selector Contract (`feature.plane.plane`)
+`feature.plane.plane` accepts:
+
+- `{"kind":"plane.datum","ref":"<datum-id>"}` for explicit datum references.
+- selector payloads (`selector.face`, `selector.named`) that resolve to planar faces.
+- canonical named aliases via `selector.named`: `Top`, `Bottom`, `Front`, `Back`, `Right`, `Left`.
+- named datum ids via `selector.named("<datum-id>")` (runtime maps to `datum:<datum-id>`).
 
 ## Stable Payload Fixtures
 Mirror fixture:

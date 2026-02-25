@@ -1,4 +1,5 @@
 import { TF_STAGED_FEATURES } from "./feature_staging.js";
+import type { FeatureStageEntry } from "./feature_staging.js";
 
 export const TF_API_VERSION = "1.2";
 
@@ -66,6 +67,20 @@ export const TF_RUNTIME_OPTIONAL_FEATURES = {
 } as const;
 
 export const TF_RUNTIME_FEATURE_STAGING = TF_STAGED_FEATURES;
+
+export function resolveRuntimeFeatureStages(
+  featureKinds: readonly string[] | undefined,
+  stagedEntries: Readonly<Record<string, FeatureStageEntry>> | undefined = TF_RUNTIME_FEATURE_STAGING
+): Record<string, FeatureStageEntry> {
+  const out: Record<string, FeatureStageEntry> = {};
+  for (const kind of featureKinds ?? []) {
+    out[kind] = { stage: "stable" };
+  }
+  for (const [key, entry] of Object.entries(stagedEntries ?? {})) {
+    out[key] = { ...entry };
+  }
+  return out;
+}
 
 export type RuntimeJobState = "queued" | "running" | "succeeded" | "failed" | "canceled";
 

@@ -40,6 +40,32 @@ Stable fixtures for UI/runtime integration tests.
 }
 ```
 
+## Plane Reference (Named Alias)
+
+```json
+{
+  "kind": "feature.plane",
+  "id": "plane-top",
+  "width": 20,
+  "height": 10,
+  "plane": { "kind": "selector.named", "name": "Top" },
+  "result": "surface:top"
+}
+```
+
+## Plane Reference (Named Datum Id)
+
+```json
+{
+  "kind": "feature.plane",
+  "id": "plane-from-datum",
+  "width": 20,
+  "height": 10,
+  "plane": { "kind": "selector.named", "name": "datum-plane-1" },
+  "result": "surface:datum"
+}
+```
+
 ## Measure Request/Response
 
 ```json

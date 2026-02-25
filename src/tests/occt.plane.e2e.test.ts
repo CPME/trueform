@@ -61,6 +61,51 @@ const tests = [
       assert.equal(countEdges(occt, shape), 4);
     },
   },
+  {
+    name: "occt e2e: plane feature accepts named datum id selectors",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const part = dsl.part("plane-from-named-datum-id", [
+        dsl.datumPlane("datum-plane-1", "+Y"),
+        dsl.plane("plane-3", 14, 9, "surface:named-datum", {
+          plane: dsl.selectorNamed("datum-plane-1"),
+        }),
+      ]);
+
+      const result = buildPart(part, backend);
+      const output = result.final.outputs.get("surface:named-datum");
+      assert.ok(output, "missing surface:named-datum output");
+      assert.equal(output.kind, "face");
+      const shape = output.meta["shape"] as any;
+      assert.ok(shape, "missing shape metadata");
+      assertValidShape(occt, shape, "plane from named datum id");
+      assert.equal(countSolids(occt, shape), 0);
+      assert.equal(countFaces(occt, shape), 1);
+      assert.equal(countEdges(occt, shape), 4);
+    },
+  },
+  {
+    name: "occt e2e: plane feature accepts canonical Top selector alias",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const part = dsl.part("plane-from-top-alias", [
+        dsl.plane("plane-4", 12, 8, "surface:top-alias", {
+          plane: dsl.selectorNamed("Top"),
+        }),
+      ]);
+
+      const result = buildPart(part, backend);
+      const output = result.final.outputs.get("surface:top-alias");
+      assert.ok(output, "missing surface:top-alias output");
+      assert.equal(output.kind, "face");
+      const shape = output.meta["shape"] as any;
+      assert.ok(shape, "missing shape metadata");
+      assertValidShape(occt, shape, "plane from Top alias");
+      assert.equal(countSolids(occt, shape), 0);
+      assert.equal(countFaces(occt, shape), 1);
+      assert.equal(countEdges(occt, shape), 4);
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

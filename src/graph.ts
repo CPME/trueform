@@ -396,6 +396,11 @@ function selectorDependencies(
       if (isImplicitSelectionReference(name)) {
         continue;
       }
+      const fallback = resolveFeaturePlaneNamedReference(feature, name, byId);
+      if (fallback.accepted) {
+        if (fallback.dep) deps.add(fallback.dep);
+        continue;
+      }
       throw new CompileError(
         "selector_named_missing",
         `Feature ${feature.id} references missing output ${name}`,
@@ -471,6 +476,42 @@ function parseNamedSelectorReferences(value: string): string[] {
 
 function isImplicitSelectionReference(value: string): boolean {
   return /^(edge|face|solid|surface):/i.test(value.trim());
+}
+
+function resolveFeaturePlaneNamedReference(
+  feature: IntentFeature,
+  name: string,
+  byId: Map<ID, IntentFeature>
+): { accepted: boolean; dep?: ID } {
+  if (feature.kind !== "feature.plane") return { accepted: false };
+  const normalized = name.trim();
+  if (!normalized) return { accepted: false };
+  if (isCanonicalPlaneAlias(normalized)) {
+    return { accepted: true };
+  }
+
+  const datumId = normalized.startsWith("datum:")
+    ? normalized.slice("datum:".length)
+    : normalized;
+  if (!datumId) return { accepted: false };
+  const hit = byId.get(datumId);
+  if (!hit) return { accepted: false };
+  if (hit.kind !== "datum.plane" && hit.kind !== "datum.frame") {
+    return { accepted: false };
+  }
+  return { accepted: true, dep: datumId };
+}
+
+function isCanonicalPlaneAlias(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "top" ||
+    normalized === "bottom" ||
+    normalized === "front" ||
+    normalized === "back" ||
+    normalized === "right" ||
+    normalized === "left"
+  );
 }
 
 export function topoSortDeterministic(features: IntentFeature[], graph: Graph): ID[] {

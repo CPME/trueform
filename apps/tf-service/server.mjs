@@ -14,9 +14,9 @@ import { residualsForTesting } from "../../dist/assembly.js";
 import {
   TF_API_ENDPOINTS,
   TF_RUNTIME_OPTIONAL_FEATURES,
-  TF_RUNTIME_FEATURE_STAGING,
   TF_API_VERSION,
   TF_RUNTIME_OPENAPI,
+  resolveRuntimeFeatureStages,
 } from "../../dist/api.js";
 import { OcctBackend } from "../../dist/backends.js";
 import { backendToAsync } from "../../dist/backend-spi.js";
@@ -1874,7 +1874,7 @@ export function createTfServiceServer(options = {}) {
           backend: caps.name ?? "opencascade.js",
           backendFingerprint,
           featureKinds: caps.featureKinds ?? [],
-          featureStages: caps.featureStages ?? TF_RUNTIME_FEATURE_STAGING,
+          featureStages: resolveRuntimeFeatureStages(caps.featureKinds, caps.featureStages),
           exports: caps.exports ?? { step: true, stl: true },
           mesh: caps.mesh ?? true,
           assertions: caps.assertions ?? [],
