@@ -258,6 +258,44 @@ const tests = [
     },
   },
   {
+    name: "occt e2e: unwrap cube net layout is deterministic across rebuilds",
+    fn: async () => {
+      const { backend } = await getBackendContext();
+      const part = dsl.part("unwrap-solid-cube-determinism", [
+        dsl.extrude("base", dsl.profileRect(20, 20), 20, "body:main"),
+        dsl.unwrap("unwrap-1", dsl.selectorNamed("body:main"), "surface:flat", [
+          "base",
+        ]),
+      ]);
+
+      const buildCenters = () => {
+        const result = buildPart(part, backend);
+        return result.final.selections
+          .filter(
+            (selection) =>
+              selection.kind === "face" &&
+              selection.meta["ownerKey"] === "surface:flat" &&
+              selection.meta["createdBy"] === "unwrap-1"
+          )
+          .map((selection) => selection.meta["center"])
+          .filter((value): value is number[] => Array.isArray(value) && value.length === 3)
+          .map((center) => center.map((v) => Number(v.toFixed(6))))
+          .sort((a, b) => {
+            const [ax = 0, ay = 0, az = 0] = a;
+            const [bx = 0, by = 0, bz = 0] = b;
+            if (ax !== bx) return ax - bx;
+            if (ay !== by) return ay - by;
+            return az - bz;
+          });
+      };
+
+      const first = buildCenters();
+      const second = buildCenters();
+      assert.equal(first.length, 6, "expected 6 flattened cube faces");
+      assert.deepEqual(second, first, "cube unwrap should be deterministic across runs");
+    },
+  },
+  {
     name: "occt e2e: unwrap flattens cylindrical surfaces",
     fn: async () => {
       const { occt, backend } = await getBackendContext();

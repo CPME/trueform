@@ -2753,7 +2753,14 @@ export class OcctBackend implements Backend {
     const transformedByIndex = new Map<number, any>();
     const visited = new Set<number>();
     const components: number[][] = [];
-    for (let i = 0; i < patches.length; i += 1) {
+    const rootOrder = patches
+      .map((patch, index) => ({
+        index,
+        key: this.unwrapPatchSortKey(patch),
+      }))
+      .sort((a, b) => this.compareUnwrapSortKeys(a.key, b.key))
+      .map((entry) => entry.index);
+    for (const i of rootOrder) {
       if (visited.has(i)) continue;
       const component: number[] = [];
       const componentPlaced = new Set<number>([i]);
@@ -2770,7 +2777,10 @@ export class OcctBackend implements Backend {
         const currentTransform = transforms.get(current) ?? root;
         const projectorA = currentPatch?.projectPoint;
         if (!projectorA) continue;
-        const neighbors = edgesByPatch.get(current) ?? [];
+        const neighbors = (edgesByPatch.get(current) ?? []).slice().sort((a, b) =>
+          this.compareUnwrapAdjacencyEdges(a, b)
+        );
+        const overlapFallback = new Map<number, { fit: Unwrap2DTransform; shape: any }>();
         for (const edge of neighbors) {
           const neighbor = edge.a === current ? edge.b : edge.a;
           if (visited.has(neighbor)) continue;
@@ -2794,10 +2804,21 @@ export class OcctBackend implements Backend {
             .map((index) => transformedByIndex.get(index))
             .filter(Boolean);
           if (this.unwrapPlacementOverlaps(candidateShape, componentShapes)) {
+            if (!overlapFallback.has(neighbor)) {
+              overlapFallback.set(neighbor, { fit, shape: candidateShape });
+            }
             continue;
           }
           transforms.set(neighbor, fit);
           transformedByIndex.set(neighbor, candidateShape);
+          componentPlaced.add(neighbor);
+          visited.add(neighbor);
+          queue.push(neighbor);
+        }
+        for (const [neighbor, fallback] of overlapFallback) {
+          if (visited.has(neighbor)) continue;
+          transforms.set(neighbor, fallback.fit);
+          transformedByIndex.set(neighbor, fallback.shape);
           componentPlaced.add(neighbor);
           visited.add(neighbor);
           queue.push(neighbor);
@@ -2816,7 +2837,7 @@ export class OcctBackend implements Backend {
       const shapes = indices.map((index) => transformed[index]).filter(Boolean);
       if (shapes.length === 0) return null;
       if (shapes.length === 1) return shapes[0];
-      return this.makeCompoundFromShapes(shapes);
+      return this.finalizeUnwrapComponentShapes(shapes);
     }).filter((shape): shape is any => shape !== null);
   }
 
@@ -2874,6 +2895,7 @@ export class OcctBackend implements Backend {
         });
       }
     }
+    edges.sort((a, b) => this.compareUnwrapAdjacencyEdges(a, b));
     return edges;
   }
 
@@ -2979,6 +3001,70 @@ export class OcctBackend implements Backend {
       return true;
     }
     return false;
+  }
+
+  private finalizeUnwrapComponentShapes(shapes: any[]): any {
+    const compound = this.makeCompoundFromShapes(shapes);
+    if (!this.unwrapShapesCoplanarXY(shapes)) return compound;
+    const sewed = this.sewShapeFaces(compound, 1e-6);
+    if (!sewed) return compound;
+    if (this.shapeHasSolid(sewed)) return compound;
+    if (this.countFaces(sewed) < 1) return compound;
+    return sewed;
+  }
+
+  private unwrapShapesCoplanarXY(shapes: any[]): boolean {
+    if (shapes.length <= 1) return true;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (const shape of shapes) {
+      const bounds = this.shapeBounds(shape);
+      minZ = Math.min(minZ, bounds.min[2]);
+      maxZ = Math.max(maxZ, bounds.max[2]);
+    }
+    if (!(Number.isFinite(minZ) && Number.isFinite(maxZ))) return false;
+    return Math.abs(maxZ - minZ) <= 1e-5;
+  }
+
+  private unwrapPatchSortKey(patch: UnwrapPatch): [number, number, number, number] {
+    if (patch.sourceFace) {
+      const props = this.faceProperties(patch.sourceFace);
+      return [props.center[0], props.center[1], props.center[2], props.area];
+    }
+    const bounds = this.shapeBounds(patch.shape);
+    const center: [number, number, number] = [
+      (bounds.min[0] + bounds.max[0]) / 2,
+      (bounds.min[1] + bounds.max[1]) / 2,
+      (bounds.min[2] + bounds.max[2]) / 2,
+    ];
+    const area = this.faceProperties(this.firstFace(patch.shape) ?? patch.shape).area;
+    return [center[0], center[1], center[2], area];
+  }
+
+  private compareUnwrapSortKeys(
+    a: [number, number, number, number],
+    b: [number, number, number, number]
+  ): number {
+    for (let i = 0; i < a.length; i += 1) {
+      const delta = (a[i] ?? 0) - (b[i] ?? 0);
+      if (Math.abs(delta) > 1e-9) return delta < 0 ? -1 : 1;
+    }
+    return 0;
+  }
+
+  private compareUnwrapAdjacencyEdges(
+    a: UnwrapAdjacencyEdge,
+    b: UnwrapAdjacencyEdge
+  ): number {
+    if (a.a !== b.a) return a.a - b.a;
+    if (a.b !== b.b) return a.b - b.b;
+    const keyA = [...a.start, ...a.end];
+    const keyB = [...b.start, ...b.end];
+    for (let i = 0; i < keyA.length; i += 1) {
+      const delta = (keyA[i] ?? 0) - (keyB[i] ?? 0);
+      if (Math.abs(delta) > 1e-9) return delta < 0 ? -1 : 1;
+    }
+    return 0;
   }
 
   private closestPeriodicParameter(value: number, min: number, max: number): number {
