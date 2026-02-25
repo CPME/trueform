@@ -2302,6 +2302,11 @@ export class OcctBackend implements Backend {
       throw new Error("OCCT backend: unwrap solid source has no faces");
     }
 
+    const cylinderNet = this.extractSolidCylinderNetFromSolid(solid, faces);
+    if (cylinderNet) {
+      return [cylinderNet];
+    }
+
     if (thinRatio > 0.35) {
       const boxNet = this.extractAxisAlignedBoxNetFromSolid(solid, faces);
       if (boxNet) {
@@ -2488,6 +2493,117 @@ export class OcctBackend implements Backend {
     throw new Error(
       "OCCT backend: unwrap solid source is not recognized as thin sheet"
     );
+  }
+
+  private extractSolidCylinderNetFromSolid(
+    solid: any,
+    faces?: any[]
+  ): UnwrapPatch | null {
+    const sourceFaces = faces ?? this.listFaces(solid);
+    const cylindricalFaces: any[] = [];
+    const planarFaces: Array<{
+      face: any;
+      area: number;
+      center: [number, number, number];
+      normal: [number, number, number];
+    }> = [];
+    for (const face of sourceFaces) {
+      const props = this.faceProperties(face);
+      if (props.surfaceType === "cylinder") {
+        cylindricalFaces.push(face);
+        continue;
+      }
+      if (!props.planar) {
+        return null;
+      }
+      const normal = props.normalVec
+        ? normalizeVector(props.normalVec)
+        : normalizeVector(this.planeBasisFromFace(face).normal);
+      if (!isFiniteVec(normal)) return null;
+      planarFaces.push({
+        face,
+        area: props.area,
+        center: props.center,
+        normal,
+      });
+    }
+    if (cylindricalFaces.length !== 1 || planarFaces.length !== 2) return null;
+    const sideFace = cylindricalFaces[0];
+    const cylinder = this.cylinderFromFace(sideFace);
+    const uv = this.surfaceUvExtents(sideFace);
+    if (!cylinder || !uv) return null;
+    const axis = normalizeVector(cylinder.axis);
+    if (!isFiniteVec(axis)) return null;
+    const vSpan = Math.abs(uv.vMax - uv.vMin);
+    if (!(vSpan > 1e-6 && cylinder.radius > 1e-6)) return null;
+    const fullTurn = Math.PI * 2;
+    const angleSpan = Math.abs(uv.uMax - uv.uMin);
+    const isFull = Math.abs(angleSpan - fullTurn) <= Math.max(1e-3, fullTurn * 0.01);
+    if (!isFull) return null;
+
+    const capA = planarFaces[0];
+    const capB = planarFaces[1];
+    if (!capA || !capB) return null;
+    const alignA = Math.abs(dot(capA.normal, axis));
+    const alignB = Math.abs(dot(capB.normal, axis));
+    if (alignA < 0.98 || alignB < 0.98) return null;
+    const capArea = Math.PI * cylinder.radius * cylinder.radius;
+    const areaTol = Math.max(capArea * 0.05, 1e-3);
+    if (Math.abs(capA.area - capArea) > areaTol || Math.abs(capB.area - capArea) > areaTol) {
+      return null;
+    }
+    const projA = dot(capA.center, axis);
+    const projB = dot(capB.center, axis);
+    const height = Math.abs(projA - projB);
+    if (!(height > 1e-6)) return null;
+
+    const width = fullTurn * cylinder.radius;
+    const rectangleCorners: [number, number, number][] = [
+      [0, 0, 0],
+      [width, 0, 0],
+      [width, height, 0],
+      [0, height, 0],
+    ];
+    const rectWire = this.makePolygonWire(rectangleCorners);
+    const rectFace = this.readShape(this.makeFaceFromWire(rectWire));
+    const topCap = this.makeCircleFace(cylinder.radius, [width / 2, height + cylinder.radius, 0]);
+    const bottomCap = this.makeCircleFace(cylinder.radius, [width / 2, -cylinder.radius, 0]);
+    const shape = this.makeCompoundFromShapes([rectFace, topCap, bottomCap]);
+    if (!this.isValidShape(shape, "face")) return null;
+    return {
+      shape,
+      meta: {
+        kind: "multi",
+        faceCount: 3,
+        faces: [
+          {
+            kind: "cylindrical",
+            radius: cylinder.radius,
+            width,
+            height,
+            angleSpan: fullTurn,
+            sourceSurfaceType: "cylinder",
+          },
+          {
+            kind: "planar",
+            sourceSurfaceType: "plane",
+            radius: cylinder.radius,
+          },
+          {
+            kind: "planar",
+            sourceSurfaceType: "plane",
+            radius: cylinder.radius,
+          },
+        ],
+        solidExtraction: {
+          source: "solid",
+          method: "solidCylinderNet",
+          radius: cylinder.radius,
+          height,
+          capCount: 2,
+        },
+      },
+    };
   }
 
   private extractAxisAlignedBoxNetFromSolid(

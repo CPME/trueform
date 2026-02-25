@@ -210,6 +210,54 @@ const tests = [
     },
   },
   {
+    name: "occt e2e: unwrap flattens full solid cylinders with cap faces",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const radius = 10;
+      const height = 24;
+      const part = dsl.part("unwrap-solid-cylinder", [
+        dsl.pipe("pipe-1", "+Z", height, radius * 2, undefined, "body:main"),
+        dsl.unwrap("unwrap-1", dsl.selectorNamed("body:main"), "surface:flat", [
+          "pipe-1",
+        ]),
+      ]);
+
+      const result = buildPart(part, backend);
+      const output = result.final.outputs.get("surface:flat");
+      assert.ok(output, "missing unwrap output");
+      const shape = output.meta["shape"] as any;
+      assert.ok(shape, "missing shape metadata");
+      assertValidShape(occt, shape, "unwrap solid cylinder");
+      assert.equal(countSolids(occt, shape), 0);
+      assert.ok(countFaces(occt, shape) >= 3, "expected side + two cap faces");
+
+      const unwrapMeta = output.meta["unwrap"] as
+        | {
+            kind?: string;
+            faceCount?: number;
+            solidExtraction?: {
+              method?: string;
+              radius?: number;
+              height?: number;
+              capCount?: number;
+            };
+          }
+        | undefined;
+      assert.equal(unwrapMeta?.kind, "multi");
+      assert.equal(unwrapMeta?.faceCount, 3);
+      assert.equal(unwrapMeta?.solidExtraction?.method, "solidCylinderNet");
+      assert.ok(
+        Math.abs((unwrapMeta?.solidExtraction?.radius ?? 0) - radius) < 1e-6,
+        "cylinder unwrap metadata radius mismatch"
+      );
+      assert.ok(
+        Math.abs((unwrapMeta?.solidExtraction?.height ?? 0) - height) < 1e-6,
+        "cylinder unwrap metadata height mismatch"
+      );
+      assert.equal(unwrapMeta?.solidExtraction?.capCount, 2);
+    },
+  },
+  {
     name: "occt e2e: unwrap flattens cylindrical surfaces",
     fn: async () => {
       const { occt, backend } = await getBackendContext();
@@ -382,8 +430,15 @@ const tests = [
     fn: async () => {
       const { backend } = await getBackendContext();
       const part = dsl.part("unwrap-solid-nonsheet", [
-        dsl.pipe("pipe-1", "+Z", 20, 20, undefined, "body:main"),
-        dsl.unwrap("unwrap-1", dsl.selectorNamed("body:main"), "surface:flat", ["pipe-1"]),
+        dsl.loft(
+          "loft-1",
+          [
+            dsl.profileCircle(12, [0, 0, 0]),
+            dsl.profileCircle(4, [0, 0, 20]),
+          ],
+          "body:main"
+        ),
+        dsl.unwrap("unwrap-1", dsl.selectorNamed("body:main"), "surface:flat", ["loft-1"]),
       ]);
 
       assert.throws(
