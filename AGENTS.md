@@ -8,6 +8,9 @@ To create the open sourced CAD tools and standards that enables the world of har
 1. Kernel: Leverage existing CAD kernels to interact with computers and machine tools.
 1. API: A broader set of tools exposed for application builders.
 
+## General Instructions
+- Commit changes as you go (only the changes you made, unless otherwise noted)
+
 ## Performance
 Make sure this is practical for use in a webapp (can it compile to opencascade.js, and then wasm, without footguns). Avoid choices that block complex assemblies or responsive rotation later.
 
@@ -90,3 +93,38 @@ Use this when adding a new feature end-to-end to avoid digging:
 6. Optional viewer asset
    - If you need viewer assets: `npm run viewer:export`
    - Filter with `TF_VIEWER_ONLY=part-a,part-b`.
+
+## Feature Visual Signoff Workflow (Required for new/changed features)
+
+Use this workflow for feature development and promotion decisions.
+
+1. Build + targeted tests (agent)
+   - Run `npm run build -- --pretty false`.
+   - Run only impacted tests:
+     - feature conformance e2e (`src/tests/occt.<feature>.e2e.test.ts`)
+     - feature failure-mode e2e (`src/tests/occt.<feature>.failure_modes.e2e.test.ts` when applicable)
+     - determinism/parity probe (`src/tests/occt.<feature>.e2e.probe.ts` when applicable)
+
+2. Render visual artifacts (agent)
+   - Add/update DSL example in `src/examples/dsl_feature_examples.ts`.
+   - Run `npm run docs:examples`.
+   - Ensure review PNG is produced in `docs/public/examples/dsl/<example>.iso.png`.
+
+3. Interactive review package (agent + reviewer)
+   - Export viewer assets with `TF_VIEWER_ONLY=<example-id> npm run viewer:export`.
+   - Serve viewer with `npm run viewer:serve`.
+   - Include exact artifact paths in the review summary.
+
+4. Reviewer visual approval (reviewer)
+   - Reviewer checks generated images/viewer output and replies with explicit approval.
+   - Approval phrase can be simple: `approved`.
+
+5. Promotion + PR trigger (agent)
+   - Once reviewer approves, immediately:
+     - promote feature stage (`src/feature_staging.ts`) when applicable
+     - update parity/docs (`specs/geometric-benchmark-corpus.json`, `specs/geometric-parity-matrix.md`, `specs/geometric-parity-plan.md`)
+     - run parity report (`npm run parity:geometric:report`)
+     - commit and open/publish PR
+
+Rule: Do not mark a feature complete or promoted without visual review artifacts
+and explicit reviewer approval.
