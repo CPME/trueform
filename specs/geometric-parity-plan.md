@@ -54,7 +54,7 @@ Interpretation:
 | M8: Stage graduation wave 1 (direct-edit + variable edge + draft) | `completed` | Direct-edit, variable-edge, and draft promotions landed with conformance/failure/determinism coverage. |
 | M9: Stage graduation wave 2 (thread + surface-mode reliability) | `in_progress` | Thread plus `feature.surface`/surface-mode revolve are promoted; remaining surface-mode entries still staged. |
 | M10: Advanced profile ops (`rib/web`) | `planned` | Close next declared missing workflow in corpus. |
-| M11: Advanced surfacing slice (`boundary/fill/trim/extend/knit`) | `planned` | Land minimum production-credible subset and probe coverage. |
+| M11: Advanced surfacing slice (`boundary/fill/trim/extend/knit`) | `planned` | Land minimum production-credible subset and probe coverage (see `specs/advanced-surfacing-three-slices-plan.md`). |
 | M12: Near-parity closure + gate validation | `in_progress` | Coverage/reliability gates are now met; remaining work is missing-feature closure (`rib/web`, advanced surfacing). |
 
 ## Execution Order (Near-Parity Path)
