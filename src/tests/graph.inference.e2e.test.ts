@@ -447,6 +447,60 @@ const tests = [
       );
     },
   },
+  {
+    name: "graph: sketch plane selector to output infers host dependency",
+    fn: async () => {
+      const part = dsl.part("sketch-plane-output-deps", [
+        dsl.sketch2d(
+          "a-sketch",
+          [{ name: "profile:cut", profile: dsl.profileRect(4, 4) }],
+          { plane: dsl.selectorNamed("surface:host-face") }
+        ),
+        dsl.plane("z-plane", 20, 20, "surface:host-face"),
+      ]);
+      const result = compilePart(part);
+      assert.ok(
+        result.featureOrder.indexOf("z-plane") <
+          result.featureOrder.indexOf("a-sketch")
+      );
+    },
+  },
+  {
+    name: "graph: sketch plane selector using raw face id requires explicit deps",
+    fn: async () => {
+      const part = dsl.part("sketch-plane-face-id-no-deps", [
+        dsl.sketch2d(
+          "a-sketch",
+          [{ name: "profile:cut", profile: dsl.profileRect(4, 4) }],
+          { plane: dsl.selectorNamed("face:130") }
+        ),
+        dsl.extrude("z-extrude", dsl.profileRect(20, 20), 6, "body:main"),
+      ]);
+      assert.throws(
+        () => compilePart(part),
+        (err) =>
+          err instanceof CompileError && err.code === "selector_anchor_missing"
+      );
+    },
+  },
+  {
+    name: "graph: sketch plane selector face id is allowed with explicit deps",
+    fn: async () => {
+      const part = dsl.part("sketch-plane-face-id-explicit-deps", [
+        dsl.sketch2d(
+          "a-sketch",
+          [{ name: "profile:cut", profile: dsl.profileRect(4, 4) }],
+          { plane: dsl.selectorNamed("face:130"), deps: ["z-extrude"] }
+        ),
+        dsl.extrude("z-extrude", dsl.profileRect(20, 20), 6, "body:main"),
+      ]);
+      const result = compilePart(part);
+      assert.ok(
+        result.featureOrder.indexOf("z-extrude") <
+          result.featureOrder.indexOf("a-sketch")
+      );
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

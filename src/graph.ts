@@ -386,19 +386,27 @@ function selectorDependencies(
   const deps = new Set<ID>();
 
   if (selector.kind === "selector.named") {
+    let anchored = false;
     const names = parseNamedSelectorReferences(selector.name);
     for (const name of names) {
       const hit = outputToFeature.get(name);
       if (hit) {
         deps.add(hit);
+        anchored = true;
         continue;
       }
       if (isImplicitSelectionReference(name)) {
+        // Sketch planes hosted by raw selection ids (e.g. face:130) need explicit deps
+        // because there is no deterministic producer edge to infer.
+        if (feature.kind !== "feature.sketch2d") {
+          anchored = true;
+        }
         continue;
       }
       const fallback = resolveFeaturePlaneNamedReference(feature, name, byId);
       if (fallback.accepted) {
         if (fallback.dep) deps.add(fallback.dep);
+        anchored = true;
         continue;
       }
       throw new CompileError(
@@ -412,7 +420,7 @@ function selectorDependencies(
         }
       );
     }
-    return { deps, anchored: true };
+    return { deps, anchored };
   }
 
   let anchored = false;
