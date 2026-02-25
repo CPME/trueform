@@ -156,6 +156,60 @@ const tests = [
     },
   },
   {
+    name: "occt e2e: unwrap flattens planar polyhedral solids (cube-like net)",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const side = 20;
+      const part = dsl.part("unwrap-solid-cube", [
+        dsl.extrude("base", dsl.profileRect(side, side), side, "body:main"),
+        dsl.unwrap("unwrap-1", dsl.selectorNamed("body:main"), "surface:flat", [
+          "base",
+        ]),
+      ]);
+
+      const result = buildPart(part, backend);
+      const output = result.final.outputs.get("surface:flat");
+      assert.ok(output, "missing unwrap output");
+      const shape = output.meta["shape"] as any;
+      assert.ok(shape, "missing shape metadata");
+      assertValidShape(occt, shape, "unwrap cube solid");
+      assert.equal(countSolids(occt, shape), 0);
+      assert.equal(countFaces(occt, shape), 6, "cube unwrap should emit 6 planar faces");
+
+      const unwrapMeta = output.meta["unwrap"] as
+        | {
+            kind?: string;
+            faceCount?: number;
+            solidExtraction?: { method?: string };
+            faces?: Array<{ solidExtraction?: { method?: string } }>;
+          }
+        | undefined;
+      assert.equal(unwrapMeta?.kind, "multi");
+      assert.equal(unwrapMeta?.faceCount, 6);
+      assert.equal(unwrapMeta?.solidExtraction?.method, "axisAlignedBoxNet");
+
+      const unwrappedFaces = result.final.selections.filter(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["ownerKey"] === "surface:flat" &&
+          selection.meta["createdBy"] === "unwrap-1"
+      );
+      const areaSum = unwrappedFaces.reduce((sum, face) => {
+        const area = face.meta["area"];
+        return sum + (typeof area === "number" ? area : 0);
+      }, 0);
+      assert.ok(
+        Math.abs(areaSum - 6 * side * side) < 1e-3,
+        "cube unwrap should preserve full surface area"
+      );
+      const sharedVertices = countCoincidentVerticesAcrossFaces(occt, shape);
+      assert.ok(
+        sharedVertices >= 4,
+        "cube unwrap should place multiple faces with shared seam vertices"
+      );
+    },
+  },
+  {
     name: "occt e2e: unwrap flattens cylindrical surfaces",
     fn: async () => {
       const { occt, backend } = await getBackendContext();
@@ -324,14 +378,12 @@ const tests = [
     },
   },
   {
-    name: "occt e2e: unwrap rejects non-sheet solids",
+    name: "occt e2e: unwrap rejects bulky non-planar solids",
     fn: async () => {
       const { backend } = await getBackendContext();
       const part = dsl.part("unwrap-solid-nonsheet", [
-        dsl.extrude("base", dsl.profileRect(20, 20), 20, "body:main"),
-        dsl.unwrap("unwrap-1", dsl.selectorNamed("body:main"), "surface:flat", [
-          "base",
-        ]),
+        dsl.pipe("pipe-1", "+Z", 20, 20, undefined, "body:main"),
+        dsl.unwrap("unwrap-1", dsl.selectorNamed("body:main"), "surface:flat", ["pipe-1"]),
       ]);
 
       assert.throws(
@@ -339,7 +391,7 @@ const tests = [
         (err) =>
           err instanceof Error &&
           err.message.includes(
-            "unwrap solid source is not recognized as thin sheet"
+            "unwrap solid source must be thin sheet or planar polyhedron"
           )
       );
     },

@@ -2079,11 +2079,9 @@ export class OcctBackend implements Backend {
     }
 
     const facePatches = faces.map((face) => this.unwrapFacePatch(face));
-    const faceComponents = this.layoutConnectedUnwrapFacePatches(facePatches);
-    const packed = this.packUnwrapPatches(
-      faceComponents.concat(precomputedPatches.map((patch) => patch.shape))
-    );
     const patches = precomputedPatches.concat(facePatches);
+    const components = this.layoutConnectedUnwrapFacePatches(patches);
+    const packed = this.packUnwrapPatches(components);
     const outputShape =
       packed.length === 1 ? packed[0] : this.makeCompoundFromShapes(packed);
     if (!this.isValidShape(outputShape)) {
@@ -2298,15 +2296,34 @@ export class OcctBackend implements Backend {
       throw new Error("OCCT backend: unwrap solid source has degenerate bounds");
     }
     const thinRatio = minDim / maxDim;
-    if (thinRatio > 0.35) {
-      throw new Error(
-        "OCCT backend: unwrap solid source is not recognized as thin sheet"
-      );
-    }
 
     const faces = this.listFaces(solid);
     if (faces.length === 0) {
       throw new Error("OCCT backend: unwrap solid source has no faces");
+    }
+
+    if (thinRatio > 0.35) {
+      const boxNet = this.extractAxisAlignedBoxNetFromSolid(solid, faces);
+      if (boxNet) {
+        return [boxNet];
+      }
+      const polyhedral = this.extractPlanarPolyhedralPatchesFromSolid(solid, faces);
+      if (polyhedral) {
+        return polyhedral.map((patch) => ({
+          ...patch,
+          meta: {
+            ...patch.meta,
+            solidExtraction: {
+              source: "solid",
+              method: "planarPolyhedron",
+              thinRatio,
+            },
+          },
+        }));
+      }
+      throw new Error(
+        "OCCT backend: unwrap solid source must be thin sheet or planar polyhedron"
+      );
     }
 
     type PlanarEntry = {
@@ -2473,6 +2490,134 @@ export class OcctBackend implements Backend {
     );
   }
 
+  private extractAxisAlignedBoxNetFromSolid(
+    solid: any,
+    faces?: any[]
+  ): UnwrapPatch | null {
+    const sourceFaces = faces ?? this.listFaces(solid);
+    if (sourceFaces.length !== 6) return null;
+
+    const bounds = this.shapeBounds(solid);
+    const center: [number, number, number] = [
+      (bounds.min[0] + bounds.max[0]) / 2,
+      (bounds.min[1] + bounds.max[1]) / 2,
+      (bounds.min[2] + bounds.max[2]) / 2,
+    ];
+    const byDir = new Map<AxisDirection, any>();
+    for (const face of sourceFaces) {
+      const props = this.faceProperties(face);
+      if (!props.planar) return null;
+      const normal = props.normalVec
+        ? normalizeVector(props.normalVec)
+        : normalizeVector(this.planeBasisFromFace(face).normal);
+      const abs: [number, number, number] = [
+        Math.abs(normal[0]),
+        Math.abs(normal[1]),
+        Math.abs(normal[2]),
+      ];
+      const dominant = Math.max(abs[0], abs[1], abs[2]);
+      if (!(dominant > 0.98)) return null;
+      const dir = (() => {
+        if (dominant === abs[0]) {
+          return props.center[0] >= center[0] ? "+X" : "-X";
+        }
+        if (dominant === abs[1]) {
+          return props.center[1] >= center[1] ? "+Y" : "-Y";
+        }
+        return props.center[2] >= center[2] ? "+Z" : "-Z";
+      })();
+      if (!dir) return null;
+      if (byDir.has(dir)) return null;
+      byDir.set(dir, face);
+    }
+    const dirs: AxisDirection[] = ["+X", "-X", "+Y", "-Y", "+Z", "-Z"];
+    if (!dirs.every((dir) => byDir.has(dir))) return null;
+
+    const dx = Math.abs(bounds.max[0] - bounds.min[0]);
+    const dy = Math.abs(bounds.max[1] - bounds.min[1]);
+    const dz = Math.abs(bounds.max[2] - bounds.min[2]);
+    if (!(dx > 1e-6 && dy > 1e-6 && dz > 1e-6)) return null;
+
+    const makeRect = (x0: number, y0: number, w: number, h: number): any => {
+      const corners: [number, number, number][] = [
+        [x0, y0, 0],
+        [x0 + w, y0, 0],
+        [x0 + w, y0 + h, 0],
+        [x0, y0 + h, 0],
+      ];
+      const wire = this.makePolygonWire(corners);
+      const faceBuilder = this.makeFaceFromWire(wire);
+      return this.readShape(faceBuilder);
+    };
+
+    const faceSpecs: Array<{
+      dir: AxisDirection;
+      x0: number;
+      y0: number;
+      w: number;
+      h: number;
+    }> = [
+      { dir: "+Z", x0: 0, y0: 0, w: dx, h: dy },
+      { dir: "+X", x0: dx, y0: 0, w: dz, h: dy },
+      { dir: "-X", x0: -dz, y0: 0, w: dz, h: dy },
+      { dir: "+Y", x0: 0, y0: dy, w: dx, h: dz },
+      { dir: "-Y", x0: 0, y0: -dz, w: dx, h: dz },
+      { dir: "-Z", x0: 0, y0: dy + dz, w: dx, h: dy },
+    ];
+    const shapes: any[] = [];
+    const faceMeta: Record<string, unknown>[] = [];
+    for (const spec of faceSpecs) {
+      const sourceFace = byDir.get(spec.dir);
+      if (!sourceFace) return null;
+      const shape = makeRect(spec.x0, spec.y0, spec.w, spec.h);
+      if (!this.isValidShape(shape, "face")) return null;
+      shapes.push(shape);
+      faceMeta.push({
+        kind: "planar",
+        sourceDirection: spec.dir,
+        width: spec.w,
+        height: spec.h,
+        sourceSurfaceType: "plane",
+      });
+    }
+
+    const compound = this.makeCompoundFromShapes(shapes);
+    return {
+      shape: compound,
+      meta: {
+        kind: "multi",
+        faceCount: faceMeta.length,
+        faces: faceMeta,
+        solidExtraction: {
+          source: "solid",
+          method: "axisAlignedBoxNet",
+        },
+      },
+    };
+  }
+
+  private extractPlanarPolyhedralPatchesFromSolid(
+    solid: any,
+    faces?: any[]
+  ): UnwrapPatch[] | null {
+    const sourceFaces = faces ?? this.listFaces(solid);
+    if (sourceFaces.length < 4) return null;
+    const patches: UnwrapPatch[] = [];
+    for (const face of sourceFaces) {
+      const props = this.faceProperties(face);
+      if (!props.planar) return null;
+      const patch = this.unwrapFacePatch(face);
+      patches.push({
+        ...patch,
+        meta: {
+          ...patch.meta,
+          kind: "planar",
+        },
+      });
+    }
+    return patches;
+  }
+
   private layoutConnectedUnwrapFacePatches(patches: UnwrapPatch[]): any[] {
     if (patches.length <= 1) return patches.map((patch) => patch.shape);
     const edges = this.buildUnwrapAdjacencyEdges(patches);
@@ -2489,13 +2634,16 @@ export class OcctBackend implements Backend {
     }
 
     const transforms = new Map<number, Unwrap2DTransform>();
+    const transformedByIndex = new Map<number, any>();
     const visited = new Set<number>();
     const components: number[][] = [];
     for (let i = 0; i < patches.length; i += 1) {
       if (visited.has(i)) continue;
       const component: number[] = [];
+      const componentPlaced = new Set<number>([i]);
       const root: Unwrap2DTransform = { angle: 0, tx: 0, ty: 0 };
       transforms.set(i, root);
+      transformedByIndex.set(i, patches[i]?.shape);
       const queue = [i];
       visited.add(i);
       while (queue.length > 0) {
@@ -2522,7 +2670,19 @@ export class OcctBackend implements Backend {
           const target1 = this.applyUnwrapTransform2D(currentTransform, a1);
           const fit = this.fitUnwrapEdgeTransform2D(b0, b1, target0, target1);
           if (!fit) continue;
+          const candidateShape = this.transformShapeInUnwrapPlane(
+            neighborPatch.shape,
+            fit
+          );
+          const componentShapes = Array.from(componentPlaced)
+            .map((index) => transformedByIndex.get(index))
+            .filter(Boolean);
+          if (this.unwrapPlacementOverlaps(candidateShape, componentShapes)) {
+            continue;
+          }
           transforms.set(neighbor, fit);
+          transformedByIndex.set(neighbor, candidateShape);
+          componentPlaced.add(neighbor);
           visited.add(neighbor);
           queue.push(neighbor);
         }
@@ -2686,6 +2846,23 @@ export class OcctBackend implements Backend {
       out = this.transformShapeTranslate(out, [transform.tx, transform.ty, 0]);
     }
     return out;
+  }
+
+  private unwrapPlacementOverlaps(shape: any, existing: any[]): boolean {
+    if (existing.length === 0) return false;
+    const bounds = this.shapeBounds(shape);
+    const tol = 1e-5;
+    for (const candidate of existing) {
+      const other = this.shapeBounds(candidate);
+      const overlapX =
+        Math.min(bounds.max[0], other.max[0]) - Math.max(bounds.min[0], other.min[0]);
+      if (overlapX <= tol) continue;
+      const overlapY =
+        Math.min(bounds.max[1], other.max[1]) - Math.max(bounds.min[1], other.min[1]);
+      if (overlapY <= tol) continue;
+      return true;
+    }
+    return false;
   }
 
   private closestPeriodicParameter(value: number, min: number, max: number): number {
