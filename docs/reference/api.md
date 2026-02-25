@@ -19,6 +19,7 @@ Runtime guidance:
 - Check `/v1/capabilities.optionalFeatures.measure.endpoint` before using `/v1/measure`.
 - Use `/v1/health` for runtime/dependency readiness and `/v1/metrics` for cache/store counters.
 - Use build/compile `ValidationOptions.stagedFeatures` (or runtime `options.stagedFeatures`) to allow, warn, or block staged features.
+- For machine-readable feature payload validation, use `IR_SCHEMA` (`src/ir_schema.ts`) and its per-feature `$defs` entries.
 
 Additional runtime docs:
 - [Interactive Runtime Profile](./runtime-interactive-profile)

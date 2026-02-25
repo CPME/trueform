@@ -379,6 +379,12 @@ Selection metadata is exposed to the client only for selectors and debug overlay
 
 - Returns the OpenAPI 3.1 contract for `/v1` endpoints.
 
+## Machine-Readable Feature Payload Schemas
+- Authoritative IR payload schema: `src/ir_schema.ts` (`IR_SCHEMA`).
+- Per-feature payload contracts are defined in `IR_SCHEMA.$defs` entries with `kind.const` values
+  (for example `feature.pipe`, `feature.pipeSweep`, `feature.split.body`, `feature.thicken`).
+- Clients that need strict form validation should consume `IR_SCHEMA` (or generated JSON) instead of relying on examples-only inference.
+
 ## Multi-Tenant Considerations
 - Job requests include tenant/user context from auth.
 - Enforce quotas on CPU time, memory, and storage per tenant.
