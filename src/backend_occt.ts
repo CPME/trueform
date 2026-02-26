@@ -988,6 +988,11 @@ export class OcctBackend implements Backend {
       (p0[2] + p1[2] + p2[2] + p3[2]) / 4,
     ];
     const span = this.resolveThinFeatureAxisSpan(axis, sectionCenter, depth, upstream);
+    if (!span) {
+      throw new Error(
+        `OCCT backend: ${kind} requires upstream support solids to bound depth`
+      );
+    }
     const spanDepth = span.high - span.low;
     if (!(spanDepth > 1e-6)) {
       throw new Error(`OCCT backend: ${kind} depth range collapsed`);
@@ -1038,8 +1043,7 @@ export class OcctBackend implements Backend {
     origin: [number, number, number],
     requestedDepth: number,
     upstream: KernelResult
-  ): { low: number; high: number } {
-    const fallback = { low: 0, high: requestedDepth };
+  ): { low: number; high: number } | null {
     const start = dot(origin, axis);
     const eps = 1e-6;
 
@@ -1068,11 +1072,11 @@ export class OcctBackend implements Backend {
       }
     }
 
-    if (!foundSupport) return fallback;
+    if (!foundSupport) return null;
 
     const low = clampedNeg === null ? 0 : -Math.min(requestedDepth, clampedNeg);
     const high = clampedPos === null ? requestedDepth : Math.min(requestedDepth, clampedPos);
-    if (!(high - low > eps)) return fallback;
+    if (!(high - low > eps)) return null;
     return { low, high };
   }
 

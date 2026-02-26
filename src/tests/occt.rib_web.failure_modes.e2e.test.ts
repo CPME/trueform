@@ -37,6 +37,24 @@ const tests = [
     },
   },
   {
+    name: "occt rib/web failure: rib requires support solids",
+    fn: async () => {
+      const { backend } = await getBackendContext();
+      const part = dsl.part("rib-missing-support", [
+        dsl.sketch2d(
+          "rib-sketch",
+          [{ name: "profile:rib", profile: dsl.profileSketchLoop(["l1"], { open: true }) }],
+          { entities: [dsl.sketchLine("l1", [-8, 0], [8, 0])] }
+        ),
+        dsl.rib("rib", dsl.profileRef("profile:rib"), 2, 8, "body:rib", ["rib-sketch"]),
+      ]);
+      assert.throws(
+        () => buildPart(part, backend),
+        /requires upstream support solids to bound depth/i
+      );
+    },
+  },
+  {
     name: "occt rib/web failure: rib rejects non-positive thickness/depth",
     fn: async () => {
       const { backend } = await getBackendContext();

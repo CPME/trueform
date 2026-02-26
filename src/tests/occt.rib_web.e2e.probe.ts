@@ -42,20 +42,25 @@ const tests = [
     fn: async () => {
       const { backend, occt } = await getBackendContext();
       const part = dsl.part("rib-web-probe", [
-        openLineProfile("rib-sketch", "profile:rib", [-18, 0], [18, 0]),
-        dsl.rib("rib", dsl.profileRef("profile:rib"), 3, 16, "body:rib", ["rib-sketch"], {
+        dsl.extrude("base", dsl.profileRect(50, 36), 18, "body:base"),
+        openLineProfile("rib-sketch", "profile:rib", [-18, -12], [-6, 6], {
+          deps: ["base"],
+        }),
+        dsl.rib("rib", dsl.profileRef("profile:rib"), 3, 16, "body:rib", ["base", "rib-sketch"], {
           side: "symmetric",
           axis: dsl.axisSketchNormal(),
         }),
-        openLineProfile("web-sketch", "profile:web", [0, -18], [0, 18]),
-        dsl.web("web", dsl.profileRef("profile:web"), 2, 12, "body:web", ["web-sketch"], {
+        openLineProfile("web-sketch", "profile:web", [6, -10], [18, 8], {
+          deps: ["base"],
+        }),
+        dsl.web("web", dsl.profileRef("profile:web"), 2, 12, "body:web", ["base", "web-sketch"], {
           side: "oneSided",
           axis: dsl.axisSketchNormal(),
         }),
       ]);
 
       const result = buildPart(part, backend);
-      const rib = result.steps[1]?.result.outputs.get("body:rib");
+      const rib = result.final.outputs.get("body:rib");
       const web = result.final.outputs.get("body:web");
       assert.ok(rib, "missing rib output");
       assert.ok(web, "missing web output");
@@ -100,12 +105,13 @@ const tests = [
     fn: async () => {
       const { backend, occt } = await getBackendContext();
       const part = dsl.part("rib-web-plane-normal-probe", [
+        dsl.extrude("base", dsl.profileRect(40, 20), 20, "body:base"),
         dsl.datumPlane("dp-x", "+X"),
         openLineProfile("rib-sketch", "profile:rib", [-8, 0], [8, 0], {
           plane: dsl.planeDatum("dp-x"),
-          deps: ["dp-x"],
+          deps: ["base", "dp-x"],
         }),
-        dsl.rib("rib", dsl.profileRef("profile:rib"), 2, 10, "body:rib", ["rib-sketch"], {
+        dsl.rib("rib", dsl.profileRef("profile:rib"), 2, 10, "body:rib", ["base", "rib-sketch"], {
           axis: dsl.axisSketchNormal(),
         }),
       ]);
@@ -123,8 +129,11 @@ const tests = [
     fn: async () => {
       const { backend, occt } = await getBackendContext();
       const part = dsl.part("rib-determinism-probe", [
-        openLineProfile("rib-sketch", "profile:rib", [-14, 0], [14, 0]),
-        dsl.rib("rib", dsl.profileRef("profile:rib"), 2.5, 14, "body:rib", ["rib-sketch"], {
+        dsl.extrude("base", dsl.profileRect(36, 24), 16, "body:base"),
+        openLineProfile("rib-sketch", "profile:rib", [-14, -8], [-2, 8], {
+          deps: ["base"],
+        }),
+        dsl.rib("rib", dsl.profileRef("profile:rib"), 2.5, 14, "body:rib", ["base", "rib-sketch"], {
           side: "symmetric",
         }),
       ]);

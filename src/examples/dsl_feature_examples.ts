@@ -223,36 +223,46 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     id: "rib-web",
     title: "Rib/Web (Staging)",
     part: (() => {
-      const ribLine = sketchLine("rib-line", [-20, 0], [20, 0]);
-      const webLine = sketchLine("web-line", [0, -16], [0, 16]);
+      const ribLine = sketchLine("rib-line", [-22, -34], [-4, -20]);
+      const webLine = sketchLine("web-line", [-12, -36], [16, -20]);
       const ribSketch = sketch2d(
         "rib-sketch",
-        [{ name: "profile:rib", profile: profileSketchLoop(["rib-line"], { open: true }) }],
-        { entities: [ribLine] }
-      );
-      const webSketch = sketch2d(
-        "web-sketch",
-        [{ name: "profile:web", profile: profileSketchLoop(["web-line"], { open: true }) }],
-        { entities: [webLine] }
+        [
+          { name: "profile:rib", profile: profileSketchLoop(["rib-line"], { open: true }) },
+          { name: "profile:web", profile: profileSketchLoop(["web-line"], { open: true }) },
+        ],
+        {
+          plane: planeDatum("dp-front"),
+          deps: ["dp-front", "support-union"],
+          entities: [ribLine, webLine],
+        }
       );
       return part("example-rib-web", [
+        extrude("base", profileRect(84, 40), 20, "body:base"),
+        extrude("tower", profileRect(20, 40, [-32, 0, 0]), 44, "body:tower"),
+        booleanOp(
+          "support-union",
+          "union",
+          selectorNamed("body:base"),
+          selectorNamed("body:tower"),
+          "body:support"
+        ),
+        datumPlane("dp-front", "+Y"),
         ribSketch,
-        webSketch,
-        rib("rib-1", profileRef("profile:rib"), 3, 16, "body:rib", ["rib-sketch"], {
+        rib("rib-1", profileRef("profile:rib"), 3, 80, "body:rib", ["support-union", "rib-sketch"], {
           side: "symmetric",
         }),
-        web("web-1", profileRef("profile:web"), 2, 12, "body:web", ["web-sketch"], {
+        web("web-1", profileRef("profile:web"), 2, 80, "body:web", ["support-union", "rib-sketch"], {
           side: "oneSided",
         }),
-        booleanOp(
-          "union-rib-web",
-          "union",
-          selectorNamed("body:rib"),
-          selectorNamed("body:web"),
-          "body:main"
-        ),
+        booleanOp("union-rib-web", "union", selectorNamed("body:support"), selectorNamed("body:rib"), "body:main"),
       ]);
     })(),
+    render: {
+      renderOpts: {
+        viewDir: [0.8, -0.6, 0.5],
+      },
+    },
   },
   {
     id: "sweep-sketch",

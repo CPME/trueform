@@ -545,31 +545,49 @@ const examplePart = part(&quot;example-sweep&quot;, [
     <article class="code-entry" id="code-dsl-rib-web">
       <h3>Rib/Web (Staging) (DSL)</h3>
       <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Rib/Web (Staging)</p>
-      <pre><code>const ribSketch = sketch2d(
-  &quot;rib-sketch&quot;,
-  [{ name: &quot;profile:rib&quot;, profile: profileSketchLoop([&quot;rib-line&quot;], { open: true }) }],
-  { entities: [sketchLine(&quot;rib-line&quot;, [-20, 0], [20, 0])] }
+      <pre><code>const supportBase = extrude(&quot;base&quot;, profileRect(84, 40), 20, &quot;body:base&quot;);
+const supportTower = extrude(&quot;tower&quot;, profileRect(20, 40, [-32, 0, 0]), 44, &quot;body:tower&quot;);
+const support = booleanOp(
+  &quot;support-union&quot;,
+  &quot;union&quot;,
+  selectorNamed(&quot;body:base&quot;),
+  selectorNamed(&quot;body:tower&quot;),
+  &quot;body:support&quot;
 );
-const webSketch = sketch2d(
-  &quot;web-sketch&quot;,
-  [{ name: &quot;profile:web&quot;, profile: profileSketchLoop([&quot;web-line&quot;], { open: true }) }],
-  { entities: [sketchLine(&quot;web-line&quot;, [0, -16], [0, 16])] }
+const front = datumPlane(&quot;dp-front&quot;, &quot;+Y&quot;);
+const ribSketch = sketch2d(
+  &quot;rib-sketch&quot;,
+  [
+    { name: &quot;profile:rib&quot;, profile: profileSketchLoop([&quot;rib-line&quot;], { open: true }) },
+    { name: &quot;profile:web&quot;, profile: profileSketchLoop([&quot;web-line&quot;], { open: true }) },
+  ],
+  {
+    plane: planeDatum(&quot;dp-front&quot;),
+    deps: [&quot;dp-front&quot;, &quot;support-union&quot;],
+    entities: [
+      sketchLine(&quot;rib-line&quot;, [-22, -34], [-4, -20]),
+      sketchLine(&quot;web-line&quot;, [-12, -36], [16, -20]),
+    ],
+  }
 );
 
 const examplePart = part(&quot;example-rib-web&quot;, [
+  supportBase,
+  supportTower,
+  support,
+  front,
   ribSketch,
-  webSketch,
-  rib(&quot;rib-1&quot;, profileRef(&quot;profile:rib&quot;), 3, 16, &quot;body:rib&quot;, [&quot;rib-sketch&quot;], {
+  rib(&quot;rib-1&quot;, profileRef(&quot;profile:rib&quot;), 3, 80, &quot;body:rib&quot;, [&quot;support-union&quot;, &quot;rib-sketch&quot;], {
     side: &quot;symmetric&quot;,
   }),
-  web(&quot;web-1&quot;, profileRef(&quot;profile:web&quot;), 2, 12, &quot;body:web&quot;, [&quot;web-sketch&quot;], {
+  web(&quot;web-1&quot;, profileRef(&quot;profile:web&quot;), 2, 80, &quot;body:web&quot;, [&quot;support-union&quot;, &quot;rib-sketch&quot;], {
     side: &quot;oneSided&quot;,
   }),
   booleanOp(
     &quot;union-rib-web&quot;,
     &quot;union&quot;,
+    selectorNamed(&quot;body:support&quot;),
     selectorNamed(&quot;body:rib&quot;),
-    selectorNamed(&quot;body:web&quot;),
     &quot;body:main&quot;
   ),
 ]);</code></pre>
