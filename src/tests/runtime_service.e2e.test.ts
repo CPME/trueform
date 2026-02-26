@@ -115,6 +115,19 @@ function triangleCount(mesh: { indices?: number[]; positions?: number[] }): numb
   return 0;
 }
 
+function ownerKeysForMeshSelections(
+  mesh: { selections?: Array<{ meta?: Record<string, unknown> }> }
+): Set<string> {
+  const out = new Set<string>();
+  for (const selection of mesh.selections ?? []) {
+    const ownerKey = selection?.meta?.ownerKey;
+    if (typeof ownerKey === "string" && ownerKey.length > 0) {
+      out.add(ownerKey);
+    }
+  }
+  return out;
+}
+
 async function startRuntimeServer(): Promise<RuntimeServer> {
   return startRuntimeServerWithEnv();
 }
@@ -843,6 +856,35 @@ const tests = [
           true,
           "mesh asset URL should differ across targets"
         );
+        const multiMeshMainAssetUrl = String(multiMeshMainJob.result?.mesh?.asset?.url ?? "");
+        const multiMeshSecondaryAssetUrl = String(
+          multiMeshSecondaryJob.result?.mesh?.asset?.url ?? ""
+        );
+        assert.ok(multiMeshMainAssetUrl.length > 0, "missing multi-output main mesh asset url");
+        assert.ok(
+          multiMeshSecondaryAssetUrl.length > 0,
+          "missing multi-output secondary mesh asset url"
+        );
+        const multiMainMesh = await fetchJson<{
+          selections?: Array<{ meta?: Record<string, unknown> }>;
+        }>(`${runtime.baseUrl}${multiMeshMainAssetUrl}`);
+        const multiSecondaryMesh = await fetchJson<{
+          selections?: Array<{ meta?: Record<string, unknown> }>;
+        }>(`${runtime.baseUrl}${multiMeshSecondaryAssetUrl}`);
+        const mainOwnerKeys = ownerKeysForMeshSelections(multiMainMesh);
+        const secondaryOwnerKeys = ownerKeysForMeshSelections(multiSecondaryMesh);
+        assert.equal(
+          mainOwnerKeys.size,
+          1,
+          `expected scoped mesh selections for body:main, got ${Array.from(mainOwnerKeys).join(",")}`
+        );
+        assert.equal(mainOwnerKeys.has("body:main"), true);
+        assert.equal(
+          secondaryOwnerKeys.size,
+          1,
+          `expected scoped mesh selections for body:secondary, got ${Array.from(secondaryOwnerKeys).join(",")}`
+        );
+        assert.equal(secondaryOwnerKeys.has("body:secondary"), true);
 
         const multiExportMainSubmit = await fetchJsonWithStatus<{
           id: string;
@@ -1474,6 +1516,101 @@ const tests = [
         assert.equal(mirrorJob.error?.details?.featureKind, "feature.mirror");
         assert.equal(mirrorJob.error?.details?.referenceKind, "named_output");
         assert.equal(mirrorJob.error?.details?.referenceId, "body:missing-source");
+      } finally {
+        await runtime.stop();
+      }
+    },
+  },
+  {
+    name: "runtime service: split/sketch reference failures return deterministic diagnostics",
+    fn: async () => {
+      const runtime = await startRuntimeServer();
+      try {
+        const missingSplitBodySource = dsl.part("runtime-split-body-missing-source", [
+          dsl.extrude("base", dsl.profileRect(20, 12), 8, "body:main"),
+          dsl.plane("splitter", 24, 18, "surface:splitter"),
+          dsl.splitBody(
+            "split-body-missing",
+            dsl.selectorNamed("body:missing-source"),
+            dsl.selectorNamed("surface:splitter"),
+            "body:split"
+          ),
+        ]);
+        const splitBodySubmit = await fetchJsonWithStatus<{ id: string; jobId: string; state: string }>(
+          `${runtime.baseUrl}/v1/build`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              part: missingSplitBodySource,
+              options: { meshProfile: "interactive" },
+            }),
+          }
+        );
+        const splitBodyJob = await pollJob(runtime.baseUrl, splitBodySubmit.jobId);
+        assert.equal(splitBodyJob.state, "failed");
+        assert.equal(splitBodyJob.error?.code, "selector_named_missing");
+        assert.equal(splitBodyJob.error?.details?.featureId, "split-body-missing");
+        assert.equal(splitBodyJob.error?.details?.featureKind, "feature.split.body");
+        assert.equal(splitBodyJob.error?.details?.referenceKind, "named_output");
+        assert.equal(splitBodyJob.error?.details?.referenceId, "body:missing-source");
+
+        const missingSplitFaceTool = dsl.part("runtime-split-face-missing-tool", [
+          dsl.extrude("base", dsl.profileRect(16, 10), 6, "body:main"),
+          dsl.splitFace(
+            "split-face-missing",
+            dsl.selectorFace([dsl.predCreatedBy("base"), dsl.predPlanar()]),
+            dsl.selectorNamed("tool-missing"),
+            "body:split-face"
+          ),
+        ]);
+        const splitFaceSubmit = await fetchJsonWithStatus<{ id: string; jobId: string; state: string }>(
+          `${runtime.baseUrl}/v1/build`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              part: missingSplitFaceTool,
+              options: { meshProfile: "interactive" },
+            }),
+          }
+        );
+        const splitFaceJob = await pollJob(runtime.baseUrl, splitFaceSubmit.jobId);
+        assert.equal(splitFaceJob.state, "failed");
+        assert.equal(splitFaceJob.error?.code, "selector_named_missing");
+        assert.equal(splitFaceJob.error?.details?.featureId, "split-face-missing");
+        assert.equal(splitFaceJob.error?.details?.featureKind, "feature.split.face");
+        assert.equal(splitFaceJob.error?.details?.referenceKind, "named_output");
+        assert.equal(splitFaceJob.error?.details?.referenceId, "tool-missing");
+
+        const missingSketchPlaneAnchor = dsl.part("runtime-sketch-plane-anchor-missing", [
+          dsl.sketch2d(
+            "a-sketch",
+            [{ name: "profile:cut", profile: dsl.profileRect(4, 4) }],
+            { plane: dsl.selectorNamed("face:130") }
+          ),
+          dsl.extrude("z-extrude", dsl.profileRect(20, 20), 6, "body:main"),
+        ]);
+        const sketchSubmit = await fetchJsonWithStatus<{ id: string; jobId: string; state: string }>(
+          `${runtime.baseUrl}/v1/build`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              part: missingSketchPlaneAnchor,
+              options: { meshProfile: "interactive" },
+            }),
+          }
+        );
+        const sketchJob = await pollJob(runtime.baseUrl, sketchSubmit.jobId);
+        assert.equal(sketchJob.state, "failed");
+        assert.equal(sketchJob.error?.code, "selector_anchor_missing");
+        assert.equal(sketchJob.error?.details?.featureId, "a-sketch");
+        assert.equal(sketchJob.error?.details?.featureKind, "feature.sketch2d");
+        assert.equal(sketchJob.error?.details?.referenceKind, "selector");
       } finally {
         await runtime.stop();
       }

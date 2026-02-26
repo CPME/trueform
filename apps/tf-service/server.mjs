@@ -485,6 +485,31 @@ export function createTfServiceServer(options = {}) {
     }));
   }
 
+  function scopeSelectionsToTarget(selections, target, output) {
+    if (!Array.isArray(selections) || selections.length === 0) return [];
+    const byTargetOwner = selections.filter((selection) => {
+      const ownerKey = selection?.meta?.ownerKey;
+      return typeof ownerKey === "string" && ownerKey === target;
+    });
+    if (byTargetOwner.length > 0) return byTargetOwner;
+
+    const outputOwnerKey = output?.meta?.ownerKey;
+    if (typeof outputOwnerKey === "string" && outputOwnerKey.length > 0) {
+      const byOutputOwner = selections.filter((selection) => {
+        const ownerKey = selection?.meta?.ownerKey;
+        return typeof ownerKey === "string" && ownerKey === outputOwnerKey;
+      });
+      if (byOutputOwner.length > 0) return byOutputOwner;
+    }
+
+    if (typeof output?.id === "string" && output.id.length > 0) {
+      const byOutputId = selections.filter((selection) => selection?.id === output.id);
+      if (byOutputId.length > 0) return byOutputId;
+    }
+
+    return selections;
+  }
+
   function summarizeSelections(selections) {
     const summary = { total: 0, byKind: { face: 0, edge: 0, solid: 0 } };
     for (const selection of selections) {
@@ -1123,7 +1148,8 @@ export function createTfServiceServer(options = {}) {
     const backend = await getBackendAsync();
     const mesh = await backend.mesh(output, options);
     throwIfCanceled(ctx);
-    const safeSelections = sanitizeSelections(selections);
+    const scopedSelections = scopeSelectionsToTarget(selections, target, output);
+    const safeSelections = sanitizeSelections(scopedSelections);
     const selectionSummary = summarizeSelections(safeSelections);
     const triangleCount = triangleCountFromMesh(mesh);
     const bounds = computeBounds(mesh.positions);
