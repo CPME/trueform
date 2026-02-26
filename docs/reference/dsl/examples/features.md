@@ -184,7 +184,7 @@ const ribSketch = sketch2d(
     plane: planeDatum("dp-front"),
     deps: ["dp-front", "support-union"],
     entities: [
-      sketchLine("rib-line", [-22, -34], [-4, -20]),
+      sketchLine("rib-line", [-4, -20], [-22, -34]),
       sketchLine("web-line", [-12, -36], [16, -20]),
     ],
   }
@@ -197,7 +197,7 @@ const examplePart = part("example-rib-web", [
   front,
   ribSketch,
   rib("rib-1", profileRef("profile:rib"), 3, 80, "body:rib", ["support-union", "rib-sketch"], {
-    side: "symmetric",
+    side: "oneSided",
   }),
   web("web-1", profileRef("profile:web"), 2, 80, "body:web", ["support-union", "rib-sketch"], {
     side: "oneSided",
@@ -215,6 +215,7 @@ const examplePart = part("example-rib-web", [
 Notes:
 - `rib` and `web` currently require open sketch profiles (`profileSketchLoop(..., { open: true })`).
 - `rib` and `web` require upstream support solids and bound depth to supporting faces along the axis (gusset-like behavior).
+- For `side: "oneSided"`, thickness direction follows the sketch line direction and sketch normal.
 - Both are staging features and should be validated on target geometries.
 
 ## Sweeping Tube Profiles (Consolidated)

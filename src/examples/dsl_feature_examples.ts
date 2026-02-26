@@ -223,7 +223,7 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     id: "rib-web",
     title: "Rib/Web (Staging)",
     part: (() => {
-      const ribLine = sketchLine("rib-line", [-22, -34], [-4, -20]);
+      const ribLine = sketchLine("rib-line", [-4, -20], [-22, -34]);
       const webLine = sketchLine("web-line", [-12, -36], [16, -20]);
       const ribSketch = sketch2d(
         "rib-sketch",
@@ -250,7 +250,7 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         datumPlane("dp-front", "+Y"),
         ribSketch,
         rib("rib-1", profileRef("profile:rib"), 3, 80, "body:rib", ["support-union", "rib-sketch"], {
-          side: "symmetric",
+          side: "oneSided",
         }),
         web("web-1", profileRef("profile:web"), 2, 80, "body:web", ["support-union", "rib-sketch"], {
           side: "oneSided",

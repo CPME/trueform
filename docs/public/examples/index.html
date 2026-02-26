@@ -565,7 +565,7 @@ const ribSketch = sketch2d(
     plane: planeDatum(&quot;dp-front&quot;),
     deps: [&quot;dp-front&quot;, &quot;support-union&quot;],
     entities: [
-      sketchLine(&quot;rib-line&quot;, [-22, -34], [-4, -20]),
+      sketchLine(&quot;rib-line&quot;, [-4, -20], [-22, -34]),
       sketchLine(&quot;web-line&quot;, [-12, -36], [16, -20]),
     ],
   }
@@ -578,7 +578,7 @@ const examplePart = part(&quot;example-rib-web&quot;, [
   front,
   ribSketch,
   rib(&quot;rib-1&quot;, profileRef(&quot;profile:rib&quot;), 3, 80, &quot;body:rib&quot;, [&quot;support-union&quot;, &quot;rib-sketch&quot;], {
-    side: &quot;symmetric&quot;,
+    side: &quot;oneSided&quot;,
   }),
   web(&quot;web-1&quot;, profileRef(&quot;profile:web&quot;), 2, 80, &quot;body:web&quot;, [&quot;support-union&quot;, &quot;rib-sketch&quot;], {
     side: &quot;oneSided&quot;,

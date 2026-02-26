@@ -970,7 +970,7 @@ export class OcctBackend implements Backend {
     if (!isFiniteVec(lineDir)) {
       throw new Error(`OCCT backend: ${kind} profile edge is degenerate`);
     }
-    const offsetDir = normalizeVector(cross(axis, lineDir));
+    const offsetDir = normalizeVector(cross(lineDir, axis));
     if (!isFiniteVec(offsetDir)) {
       throw new Error(`OCCT backend: ${kind} axis cannot be parallel to profile line`);
     }
