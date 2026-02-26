@@ -982,10 +982,24 @@ export class OcctBackend implements Backend {
     const p3 = this.addVec(endpoints.start, this.scaleVec(offsetDir, high));
     const section = this.makePolygonWire([p0, p1, p2, p3]);
     const sectionFace = this.readShape(this.makeFaceFromWire(section));
+    const sectionCenter: [number, number, number] = [
+      (p0[0] + p1[0] + p2[0] + p3[0]) / 4,
+      (p0[1] + p1[1] + p2[1] + p3[1]) / 4,
+      (p0[2] + p1[2] + p2[2] + p3[2]) / 4,
+    ];
+    const span = this.resolveThinFeatureAxisSpan(axis, sectionCenter, depth, upstream);
+    const spanDepth = span.high - span.low;
+    if (!(spanDepth > 1e-6)) {
+      throw new Error(`OCCT backend: ${kind} depth range collapsed`);
+    }
+    const sectionStart =
+      Math.abs(span.low) > 1e-9
+        ? this.transformShapeTranslate(sectionFace, this.scaleVec(axis, span.low))
+        : sectionFace;
     let solid = this.readShape(
       this.makePrism(
-        sectionFace,
-        this.makeVec(axis[0] * depth, axis[1] * depth, axis[2] * depth)
+        sectionStart,
+        this.makeVec(axis[0] * spanDepth, axis[1] * spanDepth, axis[2] * spanDepth)
       )
     );
     solid = this.normalizeSolid(solid);
@@ -1017,6 +1031,49 @@ export class OcctBackend implements Backend {
       feature.tags
     );
     return { outputs, selections };
+  }
+
+  private resolveThinFeatureAxisSpan(
+    axis: [number, number, number],
+    origin: [number, number, number],
+    requestedDepth: number,
+    upstream: KernelResult
+  ): { low: number; high: number } {
+    const fallback = { low: 0, high: requestedDepth };
+    const start = dot(origin, axis);
+    const eps = 1e-6;
+
+    let clampedPos: number | null = null;
+    let clampedNeg: number | null = null;
+    let foundSupport = false;
+
+    for (const output of upstream.outputs.values()) {
+      if (output.kind !== "solid") continue;
+      const shape = output.meta["shape"];
+      if (!shape) continue;
+      const extents = this.axisBounds(axis, this.shapeBounds(shape));
+      if (!extents) continue;
+
+      if (start < extents.min - eps || start > extents.max + eps) {
+        continue;
+      }
+      foundSupport = true;
+      const positive = extents.max - start;
+      const negative = start - extents.min;
+      if (positive > eps) {
+        clampedPos = clampedPos === null ? positive : Math.min(clampedPos, positive);
+      }
+      if (negative > eps) {
+        clampedNeg = clampedNeg === null ? negative : Math.min(clampedNeg, negative);
+      }
+    }
+
+    if (!foundSupport) return fallback;
+
+    const low = clampedNeg === null ? 0 : -Math.min(requestedDepth, clampedNeg);
+    const high = clampedPos === null ? requestedDepth : Math.min(requestedDepth, clampedPos);
+    if (!(high - low > eps)) return fallback;
+    return { low, high };
   }
 
   private execPipe(feature: Pipe, upstream: KernelResult): KernelResult {

@@ -29,6 +29,13 @@ function openLineProfile(
   );
 }
 
+function solidVolume(occt: any, shape: any): number {
+  const props = new occt.GProp_GProps_1();
+  occt.BRepGProp.VolumeProperties_1(shape, props, true, true, true);
+  const volume = props.Mass();
+  return typeof volume === "number" ? volume : Number.NaN;
+}
+
 const tests = [
   {
     name: "occt parity probe: rib/web produce valid solids from open sketch profiles",
@@ -61,6 +68,31 @@ const tests = [
       assertPositiveVolume(occt, webShape, "web");
       assert.ok(countFaces(occt, ribShape) >= 4, "expected rib to create boundary faces");
       assert.ok(countFaces(occt, webShape) >= 4, "expected web to create boundary faces");
+    },
+  },
+  {
+    name: "occt parity probe: rib depth clamps to support body faces",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const part = dsl.part("rib-face-clamp-probe", [
+        dsl.extrude("base", dsl.profileRect(40, 20), 20, "body:base"),
+        openLineProfile("rib-sketch", "profile:rib", [-12, 0], [12, 0], {
+          deps: ["base"],
+        }),
+        dsl.rib("rib", dsl.profileRef("profile:rib"), 2, 60, "body:rib", ["base", "rib-sketch"], {
+          axis: dsl.axisSketchNormal(),
+        }),
+      ]);
+
+      const result = buildPart(part, backend);
+      const rib = result.final.outputs.get("body:rib");
+      assert.ok(rib, "missing rib output");
+      const ribShape = rib.meta["shape"] as any;
+      assertValidShape(occt, ribShape, "rib clamped depth");
+      assertPositiveVolume(occt, ribShape, "rib clamped depth");
+      const volume = solidVolume(occt, ribShape);
+      assert.ok(volume > 800, `expected rib volume to stay substantial, got ${volume}`);
+      assert.ok(volume < 1500, `expected rib volume to be clamped by support faces, got ${volume}`);
     },
   },
   {

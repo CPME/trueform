@@ -196,6 +196,7 @@ const examplePart = part("example-rib-web", [
 
 Notes:
 - `rib` and `web` currently require open sketch profiles (`profileSketchLoop(..., { open: true })`).
+- When upstream solids already exist at the sketch section, rib/web depth is clamped to supporting faces along the axis.
 - Both are staging features and should be validated on target geometries.
 
 ## Sweeping Tube Profiles (Consolidated)
