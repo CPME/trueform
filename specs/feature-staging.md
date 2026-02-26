@@ -1,6 +1,6 @@
 # Feature Staging Registry
 
-Updated: 2026-02-24
+Updated: 2026-02-26
 
 Purpose: keep in-development modeling features explicit and machine-readable so
 clients and agents can avoid treating them as production-stable.
@@ -12,6 +12,10 @@ clients and agents can avoid treating them as production-stable.
 
 ## Current Staging Entries
 
+- `feature.rib`
+  - Status: `staging`
+- `feature.web`
+  - Status: `staging`
 - `feature.extrude:mode.surface`
   - Status: `staging`
 - `feature.loft:mode.surface`

@@ -30,6 +30,8 @@ export class MockBackend implements Backend {
         "feature.hexTubeSweep",
         "feature.loft",
         "feature.sweep",
+        "feature.rib",
+        "feature.web",
         "feature.shell",
         "feature.pipe",
         "feature.mirror",
@@ -99,6 +101,9 @@ export class MockBackend implements Backend {
         if ((feature as { mode?: string }).mode === "surface") {
           return this.emitSurface(feature, "surface");
         }
+        return this.emitSolid(feature);
+      case "feature.rib":
+      case "feature.web":
         return this.emitSolid(feature);
       case "feature.mirror": {
         const source = (feature as { source?: Selector }).source;

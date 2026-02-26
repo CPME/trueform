@@ -215,6 +215,15 @@ function normalizeFeature(
       clone.profile = normalizeProfileRef(clone.profile, ctx);
       clone.path = normalizePath3D(clone.path, ctx);
       break;
+    case "feature.rib":
+    case "feature.web":
+      clone.profile = normalizeProfileRef(clone.profile, ctx);
+      clone.thickness = normalizeScalar(clone.thickness, "length", ctx);
+      clone.depth = normalizeScalar(clone.depth, "length", ctx);
+      if (clone.axis !== undefined) {
+        clone.axis = normalizeExtrudeAxis(clone.axis, ctx);
+      }
+      break;
     case "feature.move.body":
       if (clone.translation !== undefined) {
         clone.translation = normalizePoint3(clone.translation, ctx);

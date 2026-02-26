@@ -1,6 +1,6 @@
 # Geometric Feature Parity Matrix (Onshape/SolidWorks Baseline)
 
-Updated: 2026-02-24
+Updated: 2026-02-26
 
 Purpose: track TrueForm progress toward near feature parity for geometric part
 modeling workflows commonly used in Onshape/SolidWorks.
@@ -23,14 +23,14 @@ Status keys:
 | Base solids | Extrude/revolve/loft/sweep/pipe, primitive profile workflows | `ready` | Surface mode separately tracked as staging. |
 | Surface creation | Surface feature + surface-mode extrude/revolve/loft/sweep | `staging` | `feature.surface` and surface-mode revolve are ready; extrude/loft/sweep/pipe/hex surface modes remain staged. |
 | Hole workflows | Simple, through/blind, counterbore/countersink, patterned holes | `ready` | Advanced wizard semantics still partial. |
-| Dress-up | Fillet/chamfer/shell/thicken | `ready` | Core workflows are ready; variable fillet/chamfer controls are now available in staging. |
+| Dress-up | Fillet/chamfer/shell/thicken | `ready` | Core workflows are ready; variable fillet/chamfer controls are promoted to ready. |
 | Draft + thread | Draft faces, modeled thread geometry | `ready` | Draft and modeled thread workflows are now promoted to ready with determinism/failure-mode coverage. |
 | Booleans | Union/subtract/intersect | `ready` | Available in DSL as canonical boolean op. |
 | Patterns + transforms | Linear/circular patterns, mirror | `ready` | Curve/fill/table-driven patterns missing. |
 | Multi-body direct edits | Split body, split face | `ready` | Selector/failure-mode and stability probes are now in place. |
 | Multi-body direct edits | Delete/replace/move face, move/copy body | `ready` | Move/copy body and delete/replace/move face workflows are now promoted to ready with conformance/determinism/failure-mode probes. |
 | Advanced surfacing | Boundary/fill/trim/untrim/extend/knit/heal | `missing` | High-value surfacing backlog. |
-| Advanced profile ops | Rib/web, wrap/emboss/deform/flex | `missing` | Common in production CAD workflows. |
+| Advanced profile ops | Rib/web, wrap/emboss/deform/flex | `staging` | Rib/web thin open-profile workflows are available in staging; broader wrap/emboss/deform/flex workflows remain missing. |
 | Advanced hole/edge options | Hole wizard standards, variable fillets/chamfers | `staging` | Variable fillet/chamfer controls are ready; hole-wizard end-condition coverage remains staging and threaded wizard profiles still require dedicated `feature.thread`. |
 
 ## Near-Parity Exit Gates

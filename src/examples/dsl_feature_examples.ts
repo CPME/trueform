@@ -5,7 +5,9 @@ import {
   booleanOp,
   draft,
   loft,
+  rib,
   sweep,
+  web,
   chamfer,
   variableChamfer,
   datumPlane,
@@ -216,6 +218,41 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     part: part("example-pipe", [
       pipe("pipe-1", "+Z", 60, 24, 18, "body:main"),
     ]),
+  },
+  {
+    id: "rib-web",
+    title: "Rib/Web (Staging)",
+    part: (() => {
+      const ribLine = sketchLine("rib-line", [-20, 0], [20, 0]);
+      const webLine = sketchLine("web-line", [0, -16], [0, 16]);
+      const ribSketch = sketch2d(
+        "rib-sketch",
+        [{ name: "profile:rib", profile: profileSketchLoop(["rib-line"], { open: true }) }],
+        { entities: [ribLine] }
+      );
+      const webSketch = sketch2d(
+        "web-sketch",
+        [{ name: "profile:web", profile: profileSketchLoop(["web-line"], { open: true }) }],
+        { entities: [webLine] }
+      );
+      return part("example-rib-web", [
+        ribSketch,
+        webSketch,
+        rib("rib-1", profileRef("profile:rib"), 3, 16, "body:rib", ["rib-sketch"], {
+          side: "symmetric",
+        }),
+        web("web-1", profileRef("profile:web"), 2, 12, "body:web", ["web-sketch"], {
+          side: "oneSided",
+        }),
+        booleanOp(
+          "union-rib-web",
+          "union",
+          selectorNamed("body:rib"),
+          selectorNamed("body:web"),
+          "body:main"
+        ),
+      ]);
+    })(),
   },
   {
     id: "sweep-sketch",

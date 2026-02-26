@@ -37,6 +37,7 @@ import {
   Shell,
   Pipe,
   PipeSweep,
+  Rib,
   Plane,
   HexTubeSweep,
   PlaneRef,
@@ -53,6 +54,7 @@ import {
   Sketch2D,
   SketchEntity,
   Surface,
+  Web,
   Mirror,
   DeleteFace,
   ReplaceFace,
@@ -82,6 +84,7 @@ type ResolvedProfile = {
   face?: any;
   wire?: any;
   wireClosed?: boolean;
+  planeNormal?: [number, number, number];
 };
 
 type PlaneBasis = {
@@ -160,6 +163,8 @@ export class OcctBackend implements Backend {
         "feature.revolve",
         "feature.loft",
         "feature.sweep",
+        "feature.rib",
+        "feature.web",
         "feature.shell",
         "feature.pipe",
         "feature.pipeSweep",
@@ -234,6 +239,10 @@ export class OcctBackend implements Backend {
           input.upstream,
           input.resolve
         );
+      case "feature.rib":
+        return this.execRib(input.feature as Rib, input.upstream);
+      case "feature.web":
+        return this.execWeb(input.feature as Web, input.upstream);
       case "feature.shell":
         return this.execShell(
           input.feature as Shell,
@@ -893,6 +902,119 @@ export class OcctBackend implements Backend {
       feature.result,
       feature.tags,
       { rootKind: outputKind === "solid" ? "solid" : "face" }
+    );
+    return { outputs, selections };
+  }
+
+  private execRib(feature: Rib, upstream: KernelResult): KernelResult {
+    return this.execThinProfileFeature("rib", feature, upstream);
+  }
+
+  private execWeb(feature: Web, upstream: KernelResult): KernelResult {
+    return this.execThinProfileFeature("web", feature, upstream);
+  }
+
+  private execThinProfileFeature(
+    kind: "rib" | "web",
+    feature: Rib | Web,
+    upstream: KernelResult
+  ): KernelResult {
+    const profile = this.resolveProfile(feature.profile, upstream);
+    if (profile.profile.kind !== "profile.sketch") {
+      throw new Error(`OCCT backend: ${kind} requires a profile.sketch reference`);
+    }
+    if (profile.profile.open !== true) {
+      throw new Error(`OCCT backend: ${kind} requires an open sketch profile`);
+    }
+    const { wire, closed } = this.buildProfileWire(profile);
+    if (closed) {
+      throw new Error(`OCCT backend: ${kind} profile must be open`);
+    }
+
+    const depth = expectNumber(feature.depth, `${kind} depth`);
+    if (!(depth > 0)) {
+      throw new Error(`OCCT backend: ${kind} depth must be positive`);
+    }
+    const thickness = expectNumber(feature.thickness, `${kind} thickness`);
+    if (!(thickness > 0)) {
+      throw new Error(`OCCT backend: ${kind} thickness must be positive`);
+    }
+
+    const axis = this.resolveExtrudeAxis(
+      feature.axis ?? ({ kind: "axis.sketch.normal" } as ExtrudeAxis),
+      profile,
+      upstream
+    );
+    const side = feature.side ?? "symmetric";
+    const occt = this.occt as any;
+    const edgeExplorer = new occt.TopExp_Explorer_1();
+    edgeExplorer.Init(
+      wire,
+      occt.TopAbs_ShapeEnum.TopAbs_EDGE,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    const edges: any[] = [];
+    for (; edgeExplorer.More(); edgeExplorer.Next()) {
+      edges.push(this.toEdge(edgeExplorer.Current()));
+    }
+    if (edges.length !== 1) {
+      throw new Error(
+        `OCCT backend: ${kind} currently supports a single sketch line segment profile`
+      );
+    }
+    const endpoints = this.edgeEndpoints(edges[0]);
+    if (!endpoints) {
+      throw new Error(`OCCT backend: ${kind} profile edge has invalid endpoints`);
+    }
+    const lineDir = normalizeVector(this.subVec(endpoints.end, endpoints.start));
+    if (!isFiniteVec(lineDir)) {
+      throw new Error(`OCCT backend: ${kind} profile edge is degenerate`);
+    }
+    const offsetDir = normalizeVector(cross(axis, lineDir));
+    if (!isFiniteVec(offsetDir)) {
+      throw new Error(`OCCT backend: ${kind} axis cannot be parallel to profile line`);
+    }
+    const low = side === "symmetric" ? -thickness / 2 : 0;
+    const high = side === "symmetric" ? thickness / 2 : thickness;
+    const p0 = this.addVec(endpoints.start, this.scaleVec(offsetDir, low));
+    const p1 = this.addVec(endpoints.end, this.scaleVec(offsetDir, low));
+    const p2 = this.addVec(endpoints.end, this.scaleVec(offsetDir, high));
+    const p3 = this.addVec(endpoints.start, this.scaleVec(offsetDir, high));
+    const section = this.makePolygonWire([p0, p1, p2, p3]);
+    const sectionFace = this.readShape(this.makeFaceFromWire(section));
+    let solid = this.readShape(
+      this.makePrism(
+        sectionFace,
+        this.makeVec(axis[0] * depth, axis[1] * depth, axis[2] * depth)
+      )
+    );
+    solid = this.normalizeSolid(solid);
+    if (!this.shapeHasSolid(solid)) {
+      const stitched = this.makeSolidFromShells(solid);
+      if (stitched) {
+        solid = this.normalizeSolid(stitched);
+      }
+    }
+
+    if (!this.shapeHasSolid(solid) || !this.isValidShape(solid)) {
+      throw new Error(`OCCT backend: ${kind} produced an invalid solid`);
+    }
+
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:solid`,
+          kind: "solid" as const,
+          meta: { shape: solid },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      solid,
+      feature.id,
+      feature.result,
+      feature.tags
     );
     return { outputs, selections };
   }
@@ -4334,7 +4456,7 @@ export class OcctBackend implements Backend {
         outputs.set(entry.name, {
           id: `${feature.id}:${entry.name}`,
           kind: "profile",
-          meta: { profile: entry.profile, face, wire, wireClosed: closed },
+          meta: { profile: entry.profile, face, wire, wireClosed: closed, planeNormal: plane.normal },
         });
         continue;
       }
@@ -5692,7 +5814,17 @@ export class OcctBackend implements Backend {
     const face = output.meta["face"];
     const wire = output.meta["wire"];
     const wireClosed = output.meta["wireClosed"];
-    return { profile, face, wire, wireClosed: typeof wireClosed === "boolean" ? wireClosed : undefined };
+    const planeNormal = output.meta["planeNormal"];
+    return {
+      profile,
+      face,
+      wire,
+      wireClosed: typeof wireClosed === "boolean" ? wireClosed : undefined,
+      planeNormal:
+        Array.isArray(planeNormal) && planeNormal.length === 3
+          ? (planeNormal as [number, number, number])
+          : undefined,
+    };
   }
 
   private buildSolidFromProfile(
@@ -6002,11 +6134,15 @@ export class OcctBackend implements Backend {
   ): [number, number, number] {
     if (!axis) return [0, 0, 1];
     if (typeof axis === "object" && axis.kind === "axis.sketch.normal") {
-      if (!profile.face) {
-        throw new Error("OCCT backend: sketch normal requires a sketch profile");
+      if (profile.face) {
+        const basis = this.planeBasisFromFace(profile.face);
+        return normalizeVector(basis.normal);
       }
-      const basis = this.planeBasisFromFace(profile.face);
-      return normalizeVector(basis.normal);
+      if (profile.planeNormal) {
+        const normalized = normalizeVector(profile.planeNormal);
+        if (isFiniteVec(normalized)) return normalized;
+      }
+      throw new Error("OCCT backend: sketch normal requires a sketch profile");
     }
     return this.resolveAxisSpec(axis as AxisSpec, upstream, "extrude axis");
   }

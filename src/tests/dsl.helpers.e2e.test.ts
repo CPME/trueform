@@ -321,6 +321,34 @@ const tests = [
       );
       assert.equal((sweepFrame.frame as { kind: string }).kind, "plane.datum");
 
+      const rib = dsl.rib(
+        "rib-1",
+        dsl.profileRef("profile:rib"),
+        2,
+        12,
+        undefined,
+        ["dep-rib"],
+        { side: "symmetric", axis: dsl.axisSketchNormal() }
+      );
+      assert.equal(rib.kind, "feature.rib");
+      assert.equal(rib.result, "body:rib-1");
+      assert.equal(rib.side, "symmetric");
+      assert.equal(rib.deps?.length, 1);
+
+      const web = dsl.web(
+        "web-1",
+        dsl.profileRef("profile:web"),
+        1.5,
+        9,
+        undefined,
+        ["dep-web"],
+        { side: "oneSided", axis: "+Z" }
+      );
+      assert.equal(web.kind, "feature.web");
+      assert.equal(web.result, "body:web-1");
+      assert.equal(web.side, "oneSided");
+      assert.equal(web.deps?.length, 1);
+
       const mirror = dsl.mirror(
         "mirror-1",
         selectorFace,

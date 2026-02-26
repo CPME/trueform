@@ -24,6 +24,7 @@ const dslCodeTargets = {
   loft: { doc: "features", heading: "Loft" },
   sweep: { doc: "features", heading: "Sweep" },
   pipe: { doc: "features", heading: "Pipe" },
+  "rib-web": { doc: "features", heading: "Rib/Web (Staging)" },
   "sweep-sketch": { doc: "features", heading: "Sweep (Arbitrary Sketch)" },
   hole: { doc: "features", heading: "Hole" },
   "hole-advanced": { doc: "features", heading: "Hole" },

@@ -36,6 +36,7 @@ export type ThickenDirection = "normal" | "reverse";
 export type UnwrapMode = "strict" | "experimental";
 export type ThreadHandedness = "right" | "left";
 export type HoleEndCondition = "blind" | "throughAll" | "upToNext" | "upToLast";
+export type RibThicknessSide = "symmetric" | "oneSided";
 
 export type ParamDef = {
   id: ID;
@@ -144,6 +145,8 @@ export type IntentFeature =
   | Pipe
   | PipeSweep
   | HexTubeSweep
+  | Rib
+  | Web
   | Mirror
   | ReplaceFace
   | MoveBody
@@ -402,6 +405,26 @@ export type HexTubeSweep = FeatureBase & {
   innerAcrossFlats?: Scalar;
   result: string;
   mode?: ExtrudeMode;
+};
+
+export type Rib = FeatureBase & {
+  kind: "feature.rib";
+  profile: ProfileRef;
+  thickness: Scalar;
+  depth: Scalar;
+  result: string;
+  axis?: ExtrudeAxis;
+  side?: RibThicknessSide;
+};
+
+export type Web = FeatureBase & {
+  kind: "feature.web";
+  profile: ProfileRef;
+  thickness: Scalar;
+  depth: Scalar;
+  result: string;
+  axis?: ExtrudeAxis;
+  side?: RibThicknessSide;
 };
 
 export type Mirror = FeatureBase & {

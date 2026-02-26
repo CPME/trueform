@@ -31,6 +31,11 @@
       "image": "/examples/dsl/pipe.iso.png"
     },
     {
+      "id": "rib-web",
+      "title": "Rib/Web (Staging)",
+      "image": "/examples/dsl/rib-web.iso.png"
+    },
+    {
       "id": "sweep-sketch",
       "title": "Sweep (Arbitrary Sketch)",
       "image": "/examples/dsl/sweep-sketch.iso.png"

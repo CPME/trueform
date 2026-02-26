@@ -159,6 +159,45 @@ Notes:
 - `pipe` creates a straight cylindrical pipe/tube primitive on a cardinal axis.
 - Use `opts.origin` to place the primitive at an explicit origin.
 
+## Rib/Web (Staging)
+
+![Rib/Web example](/examples/dsl/rib-web.iso.png)
+
+```ts
+const ribSketch = sketch2d(
+  "rib-sketch",
+  [{ name: "profile:rib", profile: profileSketchLoop(["rib-line"], { open: true }) }],
+  { entities: [sketchLine("rib-line", [-20, 0], [20, 0])] }
+);
+const webSketch = sketch2d(
+  "web-sketch",
+  [{ name: "profile:web", profile: profileSketchLoop(["web-line"], { open: true }) }],
+  { entities: [sketchLine("web-line", [0, -16], [0, 16])] }
+);
+
+const examplePart = part("example-rib-web", [
+  ribSketch,
+  webSketch,
+  rib("rib-1", profileRef("profile:rib"), 3, 16, "body:rib", ["rib-sketch"], {
+    side: "symmetric",
+  }),
+  web("web-1", profileRef("profile:web"), 2, 12, "body:web", ["web-sketch"], {
+    side: "oneSided",
+  }),
+  booleanOp(
+    "union-rib-web",
+    "union",
+    selectorNamed("body:rib"),
+    selectorNamed("body:web"),
+    "body:main"
+  ),
+]);
+```
+
+Notes:
+- `rib` and `web` currently require open sketch profiles (`profileSketchLoop(..., { open: true })`).
+- Both are staging features and should be validated on target geometries.
+
 ## Sweeping Tube Profiles (Consolidated)
 
 ```ts

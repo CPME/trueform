@@ -129,6 +129,14 @@
       </div>
     </a>
 
+    <a class="card" href="#code-dsl-rib-web">
+      <img src="./dsl/rib-web.iso.png" alt="Rib/Web (Staging)" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Rib/Web (Staging)</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
     <a class="card" href="#code-dsl-sweep-sketch">
       <img src="./dsl/sweep-sketch.iso.png" alt="Sweep (Arbitrary Sketch)" loading="lazy" />
       <div class="card-body">
@@ -530,6 +538,40 @@ const examplePart = part(&quot;example-sweep&quot;, [
       <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Pipe</p>
       <pre><code>const examplePart = part(&quot;example-pipe&quot;, [
   pipe(&quot;pipe-1&quot;, &quot;+Z&quot;, 60, 24, 18, &quot;body:main&quot;),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-rib-web">
+      <h3>Rib/Web (Staging) (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Rib/Web (Staging)</p>
+      <pre><code>const ribSketch = sketch2d(
+  &quot;rib-sketch&quot;,
+  [{ name: &quot;profile:rib&quot;, profile: profileSketchLoop([&quot;rib-line&quot;], { open: true }) }],
+  { entities: [sketchLine(&quot;rib-line&quot;, [-20, 0], [20, 0])] }
+);
+const webSketch = sketch2d(
+  &quot;web-sketch&quot;,
+  [{ name: &quot;profile:web&quot;, profile: profileSketchLoop([&quot;web-line&quot;], { open: true }) }],
+  { entities: [sketchLine(&quot;web-line&quot;, [0, -16], [0, 16])] }
+);
+
+const examplePart = part(&quot;example-rib-web&quot;, [
+  ribSketch,
+  webSketch,
+  rib(&quot;rib-1&quot;, profileRef(&quot;profile:rib&quot;), 3, 16, &quot;body:rib&quot;, [&quot;rib-sketch&quot;], {
+    side: &quot;symmetric&quot;,
+  }),
+  web(&quot;web-1&quot;, profileRef(&quot;profile:web&quot;), 2, 12, &quot;body:web&quot;, [&quot;web-sketch&quot;], {
+    side: &quot;oneSided&quot;,
+  }),
+  booleanOp(
+    &quot;union-rib-web&quot;,
+    &quot;union&quot;,
+    selectorNamed(&quot;body:rib&quot;),
+    selectorNamed(&quot;body:web&quot;),
+    &quot;body:main&quot;
+  ),
 ]);</code></pre>
       <a class="back-link" href="#top">Back to gallery</a>
     </article>

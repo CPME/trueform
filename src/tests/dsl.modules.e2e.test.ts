@@ -89,6 +89,10 @@ const tests = [
       assert.equal(extrude.kind, "feature.extrude");
       const plane = features.plane("plane-1", 20, 10);
       assert.equal(plane.kind, "feature.plane");
+      const rib = features.rib("rib-1", sketch.profileRef("profile:base"), 1.5, 6);
+      assert.equal(rib.kind, "feature.rib");
+      const web = features.web("web-1", sketch.profileRef("profile:base"), 1.5, 6);
+      assert.equal(web.kind, "feature.web");
       const splitBody = features.splitBody(
         "split-1",
         selectors.selectorNamed("body:main"),

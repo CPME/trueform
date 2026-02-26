@@ -1,6 +1,6 @@
 # Geometric Parity Implementation Plan
 
-Updated: 2026-02-24
+Updated: 2026-02-26
 
 Purpose: maintain a single checkpointed plan for progressing TrueForm toward
 near feature parity on geometric part modeling workflows used in Onshape/SolidWorks.
@@ -53,7 +53,7 @@ Interpretation:
 | M7: Advanced hole parity (`hole-wizard-standards`) | `completed` | Hole-wizard end-condition execution, parity probe, and failure-mode coverage landed; corpus moved to staging. |
 | M8: Stage graduation wave 1 (direct-edit + variable edge + draft) | `completed` | Direct-edit, variable-edge, and draft promotions landed with conformance/failure/determinism coverage. |
 | M9: Stage graduation wave 2 (thread + surface-mode reliability) | `in_progress` | Thread plus `feature.surface`/surface-mode revolve are promoted; remaining surface-mode entries still staged. |
-| M10: Advanced profile ops (`rib/web`) | `planned` | Close next declared missing workflow in corpus. |
+| M10: Advanced profile ops (`rib/web`) | `in_progress` | OCCT rib/web thin open-profile execution + probe/failure coverage landed in staging; promotion hardening remains. |
 | M11: Advanced surfacing slice (`boundary/fill/trim/extend/knit`) | `planned` | Land minimum production-credible subset and probe coverage (see `specs/advanced-surfacing-three-slices-plan.md`). |
 | M12: Near-parity closure + gate validation | `in_progress` | Coverage/reliability gates are now met; remaining work is missing-feature closure (`rib/web`, advanced surfacing). |
 
@@ -107,8 +107,7 @@ Use this checklist in parity-promotion PRs:
 
 ## Missing Feature Backlog (Post M8)
 
-1. `rib/web` (M10).
-2. `advanced-surfacing-boundary-fill-knit` (M11).
+1. `advanced-surfacing-boundary-fill-knit` (M11).
 
 ## CI and Reporting Rules
 
@@ -149,3 +148,4 @@ npm run parity:geometric:check
 | 2026-02-24 | M9 progress: promoted `feature.surface` and surface-mode revolve to ready with determinism and negative-path coverage. |
 | 2026-02-24 | Coverage gate exceeded in latest `--no-run` snapshot: `0.914` (`ready=26`, `staging=1`, `missing=2`); reliability gate still pending probe-run measurement. |
 | 2026-02-24 | Full probe run now passes reliability gate: `1.000` (27/27). Remaining near-parity gap is missing-feature implementation (`rib/web`, advanced surfacing). |
+| 2026-02-26 | M10 progress: added staging rib/web feature execution (`feature.rib`, `feature.web`) with OCCT probe + failure-mode tests and corpus/matrix/staging updates. |

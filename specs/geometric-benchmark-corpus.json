@@ -1,6 +1,6 @@
 {
   "$schema": "trueform.geometric-benchmark.v1",
-  "updated": "2026-02-24",
+  "updated": "2026-02-26",
   "scoring": {
     "stagingWeight": 0.5,
     "compositeWeights": {
@@ -203,7 +203,9 @@
       "id": "rib-web",
       "category": "advanced-profile-ops",
       "feature": "Rib/web",
-      "parity": "missing"
+      "parity": "staging",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.rib_web.e2e.probe.js" },
+      "notes": "Rib/web thin open-profile workflows now execute in OCCT with staging conformance and failure-mode coverage."
     },
     {
       "id": "variable-fillet-chamfer",

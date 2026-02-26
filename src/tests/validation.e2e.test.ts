@@ -155,6 +155,26 @@ const tests = [
     },
   },
   {
+    name: "validation: rib/web side must be supported enum value",
+    fn: async () => {
+      const rib = {
+        ...dsl.rib("rib-1", dsl.profileRef("profile:rib"), 2, 8),
+        side: "both" as unknown as "symmetric",
+      };
+      const part = dsl.part("rib-invalid-side", [rib]);
+      assert.throws(() => normalizePart(part), /Rib\/Web side must be/i);
+    },
+  },
+  {
+    name: "validation: rib requires sketch profile reference",
+    fn: async () => {
+      const part = dsl.part("rib-invalid-profile", [
+        dsl.rib("rib-1", dsl.profileRect(10, 2), 2, 8),
+      ]);
+      assert.throws(() => normalizePart(part), /requires profileRef/i);
+    },
+  },
+  {
     name: "validation: staged surface-mode features can be blocked",
     fn: async () => {
       const part = dsl.part("staged-surface-mode", [
@@ -166,6 +186,26 @@ const tests = [
           undefined,
           { mode: "surface" }
         ),
+      ]);
+      assert.throws(
+        () => normalizePart(part, undefined, { stagedFeatures: "error" }),
+        /staging feature/i
+      );
+    },
+  },
+  {
+    name: "validation: rib is staged and can be blocked",
+    fn: async () => {
+      const part = dsl.part("staged-rib", [
+        dsl.sketch2d("rib-sketch", [
+          {
+            name: "profile:rib",
+            profile: dsl.profileSketchLoop(["rib-line"], { open: true }),
+          },
+        ], {
+          entities: [dsl.sketchLine("rib-line", [-8, 0], [8, 0])],
+        }),
+        dsl.rib("rib-1", dsl.profileRef("profile:rib"), 2, 8, "body:rib", ["rib-sketch"]),
       ]);
       assert.throws(
         () => normalizePart(part, undefined, { stagedFeatures: "error" }),

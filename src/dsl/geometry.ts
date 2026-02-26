@@ -27,6 +27,7 @@ import type {
   PatternRef,
   Pipe,
   PipeSweep,
+  Rib,
   HexTubeSweep,
   PlaneRef,
   Point2D,
@@ -63,6 +64,7 @@ import type {
   Surface,
   Shell,
   Sweep,
+  Web,
   Thicken,
   Unwrap,
   ThickenDirection,
@@ -420,6 +422,48 @@ export const pipe = (
     origin: opts?.origin,
     result: result ?? `body:${id}`,
     deps: opts?.deps,
+  });
+
+export const rib = (
+  id: ID,
+  profile: ProfileRef,
+  thickness: Scalar,
+  depth: Scalar,
+  result?: string,
+  deps?: ID[],
+  opts?: { axis?: Rib["axis"]; side?: Rib["side"] }
+): Rib =>
+  compact({
+    id,
+    kind: "feature.rib",
+    profile,
+    thickness,
+    depth,
+    result: result ?? `body:${id}`,
+    deps,
+    axis: opts?.axis,
+    side: opts?.side,
+  });
+
+export const web = (
+  id: ID,
+  profile: ProfileRef,
+  thickness: Scalar,
+  depth: Scalar,
+  result?: string,
+  deps?: ID[],
+  opts?: { axis?: Web["axis"]; side?: Web["side"] }
+): Web =>
+  compact({
+    id,
+    kind: "feature.web",
+    profile,
+    thickness,
+    depth,
+    result: result ?? `body:${id}`,
+    deps,
+    axis: opts?.axis,
+    side: opts?.side,
   });
 
 /**
