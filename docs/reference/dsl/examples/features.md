@@ -339,7 +339,7 @@ const examplePart = part("example-delete-face", [
 
 Notes:
 - `deleteFace(..., { heal: false })` keeps an opened shell/surface result.
-- Delete face is staging behavior and should be validated on target geometries.
+- Delete face is stable and should still be validated on target geometries with complex topology.
 
 ## Replace Face
 
@@ -366,7 +366,7 @@ const examplePart = part("example-replace-face", [
 
 Notes:
 - `replaceFace` swaps selected source faces using tool face/surface geometry.
-- Replace face is staging behavior and currently optimized for core matching-face workflows.
+- Replace face is stable and currently optimized for core matching-face workflows.
 
 ## Move Face
 
@@ -392,7 +392,7 @@ const examplePart = part("example-move-face", [
 Notes:
 - `moveFace` applies transform controls to selected faces on a source solid.
 - `heal: false` keeps an open shell/surface result; `heal: true` attempts to keep a closed solid.
-- Move face is staging behavior and should be validated on target geometries.
+- Move face is stable and should be validated on target geometries.
 
 ## Draft
 
@@ -419,7 +419,7 @@ const examplePart = part("example-draft", [
 ```
 
 Notes:
-- `draft` is currently in staging and should be treated as maturing behavior.
+- `draft` is stable in the runtime stage registry.
 - Use `neutralPlane` + `pullDirection` explicitly; avoid relying on implicit model orientation.
 
 ## Thicken
@@ -565,7 +565,7 @@ const examplePart = part("example-variable-fillet", [
 
 Notes:
 - `variableFillet` applies per-entry radii to selected edge sets on one source body.
-- This feature is staging and should be validated on your target edge/corner blends.
+- Validate entry selectors/radii on your target edge/corner blends.
 
 ## Chamfer
 
@@ -603,7 +603,7 @@ const examplePart = part("example-variable-chamfer", [
 
 Notes:
 - `variableChamfer` applies per-entry distances to selected edge sets on one source body.
-- This feature is staging and should be validated on your target edge/corner blends.
+- Validate entry selectors/distances on your target edge/corner blends.
 
 ## Boolean Union
 

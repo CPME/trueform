@@ -37,7 +37,7 @@ Consolidation note:
 - `pipeSweep`, `hexTubeSweep`, `union`, `cut`, and `intersect` remain available as compatibility aliases.
 
 Staging note:
-- `rib`, `web`, and several surface-oriented workflows are currently marked as `staging` in the runtime feature registry (`/v1/capabilities.featureStages`).
+- `rib`, `web`, and surface-mode variants for `extrude`, `loft`, `sweep`, `pipeSweep`, and `hexTubeSweep` are currently marked as `staging` in the runtime feature registry (`/v1/capabilities.featureStages`).
 
 Outputs are named and not limited to `body:main`; helpers default to `body:<id>` or `surface:<id>` depending on feature/mode.
 

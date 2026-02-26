@@ -47,21 +47,21 @@ import {
 - `pipe(id, axis, length, outerDiameter, innerDiameter?, result?, opts?) -> Pipe`
 - `shell(id, source, thickness, result?, deps?, opts?) -> Shell`
 - `mirror(id, source, plane, result?, deps?) -> Mirror`
-- `deleteFace(id, source, faces, result?, deps?, opts?) -> DeleteFace` (staging)
-- `replaceFace(id, source, faces, tool, result?, deps?, opts?) -> ReplaceFace` (staging)
-- `moveFace(id, source, faces, result?, deps?, opts?) -> MoveFace` (staging)
-- `moveBody(id, source, result?, deps?, opts?) -> MoveBody` (staging)
+- `deleteFace(id, source, faces, result?, deps?, opts?) -> DeleteFace`
+- `replaceFace(id, source, faces, tool, result?, deps?, opts?) -> ReplaceFace`
+- `moveFace(id, source, faces, result?, deps?, opts?) -> MoveFace`
+- `moveBody(id, source, result?, deps?, opts?) -> MoveBody`
 - `splitBody(id, source, tool, result?, deps?, opts?) -> SplitBody`
 - `splitFace(id, faces, tool, result?, deps?) -> SplitFace`
-- `draft(id, source, faces, neutralPlane, pullDirection, angle, result?, deps?) -> Draft` (staging)
+- `draft(id, source, faces, neutralPlane, pullDirection, angle, result?, deps?) -> Draft`
 - `thicken(id, surface, thickness, result?, deps?, opts?) -> Thicken`
 - `unwrap(id, source, result?, deps?, opts?) -> Unwrap` (strict/default and experimental modes)
-- `thread(id, axis, length, majorDiameter, pitch, result?, deps?, opts?) -> Thread` (modelled)
+- `thread(id, axis, length, majorDiameter, pitch, result?, deps?, opts?) -> Thread` (modeled)
 - `hole(id, onFace, axis, diameter, depth, opts?) -> Hole`
 - `fillet(id, edges, radius, depsOrOpts?) -> Fillet`
-- `variableFillet(id, source, entries, result?, deps?) -> VariableFillet` (staging)
+- `variableFillet(id, source, entries, result?, deps?) -> VariableFillet`
 - `chamfer(id, edges, distance, depsOrOpts?) -> Chamfer`
-- `variableChamfer(id, source, entries, result?, deps?) -> VariableChamfer` (staging)
+- `variableChamfer(id, source, entries, result?, deps?) -> VariableChamfer`
 - `booleanOp(id, op, left, right, result?, deps?) -> BooleanOp`
 - `patternLinear(id, origin, spacing, count, depsOrOpts?) -> PatternLinear`
 - `patternCircular(id, origin, axis, count, depsOrOpts?) -> PatternCircular`
@@ -128,5 +128,6 @@ Options (`opts`):
 - `crestFlat?: Scalar`
 - `rootFlat?: Scalar`
 
-Modelled thread is currently staging behavior. Public docs intentionally avoid
-showing it in the main feature examples until robustness tuning is complete.
+Thread is a stable feature in the runtime stage registry. As with all modeled
+threads, validate geometry/performance on your target parts when using dense
+pitch or long thread lengths.

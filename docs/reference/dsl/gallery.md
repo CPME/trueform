@@ -18,7 +18,7 @@ For the full card-style experience (all previews + source snippets in one place)
 | Pipe | [![Pipe feature](/examples/dsl/pipe.iso.png)](./examples/features#pipe) |
 | Shell | [![Shell feature](/examples/dsl/shell.iso.png)](./examples/features#shell) |
 | Mirror | [![Mirror feature](/examples/dsl/mirror.iso.png)](./examples/features#mirror) |
-| Draft (Staging) | [![Draft feature](/examples/dsl/draft.iso.png)](./examples/features#draft) |
+| Draft | [![Draft feature](/examples/dsl/draft.iso.png)](./examples/features#draft) |
 | Thicken | [![Thicken feature](/examples/dsl/thicken.iso.png)](./examples/features#thicken) |
 | Hole | [![Hole feature](/examples/dsl/hole.iso.png)](./examples/features#hole) |
 | Hole (Counterbore + Countersink) | [![Hole advanced feature](/examples/dsl/hole-advanced.iso.png)](./examples/features#hole) |
