@@ -28,7 +28,8 @@ Current scope (v1) compiles a JSON-serializable IR and builds with an OpenCascad
 
 Implemented part feature surface includes:
 - Datums and sketching (`datum.*`, `feature.sketch2d`, sketch entities/profiles).
-- Solid/surface operations (`extrude`, `surface`, `revolve`, `loft`, `sweep`, `pipe`, `mirror`, `thicken`, `shell`, `thread`, `hole`, `fillet`, `chamfer`, `boolean`).
+- Core solid/surface operations (`extrude`, `surface`, `revolve`, `loft`, `sweep`, `pipe`, `mirror`, `shell`, `draft`, `thicken`, `unwrap`, `thread`, `hole`, `fillet`, `chamfer`, `boolean`).
+- Direct-edit and split operations (`delete.face`, `replace.face`, `move.face`, `move.body`, `split.body`, `split.face`).
 - Advanced profile operations (`rib`, `web`) with thin open-profile workflows.
 - Pattern intent (`pattern.linear`, `pattern.circular`).
 
@@ -38,6 +39,7 @@ Consolidation note:
 
 Staging note:
 - `rib`, `web`, and surface-mode variants for `extrude`, `loft`, `sweep`, `pipeSweep`, and `hexTubeSweep` are currently marked as `staging` in the runtime feature registry (`/v1/capabilities.featureStages`).
+- The remaining advertised `featureKinds` are currently `stable` (see `/v1/capabilities.featureStages`).
 
 Outputs are named and not limited to `body:main`; helpers default to `body:<id>` or `surface:<id>` depending on feature/mode.
 
