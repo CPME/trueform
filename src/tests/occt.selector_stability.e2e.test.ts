@@ -90,18 +90,19 @@ function assertBodyFaceIncrease(
   result: BuildResult,
   selectionId: string,
   featureId: string,
-  outputKey: string,
-  label: string
+  finalOutputKey: string,
+  label: string,
+  baseOutputKey = "body:main"
 ): void {
   assertBaseSelectionPreserved(result, selectionId, label);
   const baseStep = stepByFeatureId(result, "base");
   const featureStep = stepByFeatureId(result, featureId);
   assert.ok(baseStep, `missing base step for ${label}`);
   assert.ok(featureStep, `missing ${featureId} step for ${label}`);
-  const baseBody = baseStep.result.outputs.get(outputKey);
-  const finalBody = result.final.outputs.get(outputKey);
-  assert.ok(baseBody, `missing edited base output ${outputKey} for ${label}`);
-  assert.ok(finalBody, `missing final output ${outputKey} for ${label}`);
+  const baseBody = baseStep.result.outputs.get(baseOutputKey);
+  const finalBody = result.final.outputs.get(finalOutputKey);
+  assert.ok(baseBody, `missing edited base output ${baseOutputKey} for ${label}`);
+  assert.ok(finalBody, `missing final output ${finalOutputKey} for ${label}`);
   const baseShape = baseBody.meta["shape"] as any;
   const finalShape = finalBody.meta["shape"] as any;
   assert.ok(baseShape, `missing edited base shape for ${label}`);
@@ -132,6 +133,38 @@ const matrix: MatrixCase[] = [
         `expected stable face id to anchor hole ordering (order=${result.order.join(",")})`
       );
       assertBodyFaceIncrease(occt, result, selectionId, "hole-1", "body:main", "stable-id hole");
+    },
+  },
+  {
+    name: "stable face id keeps move face resolved after upstream edits",
+    buildSeedPart: () =>
+      dsl.part("selector-matrix-seed-move-face", [
+        dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:main"),
+      ]),
+    captureSelectionId: topStableFaceId,
+    buildEditedPart: (selectionId) =>
+      dsl.part("selector-matrix-move-face", [
+        dsl.moveFace(
+          "move-top",
+          dsl.selectorNamed("body:main"),
+          dsl.selectorNamed(selectionId),
+          "body:moved",
+          undefined,
+          { translation: [0, 0, 1], heal: true }
+        ),
+        dsl.extrude("base", dsl.profileRect(32, 18), 18, "body:main"),
+      ]),
+    assertEdited: ({ occt, result, selectionId }) => {
+      assert.ok(
+        result.order.indexOf("base") < result.order.indexOf("move-top"),
+        `expected stable face id to anchor move-face ordering (order=${result.order.join(",")})`
+      );
+      assertBaseSelectionPreserved(result, selectionId, "move face");
+      const finalBody = result.final.outputs.get("body:moved");
+      assert.ok(finalBody, "missing move-face output body:moved");
+      const finalShape = finalBody.meta["shape"] as any;
+      assert.ok(finalShape, "missing move-face shape");
+      assertValidShape(occt, finalShape, "stable-id move-face solid");
     },
   },
   {
@@ -170,6 +203,53 @@ const matrix: MatrixCase[] = [
       const finalShape = finalBody.meta["shape"] as any;
       assert.ok(finalShape, "missing draft shape");
       assertValidShape(occt, finalShape, "stable-id draft solid");
+    },
+  },
+  {
+    name: "stable face id keeps split face resolved after upstream edits",
+    buildSeedPart: () =>
+      dsl.part("selector-matrix-seed-split-face", [
+        dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:main"),
+      ]),
+    captureSelectionId: topStableFaceId,
+    buildEditedPart: (selectionId) =>
+      dsl.part("selector-matrix-split-face", [
+        dsl.splitFace(
+          "split-face",
+          dsl.selectorNamed(selectionId),
+          dsl.selectorNamed("surface:splitter"),
+          "body:split"
+        ),
+        dsl.plane("split-plane", 24, 16, "surface:splitter", {
+          plane: dsl.planeDatum("split-datum"),
+          origin: [0, 0, 9],
+          deps: ["split-datum", "base"],
+        }),
+        dsl.datumPlane("split-datum", "+X", [0, 0, 0]),
+        dsl.extrude("base", dsl.profileRect(28, 20), 18, "body:main"),
+      ]),
+    assertEdited: ({ occt, result, selectionId }) => {
+      assert.ok(
+        result.order.indexOf("base") < result.order.indexOf("split-face"),
+        `expected stable face id to anchor split-face ordering (order=${result.order.join(",")})`
+      );
+      assert.ok(
+        result.order.indexOf("split-plane") < result.order.indexOf("split-face"),
+        `expected split-plane before split-face (order=${result.order.join(",")})`
+      );
+      assert.ok(
+        result.order.indexOf("split-datum") < result.order.indexOf("split-plane"),
+        `expected split-datum before split-plane (order=${result.order.join(",")})`
+      );
+      assertBodyFaceIncrease(
+        occt,
+        result,
+        selectionId,
+        "split-face",
+        "body:split",
+        "stable-id split-face",
+        "body:main"
+      );
     },
   },
   {
