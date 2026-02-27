@@ -128,6 +128,16 @@ function ownerKeysForMeshSelections(
   return out;
 }
 
+function findMeshSelection(
+  mesh: { selections?: Array<{ id?: string; kind?: string; meta?: Record<string, unknown> }> },
+  predicate: (selection: { id?: string; kind?: string; meta?: Record<string, unknown> }) => boolean
+): { id?: string; kind?: string; meta?: Record<string, unknown> } | null {
+  for (const selection of mesh.selections ?? []) {
+    if (selection && predicate(selection)) return selection;
+  }
+  return null;
+}
+
 async function startRuntimeServer(): Promise<RuntimeServer> {
   return startRuntimeServerWithEnv();
 }
@@ -1612,6 +1622,82 @@ const tests = [
         assert.equal(sketchJob.error?.details?.featureKind, "feature.sketch2d");
         assert.equal(sketchJob.error?.details?.referenceKind, "legacy_numeric_selector");
         assert.equal(sketchJob.error?.details?.referenceId, "face:130");
+      } finally {
+        await runtime.stop();
+      }
+    },
+  },
+  {
+    name: "runtime service: stable selection ids round-trip across builds",
+    fn: async () => {
+      const runtime = await startRuntimeServer();
+      try {
+        const seedPart = dsl.part("runtime-stable-selection-seed", [
+          dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:main"),
+        ]);
+        const seedSubmit = await fetchJsonWithStatus<{ id: string; jobId: string; state: string }>(
+          `${runtime.baseUrl}/v1/build`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              part: seedPart,
+              options: { meshProfile: "interactive" },
+            }),
+          }
+        );
+        const seedJob = await pollJob(runtime.baseUrl, seedSubmit.jobId);
+        assert.equal(seedJob.state, "succeeded");
+        const seedMeshAssetUrl = String(seedJob.result?.mesh?.asset?.url ?? "");
+        assert.ok(seedMeshAssetUrl.length > 0, "missing seed mesh asset url");
+        const seedMesh = await fetchJson<{
+          selections?: Array<{ id?: string; kind?: string; meta?: Record<string, unknown> }>;
+        }>(`${runtime.baseUrl}${seedMeshAssetUrl}`);
+        const topFace = findMeshSelection(
+          seedMesh,
+          (selection) =>
+            selection.kind === "face" &&
+            selection.meta?.["createdBy"] === "base" &&
+            selection.meta?.["normal"] === "+Z"
+        );
+        assert.ok(topFace, "missing stable top face selection");
+        const stableFaceId = String(topFace?.id ?? "");
+        assert.ok(
+          stableFaceId.startsWith("face:body.main~base."),
+          `expected stable face id, got ${stableFaceId}`
+        );
+
+        const editedPart = dsl.part("runtime-stable-selection-edited", [
+          dsl.sketch2d(
+            "top-sketch",
+            [{ name: "profile:cut", profile: dsl.profileRect(4, 4) }],
+            { plane: dsl.selectorNamed(stableFaceId) }
+          ),
+          dsl.extrude("base", dsl.profileRect(28, 16), 24, "body:main"),
+        ]);
+        const editedSubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(`${runtime.baseUrl}/v1/build`, 202, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            part: editedPart,
+            options: { meshProfile: "interactive" },
+          }),
+        });
+        const editedJob = await pollJob(runtime.baseUrl, editedSubmit.jobId);
+        assert.equal(editedJob.state, "succeeded");
+        const featureOrder = Array.isArray(editedJob.result?.featureOrder)
+          ? editedJob.result.featureOrder.map((entry: unknown) => String(entry))
+          : [];
+        assert.ok(
+          featureOrder.indexOf("base") < featureOrder.indexOf("top-sketch"),
+          `expected runtime feature order to anchor stable face id (order=${featureOrder.join(",")})`
+        );
+        assert.equal(editedJob.result?.outputs?.["profile:cut"]?.kind, "profile");
       } finally {
         await runtime.stop();
       }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { dsl } from "../dsl.js";
 import type { Backend, KernelResult, KernelSelection } from "../backend.js";
 import { buildPart } from "../executor.js";
+import { CompileError } from "../errors.js";
 import { resolveSelector } from "../selectors.js";
 import type { TestCase } from "./occt_test_utils.js";
 
@@ -57,6 +58,35 @@ export function selectorConformanceTests(
         const selector = dsl.selectorNamed("body:main");
         const selection = resolveSelector(selector, toResolutionContext(result.final));
         assert.equal(selection.kind, "solid");
+      },
+    },
+    {
+      name: `${target.name}: selector resolves explicit stable selection id`,
+      fn: async () => {
+        const result = buildPart(part, target.backend);
+        const topFace = result.final.selections.find(
+          (selection) =>
+            selection.kind === "face" &&
+            selection.meta["createdBy"] === "base-extrude" &&
+            selection.meta["normal"] === "+Z"
+        );
+        assert.ok(topFace, "missing stable top face selection");
+        const selector = dsl.selectorNamed(String(topFace?.id ?? ""));
+        const selection = resolveSelector(selector, toResolutionContext(result.final));
+        assert.equal(selection.id, topFace?.id);
+      },
+    },
+    {
+      name: `${target.name}: selector rejects legacy numeric selection ids`,
+      fn: async () => {
+        const result = buildPart(part, target.backend);
+        assert.throws(
+          () => resolveSelector(dsl.selectorNamed("face:1"), toResolutionContext(result.final)),
+          (err) =>
+            err instanceof CompileError &&
+            err.code === "selector_legacy_numeric_unsupported" &&
+            err.details?.["referenceId"] === "face:1"
+        );
       },
     },
   ];
