@@ -1585,7 +1585,7 @@ const tests = [
         assert.equal(splitFaceJob.error?.details?.referenceKind, "named_output");
         assert.equal(splitFaceJob.error?.details?.referenceId, "tool-missing");
 
-        const missingSketchPlaneAnchor = dsl.part("runtime-sketch-plane-anchor-missing", [
+        const legacySketchPlaneRef = dsl.part("runtime-sketch-plane-anchor-missing", [
           dsl.sketch2d(
             "a-sketch",
             [{ name: "profile:cut", profile: dsl.profileRect(4, 4) }],
@@ -1600,17 +1600,18 @@ const tests = [
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
-              part: missingSketchPlaneAnchor,
+              part: legacySketchPlaneRef,
               options: { meshProfile: "interactive" },
             }),
           }
         );
         const sketchJob = await pollJob(runtime.baseUrl, sketchSubmit.jobId);
         assert.equal(sketchJob.state, "failed");
-        assert.equal(sketchJob.error?.code, "selector_anchor_missing");
+        assert.equal(sketchJob.error?.code, "selector_legacy_numeric_unsupported");
         assert.equal(sketchJob.error?.details?.featureId, "a-sketch");
         assert.equal(sketchJob.error?.details?.featureKind, "feature.sketch2d");
-        assert.equal(sketchJob.error?.details?.referenceKind, "selector");
+        assert.equal(sketchJob.error?.details?.referenceKind, "legacy_numeric_selector");
+        assert.equal(sketchJob.error?.details?.referenceId, "face:130");
       } finally {
         await runtime.stop();
       }

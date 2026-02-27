@@ -56,7 +56,6 @@ export function buildDependencyGraph(part: IntentPart): Graph {
             featureId: feature.id,
             featureKind: feature.kind,
             referenceKind: "selector",
-            ...selectorAnchorDiagnostic(selector),
           }
         );
       }
@@ -413,9 +412,23 @@ function selectorDependencies(
         anchored = true;
         continue;
       }
+      if (isLegacyTransientSelectionReference(name)) {
+        throw new CompileError(
+          "selector_legacy_numeric_unsupported",
+          `Legacy numeric selector ${name} is unsupported`,
+          {
+            featureId: feature.id,
+            featureKind: feature.kind,
+            referenceKind: "legacy_numeric_selector",
+            referenceId: name,
+            migrationHint:
+              "Use a stable selection id emitted in build results or a semantic selector",
+          }
+        );
+      }
       if (isImplicitSelectionReference(name)) {
-        // Sketch planes hosted by raw selection ids (e.g. face:130) need explicit deps
-        // because there is no deterministic producer edge to infer.
+        // Non-output selection ids that are not recognized as stable references
+        // need explicit deps because there is no deterministic producer edge to infer.
         if (feature.kind !== "feature.sketch2d") {
           anchored = true;
         }
@@ -550,21 +563,6 @@ function normalizeSelectionReferenceToken(value: string): string {
     .replace(/[^A-Za-z0-9_-]+/g, ".")
     .replace(/\.+/g, ".")
     .replace(/^\.|\.$/g, "");
-}
-
-function selectorAnchorDiagnostic(selector: Selector): Record<string, unknown> {
-  if (selector.kind !== "selector.named") return {};
-  const references = parseNamedSelectorReferences(selector.name);
-  if (references.length !== 1) return {};
-  const [referenceId] = references;
-  if (!referenceId || !isLegacyTransientSelectionReference(referenceId)) {
-    return {};
-  }
-  return {
-    referenceId,
-    migrationHint:
-      "Use a stable selection id emitted in build results, add explicit deps, or prefer a semantic selector",
-  };
 }
 
 function isLegacyTransientSelectionReference(value: string): boolean {

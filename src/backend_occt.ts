@@ -123,10 +123,7 @@ type CollectedSubshape = {
   meta: Record<string, unknown>;
 };
 
-type SelectionIdAssignment = {
-  id: string;
-  transientId: string;
-};
+type SelectionIdAssignment = { id: string };
 
 type UnwrapPointProjector = (
   point: [number, number, number]
@@ -154,7 +151,6 @@ type Unwrap2DTransform = {
 
 export class OcctBackend implements Backend {
   private occt: OcctModule;
-  private selectionSeq = 0;
 
   constructor(options: OcctBackendOptions) {
     this.occt = options.occt;
@@ -208,10 +204,6 @@ export class OcctBackend implements Backend {
   }
 
   execute(input: ExecuteInput): KernelResult {
-    if (input.upstream.outputs.size === 0 && input.upstream.selections.length === 0) {
-      // Runtime service reuses a backend instance; transient debug ids stay scoped to a build.
-      this.selectionSeq = 0;
-    }
     const kind = (input.feature as { kind: string }).kind;
     switch (kind) {
       case "datum.plane":
@@ -4597,14 +4589,8 @@ export class OcctBackend implements Backend {
       if (assignment) {
         selections.push({
           id: assignment.id,
-          stableRef: assignment.id,
-          transientId: assignment.transientId,
           kind: "solid",
-          meta: {
-            ...meta,
-            stableRef: assignment.id,
-            transientId: assignment.transientId,
-          },
+          meta,
         });
       }
     }
@@ -4621,14 +4607,8 @@ export class OcctBackend implements Backend {
       if (!entry || !assignment) continue;
       selections.push({
         id: assignment.id,
-        stableRef: assignment.id,
-        transientId: assignment.transientId,
         kind: "face",
-        meta: {
-          ...entry.meta,
-          stableRef: assignment.id,
-          transientId: assignment.transientId,
-        },
+        meta: entry.meta,
       });
     }
 
@@ -4644,14 +4624,8 @@ export class OcctBackend implements Backend {
       if (!entry || !assignment) continue;
       selections.push({
         id: assignment.id,
-        stableRef: assignment.id,
-        transientId: assignment.transientId,
         kind: "edge",
-        meta: {
-          ...entry.meta,
-          stableRef: assignment.id,
-          transientId: assignment.transientId,
-        },
+        meta: entry.meta,
       });
     }
 
@@ -4694,7 +4668,6 @@ export class OcctBackend implements Backend {
       baseId: string;
       semanticHash: string;
       tieHash: string;
-      transientId: string;
     };
 
     const decorated: DecoratedEntry[] = entries.map((entry, index) => ({
@@ -4702,7 +4675,6 @@ export class OcctBackend implements Backend {
       baseId: this.buildStableSelectionBaseId(kind, entry.meta),
       semanticHash: hashValue(this.selectionSemanticFingerprint(kind, entry.meta)),
       tieHash: hashValue(this.selectionTieBreakerFingerprint(kind, entry.meta)),
-      transientId: this.nextSelectionId(kind),
     }));
 
     const groups = new Map<string, DecoratedEntry[]>();
@@ -4724,7 +4696,6 @@ export class OcctBackend implements Backend {
         if (!entry) continue;
         assignments[entry.index] = {
           id: bucket.length === 1 ? entry.baseId : `${entry.baseId}.${i + 1}`,
-          transientId: entry.transientId,
         };
       }
     }
@@ -4822,11 +4793,6 @@ export class OcctBackend implements Backend {
       out.push(Number(entry.toFixed(6)));
     }
     return out as [number, number, number];
-  }
-
-  private nextSelectionId(prefix: string): string {
-    this.selectionSeq += 1;
-    return `${prefix}:${this.selectionSeq}`;
   }
 
   private faceMetadata(

@@ -78,15 +78,13 @@ const tests = [
     },
   },
   {
-    name: "selectors: legacy transient ids resolve to durable selections when present",
+    name: "selectors: stable ids resolve directly",
     fn: async () => {
-      const selector = dsl.selectorNamed("edge:7");
+      const selector = dsl.selectorNamed("edge:body.main~base.hstable");
       const ctx = {
         selections: [
           {
             id: "edge:body.main~base.hstable",
-            stableRef: "edge:body.main~base.hstable",
-            transientId: "edge:7",
             kind: "edge" as const,
             meta: { center: [0, 0, 0] },
           },
@@ -95,19 +93,16 @@ const tests = [
       };
       const resolved = resolveSelector(selector, ctx);
       assert.equal(resolved.id, "edge:body.main~base.hstable");
-      assert.equal(resolved.transientId, "edge:7");
     },
   },
   {
-    name: "selectors: stale transient ids raise targeted diagnostics",
+    name: "selectors: legacy numeric ids raise migration diagnostics",
     fn: async () => {
       const selector = dsl.selectorNamed("face:42");
       const ctx = {
         selections: [
           {
             id: "face:body.main~base.hseed",
-            stableRef: "face:body.main~base.hseed",
-            transientId: "face:1",
             kind: "face" as const,
             meta: { planar: true, area: 10, center: [0, 0, 0], centerZ: 0 },
           },
@@ -118,7 +113,7 @@ const tests = [
         () => resolveSelector(selector, ctx),
         (err) =>
           err instanceof CompileError &&
-          err.code === "selector_transient_stale" &&
+          err.code === "selector_legacy_numeric_unsupported" &&
           err.details?.["referenceId"] === "face:42"
       );
     },

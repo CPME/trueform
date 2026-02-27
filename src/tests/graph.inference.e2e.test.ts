@@ -293,11 +293,16 @@ const tests = [
     },
   },
   {
-    name: "graph: selector.named explicit selection id is accepted",
+    name: "graph: selector.named explicit stable selection id is accepted",
     fn: async () => {
       const part = dsl.part("named-selection-id", [
         dsl.extrude("base", dsl.profileRect(10, 10), 5, "body:main"),
-        dsl.fillet("fillet", dsl.selectorNamed("edge:7"), 1, ["base"]),
+        dsl.fillet(
+          "fillet",
+          dsl.selectorNamed("edge:body.main~base.hseed"),
+          1,
+          ["base"]
+        ),
       ]);
       const result = compilePart(part);
       assert.ok(
@@ -307,13 +312,15 @@ const tests = [
     },
   },
   {
-    name: "graph: selector.named multi selection ids are accepted",
+    name: "graph: selector.named multi stable selection ids are accepted",
     fn: async () => {
       const part = dsl.part("named-selection-id-list", [
         dsl.extrude("base", dsl.profileRect(10, 10), 5, "body:main"),
         dsl.fillet(
           "fillet",
-          dsl.selectorNamed("edge:7, edge:9, edge:7"),
+          dsl.selectorNamed(
+            "edge:body.main~base.ha, edge:body.main~base.hb, edge:body.main~base.ha"
+          ),
           1,
           ["base"]
         ),
@@ -549,7 +556,7 @@ const tests = [
     },
   },
   {
-    name: "graph: sketch plane selector using raw face id requires explicit deps",
+    name: "graph: sketch plane selector using raw face id is rejected as legacy",
     fn: async () => {
       const part = dsl.part("sketch-plane-face-id-no-deps", [
         dsl.sketch2d(
@@ -563,13 +570,13 @@ const tests = [
         () => compilePart(part),
         (err) =>
           err instanceof CompileError &&
-          err.code === "selector_anchor_missing" &&
+          err.code === "selector_legacy_numeric_unsupported" &&
           err.details?.["referenceId"] === "face:130"
       );
     },
   },
   {
-    name: "graph: sketch plane selector face id is allowed with explicit deps",
+    name: "graph: sketch plane selector face id is rejected even with explicit deps",
     fn: async () => {
       const part = dsl.part("sketch-plane-face-id-explicit-deps", [
         dsl.sketch2d(
@@ -579,10 +586,12 @@ const tests = [
         ),
         dsl.extrude("z-extrude", dsl.profileRect(20, 20), 6, "body:main"),
       ]);
-      const result = compilePart(part);
-      assert.ok(
-        result.featureOrder.indexOf("z-extrude") <
-          result.featureOrder.indexOf("a-sketch")
+      assert.throws(
+        () => compilePart(part),
+        (err) =>
+          err instanceof CompileError &&
+          err.code === "selector_legacy_numeric_unsupported" &&
+          err.details?.["referenceId"] === "face:130"
       );
     },
   },

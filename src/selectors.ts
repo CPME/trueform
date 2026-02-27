@@ -10,8 +10,6 @@ import { CompileError } from "./errors.js";
 
 export type Selection = {
   id: ID;
-  transientId?: ID;
-  stableRef?: ID;
   kind: "face" | "edge" | "solid" | "surface";
   meta: Record<string, unknown>;
 };
@@ -103,16 +101,11 @@ function resolveNamedSingle(
   const hit = ctx.named.get(normalized);
   if (hit) return { selection: hit };
 
-  const selectionHit = ctx.selections.find((selection) => {
-    if (selection.id === normalized) return true;
-    if (selection.stableRef === normalized) return true;
-    if (selection.transientId === normalized) return true;
-    return false;
-  });
+  const selectionHit = ctx.selections.find((selection) => selection.id === normalized);
   if (selectionHit) return { selection: selectionHit };
 
-  const staleError = staleTransientSelectorError(normalized, ctx);
-  if (staleError) return { selection: null, error: staleError };
+  const legacyError = legacyNumericSelectorError(normalized);
+  if (legacyError) return { selection: null, error: legacyError };
   return { selection: null };
 }
 
@@ -129,34 +122,19 @@ function parseNamedTargetList(name: string): string[] {
   return entries;
 }
 
-function staleTransientSelectorError(
-  name: string,
-  ctx: ResolutionContext
-): CompileError | null {
+function legacyNumericSelectorError(name: string): CompileError | null {
   const match = name.match(/^(face|edge|solid|surface):(\d+)$/i);
   if (!match) return null;
 
   const selectionKind = match[1]?.toLowerCase() as Selection["kind"] | undefined;
   if (!selectionKind) return null;
-  const surviving = ctx.selections.filter((selection) => selection.kind === selectionKind);
-  if (surviving.length === 0) {
-    return new CompileError(
-      "selector_target_deleted",
-      `Transient selector ${name} no longer exists after rebuild`,
-      {
-        referenceId: name,
-        referenceKind: selectionKind,
-        migrationHint: "Re-select the target or persist a stable selection id",
-      }
-    );
-  }
   return new CompileError(
-    "selector_transient_stale",
-    `Transient selector ${name} is stale after topology changed`,
+    "selector_legacy_numeric_unsupported",
+    `Legacy numeric selector ${name} is unsupported`,
     {
       referenceId: name,
       referenceKind: selectionKind,
-      migrationHint: "Persist the stable selection id emitted in build results or use a semantic selector",
+      migrationHint: "Use a stable selection id emitted in build results or a semantic selector",
     }
   );
 }

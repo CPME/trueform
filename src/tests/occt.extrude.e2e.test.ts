@@ -153,11 +153,6 @@ const tests = [
           selection.meta["normal"] === "+Z"
       );
       assert.ok(topFace, "missing top face selection");
-      assert.equal(
-        typeof topFace?.transientId,
-        "string",
-        "expected transientId metadata for legacy diagnostics"
-      );
 
       const stableFaceId = String(topFace?.id ?? "");
       assert.ok(
