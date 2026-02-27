@@ -56,6 +56,7 @@ export function buildDependencyGraph(part: IntentPart): Graph {
             featureId: feature.id,
             featureKind: feature.kind,
             referenceKind: "selector",
+            ...selectorAnchorDiagnostic(selector),
           }
         );
       }
@@ -406,6 +407,12 @@ function selectorDependencies(
         anchored = true;
         continue;
       }
+      const stableSelectionDep = resolveStableSelectionDependency(name, byId);
+      if (stableSelectionDep) {
+        deps.add(stableSelectionDep);
+        anchored = true;
+        continue;
+      }
       if (isImplicitSelectionReference(name)) {
         // Sketch planes hosted by raw selection ids (e.g. face:130) need explicit deps
         // because there is no deterministic producer edge to infer.
@@ -495,6 +502,73 @@ function parseNamedSelectorReferences(value: string): string[] {
 
 function isImplicitSelectionReference(value: string): boolean {
   return /^(edge|face|solid|surface):/i.test(value.trim());
+}
+
+function resolveStableSelectionDependency(
+  value: string,
+  byId: Map<ID, IntentFeature>
+): ID | null {
+  const parsed = parseStableSelectionReference(value);
+  if (!parsed) return null;
+  const direct = byId.get(parsed.createdByToken);
+  if (direct) return direct.id;
+
+  const normalizedTarget = normalizeSelectionReferenceToken(parsed.createdByToken);
+  for (const [featureId] of byId) {
+    if (normalizeSelectionReferenceToken(featureId) === normalizedTarget) {
+      return featureId;
+    }
+  }
+  return null;
+}
+
+function parseStableSelectionReference(
+  value: string
+): { kind: string; ownerToken: string; createdByToken: string } | null {
+  const normalized = value.trim();
+  const match = normalized.match(/^(edge|face|solid|surface):(.+)$/i);
+  if (!match) return null;
+  const body = match[2] ?? "";
+  const split = body.indexOf("~");
+  if (split <= 0) return null;
+  const ownerToken = body.slice(0, split);
+  const remainder = body.slice(split + 1);
+  const hashMarker = remainder.indexOf(".h");
+  if (hashMarker <= 0) return null;
+  const createdByToken = remainder.slice(0, hashMarker);
+  if (!ownerToken || !createdByToken) return null;
+  return {
+    kind: (match[1] ?? "").toLowerCase(),
+    ownerToken,
+    createdByToken,
+  };
+}
+
+function normalizeSelectionReferenceToken(value: string): string {
+  return value
+    .trim()
+    .replace(/[^A-Za-z0-9_-]+/g, ".")
+    .replace(/\.+/g, ".")
+    .replace(/^\.|\.$/g, "");
+}
+
+function selectorAnchorDiagnostic(selector: Selector): Record<string, unknown> {
+  if (selector.kind !== "selector.named") return {};
+  const references = parseNamedSelectorReferences(selector.name);
+  if (references.length !== 1) return {};
+  const [referenceId] = references;
+  if (!referenceId || !isLegacyTransientSelectionReference(referenceId)) {
+    return {};
+  }
+  return {
+    referenceId,
+    migrationHint:
+      "Use a stable selection id emitted in build results, add explicit deps, or prefer a semantic selector",
+  };
+}
+
+function isLegacyTransientSelectionReference(value: string): boolean {
+  return /^(edge|face|solid|surface):\d+$/i.test(value.trim());
 }
 
 function resolveFeaturePlaneNamedReference(

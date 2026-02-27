@@ -4741,8 +4741,13 @@ export class OcctBackend implements Backend {
         ? meta.ownerKey.trim()
         : "unowned";
     const ownerToken = this.normalizeSelectionToken(ownerKey);
+    const createdBy =
+      typeof meta.createdBy === "string" && meta.createdBy.trim().length > 0
+        ? meta.createdBy.trim()
+        : "unknown";
+    const createdByToken = this.normalizeSelectionToken(createdBy);
     const semanticHash = hashValue(this.selectionSemanticFingerprint(kind, meta));
-    return `${kind}:${ownerToken}.${semanticHash}`;
+    return `${kind}:${ownerToken}~${createdByToken}.${semanticHash}`;
   }
 
   private selectionSemanticFingerprint(

@@ -304,6 +304,9 @@ Diagnostics expectations for broken references:
 - named datum ids via `selector.named("<datum-id>")` (runtime maps to `datum:<datum-id>`).
 - durable face ids emitted by build results. Treat legacy traversal ids
   (`face:<number>`) as debugging-only and non-persistent.
+- stable selection ids include an owner token plus a producer token
+  (`face:<owner>~<feature>.<hash>`), which allows clients and the compiler to
+  preserve references without relying on traversal order.
 
 ## Modifier Named Outputs
 `feature.hole`, `feature.fillet`, and `feature.chamfer` accept optional `result` names.

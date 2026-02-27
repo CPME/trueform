@@ -161,22 +161,23 @@ const tests = [
 
       const stableFaceId = String(topFace?.id ?? "");
       assert.ok(
-        stableFaceId.startsWith("face:body.main."),
+        stableFaceId.startsWith("face:body.main~base."),
         `expected durable face id, got ${stableFaceId}`
       );
 
       const editedPart = dsl.part("extrude-stable-face-edited", [
-        dsl.extrude("base", dsl.profileRect(28, 16), 24, "body:main"),
         dsl.sketch2d(
           "top-sketch",
           [{ name: "profile:cut", profile: dsl.profileRect(4, 4) }],
-          {
-            plane: dsl.selectorNamed(stableFaceId),
-            deps: ["base"],
-          }
+          { plane: dsl.selectorNamed(stableFaceId) }
         ),
+        dsl.extrude("base", dsl.profileRect(28, 16), 24, "body:main"),
       ]);
       const editedBuild = buildPart(editedPart, backend);
+      assert.ok(
+        editedBuild.order.indexOf("base") < editedBuild.order.indexOf("top-sketch"),
+        "expected stable face id to anchor graph ordering without explicit deps"
+      );
       const sketchProfile = editedBuild.final.outputs.get("profile:cut");
       assert.ok(sketchProfile, "expected downstream sketch to resolve durable face id");
 

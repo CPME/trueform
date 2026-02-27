@@ -562,7 +562,9 @@ const tests = [
       assert.throws(
         () => compilePart(part),
         (err) =>
-          err instanceof CompileError && err.code === "selector_anchor_missing"
+          err instanceof CompileError &&
+          err.code === "selector_anchor_missing" &&
+          err.details?.["referenceId"] === "face:130"
       );
     },
   },
@@ -574,6 +576,24 @@ const tests = [
           "a-sketch",
           [{ name: "profile:cut", profile: dsl.profileRect(4, 4) }],
           { plane: dsl.selectorNamed("face:130"), deps: ["z-extrude"] }
+        ),
+        dsl.extrude("z-extrude", dsl.profileRect(20, 20), 6, "body:main"),
+      ]);
+      const result = compilePart(part);
+      assert.ok(
+        result.featureOrder.indexOf("z-extrude") <
+          result.featureOrder.indexOf("a-sketch")
+      );
+    },
+  },
+  {
+    name: "graph: sketch plane selector using stable face id infers dependency",
+    fn: async () => {
+      const part = dsl.part("sketch-plane-stable-face-id", [
+        dsl.sketch2d(
+          "a-sketch",
+          [{ name: "profile:cut", profile: dsl.profileRect(4, 4) }],
+          { plane: dsl.selectorNamed("face:body.main~z-extrude.hseed") }
         ),
         dsl.extrude("z-extrude", dsl.profileRect(20, 20), 6, "body:main"),
       ]);

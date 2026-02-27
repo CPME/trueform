@@ -84,8 +84,8 @@ const tests = [
       const ctx = {
         selections: [
           {
-            id: "edge:body.main.hstable",
-            stableRef: "edge:body.main.hstable",
+            id: "edge:body.main~base.hstable",
+            stableRef: "edge:body.main~base.hstable",
             transientId: "edge:7",
             kind: "edge" as const,
             meta: { center: [0, 0, 0] },
@@ -94,7 +94,7 @@ const tests = [
         named: new Map(),
       };
       const resolved = resolveSelector(selector, ctx);
-      assert.equal(resolved.id, "edge:body.main.hstable");
+      assert.equal(resolved.id, "edge:body.main~base.hstable");
       assert.equal(resolved.transientId, "edge:7");
     },
   },
@@ -105,8 +105,8 @@ const tests = [
       const ctx = {
         selections: [
           {
-            id: "face:body.main.hseed",
-            stableRef: "face:body.main.hseed",
+            id: "face:body.main~base.hseed",
+            stableRef: "face:body.main~base.hseed",
             transientId: "face:1",
             kind: "face" as const,
             meta: { planar: true, area: 10, center: [0, 0, 0], centerZ: 0 },
