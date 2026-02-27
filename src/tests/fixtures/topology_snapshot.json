@@ -1,0 +1,84 @@
+{
+  "parts": {
+    "plate": {
+      "faces": 32,
+      "edges": 192,
+      "solids": 1
+    },
+    "asm-plate": {
+      "faces": 6,
+      "edges": 24,
+      "solids": 1
+    },
+    "asm-peg": {
+      "faces": 6,
+      "edges": 24,
+      "solids": 1
+    },
+    "block-basic": {
+      "faces": 6,
+      "edges": 24,
+      "solids": 1
+    },
+    "plate-hole": {
+      "faces": 7,
+      "edges": 30,
+      "solids": 1
+    },
+    "rounded-post": {
+      "faces": 5,
+      "edges": 14,
+      "solids": 1
+    },
+    "bossed-plate": {
+      "faces": 10,
+      "edges": 38,
+      "solids": 1
+    },
+    "l-bracket-cutout": {
+      "faces": 13,
+      "edges": 66,
+      "solids": 1
+    },
+    "stepped-pulley": {
+      "faces": 19,
+      "edges": 120,
+      "solids": 1
+    },
+    "bearing-housing": {
+      "faces": 7,
+      "edges": 16,
+      "solids": 1
+    },
+    "t-slot-carriage": {
+      "faces": 22,
+      "edges": 120,
+      "solids": 1
+    },
+    "hinge-knuckle": {
+      "faces": 6,
+      "edges": 24,
+      "solids": 1
+    },
+    "valve-body": {
+      "faces": 18,
+      "edges": 84,
+      "solids": 1
+    },
+    "impeller-hub": {
+      "faces": 28,
+      "edges": 144,
+      "solids": 1
+    },
+    "hex-tube-sweep": {
+      "faces": 14,
+      "edges": 72,
+      "solids": 1
+    },
+    "pipe-asm": {
+      "faces": 67,
+      "edges": 294,
+      "solids": 1
+    }
+  }
+}

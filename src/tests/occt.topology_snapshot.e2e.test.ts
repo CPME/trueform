@@ -16,14 +16,14 @@ const tests = [
   {
     name: "occt e2e: topology snapshot matches export",
     fn: async () => {
-      const snapshotPath = path.resolve("tools/viewer/assets/topology.json");
+      const snapshotPath = path.resolve("src/tests/fixtures/topology_snapshot.json");
       let snapshotRaw = "";
       try {
         snapshotRaw = await readFile(snapshotPath, "utf8");
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         throw new Error(
-          `Missing topology snapshot at ${snapshotPath} (${msg}). Run npm run viewer:export.`
+          `Missing topology snapshot at ${snapshotPath} (${msg}).`
         );
       }
       const snapshot = JSON.parse(snapshotRaw);
