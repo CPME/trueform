@@ -17,6 +17,7 @@ Purpose: define the source of truth for each topic to prevent drift.
 - Runtime execution milestone plan: `specs/webapp-runtime-two-milestones.md`
 - Pre-feature execution board (runtime/platform before feature dev): `specs/pre-feature-sprint-board.md`
 - Roadmap ideas (non-MVP): `specs/geometric-abstractions.md`
+- Sketch constraint solver proposal: `specs/sketch-constraint-solver-outline.md`
 - Geometric parity target matrix: `specs/geometric-parity-matrix.md`
 - Geometric benchmark corpus + scoring workflow: `specs/geometric-benchmark-corpus.md`
 - Geometric parity implementation tracker: `specs/geometric-parity-plan.md`
