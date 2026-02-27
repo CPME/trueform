@@ -10,6 +10,8 @@ import { CompileError } from "./errors.js";
 
 export type Selection = {
   id: ID;
+  transientId?: ID;
+  stableRef?: ID;
   kind: "face" | "edge" | "solid" | "surface";
   meta: Record<string, unknown>;
 };
@@ -70,7 +72,8 @@ export function resolveSelectorSet(
 
 function resolveNamedSet(selector: NamedOutput, ctx: ResolutionContext): Selection[] {
   const direct = resolveNamedSingle(selector.name, ctx);
-  if (direct) return [direct];
+  if (direct.selection) return [direct.selection];
+  if (direct.error) throw direct.error;
 
   const tokens = parseNamedTargetList(selector.name);
   if (tokens.length > 1) {
@@ -78,12 +81,13 @@ function resolveNamedSet(selector: NamedOutput, ctx: ResolutionContext): Selecti
     const seen = new Set<string>();
     for (const token of tokens) {
       const hit = resolveNamedSingle(token, ctx);
-      if (!hit) {
+      if (!hit.selection) {
+        if (hit.error) throw hit.error;
         throw new CompileError("selector_named_missing", `Missing named output ${token}`);
       }
-      if (seen.has(hit.id)) continue;
-      seen.add(hit.id);
-      resolved.push(hit);
+      if (seen.has(hit.selection.id)) continue;
+      seen.add(hit.selection.id);
+      resolved.push(hit.selection);
     }
     if (resolved.length > 0) return resolved;
   }
@@ -91,11 +95,25 @@ function resolveNamedSet(selector: NamedOutput, ctx: ResolutionContext): Selecti
   throw new CompileError("selector_named_missing", `Missing named output ${selector.name}`);
 }
 
-function resolveNamedSingle(name: string, ctx: ResolutionContext): Selection | null {
-  const hit = ctx.named.get(name);
-  if (hit) return hit;
-  const selectionHit = ctx.selections.find((selection) => selection.id === name);
-  return selectionHit ?? null;
+function resolveNamedSingle(
+  name: string,
+  ctx: ResolutionContext
+): { selection: Selection | null; error?: CompileError } {
+  const normalized = name.trim();
+  const hit = ctx.named.get(normalized);
+  if (hit) return { selection: hit };
+
+  const selectionHit = ctx.selections.find((selection) => {
+    if (selection.id === normalized) return true;
+    if (selection.stableRef === normalized) return true;
+    if (selection.transientId === normalized) return true;
+    return false;
+  });
+  if (selectionHit) return { selection: selectionHit };
+
+  const staleError = staleTransientSelectorError(normalized, ctx);
+  if (staleError) return { selection: null, error: staleError };
+  return { selection: null };
 }
 
 function parseNamedTargetList(name: string): string[] {
@@ -109,6 +127,38 @@ function parseNamedTargetList(name: string): string[] {
     entries.push(token);
   }
   return entries;
+}
+
+function staleTransientSelectorError(
+  name: string,
+  ctx: ResolutionContext
+): CompileError | null {
+  const match = name.match(/^(face|edge|solid|surface):(\d+)$/i);
+  if (!match) return null;
+
+  const selectionKind = match[1]?.toLowerCase() as Selection["kind"] | undefined;
+  if (!selectionKind) return null;
+  const surviving = ctx.selections.filter((selection) => selection.kind === selectionKind);
+  if (surviving.length === 0) {
+    return new CompileError(
+      "selector_target_deleted",
+      `Transient selector ${name} no longer exists after rebuild`,
+      {
+        referenceId: name,
+        referenceKind: selectionKind,
+        migrationHint: "Re-select the target or persist a stable selection id",
+      }
+    );
+  }
+  return new CompileError(
+    "selector_transient_stale",
+    `Transient selector ${name} is stale after topology changed`,
+    {
+      referenceId: name,
+      referenceKind: selectionKind,
+      migrationHint: "Persist the stable selection id emitted in build results or use a semantic selector",
+    }
+  );
 }
 
 function predicateMatches(predicate: Predicate, selection: Selection): boolean {

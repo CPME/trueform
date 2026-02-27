@@ -290,6 +290,10 @@ Diagnostics expectations for broken references:
   `error.details.featureId` and `error.details.referenceId`.
 - missing named outputs should report `code: "selector_named_missing"` with
   `error.details.featureId` and `error.details.referenceId`.
+- stale legacy traversal ids such as `face:42` / `edge:7` should report
+  `code: "selector_transient_stale"` (or `selector_target_deleted` when the
+  referenced topology class no longer exists) with a migration hint toward
+  stable selection ids or semantic selectors.
 
 ## Plane Selector Contract (`feature.plane.plane`)
 `feature.plane.plane` accepts:
@@ -298,6 +302,8 @@ Diagnostics expectations for broken references:
 - selector payloads (`selector.face`, `selector.named`) that resolve to planar faces.
 - canonical named aliases via `selector.named`: `Top`, `Bottom`, `Front`, `Back`, `Right`, `Left`.
 - named datum ids via `selector.named("<datum-id>")` (runtime maps to `datum:<datum-id>`).
+- durable face ids emitted by build results. Treat legacy traversal ids
+  (`face:<number>`) as debugging-only and non-persistent.
 
 ## Modifier Named Outputs
 `feature.hole`, `feature.fillet`, and `feature.chamfer` accept optional `result` names.

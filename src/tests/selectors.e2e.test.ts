@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { dsl } from "../dsl.js";
+import { CompileError } from "../errors.js";
 import { resolveSelector, resolveSelectorSet } from "../selectors.js";
 import { runTests } from "./occt_test_utils.js";
 
@@ -73,6 +74,52 @@ const tests = [
       assert.deepEqual(
         resolved.map((entry) => entry.id),
         ["edge:11", "edge:12"]
+      );
+    },
+  },
+  {
+    name: "selectors: legacy transient ids resolve to durable selections when present",
+    fn: async () => {
+      const selector = dsl.selectorNamed("edge:7");
+      const ctx = {
+        selections: [
+          {
+            id: "edge:body.main.hstable",
+            stableRef: "edge:body.main.hstable",
+            transientId: "edge:7",
+            kind: "edge" as const,
+            meta: { center: [0, 0, 0] },
+          },
+        ],
+        named: new Map(),
+      };
+      const resolved = resolveSelector(selector, ctx);
+      assert.equal(resolved.id, "edge:body.main.hstable");
+      assert.equal(resolved.transientId, "edge:7");
+    },
+  },
+  {
+    name: "selectors: stale transient ids raise targeted diagnostics",
+    fn: async () => {
+      const selector = dsl.selectorNamed("face:42");
+      const ctx = {
+        selections: [
+          {
+            id: "face:body.main.hseed",
+            stableRef: "face:body.main.hseed",
+            transientId: "face:1",
+            kind: "face" as const,
+            meta: { planar: true, area: 10, center: [0, 0, 0], centerZ: 0 },
+          },
+        ],
+        named: new Map(),
+      };
+      assert.throws(
+        () => resolveSelector(selector, ctx),
+        (err) =>
+          err instanceof CompileError &&
+          err.code === "selector_transient_stale" &&
+          err.details?.["referenceId"] === "face:42"
       );
     },
   },

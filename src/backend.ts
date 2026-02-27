@@ -23,6 +23,8 @@ export type KernelObject = {
 
 export type KernelSelection = {
   id: ID;
+  transientId?: ID;
+  stableRef?: ID;
   kind: "face" | "edge" | "solid" | "surface";
   meta: Record<string, unknown>;
 };

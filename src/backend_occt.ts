@@ -13,6 +13,7 @@ import {
 import { resolveSelectorSet } from "./selectors.js";
 import { BackendError } from "./errors.js";
 import { TF_STAGED_FEATURES } from "./feature_staging.js";
+import { hashValue } from "./hash.js";
 import { tryDynamicMethod } from "./occt/dynamic_call.js";
 import {
   executeEdgeModifier,
@@ -117,6 +118,16 @@ type FaceSurfaceClass =
 
 type FaceSurfaceMap = Map<number, Array<{ face: any; surface: FaceSurfaceClass }>>;
 
+type CollectedSubshape = {
+  shape: any;
+  meta: Record<string, unknown>;
+};
+
+type SelectionIdAssignment = {
+  id: string;
+  transientId: string;
+};
+
 type UnwrapPointProjector = (
   point: [number, number, number]
 ) => [number, number, number] | null;
@@ -198,7 +209,7 @@ export class OcctBackend implements Backend {
 
   execute(input: ExecuteInput): KernelResult {
     if (input.upstream.outputs.size === 0 && input.upstream.selections.length === 0) {
-      // Runtime service reuses a backend instance; reset ids per build so selection ids stay stable.
+      // Runtime service reuses a backend instance; transient debug ids stay scoped to a build.
       this.selectionSeq = 0;
     }
     const kind = (input.feature as { kind: string }).kind;
@@ -4565,10 +4576,7 @@ export class OcctBackend implements Backend {
     featureTags?: string[],
     opts?: { rootKind?: "solid" | "face" }
   ): KernelSelection[] {
-    const occt = this.occt as any;
     const selections: KernelSelection[] = [];
-    const canonicalFaceIds = new Map<number, Array<{ shape: any; id: string }>>();
-    const canonicalEdgeIds = new Map<number, Array<{ shape: any; id: string }>>();
     const tags =
       Array.isArray(featureTags) && featureTags.length > 0
         ? featureTags.slice()
@@ -4576,74 +4584,239 @@ export class OcctBackend implements Backend {
 
     const rootKind = opts?.rootKind ?? "solid";
     if (rootKind === "solid") {
+      const meta: Record<string, unknown> = {
+        shape,
+        owner: shape,
+        ownerKey,
+        createdBy: featureId,
+        role: "body",
+        center: this.shapeCenter(shape),
+        featureTags: tags,
+      };
+      const assignment = this.assignStableSelectionIds("solid", [{ shape, meta }])[0];
+      if (assignment) {
+        selections.push({
+          id: assignment.id,
+          stableRef: assignment.id,
+          transientId: assignment.transientId,
+          kind: "solid",
+          meta: {
+            ...meta,
+            stableRef: assignment.id,
+            transientId: assignment.transientId,
+          },
+        });
+      }
+    }
+
+    const faceEntries = this.collectUniqueSubshapes(
+      shape,
+      (this.occt as any).TopAbs_ShapeEnum.TopAbs_FACE,
+      (face) => this.faceMetadata(face, shape, featureId, ownerKey, tags)
+    );
+    const faceAssignments = this.assignStableSelectionIds("face", faceEntries);
+    for (let i = 0; i < faceEntries.length; i += 1) {
+      const entry = faceEntries[i];
+      const assignment = faceAssignments[i];
+      if (!entry || !assignment) continue;
       selections.push({
-        id: this.nextSelectionId("solid"),
-        kind: "solid",
+        id: assignment.id,
+        stableRef: assignment.id,
+        transientId: assignment.transientId,
+        kind: "face",
         meta: {
-          shape,
-          owner: shape,
-          ownerKey,
-          createdBy: featureId,
-          role: "body",
-          center: this.shapeCenter(shape),
-          featureTags: tags,
+          ...entry.meta,
+          stableRef: assignment.id,
+          transientId: assignment.transientId,
         },
       });
     }
 
-    const faceExplorer = new occt.TopExp_Explorer_1();
-    faceExplorer.Init(
+    const edgeEntries = this.collectUniqueSubshapes(
       shape,
-      occt.TopAbs_ShapeEnum.TopAbs_FACE,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+      (this.occt as any).TopAbs_ShapeEnum.TopAbs_EDGE,
+      (edge) => this.edgeMetadata(edge, shape, featureId, ownerKey, tags)
     );
-    for (; faceExplorer.More(); faceExplorer.Next()) {
-      const face = faceExplorer.Current();
-      const id = this.canonicalSelectionId("face", face, canonicalFaceIds);
+    const edgeAssignments = this.assignStableSelectionIds("edge", edgeEntries);
+    for (let i = 0; i < edgeEntries.length; i += 1) {
+      const entry = edgeEntries[i];
+      const assignment = edgeAssignments[i];
+      if (!entry || !assignment) continue;
       selections.push({
-        id,
-        kind: "face",
-        meta: this.faceMetadata(face, shape, featureId, ownerKey, tags),
-      });
-    }
-
-    const edgeExplorer = new occt.TopExp_Explorer_1();
-    edgeExplorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_EDGE,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    for (; edgeExplorer.More(); edgeExplorer.Next()) {
-      const edge = edgeExplorer.Current();
-      const id = this.canonicalSelectionId("edge", edge, canonicalEdgeIds);
-      selections.push({
-        id,
+        id: assignment.id,
+        stableRef: assignment.id,
+        transientId: assignment.transientId,
         kind: "edge",
-        meta: this.edgeMetadata(edge, shape, featureId, ownerKey, tags),
+        meta: {
+          ...entry.meta,
+          stableRef: assignment.id,
+          transientId: assignment.transientId,
+        },
       });
     }
 
     return selections;
   }
 
-  private canonicalSelectionId(
-    prefix: string,
+  private collectUniqueSubshapes(
     shape: any,
-    canonical: Map<number, Array<{ shape: any; id: string }>>
+    shapeKind: any,
+    metaFactory: (subshape: any) => Record<string, unknown>
+  ): CollectedSubshape[] {
+    const occt = this.occt as any;
+    const collected: CollectedSubshape[] = [];
+    const seen = new Map<number, any[]>();
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(shape, shapeKind, occt.TopAbs_ShapeEnum.TopAbs_SHAPE);
+    for (; explorer.More(); explorer.Next()) {
+      const current = explorer.Current();
+      const hash = this.shapeHash(current);
+      const bucket = seen.get(hash);
+      if (bucket && bucket.some((candidate) => this.shapesSame(candidate, current))) {
+        continue;
+      }
+      if (bucket) bucket.push(current);
+      else seen.set(hash, [current]);
+      collected.push({
+        shape: current,
+        meta: metaFactory(current),
+      });
+    }
+    return collected;
+  }
+
+  private assignStableSelectionIds(
+    kind: KernelSelection["kind"],
+    entries: CollectedSubshape[]
+  ): SelectionIdAssignment[] {
+    type DecoratedEntry = {
+      index: number;
+      baseId: string;
+      semanticHash: string;
+      tieHash: string;
+      transientId: string;
+    };
+
+    const decorated: DecoratedEntry[] = entries.map((entry, index) => ({
+      index,
+      baseId: this.buildStableSelectionBaseId(kind, entry.meta),
+      semanticHash: hashValue(this.selectionSemanticFingerprint(kind, entry.meta)),
+      tieHash: hashValue(this.selectionTieBreakerFingerprint(kind, entry.meta)),
+      transientId: this.nextSelectionId(kind),
+    }));
+
+    const groups = new Map<string, DecoratedEntry[]>();
+    for (const entry of decorated) {
+      const bucket = groups.get(entry.semanticHash);
+      if (bucket) bucket.push(entry);
+      else groups.set(entry.semanticHash, [entry]);
+    }
+
+    const assignments = new Array<SelectionIdAssignment>(entries.length);
+    for (const bucket of groups.values()) {
+      bucket.sort((a, b) => {
+        const byTie = a.tieHash.localeCompare(b.tieHash);
+        if (byTie !== 0) return byTie;
+        return a.index - b.index;
+      });
+      for (let i = 0; i < bucket.length; i += 1) {
+        const entry = bucket[i];
+        if (!entry) continue;
+        assignments[entry.index] = {
+          id: bucket.length === 1 ? entry.baseId : `${entry.baseId}.${i + 1}`,
+          transientId: entry.transientId,
+        };
+      }
+    }
+
+    return assignments;
+  }
+
+  private buildStableSelectionBaseId(
+    kind: KernelSelection["kind"],
+    meta: Record<string, unknown>
   ): string {
-    const hash = this.shapeHash(shape);
-    const bucket = canonical.get(hash);
-    if (bucket) {
-      const match = bucket.find((entry) => this.shapesSame(entry.shape, shape));
-      if (match) return match.id;
+    const ownerKey =
+      typeof meta.ownerKey === "string" && meta.ownerKey.trim().length > 0
+        ? meta.ownerKey.trim()
+        : "unowned";
+    const ownerToken = this.normalizeSelectionToken(ownerKey);
+    const semanticHash = hashValue(this.selectionSemanticFingerprint(kind, meta));
+    return `${kind}:${ownerToken}.${semanticHash}`;
+  }
+
+  private selectionSemanticFingerprint(
+    kind: KernelSelection["kind"],
+    meta: Record<string, unknown>
+  ): Record<string, unknown> {
+    const featureTags = Array.isArray(meta.featureTags)
+      ? meta.featureTags
+          .filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+          .slice()
+          .sort()
+      : [];
+    return {
+      version: 1,
+      kind,
+      ownerKey: this.stringFingerprint(meta.ownerKey),
+      createdBy: this.stringFingerprint(meta.createdBy),
+      role: this.stringFingerprint(meta.role),
+      planar: typeof meta.planar === "boolean" ? meta.planar : undefined,
+      normal: this.stringFingerprint(meta.normal),
+      surfaceType: this.stringFingerprint(meta.surfaceType),
+      curveType: this.stringFingerprint(meta.curveType),
+      featureTags,
+    };
+  }
+
+  private selectionTieBreakerFingerprint(
+    kind: KernelSelection["kind"],
+    meta: Record<string, unknown>
+  ): Record<string, unknown> {
+    return {
+      version: 1,
+      kind,
+      center: this.vectorFingerprint(meta.center),
+      centerZ: this.numberFingerprint(meta.centerZ),
+      area: this.numberFingerprint(meta.area),
+      length: this.numberFingerprint(meta.length),
+      radius: this.numberFingerprint(meta.radius),
+      normalVec: this.vectorFingerprint(meta.normalVec),
+      planeOrigin: this.vectorFingerprint(meta.planeOrigin),
+      planeNormal: this.vectorFingerprint(meta.planeNormal),
+      planeXDir: this.vectorFingerprint(meta.planeXDir),
+      planeYDir: this.vectorFingerprint(meta.planeYDir),
+    };
+  }
+
+  private normalizeSelectionToken(value: string): string {
+    return value
+      .trim()
+      .replace(/[^A-Za-z0-9_-]+/g, ".")
+      .replace(/\.+/g, ".")
+      .replace(/^\.|\.$/g, "")
+      .slice(0, 96);
+  }
+
+  private stringFingerprint(value: unknown): string | undefined {
+    if (typeof value !== "string") return undefined;
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  private numberFingerprint(value: unknown): number | undefined {
+    if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+    return Number(value.toFixed(6));
+  }
+
+  private vectorFingerprint(value: unknown): [number, number, number] | undefined {
+    if (!Array.isArray(value) || value.length !== 3) return undefined;
+    const out: number[] = [];
+    for (const entry of value) {
+      if (typeof entry !== "number" || !Number.isFinite(entry)) return undefined;
+      out.push(Number(entry.toFixed(6)));
     }
-    const id = this.nextSelectionId(prefix);
-    if (bucket) {
-      bucket.push({ shape, id });
-    } else {
-      canonical.set(hash, [{ shape, id }]);
-    }
-    return id;
+    return out as [number, number, number];
   }
 
   private nextSelectionId(prefix: string): string {

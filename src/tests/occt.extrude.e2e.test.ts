@@ -139,6 +139,62 @@ const tests = [
     },
   },
   {
+    name: "occt e2e: durable face ids survive upstream dimension edits",
+    fn: async () => {
+      const { backend } = await getBackendContext();
+      const seedPart = dsl.part("extrude-stable-face-seed", [
+        dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:main"),
+      ]);
+      const seedBuild = buildPart(seedPart, backend);
+      const topFace = seedBuild.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "base" &&
+          selection.meta["normal"] === "+Z"
+      );
+      assert.ok(topFace, "missing top face selection");
+      assert.equal(
+        typeof topFace?.transientId,
+        "string",
+        "expected transientId metadata for legacy diagnostics"
+      );
+
+      const stableFaceId = String(topFace?.id ?? "");
+      assert.ok(
+        stableFaceId.startsWith("face:body.main."),
+        `expected durable face id, got ${stableFaceId}`
+      );
+
+      const editedPart = dsl.part("extrude-stable-face-edited", [
+        dsl.extrude("base", dsl.profileRect(28, 16), 24, "body:main"),
+        dsl.sketch2d(
+          "top-sketch",
+          [{ name: "profile:cut", profile: dsl.profileRect(4, 4) }],
+          {
+            plane: dsl.selectorNamed(stableFaceId),
+            deps: ["base"],
+          }
+        ),
+      ]);
+      const editedBuild = buildPart(editedPart, backend);
+      const sketchProfile = editedBuild.final.outputs.get("profile:cut");
+      assert.ok(sketchProfile, "expected downstream sketch to resolve durable face id");
+
+      const editedTopFace = editedBuild.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "base" &&
+          selection.meta["normal"] === "+Z"
+      );
+      assert.ok(editedTopFace, "missing edited top face selection");
+      assert.equal(
+        editedTopFace?.id,
+        stableFaceId,
+        "expected durable face id to survive upstream dimension edits"
+      );
+    },
+  },
+  {
     name: "occt e2e: extrude along sketch normal",
     fn: async () => {
       const { occt, backend } = await getBackendContext();
