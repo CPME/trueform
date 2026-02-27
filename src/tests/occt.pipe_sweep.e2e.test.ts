@@ -3,6 +3,7 @@ import { dsl } from "../dsl.js";
 import { buildPart } from "../executor.js";
 import {
   assertPositiveVolume,
+  assertValidShape,
   countSolids,
   countFaces,
   getBackendContext,
@@ -27,6 +28,7 @@ const tests = [
 
       const shape = body.meta["shape"] as any;
       assert.ok(shape, "missing shape metadata");
+      assertValidShape(occt, shape, "pipe sweep solid");
       assertPositiveVolume(occt, shape, "pipe sweep solid");
       assert.equal(countSolids(occt, shape), 1, "expected exactly one solid output");
 

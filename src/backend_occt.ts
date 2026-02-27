@@ -1274,8 +1274,31 @@ export class OcctBackend implements Backend {
 
     let solid: any;
     try {
-      const face = this.makeRingFace(plane.origin, plane.normal, outerRadius, innerRadius);
-      solid = this.makePipeSolid(spine, face, plane, { makeSolid: true });
+      const outerFace = this.makeRingFace(
+        plane.origin,
+        plane.normal,
+        outerRadius,
+        0
+      );
+      const outerShape = this.makePipeSolid(spine, outerFace, plane, {
+        makeSolid: true,
+      });
+      if (innerRadius > 0) {
+        const innerFace = this.makeRingFace(
+          plane.origin,
+          plane.normal,
+          innerRadius,
+          0
+        );
+        const innerShape = this.makePipeSolid(spine, innerFace, plane, {
+          makeSolid: true,
+        });
+        const cut = this.makeBoolean("cut", outerShape, innerShape);
+        solid = this.readShape(cut);
+        solid = this.splitByTools(solid, [outerShape, innerShape]);
+      } else {
+        solid = outerShape;
+      }
     } catch {
       throw new Error(
         "OCCT backend: pipe sweep failed to create solid; increase bend radius or reduce diameter"
@@ -1288,6 +1311,11 @@ export class OcctBackend implements Backend {
       );
     }
     solid = this.normalizeSolid(solid);
+    if (!this.isValidShape(solid)) {
+      throw new Error(
+        "OCCT backend: pipe sweep failed to create solid; increase bend radius or reduce diameter"
+      );
+    }
 
     const outputs = new Map([
       [
