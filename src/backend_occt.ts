@@ -1649,7 +1649,10 @@ export class OcctBackend implements Backend {
       feature.id,
       feature.result,
       feature.tags,
-      { rootKind: outputKind === "solid" ? "solid" : "face" }
+      {
+        rootKind: outputKind === "solid" ? "solid" : "face",
+        ledgerPlan: this.makeFaceMutationSelectionLedgerPlan(upstream, ownerShape, []),
+      }
     );
     return { outputs, selections };
   }
@@ -1760,7 +1763,17 @@ export class OcctBackend implements Backend {
       feature.id,
       feature.result,
       feature.tags,
-      { rootKind: outputKind === "solid" ? "solid" : "face" }
+      {
+        rootKind: outputKind === "solid" ? "solid" : "face",
+        ledgerPlan: this.makeFaceMutationSelectionLedgerPlan(
+          upstream,
+          ownerShape,
+          replacements.map((replacement, index) => ({
+            from: targets[Math.min(index, targets.length - 1)] as KernelSelection,
+            to: replacement.to,
+          }))
+        ),
+      }
     );
     return { outputs, selections };
   }
@@ -1898,7 +1911,17 @@ export class OcctBackend implements Backend {
       feature.id,
       feature.result,
       feature.tags,
-      { rootKind: outputKind === "solid" ? "solid" : "face" }
+      {
+        rootKind: outputKind === "solid" ? "solid" : "face",
+        ledgerPlan: this.makeFaceMutationSelectionLedgerPlan(
+          upstream,
+          ownerShape,
+          movedFaces.map((movedFace, index) => ({
+            from: targets[Math.min(index, targets.length - 1)] as KernelSelection,
+            to: movedFace,
+          }))
+        ),
+      }
     );
     return { outputs, selections };
   }
@@ -5023,6 +5046,179 @@ export class OcctBackend implements Backend {
           wireSegmentSlots: opts.wireSegmentSlots,
         }),
     };
+  }
+
+  private makeFaceMutationSelectionLedgerPlan(
+    upstream: KernelResult,
+    ownerShape: any,
+    replacements: Array<{ from: KernelSelection; to: any }>
+  ): SelectionLedgerPlan {
+    const ownerFaces = upstream.selections.filter(
+      (selection): selection is KernelSelection =>
+        selection.kind === "face" &&
+        !!selection.meta["owner"] &&
+        this.shapesSame(selection.meta["owner"], ownerShape)
+    );
+    const replacementSources = new Set(
+      replacements
+        .map((entry) => entry.from?.id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0)
+    );
+    return {
+      faces: (entries) =>
+        this.annotateFaceMutationSelections(entries, ownerFaces, replacements, replacementSources),
+    };
+  }
+
+  private annotateFaceMutationSelections(
+    entries: CollectedSubshape[],
+    ownerFaces: KernelSelection[],
+    replacements: Array<{ from: KernelSelection; to: any }>,
+    replacementSources: Set<string>
+  ): void {
+    const unmatched = entries.slice();
+
+    const applyHint = (entry: CollectedSubshape, sourceSelection: KernelSelection): void => {
+      const hint: SelectionLedgerHint = {
+        lineage: { kind: "modified", from: sourceSelection.id },
+      };
+      const slot = this.selectionSlotForLineage(sourceSelection);
+      if (slot) hint.slot = slot;
+      const role = this.selectionRoleForLineage(sourceSelection);
+      if (role) hint.role = role;
+      this.applySelectionLedgerHint(entry, hint);
+    };
+
+    const applyLineage = (
+      targetShape: any,
+      sourceSelection: KernelSelection,
+      allowFallback = false
+    ): boolean => {
+      for (let i = 0; i < unmatched.length; i += 1) {
+        const entry = unmatched[i];
+        if (!entry || !this.shapesSame(entry.shape, targetShape)) continue;
+        applyHint(entry, sourceSelection);
+        unmatched.splice(i, 1);
+        return true;
+      }
+      if (!allowFallback) return false;
+      const fallbackIndex = this.bestFaceMutationFallbackIndex(unmatched, sourceSelection);
+      if (fallbackIndex < 0) return false;
+      const fallbackEntry = unmatched[fallbackIndex];
+      if (!fallbackEntry) return false;
+      applyHint(fallbackEntry, sourceSelection);
+      unmatched.splice(fallbackIndex, 1);
+      return true;
+    };
+
+    for (const replacement of replacements) {
+      if (!replacement?.from || !replacement.to) continue;
+      applyLineage(replacement.to, replacement.from, true);
+    }
+
+    for (const sourceSelection of ownerFaces) {
+      if (replacementSources.has(sourceSelection.id)) continue;
+      const sourceShape = sourceSelection.meta["shape"];
+      if (!sourceShape) continue;
+      applyLineage(sourceShape, sourceSelection);
+    }
+  }
+
+  private bestFaceMutationFallbackIndex(
+    entries: CollectedSubshape[],
+    sourceSelection: KernelSelection
+  ): number {
+    if (entries.length === 0) return -1;
+    const sourceMeta = sourceSelection.meta;
+    const sourceNormal =
+      typeof sourceMeta["normal"] === "string" ? (sourceMeta["normal"] as string) : null;
+    const sourceSurfaceType =
+      typeof sourceMeta["surfaceType"] === "string"
+        ? (sourceMeta["surfaceType"] as string)
+        : null;
+    const sourcePlanar =
+      typeof sourceMeta["planar"] === "boolean" ? (sourceMeta["planar"] as boolean) : null;
+    const sourceArea =
+      typeof sourceMeta["area"] === "number" ? (sourceMeta["area"] as number) : null;
+    const sourceCenter = this.vectorFingerprint(sourceMeta["center"]);
+
+    const candidates = entries
+      .map((entry, index) => {
+        if (
+          sourceNormal &&
+          typeof entry.meta["normal"] === "string" &&
+          entry.meta["normal"] !== sourceNormal
+        ) {
+          return null;
+        }
+        if (
+          sourceSurfaceType &&
+          typeof entry.meta["surfaceType"] === "string" &&
+          entry.meta["surfaceType"] !== sourceSurfaceType
+        ) {
+          return null;
+        }
+        if (
+          sourcePlanar !== null &&
+          typeof entry.meta["planar"] === "boolean" &&
+          entry.meta["planar"] !== sourcePlanar
+        ) {
+          return null;
+        }
+
+        const area =
+          typeof entry.meta["area"] === "number" ? (entry.meta["area"] as number) : null;
+        const center = this.vectorFingerprint(entry.meta["center"]);
+        const areaDelta =
+          sourceArea !== null && area !== null ? Math.abs(area - sourceArea) : Number.POSITIVE_INFINITY;
+        const centerDelta =
+          sourceCenter && center
+            ? Math.hypot(
+                sourceCenter[0] - center[0],
+                sourceCenter[1] - center[1],
+                sourceCenter[2] - center[2]
+              )
+            : Number.POSITIVE_INFINITY;
+        return { index, areaDelta, centerDelta };
+      })
+      .filter(
+        (
+          candidate
+        ): candidate is { index: number; areaDelta: number; centerDelta: number } =>
+          candidate !== null
+      );
+
+    if (candidates.length === 0) return -1;
+    candidates.sort((a, b) => {
+      const byArea = a.areaDelta - b.areaDelta;
+      if (Math.abs(byArea) > 1e-9) return byArea;
+      const byCenter = a.centerDelta - b.centerDelta;
+      if (Math.abs(byCenter) > 1e-9) return byCenter;
+      return a.index - b.index;
+    });
+    return candidates[0]?.index ?? -1;
+  }
+
+  private selectionSlotForLineage(selection: KernelSelection): string | undefined {
+    if (typeof selection.record?.slot === "string" && selection.record.slot.trim().length > 0) {
+      return selection.record.slot.trim();
+    }
+    const metaSlot = selection.meta["selectionSlot"];
+    if (typeof metaSlot === "string" && metaSlot.trim().length > 0) {
+      return metaSlot.trim();
+    }
+    return undefined;
+  }
+
+  private selectionRoleForLineage(selection: KernelSelection): string | undefined {
+    if (typeof selection.record?.role === "string" && selection.record.role.trim().length > 0) {
+      return selection.record.role.trim();
+    }
+    const metaRole = selection.meta["role"];
+    if (typeof metaRole === "string" && metaRole.trim().length > 0) {
+      return metaRole.trim();
+    }
+    return undefined;
   }
 
   private annotatePrismFaceSelections(
