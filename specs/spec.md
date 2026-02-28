@@ -108,7 +108,7 @@ Each feature is a node with:
 
 ---
 
-## Reference stability: selectors + datums (no persistent face IDs)
+## Reference stability: selectors + datums (no kernel face IDs)
 
 ### Datums
 
@@ -128,6 +128,10 @@ Selectors are:
 * deterministic
 * serializable
 * re-resolved each rebuild
+
+The runtime may emit durable selection IDs for concrete faces/edges, but those are
+**TrueForm-owned stable IDs** derived from semantic metadata. They are not raw
+kernel indices or traversal-order IDs.
 
 Features may emit **named selections** as selectors for downstream use.
 
