@@ -46,6 +46,15 @@ const tests = [
       assertValidShape(occt, shape, "revolve surface");
       assert.equal(countSolids(occt, shape), 0);
       assert.ok(countFaces(occt, shape) > 0, "expected surface to have faces");
+      const faceIds = result.final.selections
+        .filter(
+          (selection) =>
+            selection.kind === "face" &&
+            selection.meta["createdBy"] === "revolve-1"
+        )
+        .map((selection) => selection.id)
+        .sort();
+      assert.deepEqual(faceIds, ["face:surface.main~revolve-1.profile.line-1"]);
     },
   },
   {

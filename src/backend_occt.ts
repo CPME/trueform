@@ -792,7 +792,17 @@ export class OcctBackend implements Backend {
         feature.id,
         feature.result,
         feature.tags,
-        { rootKind: "face" }
+        {
+          rootKind: "face",
+          ledgerPlan:
+            profile.wire && profile.wireSegmentSlots
+              ? this.makeRevolveSelectionLedgerPlan(angleRad, {
+                  revol,
+                  wire: profile.wire,
+                  wireSegmentSlots: profile.wireSegmentSlots,
+                })
+              : undefined,
+        }
       );
       return { outputs, selections };
     }
@@ -815,7 +825,17 @@ export class OcctBackend implements Backend {
       solid,
       feature.id,
       feature.result,
-      feature.tags
+      feature.tags,
+      {
+        ledgerPlan:
+          profile.wire && profile.wireSegmentSlots
+            ? this.makeRevolveSelectionLedgerPlan(angleRad, {
+                revol,
+                wire: profile.wire,
+                wireSegmentSlots: profile.wireSegmentSlots,
+              })
+            : undefined,
+      }
     );
     return { outputs, selections };
   }
@@ -4987,6 +5007,24 @@ export class OcctBackend implements Backend {
     };
   }
 
+  private makeRevolveSelectionLedgerPlan(
+    angleRad: number,
+    opts: {
+      revol: any;
+      wire: any;
+      wireSegmentSlots: string[];
+    }
+  ): SelectionLedgerPlan {
+    return {
+      faces: (entries) =>
+        this.annotateRevolveFaceSelections(entries, angleRad, {
+          revol: opts.revol,
+          wire: opts.wire,
+          wireSegmentSlots: opts.wireSegmentSlots,
+        }),
+    };
+  }
+
   private annotatePrismFaceSelections(
     entries: CollectedSubshape[],
     axis: [number, number, number],
@@ -5086,18 +5124,47 @@ export class OcctBackend implements Backend {
     }
   }
 
+  private annotateRevolveFaceSelections(
+    entries: CollectedSubshape[],
+    _angleRad: number,
+    opts: {
+      revol: any;
+      wire: any;
+      wireSegmentSlots: string[];
+    }
+  ): void {
+    if (entries.length === 0) return;
+    this.applyGeneratedDerivedFaceSlots(
+      entries,
+      opts.revol,
+      opts.wire,
+      opts.wireSegmentSlots,
+      "profile"
+    );
+  }
+
   private applyPrismHistorySideSlots(
     sideEntries: CollectedSubshape[],
     prism: any,
     wire: any,
     wireSegmentSlots: string[]
   ): boolean {
+    return this.applyGeneratedDerivedFaceSlots(sideEntries, prism, wire, wireSegmentSlots, "side");
+  }
+
+  private applyGeneratedDerivedFaceSlots(
+    entries: CollectedSubshape[],
+    builder: any,
+    wire: any,
+    wireSegmentSlots: string[],
+    slotPrefix: string
+  ): boolean {
     const wireEdges = this.collectWireEdgesInOrder(wire);
     if (wireEdges.length === 0 || wireEdges.length !== wireSegmentSlots.length) {
       return false;
     }
 
-    const remaining = sideEntries.slice();
+    const remaining = entries.slice();
     let assigned = 0;
     for (let i = 0; i < wireEdges.length; i += 1) {
       const sourceEdge = wireEdges[i];
@@ -5105,7 +5172,10 @@ export class OcctBackend implements Backend {
       if (!sourceEdge || typeof segmentSlot !== "string" || segmentSlot.trim().length === 0) {
         continue;
       }
-      const generated = this.collectGeneratedShapes(prism, sourceEdge);
+      const generated = this.collectGeneratedShapes(builder, sourceEdge).flatMap((shape) => {
+        const faces = this.collectFacesFromShape(shape);
+        return faces.length > 0 ? faces : [shape];
+      });
       const face = generated.find((candidate) =>
         remaining.some((entry) => this.shapesSame(entry.shape, candidate))
       );
@@ -5115,8 +5185,8 @@ export class OcctBackend implements Backend {
       const [entry] = remaining.splice(index, 1);
       if (!entry) continue;
       this.applySelectionLedgerHint(entry, {
-        slot: `side.${segmentSlot.trim()}`,
-        role: "side",
+        slot: `${slotPrefix}.${segmentSlot.trim()}`,
+        role: slotPrefix,
         lineage: { kind: "created" },
       });
       assigned += 1;
@@ -5130,8 +5200,8 @@ export class OcctBackend implements Backend {
       const entry = remaining[i];
       if (!entry) continue;
       this.applySelectionLedgerHint(entry, {
-        slot: `side.fallback.${i + 1}`,
-        role: "side",
+        slot: `${slotPrefix}.fallback.${i + 1}`,
+        role: slotPrefix,
         lineage: { kind: "created" },
       });
     }
