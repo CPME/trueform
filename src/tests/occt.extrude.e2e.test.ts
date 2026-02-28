@@ -255,6 +255,27 @@ const tests = [
       const { min, max } = bounds(occt, shape);
       const extentX = max[0] - min[0];
       assert.ok(extentX > 6, `expected X extent ~8, got ${extentX}`);
+
+      const faceIds = new Set(
+        result.final.selections
+          .filter(
+            (selection) =>
+              selection.kind === "face" &&
+              selection.meta["createdBy"] === "normal-extrude"
+          )
+          .map((selection) => selection.id)
+      );
+      assert.deepEqual(
+        Array.from(faceIds).sort(),
+        [
+          "face:body.main~normal-extrude.bottom",
+          "face:body.main~normal-extrude.side.line-1",
+          "face:body.main~normal-extrude.side.line-2",
+          "face:body.main~normal-extrude.side.line-3",
+          "face:body.main~normal-extrude.side.line-4",
+          "face:body.main~normal-extrude.top",
+        ]
+      );
     },
   },
 ];

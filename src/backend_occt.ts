@@ -88,6 +88,7 @@ type ResolvedProfile = {
   wire?: any;
   wireClosed?: boolean;
   planeNormal?: [number, number, number];
+  wireSegmentSlots?: string[];
 };
 
 type PlaneBasis = {
@@ -102,6 +103,7 @@ type EdgeSegment = {
   start: [number, number, number];
   end: [number, number, number];
   closed?: boolean;
+  sourceSlot?: string;
 };
 
 type FaceSurfaceClass =
@@ -642,7 +644,9 @@ export class OcctBackend implements Backend {
       return { outputs, selections };
     }
 
-    const solid = this.buildSolidFromProfile(profile, vec);
+    const face = this.buildProfileFace(profile);
+    const prism = this.makePrism(face, this.makeVec(vec[0], vec[1], vec[2]));
+    const solid = this.readShape(prism);
     const outputs = new Map([
       [
         feature.result,
@@ -659,7 +663,11 @@ export class OcctBackend implements Backend {
       feature.result,
       feature.tags,
       {
-        ledgerPlan: this.makePrismSelectionLedgerPlan(axis),
+        ledgerPlan: this.makePrismSelectionLedgerPlan(axis, {
+          prism,
+          wire: profile.wire,
+          wireSegmentSlots: profile.wireSegmentSlots,
+        }),
       }
     );
     return { outputs, selections };
@@ -4565,6 +4573,11 @@ export class OcctBackend implements Backend {
           plane,
           allowOpen
         );
+        const wireSegmentSlots = this.segmentSlotsForLoop(
+          entry.profile.loop,
+          entityMap,
+          plane
+        );
         const holes = allowOpen
           ? []
           : (entry.profile.holes ?? []).map((hole) =>
@@ -4576,7 +4589,14 @@ export class OcctBackend implements Backend {
         outputs.set(entry.name, {
           id: `${feature.id}:${entry.name}`,
           kind: "profile",
-          meta: { profile: entry.profile, face, wire, wireClosed: closed, planeNormal: plane.normal },
+          meta: {
+            profile: entry.profile,
+            face,
+            wire,
+            wireClosed: closed,
+            planeNormal: plane.normal,
+            wireSegmentSlots,
+          },
         });
         continue;
       }
@@ -4946,20 +4966,35 @@ export class OcctBackend implements Backend {
   }
 
   private makePrismSelectionLedgerPlan(
-    axis: [number, number, number]
+    axis: [number, number, number],
+    opts?: {
+      prism?: any;
+      wire?: any;
+      wireSegmentSlots?: string[];
+    }
   ): SelectionLedgerPlan {
     const normalizedAxis = normalizeVector(axis);
     if (!isFiniteVec(normalizedAxis)) {
       return {};
     }
     return {
-      faces: (entries) => this.annotatePrismFaceSelections(entries, normalizedAxis),
+      faces: (entries) =>
+        this.annotatePrismFaceSelections(entries, normalizedAxis, {
+          prism: opts?.prism,
+          wire: opts?.wire,
+          wireSegmentSlots: opts?.wireSegmentSlots,
+        }),
     };
   }
 
   private annotatePrismFaceSelections(
     entries: CollectedSubshape[],
-    axis: [number, number, number]
+    axis: [number, number, number],
+    opts?: {
+      prism?: any;
+      wire?: any;
+      wireSegmentSlots?: string[];
+    }
   ): void {
     if (entries.length === 0) return;
     const centers = entries
@@ -5008,6 +5043,17 @@ export class OcctBackend implements Backend {
     }
 
     if (sideEntries.length === 0) return;
+    const historyApplied =
+      opts?.prism && opts?.wire && Array.isArray(opts.wireSegmentSlots)
+        ? this.applyPrismHistorySideSlots(
+            sideEntries,
+            opts.prism,
+            opts.wire,
+            opts.wireSegmentSlots
+          )
+        : false;
+    if (historyApplied) return;
+
     const basis = this.basisFromNormal(axis, undefined, centroid);
     const ranked = sideEntries
       .map((entry) => {
@@ -5037,6 +5083,117 @@ export class OcctBackend implements Backend {
         role: "side",
         lineage: { kind: "created" },
       });
+    }
+  }
+
+  private applyPrismHistorySideSlots(
+    sideEntries: CollectedSubshape[],
+    prism: any,
+    wire: any,
+    wireSegmentSlots: string[]
+  ): boolean {
+    const wireEdges = this.collectWireEdgesInOrder(wire);
+    if (wireEdges.length === 0 || wireEdges.length !== wireSegmentSlots.length) {
+      return false;
+    }
+
+    const remaining = sideEntries.slice();
+    let assigned = 0;
+    for (let i = 0; i < wireEdges.length; i += 1) {
+      const sourceEdge = wireEdges[i];
+      const segmentSlot = wireSegmentSlots[i];
+      if (!sourceEdge || typeof segmentSlot !== "string" || segmentSlot.trim().length === 0) {
+        continue;
+      }
+      const generated = this.collectGeneratedShapes(prism, sourceEdge);
+      const face = generated.find((candidate) =>
+        remaining.some((entry) => this.shapesSame(entry.shape, candidate))
+      );
+      if (!face) continue;
+      const index = remaining.findIndex((entry) => this.shapesSame(entry.shape, face));
+      if (index < 0) continue;
+      const [entry] = remaining.splice(index, 1);
+      if (!entry) continue;
+      this.applySelectionLedgerHint(entry, {
+        slot: `side.${segmentSlot.trim()}`,
+        role: "side",
+        lineage: { kind: "created" },
+      });
+      assigned += 1;
+    }
+
+    if (assigned === 0) {
+      return false;
+    }
+
+    for (let i = 0; i < remaining.length; i += 1) {
+      const entry = remaining[i];
+      if (!entry) continue;
+      this.applySelectionLedgerHint(entry, {
+        slot: `side.fallback.${i + 1}`,
+        role: "side",
+        lineage: { kind: "created" },
+      });
+    }
+    return true;
+  }
+
+  private collectWireEdgesInOrder(wire: any): any[] {
+    const occt = this.occt as any;
+    const edges: any[] = [];
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(this.toWire(wire), occt.TopAbs_ShapeEnum.TopAbs_EDGE, occt.TopAbs_ShapeEnum.TopAbs_SHAPE);
+    for (; explorer.More(); explorer.Next()) {
+      edges.push(explorer.Current());
+    }
+    return edges;
+  }
+
+  private collectGeneratedShapes(builder: any, source: any): any[] {
+    let generated: any;
+    try {
+      generated = this.callWithFallback(builder, ["Generated", "Generated_1"], [[source]]);
+    } catch {
+      return [];
+    }
+    if (!generated) return [];
+    if (typeof generated.Size === "function") {
+      return this.drainShapeList(generated);
+    }
+    return [generated];
+  }
+
+  private drainShapeList(list: any): any[] {
+    const shapes: any[] = [];
+    let size = this.readShapeListSize(list);
+    let guard = 0;
+    while (size > 0 && guard < 1024) {
+      let first: any;
+      try {
+        first = this.callWithFallback(list, ["First_1", "First_2", "First"], [[], []]);
+      } catch {
+        break;
+      }
+      if (first) {
+        shapes.push(first);
+      }
+      try {
+        this.callWithFallback(list, ["RemoveFirst", "RemoveFirst_1"], [[], []]);
+      } catch {
+        break;
+      }
+      size = this.readShapeListSize(list);
+      guard += 1;
+    }
+    return shapes;
+  }
+
+  private readShapeListSize(list: any): number {
+    try {
+      const size = this.callWithFallback(list, ["Size", "Size_1"], [[], []]);
+      return typeof size === "number" && Number.isFinite(size) ? size : 0;
+    } catch {
+      return 0;
     }
   }
 
@@ -6323,6 +6480,7 @@ export class OcctBackend implements Backend {
     const wire = output.meta["wire"];
     const wireClosed = output.meta["wireClosed"];
     const planeNormal = output.meta["planeNormal"];
+    const wireSegmentSlots = output.meta["wireSegmentSlots"];
     return {
       profile,
       face,
@@ -6332,16 +6490,12 @@ export class OcctBackend implements Backend {
         Array.isArray(planeNormal) && planeNormal.length === 3
           ? (planeNormal as [number, number, number])
           : undefined,
+      wireSegmentSlots: Array.isArray(wireSegmentSlots)
+        ? wireSegmentSlots.filter(
+            (entry): entry is string => typeof entry === "string" && entry.trim().length > 0
+          )
+        : undefined,
     };
-  }
-
-  private buildSolidFromProfile(
-    profile: ResolvedProfile,
-    vec: [number, number, number]
-  ) {
-    const face = this.buildProfileFace(profile);
-    const prism = this.makePrism(face, this.makeVec(vec[0], vec[1], vec[2]));
-    return this.readShape(prism);
   }
 
   private buildProfileFace(profile: ResolvedProfile) {
@@ -7422,18 +7576,46 @@ export class OcctBackend implements Backend {
     throw new Error("OCCT backend: wire builder missing Wire()");
   }
 
+  private segmentSlotsForLoop(
+    loop: ID[],
+    entityMap: Map<ID, SketchEntity>,
+    plane: PlaneBasis
+  ): string[] {
+    const slots: string[] = [];
+    for (const id of loop) {
+      const entity = entityMap.get(id);
+      if (!entity) {
+        throw new Error(`OCCT backend: sketch entity ${id} not found`);
+      }
+      for (const segment of this.sketchEntityToSegments(entity, plane)) {
+        slots.push(segment.sourceSlot ?? entity.id);
+      }
+    }
+    return slots;
+  }
+
+  private withEntitySegmentSlots(entityId: string, segments: EdgeSegment[]): EdgeSegment[] {
+    if (segments.length <= 1) {
+      return segments.map((segment) => ({ ...segment, sourceSlot: entityId }));
+    }
+    return segments.map((segment, index) => ({
+      ...segment,
+      sourceSlot: `${entityId}.${index + 1}`,
+    }));
+  }
+
   private sketchEntityToSegments(entity: SketchEntity, plane: PlaneBasis): EdgeSegment[] {
     switch (entity.kind) {
       case "sketch.line": {
         const start = this.point2To3(entity.start, plane);
         const end = this.point2To3(entity.end, plane);
-        return [
+        return this.withEntitySegmentSlots(entity.id, [
           {
             edge: this.makeLineEdge(start, end),
             start,
             end,
           },
-        ];
+        ]);
       }
       case "sketch.arc": {
         const start2 = entity.start;
@@ -7448,25 +7630,25 @@ export class OcctBackend implements Backend {
         }
         const mid2 = this.arcMidpoint(start2, end2, center2, entity.direction);
         const mid = this.point2To3(mid2, plane);
-        return [
+        return this.withEntitySegmentSlots(entity.id, [
           {
             edge: this.makeArcEdge(start, mid, end),
             start,
             end,
           },
-        ];
+        ]);
       }
       case "sketch.circle": {
         const center = this.point2To3(entity.center, plane);
         const radius = expectNumber(entity.radius, "sketch circle radius");
-        return [
+        return this.withEntitySegmentSlots(entity.id, [
           {
             edge: this.makeCircleEdge(center, radius, plane.normal),
             start: center,
             end: center,
             closed: true,
           },
-        ];
+        ]);
       }
       case "sketch.ellipse": {
         const center2 = this.point2Numbers(entity.center, "sketch ellipse center");
@@ -7483,14 +7665,14 @@ export class OcctBackend implements Backend {
           radiusY,
           rotation
         );
-        return [
+        return this.withEntitySegmentSlots(entity.id, [
           {
             edge: this.makeEllipseEdge(center, xDir, plane.normal, major, minor),
             start: center,
             end: center,
             closed: true,
           },
-        ];
+        ]);
       }
       case "sketch.rectangle": {
         const points = this.rectanglePoints(entity);
@@ -7507,10 +7689,10 @@ export class OcctBackend implements Backend {
             end,
           });
         }
-        return segments;
+        return this.withEntitySegmentSlots(entity.id, segments);
       }
       case "sketch.slot": {
-        return this.slotSegments(entity, plane);
+        return this.withEntitySegmentSlots(entity.id, this.slotSegments(entity, plane));
       }
       case "sketch.polygon": {
         const points = this.polygonPoints(entity);
@@ -7527,18 +7709,18 @@ export class OcctBackend implements Backend {
             end,
           });
         }
-        return segments;
+        return this.withEntitySegmentSlots(entity.id, segments);
       }
       case "sketch.spline": {
         const { edge, start, end, closed } = this.makeSplineEdge(entity, plane);
-        return [
+        return this.withEntitySegmentSlots(entity.id, [
           {
             edge,
             start,
             end,
             closed,
           },
-        ];
+        ]);
       }
       default:
         throw new Error(`OCCT backend: unsupported sketch entity ${entity.kind}`);
