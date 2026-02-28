@@ -72,6 +72,24 @@ function countDuplicateEdgeIdMismatches(
   return mismatches;
 }
 
+function highestCreatedFace(
+  selections: Array<{ id: string; kind: string; meta: Record<string, unknown> }>,
+  featureId: string
+) {
+  return selections
+    .filter(
+      (selection) =>
+        selection.kind === "face" &&
+        selection.meta["createdBy"] === featureId &&
+        typeof selection.meta["centerZ"] === "number"
+    )
+    .sort(
+      (a, b) =>
+        Number(b.meta["centerZ"] ?? Number.NEGATIVE_INFINITY) -
+        Number(a.meta["centerZ"] ?? Number.NEGATIVE_INFINITY)
+    )[0];
+}
+
 const tests = [
   {
     name: "occt e2e: extrude rectangle produces solid output",
@@ -146,18 +164,22 @@ const tests = [
         dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:main"),
       ]);
       const seedBuild = buildPart(seedPart, backend);
-      const topFace = seedBuild.final.selections.find(
-        (selection) =>
-          selection.kind === "face" &&
-          selection.meta["createdBy"] === "base" &&
-          selection.meta["normal"] === "+Z"
-      );
+      const topFace = highestCreatedFace(seedBuild.final.selections as any[], "base");
       assert.ok(topFace, "missing top face selection");
 
       const stableFaceId = String(topFace?.id ?? "");
       assert.ok(
         stableFaceId.startsWith("face:body.main~base."),
         `expected durable face id, got ${stableFaceId}`
+      );
+      assert.equal(stableFaceId, "face:body.main~base.top");
+      const aliases = Array.isArray(topFace?.meta["selectionAliases"])
+        ? (topFace?.meta["selectionAliases"] as string[])
+        : [];
+      assert.equal(aliases.length, 1, "expected one legacy alias for top face");
+      assert.ok(
+        aliases[0]?.startsWith("face:body.main~base.h"),
+        `expected legacy hash alias, got ${aliases[0]}`
       );
 
       const editedPart = dsl.part("extrude-stable-face-edited", [
@@ -176,12 +198,7 @@ const tests = [
       const sketchProfile = editedBuild.final.outputs.get("profile:cut");
       assert.ok(sketchProfile, "expected downstream sketch to resolve durable face id");
 
-      const editedTopFace = editedBuild.final.selections.find(
-        (selection) =>
-          selection.kind === "face" &&
-          selection.meta["createdBy"] === "base" &&
-          selection.meta["normal"] === "+Z"
-      );
+      const editedTopFace = highestCreatedFace(editedBuild.final.selections as any[], "base");
       assert.ok(editedTopFace, "missing edited top face selection");
       assert.equal(
         editedTopFace?.id,

@@ -312,6 +312,25 @@ const tests = [
     },
   },
   {
+    name: "graph: selector.named semantic slot selection id is accepted",
+    fn: async () => {
+      const part = dsl.part("named-selection-slot", [
+        dsl.extrude("base", dsl.profileRect(10, 10), 5, "body:main"),
+        dsl.fillet(
+          "fillet",
+          dsl.selectorNamed("edge:body.main~base.side.1"),
+          1,
+          ["base"]
+        ),
+      ]);
+      const result = compilePart(part);
+      assert.ok(
+        result.featureOrder.indexOf("base") <
+          result.featureOrder.indexOf("fillet")
+      );
+    },
+  },
+  {
     name: "graph: selector.named multi stable selection ids are accepted",
     fn: async () => {
       const part = dsl.part("named-selection-id-list", [

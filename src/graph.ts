@@ -546,9 +546,9 @@ function parseStableSelectionReference(
   if (split <= 0) return null;
   const ownerToken = body.slice(0, split);
   const remainder = body.slice(split + 1);
-  const hashMarker = remainder.indexOf(".h");
-  if (hashMarker <= 0) return null;
-  const createdByToken = remainder.slice(0, hashMarker);
+  const slotMarker = remainder.indexOf(".");
+  if (slotMarker <= 0) return null;
+  const createdByToken = remainder.slice(0, slotMarker);
   if (!ownerToken || !createdByToken) return null;
   return {
     kind: (match[1] ?? "").toLowerCase(),

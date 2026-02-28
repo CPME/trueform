@@ -21,10 +21,26 @@ export type KernelObject = {
   meta: Record<string, unknown>;
 };
 
+export type KernelSelectionLineage =
+  | { kind: "created" }
+  | { kind: "modified"; from: ID }
+  | { kind: "split"; from: ID; branch: string }
+  | { kind: "merged"; from: ID[] };
+
+export type KernelSelectionRecord = {
+  ownerKey: string;
+  createdBy: ID;
+  role?: string;
+  slot?: string;
+  lineage: KernelSelectionLineage;
+  aliases?: ID[];
+};
+
 export type KernelSelection = {
   id: ID;
   kind: "face" | "edge" | "solid" | "surface";
   meta: Record<string, unknown>;
+  record?: KernelSelectionRecord;
 };
 
 export type BackendCapabilities = {

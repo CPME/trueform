@@ -5,6 +5,8 @@ import {
   KernelResult,
   KernelObject,
   KernelSelection,
+  KernelSelectionLineage,
+  KernelSelectionRecord,
   MeshData,
   MeshOptions,
   StepExportOptions,
@@ -121,9 +123,32 @@ type FaceSurfaceMap = Map<number, Array<{ face: any; surface: FaceSurfaceClass }
 type CollectedSubshape = {
   shape: any;
   meta: Record<string, unknown>;
+  ledger?: SelectionLedgerHint;
 };
 
-type SelectionIdAssignment = { id: string };
+type SelectionLedgerHint = {
+  slot?: string;
+  role?: string;
+  lineage?: KernelSelectionLineage;
+  aliases?: string[];
+};
+
+type SelectionLedgerPlan = {
+  solid?: SelectionLedgerHint;
+  faces?: (entries: CollectedSubshape[]) => void;
+  edges?: (entries: CollectedSubshape[]) => void;
+};
+
+type SelectionCollectionOptions = {
+  rootKind?: "solid" | "face";
+  ledgerPlan?: SelectionLedgerPlan;
+};
+
+type SelectionIdAssignment = {
+  id: string;
+  aliases?: string[];
+  record: KernelSelectionRecord;
+};
 
 type UnwrapPointProjector = (
   point: [number, number, number]
@@ -632,7 +657,10 @@ export class OcctBackend implements Backend {
       solid,
       feature.id,
       feature.result,
-      feature.tags
+      feature.tags,
+      {
+        ledgerPlan: this.makePrismSelectionLedgerPlan(axis),
+      }
     );
     return { outputs, selections };
   }
@@ -4566,7 +4594,7 @@ export class OcctBackend implements Backend {
     featureId: string,
     ownerKey: string,
     featureTags?: string[],
-    opts?: { rootKind?: "solid" | "face" }
+    opts?: SelectionCollectionOptions
   ): KernelSelection[] {
     const selections: KernelSelection[] = [];
     const tags =
@@ -4576,21 +4604,33 @@ export class OcctBackend implements Backend {
 
     const rootKind = opts?.rootKind ?? "solid";
     if (rootKind === "solid") {
-      const meta: Record<string, unknown> = {
+      const solidEntry: CollectedSubshape = {
         shape,
-        owner: shape,
-        ownerKey,
-        createdBy: featureId,
-        role: "body",
-        center: this.shapeCenter(shape),
-        featureTags: tags,
+        meta: {
+          shape,
+          owner: shape,
+          ownerKey,
+          createdBy: featureId,
+          role: "body",
+          center: this.shapeCenter(shape),
+          featureTags: tags,
+        },
       };
-      const assignment = this.assignStableSelectionIds("solid", [{ shape, meta }])[0];
+      this.applySelectionLedgerHint(solidEntry, {
+        slot: "body",
+        role: "body",
+        lineage: { kind: "created" },
+      });
+      if (opts?.ledgerPlan?.solid) {
+        this.applySelectionLedgerHint(solidEntry, opts.ledgerPlan.solid);
+      }
+      const assignment = this.assignStableSelectionIds("solid", [solidEntry])[0];
       if (assignment) {
         selections.push({
           id: assignment.id,
           kind: "solid",
-          meta,
+          meta: solidEntry.meta,
+          record: assignment.record,
         });
       }
     }
@@ -4600,6 +4640,19 @@ export class OcctBackend implements Backend {
       (this.occt as any).TopAbs_ShapeEnum.TopAbs_FACE,
       (face) => this.faceMetadata(face, shape, featureId, ownerKey, tags)
     );
+    if (opts?.ledgerPlan?.faces) {
+      opts.ledgerPlan.faces(faceEntries);
+    }
+    if (rootKind === "face" && faceEntries.length === 1) {
+      const onlyFace = faceEntries[0];
+      if (onlyFace && !onlyFace.ledger?.slot) {
+        this.applySelectionLedgerHint(onlyFace, {
+          slot: "seed",
+          role: "face",
+          lineage: { kind: "created" },
+        });
+      }
+    }
     const faceAssignments = this.assignStableSelectionIds("face", faceEntries);
     for (let i = 0; i < faceEntries.length; i += 1) {
       const entry = faceEntries[i];
@@ -4609,6 +4662,7 @@ export class OcctBackend implements Backend {
         id: assignment.id,
         kind: "face",
         meta: entry.meta,
+        record: assignment.record,
       });
     }
 
@@ -4617,6 +4671,9 @@ export class OcctBackend implements Backend {
       (this.occt as any).TopAbs_ShapeEnum.TopAbs_EDGE,
       (edge) => this.edgeMetadata(edge, shape, featureId, ownerKey, tags)
     );
+    if (opts?.ledgerPlan?.edges) {
+      opts.ledgerPlan.edges(edgeEntries);
+    }
     const edgeAssignments = this.assignStableSelectionIds("edge", edgeEntries);
     for (let i = 0; i < edgeEntries.length; i += 1) {
       const entry = edgeEntries[i];
@@ -4626,10 +4683,52 @@ export class OcctBackend implements Backend {
         id: assignment.id,
         kind: "edge",
         meta: entry.meta,
+        record: assignment.record,
       });
     }
 
     return selections;
+  }
+
+  private applySelectionLedgerHint(
+    entry: CollectedSubshape,
+    hint: SelectionLedgerHint
+  ): void {
+    const existing = entry.ledger;
+    const aliases = new Set<string>();
+    for (const candidate of [existing?.aliases, hint.aliases]) {
+      if (!Array.isArray(candidate)) continue;
+      for (const alias of candidate) {
+        if (typeof alias === "string" && alias.trim().length > 0) {
+          aliases.add(alias.trim());
+        }
+      }
+    }
+    entry.ledger = {
+      slot: typeof hint.slot === "string" && hint.slot.length > 0 ? hint.slot : existing?.slot,
+      role: typeof hint.role === "string" && hint.role.length > 0 ? hint.role : existing?.role,
+      lineage: hint.lineage ?? existing?.lineage,
+      aliases: aliases.size > 0 ? Array.from(aliases) : existing?.aliases,
+    };
+    if (entry.ledger?.role) {
+      if (
+        entry.meta.selectionLegacyRole === undefined &&
+        typeof entry.meta.role === "string" &&
+        entry.meta.role.trim().length > 0
+      ) {
+        entry.meta.selectionLegacyRole = entry.meta.role;
+      }
+      entry.meta.role = entry.ledger.role;
+    }
+    if (entry.ledger?.slot) {
+      entry.meta.selectionSlot = entry.ledger.slot;
+    }
+    if (entry.ledger?.lineage) {
+      entry.meta.selectionLineage = entry.ledger.lineage;
+    }
+    if (entry.ledger?.aliases && entry.ledger.aliases.length > 0) {
+      entry.meta.selectionAliases = entry.ledger.aliases.slice();
+    }
   }
 
   private collectUniqueSubshapes(
@@ -4666,22 +4765,29 @@ export class OcctBackend implements Backend {
     type DecoratedEntry = {
       index: number;
       baseId: string;
-      semanticHash: string;
+      legacyBaseId?: string;
       tieHash: string;
+      record: KernelSelectionRecord;
     };
 
-    const decorated: DecoratedEntry[] = entries.map((entry, index) => ({
-      index,
-      baseId: this.buildStableSelectionBaseId(kind, entry.meta),
-      semanticHash: hashValue(this.selectionSemanticFingerprint(kind, entry.meta)),
-      tieHash: hashValue(this.selectionTieBreakerFingerprint(kind, entry.meta)),
-    }));
+    const decorated: DecoratedEntry[] = entries.map((entry, index) => {
+      const record = this.buildSelectionRecord(entry);
+      return {
+        index,
+        baseId: this.buildStableSelectionBaseId(kind, entry.meta, record),
+        legacyBaseId: record.slot
+          ? this.buildLegacyStableSelectionBaseId(kind, entry.meta, record)
+          : undefined,
+        tieHash: hashValue(this.selectionTieBreakerFingerprint(kind, entry.meta)),
+        record,
+      };
+    });
 
     const groups = new Map<string, DecoratedEntry[]>();
     for (const entry of decorated) {
-      const bucket = groups.get(entry.semanticHash);
+      const bucket = groups.get(entry.baseId);
       if (bucket) bucket.push(entry);
-      else groups.set(entry.semanticHash, [entry]);
+      else groups.set(entry.baseId, [entry]);
     }
 
     const assignments = new Array<SelectionIdAssignment>(entries.length);
@@ -4694,8 +4800,22 @@ export class OcctBackend implements Backend {
       for (let i = 0; i < bucket.length; i += 1) {
         const entry = bucket[i];
         if (!entry) continue;
+        const id = bucket.length === 1 ? entry.baseId : `${entry.baseId}.${i + 1}`;
+        const aliases =
+          entry.legacyBaseId && entry.legacyBaseId !== entry.baseId
+            ? [bucket.length === 1 ? entry.legacyBaseId : `${entry.legacyBaseId}.${i + 1}`]
+            : undefined;
+        if (aliases) {
+          entry.record.aliases = aliases;
+          const targetEntry = entries[entry.index];
+          if (targetEntry) {
+            targetEntry.meta.selectionAliases = aliases.slice();
+          }
+        }
         assignments[entry.index] = {
-          id: bucket.length === 1 ? entry.baseId : `${entry.baseId}.${i + 1}`,
+          id,
+          aliases,
+          record: entry.record,
         };
       }
     }
@@ -4703,22 +4823,82 @@ export class OcctBackend implements Backend {
     return assignments;
   }
 
+  private buildSelectionRecord(entry: CollectedSubshape): KernelSelectionRecord {
+    const identity = this.selectionIdentityValues(entry.meta);
+    return {
+      ownerKey: identity.ownerKey,
+      createdBy: identity.createdBy,
+      role: entry.ledger?.role ?? this.stringFingerprint(entry.meta.role),
+      slot: entry.ledger?.slot,
+      lineage: entry.ledger?.lineage ?? { kind: "created" },
+      aliases: entry.ledger?.aliases,
+    };
+  }
+
+  private selectionIdentityValues(
+    meta: Record<string, unknown>,
+    record?: Pick<KernelSelectionRecord, "ownerKey" | "createdBy">
+  ): { ownerKey: string; createdBy: string } {
+    const ownerKey =
+      record?.ownerKey && record.ownerKey.trim().length > 0
+        ? record.ownerKey.trim()
+        : typeof meta.ownerKey === "string" && meta.ownerKey.trim().length > 0
+          ? meta.ownerKey.trim()
+          : "unowned";
+    const createdBy =
+      record?.createdBy && record.createdBy.trim().length > 0
+        ? record.createdBy.trim()
+        : typeof meta.createdBy === "string" && meta.createdBy.trim().length > 0
+          ? meta.createdBy.trim()
+          : "unknown";
+    return { ownerKey, createdBy };
+  }
+
   private buildStableSelectionBaseId(
     kind: KernelSelection["kind"],
-    meta: Record<string, unknown>
+    meta: Record<string, unknown>,
+    record?: KernelSelectionRecord
   ): string {
-    const ownerKey =
-      typeof meta.ownerKey === "string" && meta.ownerKey.trim().length > 0
-        ? meta.ownerKey.trim()
-        : "unowned";
+    const { ownerKey, createdBy } = this.selectionIdentityValues(meta, record);
     const ownerToken = this.normalizeSelectionToken(ownerKey);
-    const createdBy =
-      typeof meta.createdBy === "string" && meta.createdBy.trim().length > 0
-        ? meta.createdBy.trim()
-        : "unknown";
     const createdByToken = this.normalizeSelectionToken(createdBy);
-    const semanticHash = hashValue(this.selectionSemanticFingerprint(kind, meta));
+    const slotToken =
+      typeof record?.slot === "string" && record.slot.trim().length > 0
+        ? this.normalizeSelectionToken(record.slot)
+        : "";
+    if (slotToken.length > 0) {
+      return `${kind}:${ownerToken}~${createdByToken}.${slotToken}`;
+    }
+    return this.buildLegacyStableSelectionBaseId(kind, meta, record);
+  }
+
+  private buildLegacyStableSelectionBaseId(
+    kind: KernelSelection["kind"],
+    meta: Record<string, unknown>,
+    record?: KernelSelectionRecord
+  ): string {
+    const { ownerKey, createdBy } = this.selectionIdentityValues(meta, record);
+    const ownerToken = this.normalizeSelectionToken(ownerKey);
+    const createdByToken = this.normalizeSelectionToken(createdBy);
+    const semanticHash = hashValue(
+      this.selectionSemanticFingerprint(kind, this.legacySelectionSemanticMeta(meta))
+    );
     return `${kind}:${ownerToken}~${createdByToken}.${semanticHash}`;
+  }
+
+  private legacySelectionSemanticMeta(meta: Record<string, unknown>): Record<string, unknown> {
+    const legacyMeta = { ...meta };
+    if (
+      typeof legacyMeta.selectionLegacyRole === "string" &&
+      legacyMeta.selectionLegacyRole.trim().length > 0
+    ) {
+      legacyMeta.role = legacyMeta.selectionLegacyRole;
+      return legacyMeta;
+    }
+    if (typeof legacyMeta.selectionSlot === "string" && legacyMeta.selectionSlot.length > 0) {
+      delete legacyMeta.role;
+    }
+    return legacyMeta;
   }
 
   private selectionSemanticFingerprint(
@@ -4763,6 +4943,101 @@ export class OcctBackend implements Backend {
       planeXDir: this.vectorFingerprint(meta.planeXDir),
       planeYDir: this.vectorFingerprint(meta.planeYDir),
     };
+  }
+
+  private makePrismSelectionLedgerPlan(
+    axis: [number, number, number]
+  ): SelectionLedgerPlan {
+    const normalizedAxis = normalizeVector(axis);
+    if (!isFiniteVec(normalizedAxis)) {
+      return {};
+    }
+    return {
+      faces: (entries) => this.annotatePrismFaceSelections(entries, normalizedAxis),
+    };
+  }
+
+  private annotatePrismFaceSelections(
+    entries: CollectedSubshape[],
+    axis: [number, number, number]
+  ): void {
+    if (entries.length === 0) return;
+    const centers = entries
+      .map((entry) => this.vectorFingerprint(entry.meta.center))
+      .filter((center): center is [number, number, number] => Array.isArray(center));
+    const centroid =
+      centers.length > 0
+        ? ([
+            centers.reduce((sum, center) => sum + center[0], 0) / centers.length,
+            centers.reduce((sum, center) => sum + center[1], 0) / centers.length,
+            centers.reduce((sum, center) => sum + center[2], 0) / centers.length,
+          ] as [number, number, number])
+        : ([0, 0, 0] as [number, number, number]);
+
+    const caps: Array<{ entry: CollectedSubshape; projection: number }> = [];
+    const sideEntries: CollectedSubshape[] = [];
+    for (const entry of entries) {
+      const center = this.vectorFingerprint(entry.meta.center) ?? centroid;
+      const projection = dot(this.subVec(center, centroid), axis);
+      const normalVec = this.vectorFingerprint(entry.meta.normalVec);
+      const alignment = normalVec ? Math.abs(dot(normalizeVector(normalVec), axis)) : 0;
+      if (alignment > 0.98) {
+        caps.push({ entry, projection });
+        continue;
+      }
+      sideEntries.push(entry);
+    }
+
+    caps.sort((a, b) => a.projection - b.projection);
+
+    const bottom = caps[0]?.entry;
+    const top = caps[caps.length - 1]?.entry;
+    if (bottom) {
+      this.applySelectionLedgerHint(bottom, {
+        slot: "bottom",
+        role: "bottom",
+        lineage: { kind: "created" },
+      });
+    }
+    if (top && top !== bottom) {
+      this.applySelectionLedgerHint(top, {
+        slot: "top",
+        role: "top",
+        lineage: { kind: "created" },
+      });
+    }
+
+    if (sideEntries.length === 0) return;
+    const basis = this.basisFromNormal(axis, undefined, centroid);
+    const ranked = sideEntries
+      .map((entry) => {
+        const center = this.vectorFingerprint(entry.meta.center) ?? centroid;
+        const relative = this.subVec(center, centroid);
+        const radial = this.subVec(relative, this.scaleVec(axis, dot(relative, axis)));
+        const x = dot(radial, basis.xDir);
+        const y = dot(radial, basis.yDir);
+        const angle = Number.isFinite(x) && Number.isFinite(y) ? Math.atan2(y, x) : 0;
+        const height = dot(relative, axis);
+        const area = this.numberFingerprint(entry.meta.area) ?? 0;
+        return { entry, angle, height, area };
+      })
+      .sort((a, b) => {
+        const byAngle = a.angle - b.angle;
+        if (byAngle !== 0) return byAngle;
+        const byHeight = a.height - b.height;
+        if (byHeight !== 0) return byHeight;
+        return b.area - a.area;
+      });
+
+    for (let i = 0; i < ranked.length; i += 1) {
+      const current = ranked[i];
+      if (!current) continue;
+      this.applySelectionLedgerHint(current.entry, {
+        slot: `side.${i + 1}`,
+        role: "side",
+        lineage: { kind: "created" },
+      });
+    }
   }
 
   private normalizeSelectionToken(value: string): string {
