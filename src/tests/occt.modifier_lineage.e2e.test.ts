@@ -23,6 +23,45 @@ function bottomFaceSelection(result: ReturnType<typeof buildPart>, featureId: st
 
 const tests = [
   {
+    name: "occt modifier lineage: hole emits wall slot derived from the target face",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const part = dsl.part("hole-lineage", [
+        dsl.sketch2d("sketch-base", [
+          { name: "profile:base", profile: dsl.profileRect(20, 12) },
+        ]),
+        dsl.extrude("base", dsl.profileRef("profile:base"), 8, "body:main", [
+          "sketch-base",
+        ]),
+        dsl.hole(
+          "hole-1",
+          dsl.selectorNamed("face:body.main~base.top"),
+          "-Z",
+          6,
+          "throughAll"
+        ),
+      ]);
+
+      const result = buildPart(part, backend);
+      const body = result.final.outputs.get("body:main");
+      assert.ok(body, "missing hole result body");
+      assertValidShape(occt, body.meta["shape"] as any, "hole lineage result");
+
+      const wall = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "hole-1" &&
+          selection.meta["selectionSlot"] === "hole.top.wall"
+      );
+      assert.ok(wall, "missing hole wall selection");
+      assert.equal(wall.id, "face:body.main~hole-1.hole.top.wall");
+      assert.deepEqual(wall.meta["selectionLineage"], {
+        kind: "modified",
+        from: "face:body.main~base.top",
+      });
+    },
+  },
+  {
     name: "occt modifier lineage: move face preserves top-face slot with modified lineage",
     fn: async () => {
       const { backend, occt } = await getBackendContext();

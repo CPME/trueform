@@ -4027,7 +4027,21 @@ export class OcctBackend implements Backend {
       solid,
       feature.id,
       outputKey,
-      feature.tags
+      feature.tags,
+      {
+        ledgerPlan: this.makeHoleSelectionLedgerPlan(
+          upstream,
+          owner,
+          target,
+          centers,
+          axisDir,
+          {
+            radius,
+            counterboreRadius,
+            countersink: countersinkRadius !== null,
+          }
+        ),
+      }
     );
     return { outputs, selections };
   }
@@ -5070,6 +5084,29 @@ export class OcctBackend implements Backend {
     };
   }
 
+  private makeHoleSelectionLedgerPlan(
+    upstream: KernelResult,
+    ownerShape: any,
+    target: KernelSelection,
+    centers: Array<[number, number, number]>,
+    axisDir: [number, number, number],
+    opts: {
+      radius: number;
+      counterboreRadius: number | null;
+      countersink: boolean;
+    }
+  ): SelectionLedgerPlan {
+    const mutationPlan = this.makeFaceMutationSelectionLedgerPlan(upstream, ownerShape, []);
+    const normalizedAxis = normalizeVector(axisDir);
+    return {
+      faces: (entries) => {
+        mutationPlan.faces?.(entries);
+        if (!isFiniteVec(normalizedAxis)) return;
+        this.annotateHoleFaceSelections(entries, target, centers, normalizedAxis, opts);
+      },
+    };
+  }
+
   private annotateFaceMutationSelections(
     entries: CollectedSubshape[],
     ownerFaces: KernelSelection[],
@@ -5197,6 +5234,85 @@ export class OcctBackend implements Backend {
       return a.index - b.index;
     });
     return candidates[0]?.index ?? -1;
+  }
+
+  private annotateHoleFaceSelections(
+    entries: CollectedSubshape[],
+    target: KernelSelection,
+    centers: Array<[number, number, number]>,
+    axisDir: [number, number, number],
+    opts: {
+      radius: number;
+      counterboreRadius: number | null;
+      countersink: boolean;
+    }
+  ): void {
+    if (entries.length === 0 || centers.length === 0) return;
+    const sourceSlot = this.selectionSlotForLineage(target);
+    const slotRoot = sourceSlot ? `hole.${sourceSlot}` : "hole.seed";
+    const holeTolerance = Math.max(1e-4, opts.radius * 0.1);
+
+    for (const entry of entries) {
+      if (entry.ledger?.slot) continue;
+      const center = this.vectorFingerprint(entry.meta["center"]);
+      if (
+        center &&
+        !centers.some(
+          (origin) => this.distancePointToAxis(center, origin, axisDir) <= holeTolerance
+        )
+      ) {
+        continue;
+      }
+
+      const surfaceType = entry.meta["surfaceType"];
+      if (
+        surfaceType === "cylinder" &&
+        typeof entry.meta["radius"] === "number" &&
+        this.radiusMatches(entry.meta["radius"] as number, opts.radius)
+      ) {
+        this.applySelectionLedgerHint(entry, {
+          slot: `${slotRoot}.wall`,
+          role: "hole",
+          lineage: { kind: "modified", from: target.id },
+        });
+        continue;
+      }
+      if (
+        surfaceType === "cylinder" &&
+        opts.counterboreRadius !== null &&
+        typeof entry.meta["radius"] === "number" &&
+        this.radiusMatches(entry.meta["radius"] as number, opts.counterboreRadius)
+      ) {
+        this.applySelectionLedgerHint(entry, {
+          slot: `${slotRoot}.counterbore`,
+          role: "hole",
+          lineage: { kind: "modified", from: target.id },
+        });
+        continue;
+      }
+      if (surfaceType === "cone" && opts.countersink) {
+        this.applySelectionLedgerHint(entry, {
+          slot: `${slotRoot}.countersink`,
+          role: "hole",
+          lineage: { kind: "modified", from: target.id },
+        });
+      }
+    }
+  }
+
+  private radiusMatches(actual: number, expected: number): boolean {
+    const tolerance = Math.max(1e-4, Math.abs(expected) * 1e-4);
+    return Math.abs(actual - expected) <= tolerance;
+  }
+
+  private distancePointToAxis(
+    point: [number, number, number],
+    origin: [number, number, number],
+    axisDir: [number, number, number]
+  ): number {
+    const relative = this.subVec(point, origin);
+    const projection = this.scaleVec(axisDir, dot(relative, axisDir));
+    return vecLength(this.subVec(relative, projection));
   }
 
   private selectionSlotForLineage(selection: KernelSelection): string | undefined {
