@@ -4445,8 +4445,24 @@ export class OcctBackend implements Backend {
       toEdge: (edge) => this.toEdge(edge),
       tryBuild: (builder) => this.tryBuild(builder),
       readShape: (builder) => this.readShape(builder),
-      collectSelections: (shape, featureId, ownerKey, tags) =>
-        this.collectSelections(shape, featureId, ownerKey, tags),
+      collectSelections: (shape, featureId, ownerKey, tags, opts) =>
+        this.collectSelections(
+          shape,
+          featureId,
+          ownerKey,
+          tags,
+          opts as SelectionCollectionOptions | undefined
+        ),
+      makeSelectionCollectionOptions: (label, upstream, owner, targets, builder) =>
+        ({
+          ledgerPlan: this.makeEdgeModifierSelectionLedgerPlan(
+            label,
+            upstream,
+            owner,
+            targets,
+            builder
+          ),
+        }) satisfies SelectionCollectionOptions,
     };
   }
 
@@ -5133,6 +5149,22 @@ export class OcctBackend implements Backend {
     };
   }
 
+  private makeEdgeModifierSelectionLedgerPlan(
+    label: "fillet" | "chamfer",
+    upstream: KernelResult,
+    ownerShape: any,
+    edgeTargets: KernelSelection[],
+    builder: any
+  ): SelectionLedgerPlan {
+    const mutationPlan = this.makeFaceMutationSelectionLedgerPlan(upstream, ownerShape, []);
+    return {
+      faces: (entries) => {
+        mutationPlan.faces?.(entries);
+        this.annotateEdgeModifierFaceSelections(entries, label, edgeTargets, builder);
+      },
+    };
+  }
+
   private annotateFaceMutationSelections(
     entries: CollectedSubshape[],
     ownerFaces: KernelSelection[],
@@ -5354,6 +5386,43 @@ export class OcctBackend implements Backend {
         if (sourceRole) hint.role = sourceRole;
         this.applySelectionLedgerHint(entry, hint);
         break;
+      }
+    }
+  }
+
+  private annotateEdgeModifierFaceSelections(
+    entries: CollectedSubshape[],
+    label: "fillet" | "chamfer",
+    edgeTargets: KernelSelection[],
+    builder: any
+  ): void {
+    const unmatched = entries.filter((entry) => !entry.ledger?.slot);
+    for (let i = 0; i < edgeTargets.length; i += 1) {
+      const target = edgeTargets[i];
+      if (!target) continue;
+      const sourceShape = target.meta["shape"];
+      if (!sourceShape) continue;
+      const slotRoot = this.selectionSlotForLineage(target)
+        ? `${label}.${this.selectionSlotForLineage(target)}`
+        : `${label}.seed.${i + 1}`;
+      const generated = this.collectGeneratedShapes(builder, sourceShape).flatMap((shape) => {
+        const faces = this.collectFacesFromShape(shape);
+        return faces.length > 0 ? faces : [shape];
+      });
+      if (generated.length === 0) continue;
+      let generatedIndex = 0;
+      for (const candidate of generated) {
+        const index = unmatched.findIndex((entry) => this.shapesSame(entry.shape, candidate));
+        if (index < 0) continue;
+        const [entry] = unmatched.splice(index, 1);
+        if (!entry) continue;
+        generatedIndex += 1;
+        const hint: SelectionLedgerHint = {
+          role: label,
+          lineage: { kind: "modified", from: target.id },
+          slot: generatedIndex === 1 ? slotRoot : `${slotRoot}.part.${generatedIndex}`,
+        };
+        this.applySelectionLedgerHint(entry, hint);
       }
     }
   }

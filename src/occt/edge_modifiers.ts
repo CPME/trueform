@@ -28,8 +28,16 @@ export type EdgeModifierDeps = {
     shape: unknown,
     featureId: string,
     ownerKey: string,
-    tags?: string[]
+    tags?: string[],
+    opts?: unknown
   ) => KernelSelection[];
+  makeSelectionCollectionOptions?: (
+    label: "fillet" | "chamfer",
+    upstream: KernelResult,
+    owner: unknown,
+    targets: KernelSelection[],
+    builder: unknown
+  ) => unknown;
 };
 
 export function executeEdgeModifier(
@@ -77,6 +85,19 @@ export function executeEdgeModifier(
       },
     ],
   ]);
-  const selections = deps.collectSelections(solid, feature.id, outputKey, feature.tags);
+  const selectionOptions = deps.makeSelectionCollectionOptions?.(
+    label,
+    upstream,
+    owner,
+    targets as KernelSelection[],
+    builder
+  );
+  const selections = deps.collectSelections(
+    solid,
+    feature.id,
+    outputKey,
+    feature.tags,
+    selectionOptions
+  );
   return { outputs, selections };
 }

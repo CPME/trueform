@@ -21,6 +21,22 @@ function bottomFaceSelection(result: ReturnType<typeof buildPart>, featureId: st
   );
 }
 
+function topEdgeSelection(result: ReturnType<typeof buildPart>, featureId: string) {
+  const step = result.steps.find((entry) => entry.featureId === featureId);
+  return (
+    step?.result.selections
+      .filter((selection) => selection.kind === "edge")
+      .map((selection) => ({
+        selection,
+        centerZ:
+          typeof selection.meta["centerZ"] === "number"
+            ? (selection.meta["centerZ"] as number)
+            : Number.NEGATIVE_INFINITY,
+      }))
+      .sort((a, b) => b.centerZ - a.centerZ)[0]?.selection ?? null
+  );
+}
+
 function findStepSelection(
   result: ReturnType<typeof buildPart>,
   featureId: string,
@@ -102,6 +118,78 @@ const tests = [
       assert.deepEqual(top.meta["selectionLineage"], {
         kind: "modified",
         from: "face:body.main~base-extrude.top",
+      });
+    },
+  },
+  {
+    name: "occt modifier lineage: fillet emits seeded face slot with edge-derived lineage",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const part = dsl.part("fillet-lineage", [
+        dsl.extrude("cyl", dsl.profileCircle(10), 20, "body:main"),
+        dsl.fillet(
+          "edge-fillet",
+          dsl.selectorEdge([dsl.predCreatedBy("cyl")], [dsl.rankMaxZ()]),
+          2,
+          ["cyl"]
+        ),
+      ]);
+
+      const result = buildPart(part, backend);
+      const output = result.final.outputs.get("body:main");
+      assert.ok(output, "missing fillet result");
+      assertValidShape(occt, output.meta["shape"] as any, "fillet lineage result");
+
+      const source = topEdgeSelection(result, "cyl");
+      assert.ok(source, "missing source fillet edge");
+
+      const blend = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "edge-fillet" &&
+          selection.meta["selectionSlot"] === "fillet.seed.1"
+      );
+      assert.ok(blend, "missing fillet blend face lineage");
+      assert.equal(blend.id, "face:body.main~edge-fillet.fillet.seed.1");
+      assert.deepEqual(blend.meta["selectionLineage"], {
+        kind: "modified",
+        from: source.id,
+      });
+    },
+  },
+  {
+    name: "occt modifier lineage: chamfer emits seeded face slot with edge-derived lineage",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const part = dsl.part("chamfer-lineage", [
+        dsl.extrude("cyl", dsl.profileCircle(10), 20, "body:main"),
+        dsl.chamfer(
+          "edge-chamfer",
+          dsl.selectorEdge([dsl.predCreatedBy("cyl")], [dsl.rankMaxZ()]),
+          2,
+          ["cyl"]
+        ),
+      ]);
+
+      const result = buildPart(part, backend);
+      const output = result.final.outputs.get("body:main");
+      assert.ok(output, "missing chamfer result");
+      assertValidShape(occt, output.meta["shape"] as any, "chamfer lineage result");
+
+      const source = topEdgeSelection(result, "cyl");
+      assert.ok(source, "missing source chamfer edge");
+
+      const blend = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "edge-chamfer" &&
+          selection.meta["selectionSlot"] === "chamfer.seed.1"
+      );
+      assert.ok(blend, "missing chamfer face lineage");
+      assert.equal(blend.id, "face:body.main~edge-chamfer.chamfer.seed.1");
+      assert.deepEqual(blend.meta["selectionLineage"], {
+        kind: "modified",
+        from: source.id,
       });
     },
   },
