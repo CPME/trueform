@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <style>
+    .label-box { fill: rgba(15, 23, 36, 0.88); stroke: #20324a; stroke-width: 2; rx: 12; }
+    .label-text { fill: #eef4fb; font: 600 24px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .legend-title { fill: #eef4fb; font: 700 26px ui-sans-serif, system-ui, sans-serif; }
+    .legend-text { fill: #d7e3f2; font: 500 18px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .legend-note { fill: #a9bbd0; font: 500 16px ui-sans-serif, system-ui, sans-serif; }
+    .callout { stroke: #101820; stroke-width: 3; fill: none; }
+    .marker { fill: #f97316; stroke: #101820; stroke-width: 3; }
+  </style>
+
+  <image href="selection-ledger-extrude-review.iso.png" x="0" y="0" width="1200" height="900" />
+
+  <rect x="24" y="24" width="410" height="276" class="label-box" />
+  <text x="44" y="62" class="legend-title">Expected face ids</text>
+  <text x="44" y="98" class="legend-text">A  face:body.main~review-extrude.top</text>
+  <text x="44" y="130" class="legend-text">B  face:body.main~review-extrude.side.line-1</text>
+  <text x="44" y="162" class="legend-text">C  face:body.main~review-extrude.side.line-2</text>
+  <text x="44" y="194" class="legend-text">D  face:body.main~review-extrude.side.line-3</text>
+  <text x="44" y="226" class="legend-text">E  face:body.main~review-extrude.side.line-4</text>
+  <text x="44" y="258" class="legend-text">F  face:body.main~review-extrude.bottom</text>
+  <text x="44" y="286" class="legend-note">A, B, and C are the visible faces this image calls out directly.</text>
+
+  <circle cx="694" cy="262" r="16" class="marker" />
+  <path d="M 434 360 L 610 300 L 694 262" class="callout" />
+  <rect x="250" y="330" width="190" height="50" class="label-box" />
+  <text x="270" y="363" class="label-text">A  top</text>
+
+  <circle cx="924" cy="462" r="16" class="marker" />
+  <path d="M 972 516 L 952 490 L 924 462" class="callout" />
+  <rect x="972" y="492" width="204" height="52" class="label-box" />
+  <text x="992" y="526" class="label-text">C  side.line-2</text>
+
+  <circle cx="620" cy="640" r="16" class="marker" />
+  <path d="M 720 734 L 686 700 L 620 640" class="callout" />
+  <rect x="720" y="708" width="204" height="52" class="label-box" />
+  <text x="740" y="742" class="label-text">B  side.line-1</text>
+</svg>

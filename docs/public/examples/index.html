@@ -89,6 +89,14 @@
       </div>
     </a>
 
+    <a class="card" href="#code-dsl-selection-ledger-extrude-review">
+      <img src="./dsl/selection-ledger-extrude-review.iso.png" alt="Selection Ledger Extrude Review" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Selection Ledger Extrude Review</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
     <a class="card" href="#code-dsl-surface">
       <img src="./dsl/surface.iso.png" alt="Surface" loading="lazy" />
       <div class="card-body">
@@ -101,6 +109,14 @@
       <img src="./dsl/revolve.iso.png" alt="Revolve" loading="lazy" />
       <div class="card-body">
         <div class="card-title">Revolve</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-selection-ledger-revolve-review">
+      <img src="./dsl/selection-ledger-revolve-review.iso.png" alt="Selection Ledger Revolve Review" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Selection Ledger Revolve Review</div>
         <div class="card-meta">Features</div>
       </div>
     </a>
@@ -456,6 +472,15 @@
       <a class="back-link" href="#top">Back to gallery</a>
     </article>
 
+    <article class="code-entry" id="code-dsl-selection-ledger-extrude-review">
+      <h3>Selection Ledger Extrude Review (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Extrude</p>
+      <pre><code>const examplePart = part(&quot;example-extrude&quot;, [
+  extrude(&quot;base&quot;, profileRect(80, 50), 12, &quot;body:main&quot;),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
     <article class="code-entry" id="code-dsl-surface">
       <h3>Surface (DSL)</h3>
       <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Surface</p>
@@ -475,6 +500,21 @@ const examplePart = part(&quot;example-surface&quot;, [
 
     <article class="code-entry" id="code-dsl-revolve">
       <h3>Revolve (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Revolve</p>
+      <pre><code>const examplePart = part(&quot;example-revolve&quot;, [
+  revolve(
+    &quot;ring-revolve&quot;,
+    profileRect(3, 6, [1.5, 3, 0]),
+    &quot;+X&quot;,
+    &quot;full&quot;,
+    &quot;body:main&quot;
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-selection-ledger-revolve-review">
+      <h3>Selection Ledger Revolve Review (DSL)</h3>
       <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Revolve</p>
       <pre><code>const examplePart = part(&quot;example-revolve&quot;, [
   revolve(

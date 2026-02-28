@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <style>
+    .label-box { fill: rgba(15, 23, 36, 0.88); stroke: #20324a; stroke-width: 2; rx: 12; }
+    .label-text { fill: #eef4fb; font: 600 24px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .legend-title { fill: #eef4fb; font: 700 26px ui-sans-serif, system-ui, sans-serif; }
+    .legend-text { fill: #d7e3f2; font: 500 18px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .legend-note { fill: #a9bbd0; font: 500 16px ui-sans-serif, system-ui, sans-serif; }
+    .callout { stroke: #101820; stroke-width: 3; fill: none; }
+    .marker { fill: #f97316; stroke: #101820; stroke-width: 3; }
+  </style>
+
+  <image href="selection-ledger-revolve-review.iso.png" x="0" y="0" width="1200" height="900" />
+
+  <rect x="24" y="24" width="448" height="214" class="label-box" />
+  <text x="44" y="62" class="legend-title">Expected face ids</text>
+  <text x="44" y="98" class="legend-text">A  face:body.main~review-revolve.profile.line-2</text>
+  <text x="44" y="130" class="legend-text">B  face:body.main~review-revolve.profile.line-4</text>
+  <text x="44" y="162" class="legend-text">C  face:body.main~review-revolve.profile.line-3</text>
+  <text x="44" y="194" class="legend-text">D  face:body.main~review-revolve.profile.line-1</text>
+  <text x="44" y="224" class="legend-note">A, B, and C are called out directly. D exists but is mostly occluded.</text>
+
+  <circle cx="892" cy="354" r="16" class="marker" />
+  <path d="M 974 250 L 944 292 L 892 354" class="callout" />
+  <rect x="974" y="218" width="210" height="52" class="label-box" />
+  <text x="994" y="252" class="label-text">A  profile.line-2</text>
+
+  <circle cx="702" cy="356" r="16" class="marker" />
+  <path d="M 834 470 L 798 430 L 702 356" class="callout" />
+  <rect x="834" y="444" width="210" height="52" class="label-box" />
+  <text x="854" y="478" class="label-text">B  profile.line-4</text>
+
+  <circle cx="548" cy="182" r="16" class="marker" />
+  <path d="M 514 262 L 528 230 L 548 182" class="callout" />
+  <rect x="340" y="236" width="210" height="52" class="label-box" />
+  <text x="360" y="270" class="label-text">C  profile.line-3</text>
+</svg>

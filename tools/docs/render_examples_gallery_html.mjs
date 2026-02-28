@@ -19,8 +19,10 @@ const docSourcePaths = {
 
 const dslCodeTargets = {
   extrude: { doc: "features", heading: "Extrude" },
+  "selection-ledger-extrude-review": { doc: "features", heading: "Extrude" },
   surface: { doc: "features", heading: "Surface" },
   revolve: { doc: "features", heading: "Revolve" },
+  "selection-ledger-revolve-review": { doc: "features", heading: "Revolve" },
   loft: { doc: "features", heading: "Loft" },
   sweep: { doc: "features", heading: "Sweep" },
   pipe: { doc: "features", heading: "Pipe" },

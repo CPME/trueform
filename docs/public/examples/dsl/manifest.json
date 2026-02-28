@@ -6,6 +6,11 @@
       "image": "/examples/dsl/extrude.iso.png"
     },
     {
+      "id": "selection-ledger-extrude-review",
+      "title": "Selection Ledger Extrude Review",
+      "image": "/examples/dsl/selection-ledger-extrude-review.iso.png"
+    },
+    {
       "id": "surface",
       "title": "Surface",
       "image": "/examples/dsl/surface.iso.png"
@@ -14,6 +19,11 @@
       "id": "revolve",
       "title": "Revolve",
       "image": "/examples/dsl/revolve.iso.png"
+    },
+    {
+      "id": "selection-ledger-revolve-review",
+      "title": "Selection Ledger Revolve Review",
+      "image": "/examples/dsl/selection-ledger-revolve-review.iso.png"
     },
     {
       "id": "loft",

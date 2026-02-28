@@ -111,6 +111,59 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     ]),
   },
   {
+    id: "selection-ledger-extrude-review",
+    title: "Selection Ledger Extrude Review",
+    part: (() => {
+      const sketch = sketch2d(
+        "sketch-review-extrude",
+        [
+          {
+            name: "profile:loop",
+            profile: profileSketchLoop([
+              "line-1",
+              "line-2",
+              "line-3",
+              "line-4",
+            ]),
+          },
+        ],
+        {
+          entities: [
+            sketchLine("line-1", [0, 0], [36, 0]),
+            sketchLine("line-2", [36, 0], [36, 24]),
+            sketchLine("line-3", [36, 24], [0, 24]),
+            sketchLine("line-4", [0, 24], [0, 0]),
+          ],
+        }
+      );
+      return part("selection-ledger-extrude-review", [
+        sketch,
+        extrude("review-extrude", profileRef("profile:loop"), 18, "body:main"),
+      ]);
+    })(),
+    render: {
+      meshOpts: {
+        linearDeflection: 0.12,
+        angularDeflection: 0.12,
+        parallel: true,
+      },
+      renderOpts: {
+        viewDir: [1.4, -1.2, 0.95],
+      },
+      layers: [
+        {
+          output: "body:main",
+          color: [196, 214, 232],
+          alpha: 0.82,
+          wireframe: true,
+          wireColor: [28, 36, 48],
+          wireDepthTest: false,
+          depthTest: true,
+        },
+      ],
+    },
+  },
+  {
     id: "surface",
     title: "Surface",
     part: (() => {
@@ -151,6 +204,65 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         "body:main"
       ),
     ]),
+  },
+  {
+    id: "selection-ledger-revolve-review",
+    title: "Selection Ledger Revolve Review",
+    part: (() => {
+      const sketch = sketch2d(
+        "sketch-review-revolve",
+        [
+          {
+            name: "profile:loop",
+            profile: profileSketchLoop([
+              "line-1",
+              "line-2",
+              "line-3",
+              "line-4",
+            ]),
+          },
+        ],
+        {
+          entities: [
+            sketchLine("line-1", [8, 0], [20, 0]),
+            sketchLine("line-2", [20, 0], [20, 14]),
+            sketchLine("line-3", [20, 14], [8, 14]),
+            sketchLine("line-4", [8, 14], [8, 0]),
+          ],
+        }
+      );
+      return part("selection-ledger-revolve-review", [
+        sketch,
+        revolve(
+          "review-revolve",
+          profileRef("profile:loop"),
+          "+Y",
+          Math.PI,
+          "body:main"
+        ),
+      ]);
+    })(),
+    render: {
+      meshOpts: {
+        linearDeflection: 0.12,
+        angularDeflection: 0.12,
+        parallel: true,
+      },
+      renderOpts: {
+        viewDir: [1.25, -1.05, 0.9],
+      },
+      layers: [
+        {
+          output: "body:main",
+          color: [210, 222, 198],
+          alpha: 0.78,
+          wireframe: true,
+          wireColor: [36, 44, 32],
+          wireDepthTest: false,
+          depthTest: true,
+        },
+      ],
+    },
   },
   {
     id: "loft",
