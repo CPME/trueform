@@ -1496,12 +1496,7 @@ export class OcctBackend implements Backend {
         },
       ],
     ]);
-    const selections = this.collectSelections(
-      solid,
-      feature.id,
-      feature.result,
-      feature.tags
-    );
+    const selections = this.collectSelections(solid, feature.id, feature.result, feature.tags);
     return { outputs, selections };
   }
 
@@ -2108,7 +2103,10 @@ export class OcctBackend implements Backend {
       split,
       feature.id,
       feature.result,
-      feature.tags
+      feature.tags,
+      {
+        ledgerPlan: this.makeFaceMutationSelectionLedgerPlan(upstream, sourceOwner, []),
+      }
     );
     return { outputs, selections };
   }
@@ -2199,7 +2197,10 @@ export class OcctBackend implements Backend {
       feature.id,
       outputKind === "solid" ? feature.result : ownerKey,
       feature.tags,
-      { rootKind: outputKind === "solid" ? "solid" : "face" }
+      {
+        rootKind: outputKind === "solid" ? "solid" : "face",
+        ledgerPlan: this.makeSplitFaceSelectionLedgerPlan(upstream, ownerShape, faceSelections),
+      }
     );
     return { outputs, selections };
   }
@@ -4219,7 +4220,10 @@ export class OcctBackend implements Backend {
       solid,
       feature.id,
       feature.result,
-      feature.tags
+      feature.tags,
+      {
+        ledgerPlan: this.makeBooleanSelectionLedgerPlan(upstream, left, right),
+      }
     );
     return { outputs, selections };
   }
@@ -5165,13 +5169,42 @@ export class OcctBackend implements Backend {
     };
   }
 
+  private makeSplitFaceSelectionLedgerPlan(
+    upstream: KernelResult,
+    ownerShape: any,
+    faceTargets: KernelSelection[]
+  ): SelectionLedgerPlan {
+    const mutationPlan = this.makeFaceMutationSelectionLedgerPlan(upstream, ownerShape, []);
+    return {
+      faces: (entries) => {
+        mutationPlan.faces?.(entries);
+        this.annotateSplitFaceSelections(entries, faceTargets);
+      },
+    };
+  }
+
+  private makeBooleanSelectionLedgerPlan(
+    upstream: KernelResult,
+    leftShape: any,
+    rightShape: any
+  ): SelectionLedgerPlan {
+    const leftPlan = this.makeFaceMutationSelectionLedgerPlan(upstream, leftShape, []);
+    const rightPlan = this.makeFaceMutationSelectionLedgerPlan(upstream, rightShape, []);
+    return {
+      faces: (entries) => {
+        leftPlan.faces?.(entries);
+        rightPlan.faces?.(entries);
+      },
+    };
+  }
+
   private annotateFaceMutationSelections(
     entries: CollectedSubshape[],
     ownerFaces: KernelSelection[],
     replacements: Array<{ from: KernelSelection; to: any }>,
     replacementSources: Set<string>
   ): void {
-    const unmatched = entries.slice();
+    const unmatched = entries.filter((entry) => !entry.ledger?.slot);
 
     const applyHint = (entry: CollectedSubshape, sourceSelection: KernelSelection): void => {
       const hint: SelectionLedgerHint = {
@@ -5427,6 +5460,63 @@ export class OcctBackend implements Backend {
     }
   }
 
+  private annotateSplitFaceSelections(
+    entries: CollectedSubshape[],
+    faceTargets: KernelSelection[]
+  ): void {
+    const remaining = entries.filter((entry) => !entry.ledger?.slot);
+    for (let i = 0; i < faceTargets.length; i += 1) {
+      const target = faceTargets[i];
+      if (!target) continue;
+      const slotRoot = this.selectionSlotForLineage(target)
+        ? `split.${this.selectionSlotForLineage(target)}`
+        : `split.seed.${i + 1}`;
+      const sourceRole = this.selectionRoleForLineage(target);
+      const ranked = remaining
+        .map((entry) => ({
+          entry,
+          ordering: this.splitBranchOrdering(entry, target),
+        }))
+        .filter(
+          (
+            candidate
+          ): candidate is {
+            entry: CollectedSubshape;
+            ordering: [number, number, number];
+          } => candidate.ordering !== null
+        )
+        .sort((a, b) => {
+          const byX = a.ordering[0] - b.ordering[0];
+          if (Math.abs(byX) > 1e-9) return byX;
+          const byY = a.ordering[1] - b.ordering[1];
+          if (Math.abs(byY) > 1e-9) return byY;
+          const byZ = a.ordering[2] - b.ordering[2];
+          if (Math.abs(byZ) > 1e-9) return byZ;
+          return 0;
+        });
+      for (let branchIndex = 0; branchIndex < ranked.length; branchIndex += 1) {
+        const current = ranked[branchIndex];
+        if (!current) continue;
+        const remainingIndex = remaining.indexOf(current.entry);
+        if (remainingIndex >= 0) {
+          remaining.splice(remainingIndex, 1);
+        }
+        const hint: SelectionLedgerHint = {
+          slot: `${slotRoot}.branch.${branchIndex + 1}`,
+          lineage: {
+            kind: "split",
+            from: target.id,
+            branch: `${branchIndex + 1}`,
+          },
+        };
+        if (sourceRole) {
+          hint.role = sourceRole;
+        }
+        this.applySelectionLedgerHint(current.entry, hint);
+      }
+    }
+  }
+
   private radiusMatches(actual: number, expected: number): boolean {
     const tolerance = Math.max(1e-4, Math.abs(expected) * 1e-4);
     return Math.abs(actual - expected) <= tolerance;
@@ -5462,6 +5552,72 @@ export class OcctBackend implements Backend {
       return metaRole.trim();
     }
     return undefined;
+  }
+
+  private splitBranchOrdering(
+    entry: CollectedSubshape,
+    sourceSelection: KernelSelection
+  ): [number, number, number] | null {
+    const sourceMeta = sourceSelection.meta;
+    const sourceSurfaceType =
+      typeof sourceMeta["surfaceType"] === "string"
+        ? (sourceMeta["surfaceType"] as string)
+        : null;
+    const entrySurfaceType =
+      typeof entry.meta["surfaceType"] === "string"
+        ? (entry.meta["surfaceType"] as string)
+        : null;
+    if (sourceSurfaceType && entrySurfaceType && sourceSurfaceType !== entrySurfaceType) {
+      return null;
+    }
+
+    const sourcePlanar =
+      typeof sourceMeta["planar"] === "boolean" ? (sourceMeta["planar"] as boolean) : null;
+    const entryPlanar =
+      typeof entry.meta["planar"] === "boolean" ? (entry.meta["planar"] as boolean) : null;
+    if (sourcePlanar !== null && entryPlanar !== null && sourcePlanar !== entryPlanar) {
+      return null;
+    }
+
+    const sourceNormal = this.vectorFingerprint(
+      sourceMeta["planeNormal"] ?? sourceMeta["normalVec"]
+    );
+    const entryNormal = this.vectorFingerprint(
+      entry.meta["planeNormal"] ?? entry.meta["normalVec"]
+    );
+    if (sourceNormal && entryNormal) {
+      const sourceNormalUnit = normalizeVector(sourceNormal);
+      const entryNormalUnit = normalizeVector(entryNormal);
+      if (Math.abs(dot(sourceNormalUnit, entryNormalUnit)) < 0.999) {
+        return null;
+      }
+    }
+
+    const sourcePlaneOrigin = this.vectorFingerprint(sourceMeta["planeOrigin"]);
+    const entryPlaneOrigin = this.vectorFingerprint(entry.meta["planeOrigin"]);
+    if (sourcePlaneOrigin && entryPlaneOrigin && sourceNormal) {
+      const delta = this.subVec(entryPlaneOrigin, sourcePlaneOrigin);
+      if (Math.abs(dot(delta, normalizeVector(sourceNormal))) > 1e-4) {
+        return null;
+      }
+    }
+
+    const center = this.vectorFingerprint(entry.meta["center"]);
+    if (!center) return null;
+
+    const origin = sourcePlaneOrigin ?? this.vectorFingerprint(sourceMeta["center"]) ?? [0, 0, 0];
+    const normal =
+      this.vectorFingerprint(sourceMeta["planeNormal"] ?? sourceMeta["normalVec"]) ?? [0, 0, 1];
+    const xSeed =
+      this.vectorFingerprint(sourceMeta["planeXDir"]) ?? this.defaultAxisForNormal(normal);
+    const xDir = normalizeVector(xSeed);
+    const ySeed = this.vectorFingerprint(sourceMeta["planeYDir"]) ?? cross(normalizeVector(normal), xDir);
+    const yDir = normalizeVector(ySeed);
+    const relative = this.subVec(center, origin);
+    const x = dot(relative, xDir);
+    const y = dot(relative, yDir);
+    const z = typeof entry.meta["centerZ"] === "number" ? (entry.meta["centerZ"] as number) : center[2];
+    return [x, y, z];
   }
 
   private annotatePrismFaceSelections(
