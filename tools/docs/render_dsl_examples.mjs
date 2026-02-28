@@ -20,6 +20,12 @@ const pmiDir = path.join(__dirname, "..", "..", "docs", "public", "examples", "p
 const shouldSkip =
   process.env.TF_DOCS_SKIP_EXAMPLES === "1" ||
   process.env.TF_DOCS_SKIP_EXAMPLES === "true";
+const requestedExampleIds = new Set(
+  String(process.env.TF_DOCS_ONLY ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+);
 
 const meshOpts = {
   linearDeflection: 0.2,
@@ -33,6 +39,19 @@ async function fileExists(filePath) {
     return true;
   } catch {
     return false;
+  }
+}
+
+async function readExistingManifestEntries() {
+  const manifestPath = path.join(outDir, "manifest.json");
+  if (!(await fileExists(manifestPath))) {
+    return [];
+  }
+  try {
+    const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+    return Array.isArray(manifest.examples) ? manifest.examples : [];
+  } catch {
+    return [];
   }
 }
 
@@ -111,9 +130,22 @@ try {
   await fs.mkdir(outDir, { recursive: true });
   await fs.mkdir(pmiDir, { recursive: true });
 
-  const manifest = [];
+  const examplesToRender =
+    requestedExampleIds.size > 0
+      ? dslFeatureExamples.filter((example) => requestedExampleIds.has(example.id))
+      : dslFeatureExamples;
+  const existingManifestEntries = await readExistingManifestEntries();
+  const existingManifestById = new Map(
+    existingManifestEntries
+      .filter((entry) => entry && typeof entry.id === "string")
+      .map((entry) => [entry.id, entry])
+  );
+  const renderedManifestById = new Map();
+  for (const entry of existingManifestById.values()) {
+    renderedManifestById.set(entry.id, entry);
+  }
 
-  for (const example of dslFeatureExamples) {
+  for (const example of examplesToRender) {
     const result = buildPart(example.part, backend);
     const resolution = buildResolutionContext(result.final);
     const renderConfig = example.render ?? {};
@@ -170,7 +202,7 @@ try {
     }
     const filename = `${example.id}.iso.png`;
     await fs.writeFile(path.join(outDir, filename), png);
-    manifest.push({
+    renderedManifestById.set(example.id, {
       id: example.id,
       title: example.title,
       image: `/examples/dsl/${filename}`,
@@ -187,6 +219,10 @@ try {
     }
   }
 
+  const manifest = dslFeatureExamples
+    .map((example) => renderedManifestById.get(example.id))
+    .filter((entry) => entry !== undefined);
+
   await fs.writeFile(
     path.join(outDir, "manifest.json"),
     JSON.stringify({ examples: manifest }, null, 2)
@@ -196,7 +232,10 @@ try {
     JSON.stringify(
       {
         outputDir: outDir,
-        count: manifest.length,
+        count: examplesToRender.length,
+        manifestCount: manifest.length,
+        mode: requestedExampleIds.size > 0 ? "filtered" : "full",
+        requested: requestedExampleIds.size > 0 ? Array.from(requestedExampleIds) : undefined,
       },
       null,
       2
