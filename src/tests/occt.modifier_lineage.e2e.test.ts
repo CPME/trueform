@@ -21,6 +21,15 @@ function bottomFaceSelection(result: ReturnType<typeof buildPart>, featureId: st
   );
 }
 
+function findStepSelection(
+  result: ReturnType<typeof buildPart>,
+  featureId: string,
+  predicate: (selection: (typeof result.steps)[number]["result"]["selections"][number]) => boolean
+) {
+  const step = result.steps.find((entry) => entry.featureId === featureId);
+  return step?.result.selections.find(predicate);
+}
+
 const tests = [
   {
     name: "occt modifier lineage: hole emits wall slot derived from the target face",
@@ -97,6 +106,53 @@ const tests = [
     },
   },
   {
+    name: "occt modifier lineage: draft preserves selected side slot with modified lineage",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const part = dsl.part("draft-lineage", [
+        dsl.extrude("base", dsl.profileRect(40, 20), 20, "body:base"),
+        dsl.datumPlane("draft-neutral", "+Z", [0, 0, 0]),
+        dsl.draft(
+          "draft-1",
+          dsl.selectorNamed("body:base"),
+          dsl.selectorFace([
+            dsl.predCreatedBy("base"),
+            dsl.predPlanar(),
+            dsl.predNormal("+X"),
+          ]),
+          dsl.planeDatum("draft-neutral"),
+          "+Z",
+          Math.PI / 60,
+          "body:main",
+          ["base", "draft-neutral"]
+        ),
+      ]);
+
+      const result = buildPart(part, backend);
+      const output = result.final.outputs.get("body:main");
+      assert.ok(output, "missing draft result");
+      assertValidShape(occt, output.meta["shape"] as any, "draft lineage result");
+
+      const drafted = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "draft-1" &&
+          selection.meta["selectionLineage"] &&
+          typeof selection.meta["selectionSlot"] === "string" &&
+          (selection.meta["selectionSlot"] as string).startsWith("side.")
+      );
+      assert.ok(drafted, "missing drafted face lineage");
+      const sourceId = (drafted?.meta["selectionLineage"] as { from?: string }).from;
+      const source = findStepSelection(
+        result,
+        "base",
+        (selection) => selection.id === sourceId
+      );
+      assert.ok(source, "missing drafted source face");
+      assert.equal(drafted?.meta["selectionSlot"], source?.meta["selectionSlot"]);
+    },
+  },
+  {
     name: "occt modifier lineage: replace face preserves top-face slot with modified lineage",
     fn: async () => {
       const { backend, occt } = await getBackendContext();
@@ -134,6 +190,52 @@ const tests = [
         kind: "modified",
         from: "face:body.main~base-extrude.top",
       });
+    },
+  },
+  {
+    name: "occt modifier lineage: shell preserves bottom slot for unchanged outer face",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const topFace = dsl.selectorFace(
+        [dsl.predCreatedBy("base"), dsl.predPlanar(), dsl.predNormal("+Z")],
+        [dsl.rankMaxArea()]
+      );
+      const part = dsl.part("shell-lineage", [
+        dsl.extrude("base", dsl.profileRect(60, 40), 20, "body:base"),
+        dsl.shell(
+          "shell-1",
+          dsl.selectorNamed("body:base"),
+          2,
+          "body:main",
+          undefined,
+          { direction: "inside", openFaces: [topFace] }
+        ),
+      ]);
+
+      const result = buildPart(part, backend);
+      const output = result.final.outputs.get("body:main");
+      assert.ok(output, "missing shell result");
+      assertValidShape(occt, output.meta["shape"] as any, "shell lineage result");
+
+      const source = findStepSelection(
+        result,
+        "base",
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "base" &&
+          selection.meta["selectionSlot"] === "bottom"
+      );
+      assert.ok(source, "missing source shell bottom face");
+
+      const preserved = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "shell-1" &&
+          selection.meta["selectionLineage"] &&
+          (selection.meta["selectionLineage"] as { from?: string }).from === source.id
+      );
+      assert.ok(preserved, "missing shell preserved face lineage");
+      assert.equal(preserved?.meta["selectionSlot"], "bottom");
     },
   },
   {

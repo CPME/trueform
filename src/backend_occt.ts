@@ -3528,7 +3528,15 @@ export class OcctBackend implements Backend {
       solid,
       feature.id,
       feature.result,
-      feature.tags
+      feature.tags,
+      {
+        ledgerPlan: this.makeDraftSelectionLedgerPlan(
+          upstream,
+          owner,
+          faceTargets as KernelSelection[],
+          draft
+        ),
+      }
     );
     return { outputs, selections };
   }
@@ -3605,7 +3613,10 @@ export class OcctBackend implements Backend {
       solid,
       feature.id,
       feature.result,
-      feature.tags
+      feature.tags,
+      {
+        ledgerPlan: this.makeFaceMutationSelectionLedgerPlan(upstream, shape, []),
+      }
     );
     return { outputs, selections };
   }
@@ -5107,6 +5118,21 @@ export class OcctBackend implements Backend {
     };
   }
 
+  private makeDraftSelectionLedgerPlan(
+    upstream: KernelResult,
+    ownerShape: any,
+    faceTargets: KernelSelection[],
+    builder: any
+  ): SelectionLedgerPlan {
+    const mutationPlan = this.makeFaceMutationSelectionLedgerPlan(upstream, ownerShape, []);
+    return {
+      faces: (entries) => {
+        mutationPlan.faces?.(entries);
+        this.annotateDraftFaceSelections(entries, faceTargets, builder);
+      },
+    };
+  }
+
   private annotateFaceMutationSelections(
     entries: CollectedSubshape[],
     ownerFaces: KernelSelection[],
@@ -5296,6 +5322,38 @@ export class OcctBackend implements Backend {
           role: "hole",
           lineage: { kind: "modified", from: target.id },
         });
+      }
+    }
+  }
+
+  private annotateDraftFaceSelections(
+    entries: CollectedSubshape[],
+    faceTargets: KernelSelection[],
+    builder: any
+  ): void {
+    const unmatched = entries.slice();
+    for (const target of faceTargets) {
+      const sourceShape = target.meta["shape"];
+      if (!sourceShape) continue;
+      const modified = this.collectModifiedShapes(builder, sourceShape).flatMap((shape) => {
+        const faces = this.collectFacesFromShape(shape);
+        return faces.length > 0 ? faces : [shape];
+      });
+      if (modified.length === 0) continue;
+      const sourceSlot = this.selectionSlotForLineage(target);
+      const sourceRole = this.selectionRoleForLineage(target);
+      for (const candidate of modified) {
+        const index = unmatched.findIndex((entry) => this.shapesSame(entry.shape, candidate));
+        if (index < 0) continue;
+        const [entry] = unmatched.splice(index, 1);
+        if (!entry) continue;
+        const hint: SelectionLedgerHint = {
+          lineage: { kind: "modified", from: target.id },
+        };
+        if (sourceSlot) hint.slot = sourceSlot;
+        if (sourceRole) hint.role = sourceRole;
+        this.applySelectionLedgerHint(entry, hint);
+        break;
       }
     }
   }
@@ -5532,9 +5590,21 @@ export class OcctBackend implements Backend {
   }
 
   private collectGeneratedShapes(builder: any, source: any): any[] {
+    return this.collectHistoryShapes(builder, ["Generated", "Generated_1"], source);
+  }
+
+  private collectModifiedShapes(builder: any, source: any): any[] {
+    return this.collectHistoryShapes(builder, ["Modified", "Modified_1"], source);
+  }
+
+  private collectHistoryShapes(
+    builder: any,
+    methodNames: string[],
+    source: any
+  ): any[] {
     let generated: any;
     try {
-      generated = this.callWithFallback(builder, ["Generated", "Generated_1"], [[source]]);
+      generated = this.callWithFallback(builder, methodNames, [[source]]);
     } catch {
       return [];
     }
