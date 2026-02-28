@@ -66,6 +66,11 @@
       "image": "/examples/dsl/fillet.iso.png"
     },
     {
+      "id": "selection-ledger-fillet-edge-review",
+      "title": "Selection Ledger Fillet Edge Review",
+      "image": "/examples/dsl/selection-ledger-fillet-edge-review.iso.png"
+    },
+    {
       "id": "variable-fillet",
       "title": "Variable Fillet",
       "image": "/examples/dsl/variable-fillet.iso.png"
@@ -74,6 +79,11 @@
       "id": "chamfer",
       "title": "Chamfer",
       "image": "/examples/dsl/chamfer.iso.png"
+    },
+    {
+      "id": "selection-ledger-chamfer-edge-review",
+      "title": "Selection Ledger Chamfer Edge Review",
+      "image": "/examples/dsl/selection-ledger-chamfer-edge-review.iso.png"
     },
     {
       "id": "variable-chamfer",

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <style>
+    .panel { fill: rgba(15, 23, 36, 0.9); stroke: #20324a; stroke-width: 2; rx: 14; }
+    .title { fill: #eef4fb; font: 700 26px ui-sans-serif, system-ui, sans-serif; }
+    .legend { fill: #d7e3f2; font: 500 17px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .note { fill: #a9bbd0; font: 500 15px ui-sans-serif, system-ui, sans-serif; }
+    .label { fill: #eef4fb; font: 600 22px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .callout { stroke: #101820; stroke-width: 3; fill: none; }
+    .edge-mark { stroke: #f97316; stroke-width: 10; stroke-linecap: round; fill: none; opacity: 0.95; }
+    .face-mark { stroke: #06b6d4; stroke-width: 26; stroke-linecap: round; fill: none; opacity: 0.32; }
+    .swatch-a { fill: #f97316; stroke: #101820; stroke-width: 2; }
+    .swatch-b { fill: #06b6d4; stroke: #101820; stroke-width: 2; }
+  </style>
+
+  <image href="selection-ledger-chamfer-edge-review.iso.png" x="0" y="0" width="1200" height="900" />
+
+  <path d="M 544 336 C 624 286, 782 286, 864 336" class="edge-mark" />
+  <path d="M 554 372 C 632 338, 772 338, 850 372" class="face-mark" />
+
+  <rect x="24" y="24" width="668" height="180" class="panel" />
+  <text x="44" y="62" class="title">Expected edge-derived labels</text>
+  <circle cx="56" cy="92" r="10" class="swatch-a" />
+  <text x="78" y="98" class="legend">A  seed edge  edge:body.main~cyl.h74080499fc506b52.1</text>
+  <circle cx="56" cy="126" r="10" class="swatch-b" />
+  <text x="78" y="132" class="legend">B  chamfer face  face:body.main~review-chamfer.chamfer.seed.1</text>
+  <text x="44" y="164" class="note">Orange traces the visible front arc of the selected top edge.</text>
+  <text x="44" y="188" class="note">Blue bands the generated chamfer face derived from that edge.</text>
+
+  <path d="M 912 258 L 874 286 L 830 314" class="callout" />
+  <rect x="910" y="220" width="232" height="48" class="panel" />
+  <text x="930" y="251" class="label">A  selected seed edge</text>
+
+  <path d="M 904 410 L 860 398 L 814 384" class="callout" />
+  <rect x="904" y="410" width="272" height="48" class="panel" />
+  <text x="924" y="441" class="label">B  chamfer.seed.1</text>
+</svg>

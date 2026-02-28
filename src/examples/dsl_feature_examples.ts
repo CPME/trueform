@@ -471,6 +471,40 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     ]),
   },
   {
+    id: "selection-ledger-fillet-edge-review",
+    title: "Selection Ledger Fillet Edge Review",
+    part: part("selection-ledger-fillet-edge-review", [
+      extrude("cyl", profileCircle(14), 28, "body:main"),
+      fillet(
+        "review-fillet",
+        selectorEdge([predCreatedBy("cyl")], [rankMaxZ()]),
+        3,
+        ["cyl"]
+      ),
+    ]),
+    render: {
+      meshOpts: {
+        linearDeflection: 0.12,
+        angularDeflection: 0.12,
+        parallel: true,
+      },
+      renderOpts: {
+        viewDir: [1.2, -1.0, 0.95],
+      },
+      layers: [
+        {
+          output: "body:main",
+          color: [221, 205, 186],
+          alpha: 0.82,
+          wireframe: true,
+          wireColor: [40, 34, 28],
+          wireDepthTest: false,
+          depthTest: true,
+        },
+      ],
+    },
+  },
+  {
     id: "variable-fillet",
     title: "Variable Fillet",
     part: part("example-variable-fillet", [
@@ -518,6 +552,40 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         ["block"]
       ),
     ]),
+  },
+  {
+    id: "selection-ledger-chamfer-edge-review",
+    title: "Selection Ledger Chamfer Edge Review",
+    part: part("selection-ledger-chamfer-edge-review", [
+      extrude("cyl", profileCircle(14), 28, "body:main"),
+      chamfer(
+        "review-chamfer",
+        selectorEdge([predCreatedBy("cyl")], [rankMaxZ()]),
+        3,
+        ["cyl"]
+      ),
+    ]),
+    render: {
+      meshOpts: {
+        linearDeflection: 0.12,
+        angularDeflection: 0.12,
+        parallel: true,
+      },
+      renderOpts: {
+        viewDir: [1.2, -1.0, 0.95],
+      },
+      layers: [
+        {
+          output: "body:main",
+          color: [198, 215, 196],
+          alpha: 0.82,
+          wireframe: true,
+          wireColor: [30, 44, 32],
+          wireDepthTest: false,
+          depthTest: true,
+        },
+      ],
+    },
   },
   {
     id: "variable-chamfer",

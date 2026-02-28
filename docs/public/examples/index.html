@@ -185,6 +185,14 @@
       </div>
     </a>
 
+    <a class="card" href="#code-dsl-selection-ledger-fillet-edge-review">
+      <img src="./dsl/selection-ledger-fillet-edge-review.iso.png" alt="Selection Ledger Fillet Edge Review" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Selection Ledger Fillet Edge Review</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
     <a class="card" href="#code-dsl-variable-fillet">
       <img src="./dsl/variable-fillet.iso.png" alt="Variable Fillet" loading="lazy" />
       <div class="card-body">
@@ -197,6 +205,14 @@
       <img src="./dsl/chamfer.iso.png" alt="Chamfer" loading="lazy" />
       <div class="card-body">
         <div class="card-title">Chamfer</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-selection-ledger-chamfer-edge-review">
+      <img src="./dsl/selection-ledger-chamfer-edge-review.iso.png" alt="Selection Ledger Chamfer Edge Review" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Selection Ledger Chamfer Edge Review</div>
         <div class="card-meta">Features</div>
       </div>
     </a>
@@ -713,6 +729,21 @@ const examplePart = part(&quot;example-sweep-sketch&quot;, [
       <a class="back-link" href="#top">Back to gallery</a>
     </article>
 
+    <article class="code-entry" id="code-dsl-selection-ledger-fillet-edge-review">
+      <h3>Selection Ledger Fillet Edge Review (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Fillet</p>
+      <pre><code>const examplePart = part(&quot;example-fillet&quot;, [
+  extrude(&quot;cyl&quot;, profileCircle(14), 28, &quot;body:main&quot;),
+  fillet(
+    &quot;edge-fillet&quot;,
+    selectorEdge([predCreatedBy(&quot;cyl&quot;)], [rankMaxZ()]),
+    3,
+    [&quot;cyl&quot;]
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
     <article class="code-entry" id="code-dsl-variable-fillet">
       <h3>Variable Fillet (DSL)</h3>
       <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Variable Fillet</p>
@@ -734,6 +765,21 @@ const examplePart = part(&quot;example-sweep-sketch&quot;, [
 
     <article class="code-entry" id="code-dsl-chamfer">
       <h3>Chamfer (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Chamfer</p>
+      <pre><code>const examplePart = part(&quot;example-chamfer&quot;, [
+  extrude(&quot;block&quot;, profileRect(40, 26), 12, &quot;body:main&quot;),
+  chamfer(
+    &quot;edge-chamfer&quot;,
+    selectorEdge([predCreatedBy(&quot;block&quot;)]),
+    2,
+    [&quot;block&quot;]
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-selection-ledger-chamfer-edge-review">
+      <h3>Selection Ledger Chamfer Edge Review (DSL)</h3>
       <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Chamfer</p>
       <pre><code>const examplePart = part(&quot;example-chamfer&quot;, [
   extrude(&quot;block&quot;, profileRect(40, 26), 12, &quot;body:main&quot;),
