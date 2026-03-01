@@ -259,6 +259,90 @@ const tests = [
     },
   },
   {
+    name: "dimensions: ref.point can round-trip named point anchor ids",
+    fn: async () => {
+      const edgeStart = dsl.refPoint(dsl.selectorNamed("edge:mid.point.start"));
+      const edgeEnd = dsl.refPoint(dsl.selectorNamed("edge:mid.point.end"));
+      const part = dsl.part("dimension-point-anchor-roundtrip", [], {
+        constraints: [
+          dsl.dimensionDistance("edge-span-roundtrip", edgeStart, edgeEnd, {
+            nominal: 10,
+            tolerance: 1e-6,
+          }),
+        ],
+      });
+      const result = makeKernelResult(
+        new Map([
+          [
+            "edge:mid",
+            {
+              id: "edge:mid",
+              kind: "edge",
+              meta: {
+                center: [0, 5, 0],
+                startPoint: [0, 0, 0],
+                midPoint: [0, 5, 0],
+                endPoint: [0, 10, 0],
+              },
+            },
+          ],
+        ])
+      );
+
+      const dimensions = evaluatePartDimensions(part, result);
+      const edgeSpan = byId(dimensions, "edge-span-roundtrip");
+      assert.equal(edgeSpan.status, "ok");
+      approx(edgeSpan.measured, 10);
+      assert.equal(edgeSpan.details?.["from"], "edge:mid.point.start");
+      assert.equal(edgeSpan.details?.["to"], "edge:mid.point.end");
+    },
+  },
+  {
+    name: "dimensions: ref.point rejects mismatched explicit locator for named point anchors",
+    fn: async () => {
+      const badPoint = dsl.refPoint(dsl.selectorNamed("edge:mid.point.start"), "end");
+      const target = dsl.refSurface(dsl.selectorNamed("face:b"));
+      const part = dsl.part("dimension-point-anchor-mismatch", [], {
+        constraints: [
+          dsl.dimensionDistance("bad-anchor", badPoint, target, {
+            nominal: 10,
+            tolerance: 0.5,
+          }),
+        ],
+      });
+      const result = makeKernelResult(
+        new Map([
+          [
+            "edge:mid",
+            {
+              id: "edge:mid",
+              kind: "edge",
+              meta: {
+                center: [0, 5, 0],
+                startPoint: [0, 0, 0],
+                midPoint: [0, 5, 0],
+                endPoint: [0, 10, 0],
+              },
+            },
+          ],
+          [
+            "face:b",
+            {
+              id: "face:b",
+              kind: "face",
+              meta: { center: [10, 0, 0], normalVec: [1, 0, 0] },
+            },
+          ],
+        ])
+      );
+
+      const dimensions = evaluatePartDimensions(part, result);
+      const bad = byId(dimensions, "bad-anchor");
+      assert.equal(bad.status, "unsupported");
+      assert.match(bad.message ?? "", /locator mismatch/);
+    },
+  },
+  {
     name: "dimensions: ref.point start/end are unsupported on closed edges",
     fn: async () => {
       const closedStart = dsl.refPoint(dsl.selectorNamed("edge:ring"), "start");

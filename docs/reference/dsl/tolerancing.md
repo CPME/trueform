@@ -35,6 +35,9 @@ Notes:
     `selection.meta.pointAnchors` for application-side discovery. That metadata
     is descriptive only; authored documents should still use
     `refPoint(selectorNamed("<source-id>"), "<locator>")`.
+  - For application round-tripping, `refPoint(selectorNamed("<source-id>.point.<locator>"))`
+    is also supported. This lets a client feed a discovered anchor id back into
+    a constraint without introducing a separate top-level point selector kind.
 
 Examples:
 - [Cosmetic thread](./examples/tolerancing#cosmetic-thread)

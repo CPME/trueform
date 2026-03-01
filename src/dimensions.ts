@@ -32,6 +32,8 @@ export type DimensionEvalOptions = {
   epsilon?: number;
 };
 
+type ResolvedPointLocator = NonNullable<RefPoint["locator"]>;
+
 export function evaluatePartDimensions(
   part: IntentPart,
   result: KernelResult,
@@ -220,11 +222,12 @@ function resolvePointRef(
   ref: RefPoint,
   ctx: ReturnType<typeof toResolutionContext>
 ): KernelSelection {
-  const base = resolveSelector(ref.selector, ctx);
-  const locator = ref.locator ?? "center";
+  const pointTarget = resolvePointTarget(ref, ctx);
+  const base = pointTarget.base;
+  const locator = pointTarget.locator;
   const point = pointOf(base, locator);
   return {
-    id: `${base.id}.point.${locator}`,
+    id: pointTarget.id ?? `${base.id}.point.${locator}`,
     kind: base.kind,
     meta: {
       ...base.meta,
@@ -233,6 +236,90 @@ function resolvePointRef(
       pointLocator: locator,
       pointSourceId: base.id,
     },
+  };
+}
+
+function resolvePointTarget(
+  ref: RefPoint,
+  ctx: ReturnType<typeof toResolutionContext>
+): {
+  base: KernelSelection;
+  locator: ResolvedPointLocator;
+  id?: string;
+} {
+  const namedPointTarget = namedPointAnchorTarget(ref.selector, ctx);
+  if (namedPointTarget) {
+    if (ref.locator && ref.locator !== namedPointTarget.locator) {
+      throw new Error(
+        `Point reference locator mismatch: selector requests ${namedPointTarget.locator} but ref.point requested ${ref.locator}`
+      );
+    }
+    return namedPointTarget;
+  }
+  return {
+    base: resolveSelector(ref.selector, ctx),
+    locator: ref.locator ?? "center",
+  };
+}
+
+function namedPointAnchorTarget(
+  selector: RefPoint["selector"],
+  ctx: ReturnType<typeof toResolutionContext>
+): {
+  base: KernelSelection;
+  locator: ResolvedPointLocator;
+  id: string;
+} | null {
+  if (selector.kind !== "selector.named") return null;
+  const normalized = selector.name.trim();
+  if (hasDirectSelectionReference(normalized, ctx)) return null;
+  const parsed = parsePointAnchorId(normalized);
+  if (!parsed) return null;
+  let base: KernelSelection;
+  try {
+    base = resolveSelector({ kind: "selector.named", name: parsed.sourceId }, ctx);
+  } catch {
+    return null;
+  }
+  return {
+    base,
+    locator: parsed.locator,
+    id: parsed.id,
+  };
+}
+
+function hasDirectSelectionReference(
+  target: string,
+  ctx: ReturnType<typeof toResolutionContext>
+): boolean {
+  if (ctx.named.has(target)) return true;
+  return ctx.selections.some((selection) => {
+    if (selection.id === target) return true;
+    const aliases = selection.meta["selectionAliases"];
+    return (
+      Array.isArray(aliases) &&
+      aliases.some((entry) => typeof entry === "string" && entry === target)
+    );
+  });
+}
+
+function parsePointAnchorId(
+  value: string
+): {
+  id: string;
+  sourceId: string;
+  locator: ResolvedPointLocator;
+} | null {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(.*)\.point\.(center|mid|start|end)$/);
+  if (!match) return null;
+  const sourceId = (match[1] ?? "").trim();
+  const locator = (match[2] ?? "").trim() as ResolvedPointLocator;
+  if (!sourceId) return null;
+  return {
+    id: trimmed,
+    sourceId,
+    locator,
   };
 }
 
@@ -259,7 +346,7 @@ function centerOf(selection: KernelSelection): [number, number, number] {
 
 function pointOf(
   selection: KernelSelection,
-  locator: RefPoint["locator"] extends infer T ? Exclude<T, undefined> : never
+  locator: ResolvedPointLocator
 ): [number, number, number] {
   switch (locator) {
     case "center": {

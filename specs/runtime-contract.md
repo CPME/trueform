@@ -480,6 +480,10 @@ Optional keys:
   - Applications can use these anchors for UI/discovery, but authored refs
     should still be expressed as `refPoint(selectorNamed("<sourceId>"), "<locator>")`
     so intent stays attached to the parent semantic selection.
+  - Clients may also round-trip an emitted anchor id directly via
+    `refPoint(selectorNamed("<sourceId>.point.<locator>"))`. This is still
+    resolved through the parent semantic selection; runtime does not expose a
+    separate top-level `point` selection kind.
 
 Selection metadata is exposed to the client only for selectors and debug overlays.
 
