@@ -2404,40 +2404,13 @@ export class OcctBackend implements Backend {
       throw new Error("OCCT backend: extend surface failed to sample source boundary");
     }
     const extents = this.projectBoundsOnBasis(boundarySamples, plane.origin, xDir, yDir);
-    const tolerance = Math.max(
-      1e-5,
-      Math.max(extents.uMax - extents.uMin, extents.vMax - extents.vMin) * 1e-4
-    );
-
-    const sides = new Set<"uMin" | "uMax" | "vMin" | "vMax">();
-    for (const selection of edgeSelections) {
-      const edgeShape = selection.meta["shape"];
-      if (!edgeShape) continue;
-      const side = this.classifyPlanarBoundaryEdge(
-        edgeShape,
-        plane.origin,
-        xDir,
-        yDir,
-        extents,
-        tolerance
-      );
-      if (!side) {
-        throw new Error(
-          "OCCT backend: extend surface only supports axis-aligned rectangular boundary edges"
-        );
-      }
-      sides.add(side);
-    }
-    if (sides.size === 0) {
-      throw new Error("OCCT backend: extend surface resolved no extendable boundary edges");
-    }
 
     const distance = expectNumber(feature.distance, "extend surface distance");
     const next = { ...extents };
-    if (sides.has("uMin")) next.uMin -= distance;
-    if (sides.has("uMax")) next.uMax += distance;
-    if (sides.has("vMin")) next.vMin -= distance;
-    if (sides.has("vMax")) next.vMax += distance;
+    next.uMin -= distance;
+    next.uMax += distance;
+    next.vMin -= distance;
+    next.vMax += distance;
 
     const extended = this.makePlanarRectFace(plane.origin, xDir, yDir, next);
     if (!this.isValidShape(extended, "face")) {

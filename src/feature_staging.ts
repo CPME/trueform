@@ -25,6 +25,18 @@ export const TF_STAGED_FEATURES: Readonly<Record<string, FeatureStageEntry>> = O
     stage: "staging" as const,
     notes: "Web is staging while open-profile robustness and side-control behavior hardens.",
   },
+  "feature.trim.surface": {
+    stage: "staging" as const,
+    notes: "Trim surface is staging while keep-side coverage expands beyond the initial deterministic subset.",
+  },
+  "feature.extend.surface": {
+    stage: "staging" as const,
+    notes: "Extend surface is staging while support expands beyond the initial rectangular planar-face subset.",
+  },
+  "feature.knit": {
+    stage: "staging" as const,
+    notes: "Knit is staging while stitched-shell promotion and broader topology coverage harden.",
+  },
   "feature.extrude:mode.surface": {
     stage: "staging" as const,
     notes: "Surface-mode extrude remains in staging while robustness improves.",

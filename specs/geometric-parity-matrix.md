@@ -29,7 +29,7 @@ Status keys:
 | Patterns + transforms | Linear/circular patterns, mirror | `ready` | Curve/fill/table-driven patterns missing. |
 | Multi-body direct edits | Split body, split face | `ready` | Selector/failure-mode and stability probes are now in place. |
 | Multi-body direct edits | Delete/replace/move face, move/copy body | `ready` | Move/copy body and delete/replace/move face workflows are now promoted to ready with conformance/determinism/failure-mode probes. |
-| Advanced surfacing | Boundary/fill/trim/untrim/extend/knit/heal | `missing` | High-value surfacing backlog. |
+| Advanced surfacing | Boundary/fill/trim/untrim/extend/knit/heal | `staging` | `feature.trim.surface`, `feature.extend.surface`, and `feature.knit` are now available in staging; boundary/fill and broader surfacing workflows remain missing. |
 | Advanced profile ops | Rib/web, wrap/emboss/deform/flex | `staging` | Rib/web thin open-profile workflows are available in staging; broader wrap/emboss/deform/flex workflows remain missing. |
 | Advanced hole/edge options | Hole wizard standards, variable fillets/chamfers | `staging` | Variable fillet/chamfer controls are ready; hole-wizard end-condition coverage remains staging and threaded wizard profiles still require dedicated `feature.thread`. |
 

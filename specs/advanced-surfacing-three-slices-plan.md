@@ -2,7 +2,7 @@
 
 Updated: 2026-02-25
 Owner: geometry/core
-Status: planned
+Status: in_progress
 
 Purpose: define a concrete implementation path for the highest-value surfacing
 gaps vs leading CAD systems, while preserving TrueForm determinism and webapp-safe

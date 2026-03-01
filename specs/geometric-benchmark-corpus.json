@@ -194,9 +194,23 @@
       "notes": "feature.move.face supports translation workflows with healing/open-surface paths plus deterministic parity checks and is now promoted to ready."
     },
     {
-      "id": "advanced-surfacing-boundary-fill-knit",
+      "id": "advanced-surfacing-trim-extend-knit",
       "category": "advanced-surfacing",
-      "feature": "Boundary/fill/trim/extend/knit workflows",
+      "feature": "Trim/extend/knit workflows",
+      "parity": "staging",
+      "probe": { "kind": "dist-test", "path": "dist/tests/occt.trim_extend_knit.e2e.probe.js" },
+      "notes": "Trim surface, extend surface, and knit now execute in OCCT with deterministic semantic selection coverage for the initial staging subset."
+    },
+    {
+      "id": "advanced-surfacing-boundary-fill",
+      "category": "advanced-surfacing",
+      "feature": "Boundary/fill surface workflows",
+      "parity": "missing"
+    },
+    {
+      "id": "advanced-surfacing-guides-curve-on-surface",
+      "category": "advanced-surfacing",
+      "feature": "Guide curves and curve-on-surface workflows",
       "parity": "missing"
     },
     {

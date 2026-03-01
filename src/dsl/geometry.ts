@@ -42,6 +42,9 @@ import type {
   Mirror,
   SplitBody,
   SplitFace,
+  TrimSurface,
+  ExtendSurface,
+  Knit,
   Draft,
   RankRule,
   Revolve,
@@ -653,6 +656,61 @@ export const splitFace = (
     faces,
     tool,
     result: result ?? `body:${id}`,
+    deps,
+  });
+
+export const trimSurface = (
+  id: ID,
+  source: Selector,
+  tools: Selector[],
+  result?: string,
+  deps?: ID[],
+  opts?: { keep?: TrimSurface["keep"] }
+): TrimSurface =>
+  compact({
+    id,
+    kind: "feature.trim.surface",
+    source,
+    tools,
+    keep: opts?.keep ?? "outside",
+    result: result ?? `surface:${id}`,
+    deps,
+  });
+
+export const extendSurface = (
+  id: ID,
+  source: Selector,
+  edges: Selector,
+  distance: Scalar,
+  result?: string,
+  deps?: ID[],
+  opts?: { mode?: ExtendSurface["mode"] }
+): ExtendSurface =>
+  compact({
+    id,
+    kind: "feature.extend.surface",
+    source,
+    edges,
+    distance,
+    mode: opts?.mode,
+    result: result ?? `surface:${id}`,
+    deps,
+  });
+
+export const knit = (
+  id: ID,
+  sources: Selector[],
+  result?: string,
+  deps?: ID[],
+  opts?: { tolerance?: Scalar; makeSolid?: boolean }
+): Knit =>
+  compact({
+    id,
+    kind: "feature.knit",
+    sources,
+    tolerance: opts?.tolerance,
+    makeSolid: opts?.makeSolid,
+    result: result ?? (opts?.makeSolid ? `body:${id}` : `surface:${id}`),
     deps,
   });
 

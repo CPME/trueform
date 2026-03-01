@@ -146,6 +146,16 @@ function normalizeFeature(
   if ("tool" in clone && isSelector(clone.tool)) {
     (clone as { tool: Selector }).tool = normalizeSelector(clone.tool as Selector);
   }
+  if ("tools" in clone && Array.isArray(clone.tools)) {
+    (clone as { tools: Selector[] }).tools = (clone.tools as Selector[]).map((tool) =>
+      normalizeSelector(tool)
+    );
+  }
+  if ("sources" in clone && Array.isArray(clone.sources)) {
+    (clone as { sources: Selector[] }).sources = (clone.sources as Selector[]).map((source) =>
+      normalizeSelector(source)
+    );
+  }
   if ("neutralPlane" in clone && isSelector(clone.neutralPlane)) {
     (clone as { neutralPlane: Selector }).neutralPlane = normalizeSelector(
       clone.neutralPlane as Selector
@@ -287,6 +297,14 @@ function normalizeFeature(
       clone.outerAcrossFlats = normalizeScalar(clone.outerAcrossFlats, "length", ctx);
       if (clone.innerAcrossFlats !== undefined) {
         clone.innerAcrossFlats = normalizeScalar(clone.innerAcrossFlats, "length", ctx);
+      }
+      break;
+    case "feature.extend.surface":
+      clone.distance = normalizeScalar(clone.distance, "length", ctx);
+      break;
+    case "feature.knit":
+      if (clone.tolerance !== undefined) {
+        clone.tolerance = normalizeScalar(clone.tolerance, "length", ctx);
       }
       break;
     case "feature.thicken":

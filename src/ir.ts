@@ -154,6 +154,9 @@ export type IntentFeature =
   | DeleteFace
   | SplitBody
   | SplitFace
+  | TrimSurface
+  | ExtendSurface
+  | Knit
   | Draft
   | Thicken
   | Unwrap
@@ -487,6 +490,35 @@ export type SplitFace = FeatureBase & {
   kind: "feature.split.face";
   faces: Selector;
   tool: Selector;
+  result: string;
+};
+
+export type TrimSurfaceKeep = "inside" | "outside" | "both";
+
+export type TrimSurface = FeatureBase & {
+  kind: "feature.trim.surface";
+  source: Selector;
+  tools: Selector[];
+  keep: TrimSurfaceKeep;
+  result: string;
+};
+
+export type ExtendSurfaceMode = "natural" | "tangent";
+
+export type ExtendSurface = FeatureBase & {
+  kind: "feature.extend.surface";
+  source: Selector;
+  edges: Selector;
+  distance: Scalar;
+  mode?: ExtendSurfaceMode;
+  result: string;
+};
+
+export type Knit = FeatureBase & {
+  kind: "feature.knit";
+  sources: Selector[];
+  tolerance?: Scalar;
+  makeSolid?: boolean;
   result: string;
 };
 

@@ -124,6 +124,9 @@ function featureResultName(feature: IntentFeature): string | undefined {
     case "feature.move.body":
     case "feature.split.body":
     case "feature.split.face":
+    case "feature.trim.surface":
+    case "feature.extend.surface":
+    case "feature.knit":
     case "feature.draft":
     case "feature.shell":
     case "feature.thicken":
@@ -366,6 +369,12 @@ function featureSelectors(feature: IntentFeature): Selector[] {
       return [feature.source, feature.tool];
     case "feature.split.face":
       return [feature.faces, feature.tool];
+    case "feature.trim.surface":
+      return [feature.source, ...feature.tools];
+    case "feature.extend.surface":
+      return [feature.source, feature.edges];
+    case "feature.knit":
+      return feature.sources.slice();
     case "feature.draft":
       return [feature.source, feature.faces];
     case "feature.shell": {

@@ -214,6 +214,31 @@ const tests = [
     },
   },
   {
+    name: "validation: trim surface requires at least one tool selector",
+    fn: async () => {
+      const part = dsl.part("trim-no-tools", [
+        dsl.trimSurface("trim-1", dsl.selectorNamed("surface:seed"), []),
+      ]);
+      assert.throws(() => normalizePart(part), /at least one tool selector/i);
+    },
+  },
+  {
+    name: "validation: surfacing slice 1 features are staged and can be blocked",
+    fn: async () => {
+      const part = dsl.part("staged-trim-surface", [
+        dsl.trimSurface(
+          "trim-1",
+          dsl.selectorNamed("surface:seed"),
+          [dsl.selectorNamed("body:tool")]
+        ),
+      ]);
+      assert.throws(
+        () => normalizePart(part, undefined, { stagedFeatures: "error" }),
+        /staging feature/i
+      );
+    },
+  },
+  {
     name: "validation: move body is stable when staged policy is error",
     fn: async () => {
       const part = dsl.part("staged-move", [

@@ -39,6 +39,9 @@ export class MockBackend implements Backend {
         "feature.replace.face",
         "feature.move.face",
         "feature.move.body",
+        "feature.trim.surface",
+        "feature.extend.surface",
+        "feature.knit",
         "feature.draft",
         "feature.thicken",
         "feature.unwrap",
@@ -153,6 +156,13 @@ export class MockBackend implements Backend {
         }
         return this.emitSolid(feature);
       }
+      case "feature.trim.surface":
+      case "feature.extend.surface":
+        return this.emitSurface(feature, "face");
+      case "feature.knit":
+        return (feature as { makeSolid?: boolean }).makeSolid === true
+          ? this.emitSolid(feature)
+          : this.emitSurface(feature, "surface");
       case "feature.shell":
       case "feature.draft":
       case "feature.thicken":

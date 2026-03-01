@@ -10,11 +10,14 @@ import { runTests } from "./occt_test_utils.js";
 
 const tests = [
   {
-    name: "feature staging: registry includes rib/web and remaining surface-mode staging entries",
+    name: "feature staging: registry includes rib/web, surfacing slice 1, and remaining surface-mode staging entries",
     fn: async () => {
       const keys = listStagedFeatureKeys();
       assert.ok(keys.includes("feature.rib"));
       assert.ok(keys.includes("feature.web"));
+      assert.ok(keys.includes("feature.trim.surface"));
+      assert.ok(keys.includes("feature.extend.surface"));
+      assert.ok(keys.includes("feature.knit"));
       assert.ok(!keys.includes("feature.surface"));
       assert.ok(!keys.includes("feature.revolve:mode.surface"));
       assert.ok(keys.includes("feature.extrude:mode.surface"));
@@ -41,6 +44,42 @@ const tests = [
       const feature = dsl.web("web-1", dsl.profileRef("profile:web"), 2, 8);
       const stage = getFeatureStage(feature);
       assert.equal(stage.key, "feature.web");
+      assert.equal(stage.stage, "staging");
+    },
+  },
+  {
+    name: "feature staging: trim surface resolves to staging entry",
+    fn: async () => {
+      const feature = dsl.trimSurface(
+        "trim-1",
+        dsl.selectorNamed("surface:seed"),
+        [dsl.selectorNamed("body:tool")]
+      );
+      const stage = getFeatureStage(feature);
+      assert.equal(stage.key, "feature.trim.surface");
+      assert.equal(stage.stage, "staging");
+    },
+  },
+  {
+    name: "feature staging: extend surface resolves to staging entry",
+    fn: async () => {
+      const feature = dsl.extendSurface(
+        "extend-1",
+        dsl.selectorNamed("surface:seed"),
+        dsl.selectorEdge([dsl.predCreatedBy("seed")]),
+        2
+      );
+      const stage = getFeatureStage(feature);
+      assert.equal(stage.key, "feature.extend.surface");
+      assert.equal(stage.stage, "staging");
+    },
+  },
+  {
+    name: "feature staging: knit resolves to staging entry",
+    fn: async () => {
+      const feature = dsl.knit("knit-1", [dsl.selectorNamed("surface:a"), dsl.selectorNamed("surface:b")]);
+      const stage = getFeatureStage(feature);
+      assert.equal(stage.key, "feature.knit");
       assert.equal(stage.stage, "staging");
     },
   },

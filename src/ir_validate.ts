@@ -1260,6 +1260,94 @@ function validateFeature(feature: IntentFeature): void {
       );
       return;
     }
+    case "feature.trim.surface": {
+      const trim = feature as {
+        source?: Selector;
+        tools?: Selector[];
+        keep?: unknown;
+        result?: string;
+      };
+      validateSelector(trim.source);
+      const tools = ensureArray<Selector>(
+        trim.tools as Selector[],
+        "validation_trim_surface_tools",
+        "Trim surface tools must be an array"
+      );
+      if (tools.length === 0) {
+        throw new CompileError(
+          "validation_trim_surface_tools",
+          "Trim surface requires at least one tool selector"
+        );
+      }
+      for (const tool of tools) {
+        validateSelector(tool);
+      }
+      validateTrimSurfaceKeep(trim.keep);
+      ensureNonEmptyString(
+        trim.result,
+        "validation_feature_result",
+        "Trim surface result is required"
+      );
+      return;
+    }
+    case "feature.extend.surface": {
+      const extend = feature as {
+        source?: Selector;
+        edges?: Selector;
+        distance?: Scalar;
+        mode?: unknown;
+        result?: string;
+      };
+      validateSelector(extend.source);
+      validateSelector(extend.edges);
+      validatePositiveScalar(extend.distance, "Extend surface distance");
+      if (extend.mode !== undefined) {
+        validateExtendSurfaceMode(extend.mode);
+      }
+      ensureNonEmptyString(
+        extend.result,
+        "validation_feature_result",
+        "Extend surface result is required"
+      );
+      return;
+    }
+    case "feature.knit": {
+      const knit = feature as {
+        sources?: Selector[];
+        tolerance?: Scalar;
+        makeSolid?: unknown;
+        result?: string;
+      };
+      const sources = ensureArray<Selector>(
+        knit.sources as Selector[],
+        "validation_knit_sources",
+        "Knit sources must be an array"
+      );
+      if (sources.length === 0) {
+        throw new CompileError(
+          "validation_knit_sources",
+          "Knit requires at least one source selector"
+        );
+      }
+      for (const source of sources) {
+        validateSelector(source);
+      }
+      if (knit.tolerance !== undefined) {
+        validatePositiveScalar(knit.tolerance, "Knit tolerance");
+      }
+      if (knit.makeSolid !== undefined && typeof knit.makeSolid !== "boolean") {
+        throw new CompileError(
+          "validation_knit_make_solid",
+          "Knit makeSolid must be a boolean"
+        );
+      }
+      ensureNonEmptyString(
+        knit.result,
+        "validation_feature_result",
+        "Knit result is required"
+      );
+      return;
+    }
     case "feature.thicken": {
       const thicken = feature as {
         surface?: Selector;
@@ -2812,6 +2900,22 @@ function validateThickenDirection(direction: unknown): void {
   throw new CompileError(
     "validation_thicken_direction",
     "Thicken direction must be \"normal\" or \"reverse\""
+  );
+}
+
+function validateTrimSurfaceKeep(keep: unknown): void {
+  if (keep === "inside" || keep === "outside" || keep === "both") return;
+  throw new CompileError(
+    "validation_trim_surface_keep",
+    "Trim surface keep must be \"inside\", \"outside\", or \"both\""
+  );
+}
+
+function validateExtendSurfaceMode(mode: unknown): void {
+  if (mode === "natural" || mode === "tangent") return;
+  throw new CompileError(
+    "validation_extend_surface_mode",
+    "Extend surface mode must be \"natural\" or \"tangent\""
   );
 }
 

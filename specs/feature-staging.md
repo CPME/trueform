@@ -16,6 +16,12 @@ clients and agents can avoid treating them as production-stable.
   - Status: `staging`
 - `feature.web`
   - Status: `staging`
+- `feature.trim.surface`
+  - Status: `staging`
+- `feature.extend.surface`
+  - Status: `staging`
+- `feature.knit`
+  - Status: `staging`
 - `feature.extrude:mode.surface`
   - Status: `staging`
 - `feature.loft:mode.surface`
