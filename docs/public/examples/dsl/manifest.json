@@ -16,6 +16,11 @@
       "image": "/examples/dsl/surface.iso.png"
     },
     {
+      "id": "extrude-surface",
+      "title": "Extrude (Surface)",
+      "image": "/examples/dsl/extrude-surface.iso.png"
+    },
+    {
       "id": "revolve",
       "title": "Revolve",
       "image": "/examples/dsl/revolve.iso.png"

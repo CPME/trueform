@@ -105,6 +105,14 @@
       </div>
     </a>
 
+    <a class="card" href="#code-dsl-extrude-surface">
+      <img src="./dsl/extrude-surface.iso.png" alt="Extrude (Surface)" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Extrude (Surface)</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
     <a class="card" href="#code-dsl-revolve">
       <img src="./dsl/revolve.iso.png" alt="Revolve" loading="lazy" />
       <div class="card-body">
@@ -193,6 +201,14 @@
       </div>
     </a>
 
+    <a class="card" href="#code-dsl-selection-ledger-fillet-seam-review">
+      <img src="./dsl/selection-ledger-fillet-seam-review.iso.png" alt="Selection Ledger Fillet Seam Review" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Selection Ledger Fillet Seam Review</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
     <a class="card" href="#code-dsl-variable-fillet">
       <img src="./dsl/variable-fillet.iso.png" alt="Variable Fillet" loading="lazy" />
       <div class="card-body">
@@ -213,6 +229,22 @@
       <img src="./dsl/selection-ledger-chamfer-edge-review.iso.png" alt="Selection Ledger Chamfer Edge Review" loading="lazy" />
       <div class="card-body">
         <div class="card-title">Selection Ledger Chamfer Edge Review</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-selection-ledger-chamfer-join-review">
+      <img src="./dsl/selection-ledger-chamfer-join-review.iso.png" alt="Selection Ledger Chamfer Join Review" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Selection Ledger Chamfer Join Review</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
+    <a class="card" href="#code-dsl-selection-ledger-stack-audit">
+      <img src="./dsl/selection-ledger-stack-audit.iso.png" alt="Selection Ledger Multi-Feature Audit" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Selection Ledger Multi-Feature Audit</div>
         <div class="card-meta">Features</div>
       </div>
     </a>
@@ -514,6 +546,15 @@ const examplePart = part(&quot;example-surface&quot;, [
       <a class="back-link" href="#top">Back to gallery</a>
     </article>
 
+    <article class="code-entry" id="code-dsl-extrude-surface">
+      <h3>Extrude (Surface) (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Extrude</p>
+      <pre><code>const examplePart = part(&quot;example-extrude&quot;, [
+  extrude(&quot;base&quot;, profileRect(80, 50), 12, &quot;body:main&quot;),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
     <article class="code-entry" id="code-dsl-revolve">
       <h3>Revolve (DSL)</h3>
       <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Revolve</p>
@@ -744,6 +785,21 @@ const examplePart = part(&quot;example-sweep-sketch&quot;, [
       <a class="back-link" href="#top">Back to gallery</a>
     </article>
 
+    <article class="code-entry" id="code-dsl-selection-ledger-fillet-seam-review">
+      <h3>Selection Ledger Fillet Seam Review (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Fillet</p>
+      <pre><code>const examplePart = part(&quot;example-fillet&quot;, [
+  extrude(&quot;cyl&quot;, profileCircle(14), 28, &quot;body:main&quot;),
+  fillet(
+    &quot;edge-fillet&quot;,
+    selectorEdge([predCreatedBy(&quot;cyl&quot;)], [rankMaxZ()]),
+    3,
+    [&quot;cyl&quot;]
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
     <article class="code-entry" id="code-dsl-variable-fillet">
       <h3>Variable Fillet (DSL)</h3>
       <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Variable Fillet</p>
@@ -788,6 +844,36 @@ const examplePart = part(&quot;example-sweep-sketch&quot;, [
     selectorEdge([predCreatedBy(&quot;block&quot;)]),
     2,
     [&quot;block&quot;]
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-selection-ledger-chamfer-join-review">
+      <h3>Selection Ledger Chamfer Join Review (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Chamfer</p>
+      <pre><code>const examplePart = part(&quot;example-chamfer&quot;, [
+  extrude(&quot;block&quot;, profileRect(40, 26), 12, &quot;body:main&quot;),
+  chamfer(
+    &quot;edge-chamfer&quot;,
+    selectorEdge([predCreatedBy(&quot;block&quot;)]),
+    2,
+    [&quot;block&quot;]
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-selection-ledger-stack-audit">
+      <h3>Selection Ledger Multi-Feature Audit (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Fillet</p>
+      <pre><code>const examplePart = part(&quot;example-fillet&quot;, [
+  extrude(&quot;cyl&quot;, profileCircle(14), 28, &quot;body:main&quot;),
+  fillet(
+    &quot;edge-fillet&quot;,
+    selectorEdge([predCreatedBy(&quot;cyl&quot;)], [rankMaxZ()]),
+    3,
+    [&quot;cyl&quot;]
   ),
 ]);</code></pre>
       <a class="back-link" href="#top">Back to gallery</a>
