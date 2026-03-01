@@ -6,7 +6,7 @@
 - `refFrame(selector) -> RefFrame`
 - `refEdge(selector) -> RefEdge`
 - `refAxis(selector) -> RefAxis`
-- `refPoint(selector) -> RefPoint`
+- `refPoint(selector, locator?) -> RefPoint`
 - `datumFeature(id, label, target, opts?) -> FTIDatum`
 - `datumRef(datumId, modifiers?) -> DatumRef`
 - `surfaceProfileConstraint(id, target, tolerance, opts?) -> SurfaceProfileConstraint`
@@ -25,6 +25,12 @@ Notes:
   `tolerance` or `plus`/`minus` are provided.
 - Use `evaluatePartDimensions(part, kernelResult, opts?)` to evaluate semantic
   dimensions from resolved kernel metadata (`center`, `normalVec`/`normal`).
+- `refPoint(..., locator)` is intent-first and derives a point from an existing
+  semantic selection rather than exposing raw kernel vertices.
+  - Supported locators:
+    - `center` for faces/edges/solids/surfaces
+    - `mid` for edges
+    - `start` / `end` for open edges
 
 Examples:
 - [Cosmetic thread](./examples/tolerancing#cosmetic-thread)

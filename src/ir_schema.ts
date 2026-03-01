@@ -939,6 +939,9 @@ export const IR_SCHEMA = {
       properties: {
         kind: { const: "ref.point" },
         selector: { $ref: "#/$defs/Selector" },
+        locator: {
+          enum: ["center", "mid", "start", "end"],
+        },
       },
       additionalProperties: false,
     },

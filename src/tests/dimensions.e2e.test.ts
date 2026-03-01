@@ -159,6 +159,150 @@ const tests = [
       assert.match(distRef.message ?? "", /Missing named output/);
     },
   },
+  {
+    name: "dimensions: ref.point locators resolve center, mid, start, and end",
+    fn: async () => {
+      const faceCenter = dsl.refPoint(dsl.selectorNamed("face:a"), "center");
+      const edgeMid = dsl.refPoint(dsl.selectorNamed("edge:mid"), "mid");
+      const edgeStart = dsl.refPoint(dsl.selectorNamed("edge:mid"), "start");
+      const edgeEnd = dsl.refPoint(dsl.selectorNamed("edge:mid"), "end");
+      const part = dsl.part("dimension-point-locators", [], {
+        constraints: [
+          dsl.dimensionDistance("face-center", faceCenter, edgeMid, {
+            nominal: 5,
+            tolerance: 1e-6,
+          }),
+          dsl.dimensionDistance("edge-span", edgeStart, edgeEnd, {
+            nominal: 10,
+            tolerance: 1e-6,
+          }),
+        ],
+      });
+      const result = makeKernelResult(
+        new Map([
+          [
+            "face:a",
+            {
+              id: "face:a",
+              kind: "face",
+              meta: { center: [0, 0, 0], normalVec: [0, 0, 1] },
+            },
+          ],
+          [
+            "edge:mid",
+            {
+              id: "edge:mid",
+              kind: "edge",
+              meta: {
+                center: [0, 5, 0],
+                startPoint: [0, 0, 0],
+                midPoint: [0, 5, 0],
+                endPoint: [0, 10, 0],
+              },
+            },
+          ],
+        ])
+      );
+
+      const dimensions = evaluatePartDimensions(part, result);
+      assert.equal(dimensions.length, 2);
+
+      const faceCenterDim = byId(dimensions, "face-center");
+      assert.equal(faceCenterDim.status, "ok");
+      approx(faceCenterDim.measured, 5);
+
+      const edgeSpan = byId(dimensions, "edge-span");
+      assert.equal(edgeSpan.status, "ok");
+      approx(edgeSpan.measured, 10);
+      assert.equal(edgeSpan.details?.["from"], "edge:mid.point.start");
+      assert.equal(edgeSpan.details?.["to"], "edge:mid.point.end");
+    },
+  },
+  {
+    name: "dimensions: ref.point unsupported when locator is invalid for the selection kind",
+    fn: async () => {
+      const badPoint = dsl.refPoint(dsl.selectorNamed("face:a"), "start");
+      const target = dsl.refSurface(dsl.selectorNamed("face:b"));
+      const part = dsl.part("dimension-point-invalid", [], {
+        constraints: [
+          dsl.dimensionDistance("bad-point", badPoint, target, {
+            nominal: 10,
+            tolerance: 0.5,
+          }),
+        ],
+      });
+      const result = makeKernelResult(
+        new Map([
+          [
+            "face:a",
+            {
+              id: "face:a",
+              kind: "face",
+              meta: { center: [0, 0, 0], normalVec: [0, 0, 1] },
+            },
+          ],
+          [
+            "face:b",
+            {
+              id: "face:b",
+              kind: "face",
+              meta: { center: [10, 0, 0], normalVec: [1, 0, 0] },
+            },
+          ],
+        ])
+      );
+
+      const dimensions = evaluatePartDimensions(part, result);
+      const bad = byId(dimensions, "bad-point");
+      assert.equal(bad.status, "unsupported");
+      assert.match(bad.message ?? "", /does not support point locator start/);
+    },
+  },
+  {
+    name: "dimensions: ref.point start/end are unsupported on closed edges",
+    fn: async () => {
+      const closedStart = dsl.refPoint(dsl.selectorNamed("edge:ring"), "start");
+      const target = dsl.refSurface(dsl.selectorNamed("face:b"));
+      const part = dsl.part("dimension-point-closed-edge", [], {
+        constraints: [
+          dsl.dimensionDistance("closed-start", closedStart, target, {
+            nominal: 10,
+            tolerance: 0.5,
+          }),
+        ],
+      });
+      const result = makeKernelResult(
+        new Map([
+          [
+            "edge:ring",
+            {
+              id: "edge:ring",
+              kind: "edge",
+              meta: {
+                center: [0, 0, 0],
+                startPoint: [5, 0, 0],
+                endPoint: [5, 0, 0],
+                closedEdge: true,
+              },
+            },
+          ],
+          [
+            "face:b",
+            {
+              id: "face:b",
+              kind: "face",
+              meta: { center: [10, 0, 0], normalVec: [1, 0, 0] },
+            },
+          ],
+        ])
+      );
+
+      const dimensions = evaluatePartDimensions(part, result);
+      const bad = byId(dimensions, "closed-start");
+      assert.equal(bad.status, "unsupported");
+      assert.match(bad.message ?? "", /closed edges/);
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

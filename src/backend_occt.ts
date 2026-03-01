@@ -6506,6 +6506,7 @@ export class OcctBackend implements Backend {
       (bounds.min[2] + bounds.max[2]) / 2,
     ];
     const centerZ = center[2];
+    const endpoints = this.edgeEndpoints(edge);
     let length: number | undefined;
     try {
       const props = this.newOcct("GProp_GProps");
@@ -6524,6 +6525,7 @@ export class OcctBackend implements Backend {
 
     let radius: number | undefined;
     let curveType: string | undefined;
+    let curveCenter: [number, number, number] | undefined;
     try {
       const adaptor = this.newOcct("BRepAdaptor_Curve", this.toEdge(edge));
       const type = this.call(adaptor, "GetType") as { value?: number } | undefined;
@@ -6553,6 +6555,15 @@ export class OcctBackend implements Backend {
         ) {
           radius = measuredRadius;
         }
+        const location = circle
+          ? this.callWithFallback(circle, ["Location", "Location_1"], [[]])
+          : null;
+        if (location) {
+          const point = this.pointToArray(location);
+          if (point.every((value) => Number.isFinite(value))) {
+            curveCenter = point;
+          }
+        }
       }
     } catch {
       // Circular radius metadata is optional.
@@ -6568,8 +6579,24 @@ export class OcctBackend implements Backend {
       centerZ,
       featureTags,
     };
+    if (endpoints) {
+      meta.startPoint = endpoints.start;
+      meta.endPoint = endpoints.end;
+      meta.midPoint = [
+        (endpoints.start[0] + endpoints.end[0]) / 2,
+        (endpoints.start[1] + endpoints.end[1]) / 2,
+        (endpoints.start[2] + endpoints.end[2]) / 2,
+      ];
+      meta.closedEdge =
+        Math.hypot(
+          endpoints.start[0] - endpoints.end[0],
+          endpoints.start[1] - endpoints.end[1],
+          endpoints.start[2] - endpoints.end[2]
+        ) <= 1e-6;
+    }
     if (length !== undefined) meta.length = length;
     if (radius !== undefined) meta.radius = radius;
+    if (curveCenter) meta.curveCenter = curveCenter;
     if (curveType) meta.curveType = curveType;
     return meta;
   }

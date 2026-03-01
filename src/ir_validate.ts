@@ -2084,8 +2084,22 @@ function validateGeometryRef(ref: GeometryRef, label: string): void {
     case "ref.frame":
     case "ref.edge":
     case "ref.axis":
+      validateSelector(ref.selector);
+      return;
     case "ref.point":
       validateSelector(ref.selector);
+      if (
+        ref.locator !== undefined &&
+        ref.locator !== "center" &&
+        ref.locator !== "mid" &&
+        ref.locator !== "start" &&
+        ref.locator !== "end"
+      ) {
+        throw new CompileError(
+          "validation_ref_point_locator",
+          `Unsupported point locator ${String(ref.locator)}`
+        );
+      }
       return;
     default:
       throw new CompileError(

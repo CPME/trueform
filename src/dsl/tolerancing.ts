@@ -10,6 +10,7 @@ import type {
   FlatnessConstraint,
   GeometryRef,
   ID,
+  PointLocator,
   ParallelismConstraint,
   PerpendicularityConstraint,
   PositionConstraint,
@@ -47,10 +48,15 @@ export const refAxis = (selector: Selector): RefAxis => ({
   selector,
 });
 
-export const refPoint = (selector: Selector): RefPoint => ({
-  kind: "ref.point",
-  selector,
-});
+export const refPoint = (
+  selector: Selector,
+  locator?: PointLocator
+): RefPoint =>
+  compact({
+    kind: "ref.point",
+    selector,
+    locator,
+  });
 
 export const datumFeature = (
   id: ID,

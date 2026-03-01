@@ -742,9 +742,12 @@ export type RefAxis = {
   selector: Selector;
 };
 
+export type PointLocator = "center" | "mid" | "start" | "end";
+
 export type RefPoint = {
   kind: "ref.point";
   selector: Selector;
+  locator?: PointLocator;
 };
 
 export type DatumModifier = "MMB" | "LMB" | "RMB";

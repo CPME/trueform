@@ -6,6 +6,7 @@ import type {
   ID,
   IntentPart,
   ParamType,
+  RefPoint,
   Scalar,
   Units,
 } from "./ir.js";
@@ -209,7 +210,30 @@ function resolveGeometryRef(
   ref: GeometryRef,
   ctx: ReturnType<typeof toResolutionContext>
 ): KernelSelection {
+  if (ref.kind === "ref.point") {
+    return resolvePointRef(ref, ctx);
+  }
   return resolveSelector(ref.selector, ctx);
+}
+
+function resolvePointRef(
+  ref: RefPoint,
+  ctx: ReturnType<typeof toResolutionContext>
+): KernelSelection {
+  const base = resolveSelector(ref.selector, ctx);
+  const locator = ref.locator ?? "center";
+  const point = pointOf(base, locator);
+  return {
+    id: `${base.id}.point.${locator}`,
+    kind: base.kind,
+    meta: {
+      ...base.meta,
+      center: point,
+      centerZ: point[2],
+      pointLocator: locator,
+      pointSourceId: base.id,
+    },
+  };
 }
 
 function toScalarValue(
@@ -231,6 +255,66 @@ function centerOf(selection: KernelSelection): [number, number, number] {
     throw new Error(`Selection ${selection.id} is missing center metadata`);
   }
   return center as [number, number, number];
+}
+
+function pointOf(
+  selection: KernelSelection,
+  locator: RefPoint["locator"] extends infer T ? Exclude<T, undefined> : never
+): [number, number, number] {
+  switch (locator) {
+    case "center": {
+      const curveCenter = pointMeta(selection, "curveCenter");
+      if (curveCenter) return curveCenter;
+      return centerOf(selection);
+    }
+    case "mid": {
+      if (selection.kind !== "edge") {
+        throw new Error(`Selection ${selection.id} does not support point locator mid`);
+      }
+      const mid = pointMeta(selection, "midPoint");
+      if (mid) return mid;
+      return centerOf(selection);
+    }
+    case "start": {
+      if (selection.kind !== "edge") {
+        throw new Error(`Selection ${selection.id} does not support point locator start`);
+      }
+      if (selection.meta["closedEdge"] === true) {
+        throw new Error(`Selection ${selection.id} does not support point locator start on closed edges`);
+      }
+      const start = pointMeta(selection, "startPoint");
+      if (start) return start;
+      throw new Error(`Selection ${selection.id} is missing startPoint metadata`);
+    }
+    case "end": {
+      if (selection.kind !== "edge") {
+        throw new Error(`Selection ${selection.id} does not support point locator end`);
+      }
+      if (selection.meta["closedEdge"] === true) {
+        throw new Error(`Selection ${selection.id} does not support point locator end on closed edges`);
+      }
+      const end = pointMeta(selection, "endPoint");
+      if (end) return end;
+      throw new Error(`Selection ${selection.id} is missing endPoint metadata`);
+    }
+    default:
+      return centerOf(selection);
+  }
+}
+
+function pointMeta(
+  selection: KernelSelection,
+  key: string
+): [number, number, number] | null {
+  const value = selection.meta[key];
+  if (
+    !Array.isArray(value) ||
+    value.length !== 3 ||
+    value.some((entry) => typeof entry !== "number" || !Number.isFinite(entry))
+  ) {
+    return null;
+  }
+  return value as [number, number, number];
 }
 
 function directionOf(selection: KernelSelection): [number, number, number] {

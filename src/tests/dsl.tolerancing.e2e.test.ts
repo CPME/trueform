@@ -11,13 +11,14 @@ const tests = [
       const frame = dsl.refFrame(dsl.selectorFace([dsl.predNormal("+Z")]));
       const axis = dsl.refAxis(dsl.selectorFace([dsl.predCreatedBy("hole-1")]));
       const edge = dsl.refEdge(dsl.selectorEdge([dsl.predRole("edge")]));
-      const point = dsl.refPoint(dsl.selectorNamed("body:main"));
+      const point = dsl.refPoint(dsl.selectorNamed("body:main"), "center");
 
       assert.equal(surface.kind, "ref.surface");
       assert.equal(frame.kind, "ref.frame");
       assert.equal(axis.kind, "ref.axis");
       assert.equal(edge.kind, "ref.edge");
       assert.equal(point.kind, "ref.point");
+      assert.equal(point.locator, "center");
 
       const datum = dsl.datumFeature("datum-A", "A", surface, {
         modifiers: ["MMB"],
