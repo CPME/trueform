@@ -91,6 +91,16 @@ function unionRightSideStableFaceId(selections: SelectionRecord[]): string | nul
   );
 }
 
+function unionRightTopStableEdgeId(selections: SelectionRecord[]): string | null {
+  return findSelectionId(
+    selections,
+    (selection) =>
+      selection.kind === "edge" &&
+      selection.meta["createdBy"] === "union-1" &&
+      selection.meta["selectionSlot"] === "right.side.1.bound.top"
+  );
+}
+
 function stepByFeatureId(result: BuildResult, featureId: string) {
   return result.steps.find((step) => step.featureId === featureId);
 }
@@ -483,6 +493,84 @@ const matrix: MatrixCase[] = [
       const finalShape = finalBody.meta["shape"] as any;
       assert.ok(finalShape, "missing move-face shape");
       assertValidShape(occt, finalShape, "stable-id union move-face solid");
+    },
+  },
+  {
+    name: "stable union edge id keeps fillet resolved after upstream edits",
+    buildSeedPart: () =>
+      dsl.part("selector-matrix-seed-union-edge", [
+        dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:left"),
+        dsl.extrude("tool-seed", dsl.profileRect(8, 8), 6, "body:tool-seed"),
+        dsl.moveBody("tool-move", dsl.selectorNamed("body:tool-seed"), "body:right", [
+          "tool-seed",
+        ], {
+          translation: [0, 0, 10],
+        }),
+        dsl.booleanOp(
+          "union-1",
+          "union",
+          dsl.selectorNamed("body:left"),
+          dsl.selectorNamed("body:right"),
+          "body:main"
+        ),
+      ]),
+    captureSelectionId: unionRightTopStableEdgeId,
+    buildEditedPart: (selectionId) =>
+      dsl.part("selector-matrix-union-edge", [
+        dsl.fillet("edge-fillet", dsl.selectorNamed(selectionId), 0.75),
+        dsl.booleanOp(
+          "union-1",
+          "union",
+          dsl.selectorNamed("body:left"),
+          dsl.selectorNamed("body:right"),
+          "body:main"
+        ),
+        dsl.moveBody("tool-move", dsl.selectorNamed("body:tool-seed"), "body:right", [
+          "tool-seed",
+        ], {
+          translation: [0, 0, 12],
+        }),
+        dsl.extrude("tool-seed", dsl.profileRect(10, 6), 8, "body:tool-seed"),
+        dsl.extrude("base", dsl.profileRect(28, 18), 12, "body:left"),
+      ]),
+    assertEdited: ({ occt, result, selectionId }) => {
+      assert.ok(
+        result.order.indexOf("base") < result.order.indexOf("union-1"),
+        `expected base before union-1 (order=${result.order.join(",")})`
+      );
+      assert.ok(
+        result.order.indexOf("tool-seed") < result.order.indexOf("tool-move"),
+        `expected tool-seed before tool-move (order=${result.order.join(",")})`
+      );
+      assert.ok(
+        result.order.indexOf("tool-move") < result.order.indexOf("union-1"),
+        `expected tool-move before union-1 (order=${result.order.join(",")})`
+      );
+      assert.ok(
+        result.order.indexOf("union-1") < result.order.indexOf("edge-fillet"),
+        `expected union-1 before edge-fillet (order=${result.order.join(",")})`
+      );
+      assertFeatureSelectionPreserved(
+        result,
+        "union-1",
+        selectionId,
+        "stable-id union edge"
+      );
+      const unionStep = stepByFeatureId(result, "union-1");
+      const finalBody = result.final.outputs.get("body:main");
+      assert.ok(unionStep, "missing union-1 step");
+      assert.ok(finalBody, "missing final output body:main");
+      const unionBody = unionStep.result.outputs.get("body:main");
+      assert.ok(unionBody, "missing union body output");
+      const unionShape = unionBody.meta["shape"] as any;
+      const finalShape = finalBody.meta["shape"] as any;
+      assert.ok(unionShape, "missing union shape");
+      assert.ok(finalShape, "missing final shape");
+      assertValidShape(occt, finalShape, "stable-id union fillet solid");
+      assert.ok(
+        countFaces(occt, finalShape) > countFaces(occt, unionShape),
+        "expected stable-id union edge fillet to add faces"
+      );
     },
   },
 ];

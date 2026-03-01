@@ -339,6 +339,7 @@ Diagnostics expectations for broken references:
   - `face:body.main~union-1.right.side.1`
   - `face:body.main~subtract-1.cut.bottom`
   - `face:body.main~intersect-1.side.1`
+  - `edge:body.main~union-1.right.side.1.bound.top`
   - `edge:body.main~edge-fillet.fillet.seed.1.bound.top`
   - `edge:body.main~edge-chamfer.chamfer.seed.1.join.chamfer.seed.2`
   - `edge:body.main~subtract-1.cut.bottom.join.cut.side.1`
@@ -423,6 +424,9 @@ disambiguated with a `right.` prefix.
   - `face:body.main~union-1.top`
   - `face:body.main~union-1.side.1`
   - `face:body.main~union-1.right.side.1`
+- Edge examples:
+  - `edge:body.main~union-1.right.side.1.bound.top`
+  - `edge:body.main~union-1.right.side.1.join.right.side.2`
 - This keeps the left operand on the canonical slot name and avoids unstable
   tie-suffixed ids such as `side.1.1` / `side.1.2`.
 
@@ -434,6 +438,9 @@ overlap faces when runtime can justify the mapping back to one operand face.
   - `face:body.main~intersect-1.top`
   - `face:body.main~intersect-1.bottom`
   - `face:body.main~intersect-1.side.1`
+- Edge examples:
+  - `edge:body.main~intersect-1.side.1.bound.top`
+  - `edge:body.main~intersect-1.side.1.bound.bottom`
 - In simple overlap cases, intersect results can keep the canonical face slot
   names instead of falling back to hashed ids.
 

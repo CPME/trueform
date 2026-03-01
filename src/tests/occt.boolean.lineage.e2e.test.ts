@@ -132,6 +132,34 @@ const tests = [
     },
   },
   {
+    name: "occt boolean lineage: union emits semantic edge slots from face adjacency",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const result = buildPart(buildUnionStackPart(), backend);
+      const output = result.final.outputs.get("body:main");
+      assert.ok(output, "missing union result");
+      assertValidShape(occt, output.meta["shape"] as any, "union semantic edge result");
+
+      const boundary = result.final.selections.find(
+        (selection) =>
+          selection.kind === "edge" &&
+          selection.meta["createdBy"] === "union-1" &&
+          selection.meta["selectionSlot"] === "right.side.1.bound.top"
+      );
+      assert.ok(boundary, "missing right.side.1.bound.top edge");
+      assert.equal(boundary.id, "edge:body.main~union-1.right.side.1.bound.top");
+
+      const join = result.final.selections.find(
+        (selection) =>
+          selection.kind === "edge" &&
+          selection.meta["createdBy"] === "union-1" &&
+          selection.meta["selectionSlot"] === "right.side.1.join.right.side.2"
+      );
+      assert.ok(join, "missing right.side.1.join.right.side.2 edge");
+      assert.equal(join.id, "edge:body.main~union-1.right.side.1.join.right.side.2");
+    },
+  },
+  {
     name: "occt boolean lineage: subtract preserves unchanged left bottom face slot",
     fn: async () => {
       const { backend, occt } = await getBackendContext();
@@ -297,6 +325,34 @@ const tests = [
         .map((selection) => selection.meta["selectionSlot"] as string)
         .sort();
       assert.deepEqual(sideSlots, ["side.1", "side.2", "side.3", "side.4"]);
+    },
+  },
+  {
+    name: "occt boolean lineage: intersect emits semantic edge slots from face adjacency",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const result = buildPart(buildIntersectOverlapPart(), backend);
+      const output = result.final.outputs.get("body:main");
+      assert.ok(output, "missing intersect result");
+      assertValidShape(occt, output.meta["shape"] as any, "intersect semantic edge result");
+
+      const topEdge = result.final.selections.find(
+        (selection) =>
+          selection.kind === "edge" &&
+          selection.meta["createdBy"] === "intersect-1" &&
+          selection.meta["selectionSlot"] === "side.1.bound.top"
+      );
+      assert.ok(topEdge, "missing side.1.bound.top edge");
+      assert.equal(topEdge.id, "edge:body.main~intersect-1.side.1.bound.top");
+
+      const bottomEdge = result.final.selections.find(
+        (selection) =>
+          selection.kind === "edge" &&
+          selection.meta["createdBy"] === "intersect-1" &&
+          selection.meta["selectionSlot"] === "side.1.bound.bottom"
+      );
+      assert.ok(bottomEdge, "missing side.1.bound.bottom edge");
+      assert.equal(bottomEdge.id, "edge:body.main~intersect-1.side.1.bound.bottom");
     },
   },
 ];

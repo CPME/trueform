@@ -5696,6 +5696,10 @@ export class OcctBackend implements Backend {
           ? (entries) => {
               this.annotateBooleanCutEdgeSelections(entries);
             }
+          : op === "union" || op === "intersect"
+            ? (entries) => {
+                this.annotateBooleanSemanticEdgeSelections(entries);
+              }
           : undefined,
     };
   }
@@ -5976,6 +5980,46 @@ export class OcctBackend implements Backend {
     }
   }
 
+  private annotateBooleanSemanticEdgeSelections(entries: CollectedSubshape[]): void {
+    const unmatched = entries.filter((entry) => !entry.ledger?.slot);
+    const matched = unmatched.filter((entry) => this.booleanSemanticEdgeSlot(entry) !== null);
+    if (matched.length === 0) return;
+
+    matched.sort((a, b) => {
+      const aSlot = this.booleanSemanticEdgeSlot(a) ?? "";
+      const bSlot = this.booleanSemanticEdgeSlot(b) ?? "";
+      const bySlot = aSlot.localeCompare(bSlot);
+      if (bySlot !== 0) return bySlot;
+      const aTie = hashValue(this.selectionTieBreakerFingerprint("edge", a.meta));
+      const bTie = hashValue(this.selectionTieBreakerFingerprint("edge", b.meta));
+      const byTie = aTie.localeCompare(bTie);
+      if (byTie !== 0) return byTie;
+      return this.shapeHash(a.shape) - this.shapeHash(b.shape);
+    });
+
+    const slotCounts = new Map<string, number>();
+    for (const entry of matched) {
+      const slot = this.booleanSemanticEdgeSlot(entry);
+      if (!slot) continue;
+      slotCounts.set(slot, (slotCounts.get(slot) ?? 0) + 1);
+    }
+    const slotIndexes = new Map<string, number>();
+    for (const entry of matched) {
+      let slot = this.booleanSemanticEdgeSlot(entry);
+      if (!slot) continue;
+      const duplicateCount = slotCounts.get(slot) ?? 0;
+      if (duplicateCount > 1) {
+        const index = (slotIndexes.get(slot) ?? 0) + 1;
+        slotIndexes.set(slot, index);
+        slot = `${slot}.part.${index}`;
+      }
+      this.applySelectionLedgerHint(entry, {
+        role: "edge",
+        slot,
+      });
+    }
+  }
+
   private booleanCutDerivedEdgeSlot(entry: CollectedSubshape): string | null {
     const adjacentSlots = Array.isArray(entry.meta["adjacentFaceSlots"])
       ? (entry.meta["adjacentFaceSlots"] as unknown[])
@@ -6002,6 +6046,37 @@ export class OcctBackend implements Backend {
       return `${root}.join.${target}`;
     }
     return null;
+  }
+
+  private booleanSemanticEdgeSlot(entry: CollectedSubshape): string | null {
+    const adjacentSlots = Array.isArray(entry.meta["adjacentFaceSlots"])
+      ? (entry.meta["adjacentFaceSlots"] as unknown[])
+          .filter((slot): slot is string => typeof slot === "string" && slot.trim().length > 0)
+          .map((slot) => slot.trim())
+          .filter((slot, index, all) => all.indexOf(slot) === index)
+      : [];
+    if (adjacentSlots.length !== 2) return null;
+    const [a, b] = adjacentSlots.slice().sort();
+    if (!a || !b) return null;
+
+    const isRight = (slot: string) => slot.startsWith("right.");
+    const isCap = (slot: string) => slot === "top" || slot === "bottom";
+    const isSide = (slot: string) =>
+      /^side\.\d+$/.test(slot) || /^right\.side\.\d+$/.test(slot);
+
+    if (isRight(a) && !isRight(b)) {
+      return `${a}.bound.${b}`;
+    }
+    if (isRight(b) && !isRight(a)) {
+      return `${b}.bound.${a}`;
+    }
+    if (isSide(a) && isCap(b)) {
+      return `${a}.bound.${b}`;
+    }
+    if (isSide(b) && isCap(a)) {
+      return `${b}.bound.${a}`;
+    }
+    return `${a}.join.${b}`;
   }
 
   private annotateFaceMutationSelections(
