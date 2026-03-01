@@ -177,20 +177,18 @@ const tests = [
       const descendantEdges = descendantEdgeSelections(
         result,
         "edge-fillet",
-        "fillet.seed.1.edge."
+        "fillet.seed.1.bound."
       );
       assert.ok(
         descendantEdges.length >= 2,
         `expected at least 2 descendant fillet edges, got ${descendantEdges.length}`
       );
-      assert.equal(
-        descendantEdges[0]?.id,
-        "edge:body.main~edge-fillet.fillet.seed.1.edge.1"
+      const descendantSlots = new Set(
+        descendantEdges.map((selection) => String(selection.meta["selectionSlot"]))
       );
-      for (let i = 0; i < descendantEdges.length; i += 1) {
-        const edge = descendantEdges[i];
-        assert.ok(edge, `missing descendant fillet edge ${i + 1}`);
-        assert.equal(edge.meta["selectionSlot"], `fillet.seed.1.edge.${i + 1}`);
+      assert.ok(descendantSlots.has("fillet.seed.1.bound.top"));
+      assert.ok(descendantSlots.has("fillet.seed.1.bound.side.1"));
+      for (const edge of descendantEdges) {
         assert.deepEqual(edge.meta["selectionLineage"], {
           kind: "modified",
           from: source.id,
@@ -236,20 +234,18 @@ const tests = [
       const descendantEdges = descendantEdgeSelections(
         result,
         "edge-chamfer",
-        "chamfer.seed.1.edge."
+        "chamfer.seed.1.bound."
       );
       assert.ok(
         descendantEdges.length >= 2,
         `expected at least 2 descendant chamfer edges, got ${descendantEdges.length}`
       );
-      assert.equal(
-        descendantEdges[0]?.id,
-        "edge:body.main~edge-chamfer.chamfer.seed.1.edge.1"
+      const descendantSlots = new Set(
+        descendantEdges.map((selection) => String(selection.meta["selectionSlot"]))
       );
-      for (let i = 0; i < descendantEdges.length; i += 1) {
-        const edge = descendantEdges[i];
-        assert.ok(edge, `missing descendant chamfer edge ${i + 1}`);
-        assert.equal(edge.meta["selectionSlot"], `chamfer.seed.1.edge.${i + 1}`);
+      assert.ok(descendantSlots.has("chamfer.seed.1.bound.top"));
+      assert.ok(descendantSlots.has("chamfer.seed.1.bound.side.1"));
+      for (const edge of descendantEdges) {
         assert.deepEqual(edge.meta["selectionLineage"], {
           kind: "modified",
           from: source.id,

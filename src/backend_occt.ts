@@ -64,6 +64,9 @@ import {
   MoveBody,
   SplitBody,
   SplitFace,
+  TrimSurface,
+  ExtendSurface,
+  Knit,
   Draft,
   Thicken,
   Unwrap,
@@ -151,6 +154,13 @@ type SelectionIdAssignment = {
   record: KernelSelectionRecord;
 };
 
+type FaceSelectionBinding = {
+  shape: any;
+  id: string;
+  slot?: string;
+  role?: string;
+};
+
 type UnwrapPointProjector = (
   point: [number, number, number]
 ) => [number, number, number] | null;
@@ -209,6 +219,9 @@ export class OcctBackend implements Backend {
         "feature.move.body",
         "feature.split.body",
         "feature.split.face",
+        "feature.trim.surface",
+        "feature.extend.surface",
+        "feature.knit",
         "feature.draft",
         "feature.thicken",
         "feature.unwrap",
@@ -318,6 +331,21 @@ export class OcctBackend implements Backend {
       case "feature.split.face":
         return this.execSplitFace(
           input.feature as SplitFace,
+          input.upstream
+        );
+      case "feature.trim.surface":
+        return this.execTrimSurface(
+          input.feature as TrimSurface,
+          input.upstream
+        );
+      case "feature.extend.surface":
+        return this.execExtendSurface(
+          input.feature as ExtendSurface,
+          input.upstream
+        );
+      case "feature.knit":
+        return this.execKnit(
+          input.feature as Knit,
           input.upstream
         );
       case "feature.draft":
@@ -2200,6 +2228,327 @@ export class OcctBackend implements Backend {
         rootKind: outputKind === "solid" ? "solid" : "face",
         ledgerPlan: this.makeSplitFaceSelectionLedgerPlan(upstream, ownerShape, faceSelections),
       }
+    );
+    return { outputs, selections };
+  }
+
+  private execTrimSurface(
+    feature: TrimSurface,
+    upstream: KernelResult
+  ): KernelResult {
+    const sourceTarget = this.resolveSingleSelection(
+      feature.source,
+      upstream,
+      "trim surface source"
+    );
+    if (sourceTarget.kind !== "face" && sourceTarget.kind !== "surface") {
+      throw new Error("OCCT backend: trim surface source must resolve to face/surface");
+    }
+    const sourceShape = sourceTarget.meta["shape"];
+    if (!sourceShape) {
+      throw new Error("OCCT backend: trim surface source is missing shape");
+    }
+    const sourceFaceSelections = this.faceSelectionsForTarget(sourceTarget, upstream);
+    if (sourceFaceSelections.length === 0) {
+      throw new Error("OCCT backend: trim surface source resolved no source faces");
+    }
+
+    const toolSelections = feature.tools.flatMap((tool) =>
+      resolveSelectorSet(tool, this.toResolutionContext(upstream))
+    );
+    if (toolSelections.length === 0) {
+      throw new Error("OCCT backend: trim surface tools matched 0 entities");
+    }
+    for (const selection of toolSelections) {
+      if (
+        selection.kind !== "solid" &&
+        selection.kind !== "face" &&
+        selection.kind !== "surface"
+      ) {
+        throw new Error(
+          "OCCT backend: trim surface tools must resolve to solid/face/surface"
+        );
+      }
+    }
+
+    const toolShapes = this.uniqueShapeList(
+      toolSelections
+        .map((selection) => selection.meta["shape"])
+        .filter((shape): shape is any => !!shape)
+    );
+    if (toolShapes.length === 0) {
+      throw new Error("OCCT backend: trim surface tools resolved no shapes");
+    }
+    if (!toolShapes.some((shape) => this.shapeBoundsOverlap(sourceShape, shape))) {
+      throw new Error("OCCT backend: trim_surface_no_intersection");
+    }
+
+    let trimmed: any;
+    if (feature.keep === "both") {
+      trimmed = this.splitByTools(sourceShape, toolShapes);
+      if (this.countFaces(trimmed) <= this.countFaces(sourceShape)) {
+        throw new Error("OCCT backend: trim_surface_no_intersection");
+      }
+    } else {
+      if (toolSelections.some((selection) => selection.kind !== "solid")) {
+        throw new Error(
+          "OCCT backend: trim surface inside/outside currently requires solid tools"
+        );
+      }
+      const toolShape =
+        toolShapes.length === 1 ? toolShapes[0] : this.makeCompoundFromShapes(toolShapes);
+      const builder = this.makeBoolean(
+        feature.keep === "inside" ? "intersect" : "cut",
+        sourceShape,
+        toolShape
+      );
+      trimmed = this.readShape(builder);
+    }
+
+    if (this.countFaces(trimmed) === 0) {
+      throw new Error("OCCT backend: trim surface produced no remaining faces");
+    }
+
+    const outputKind: "face" | "surface" =
+      this.countFaces(trimmed) === 1 ? "face" : "surface";
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:${outputKind}`,
+          kind: outputKind,
+          meta: { shape: trimmed },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      trimmed,
+      feature.id,
+      feature.result,
+      feature.tags,
+      {
+        rootKind: "face",
+        ledgerPlan: this.makeSplitFaceSelectionLedgerPlan(
+          upstream,
+          sourceShape,
+          sourceFaceSelections
+        ),
+      }
+    );
+    return { outputs, selections };
+  }
+
+  private execExtendSurface(
+    feature: ExtendSurface,
+    upstream: KernelResult
+  ): KernelResult {
+    const sourceTarget = this.resolveSingleSelection(
+      feature.source,
+      upstream,
+      "extend surface source"
+    );
+    if (sourceTarget.kind !== "face" && sourceTarget.kind !== "surface") {
+      throw new Error("OCCT backend: extend surface source must resolve to face/surface");
+    }
+    const sourceFaces = this.faceSelectionsForTarget(sourceTarget, upstream);
+    if (sourceFaces.length !== 1) {
+      throw new Error(
+        "OCCT backend: extend surface currently requires a single-face source"
+      );
+    }
+    const sourceFace = sourceFaces[0];
+    const sourceShape = sourceFace?.meta["shape"];
+    if (!sourceShape) {
+      throw new Error("OCCT backend: extend surface source face is missing shape");
+    }
+
+    const edgeSelections = resolveSelectorSet(
+      feature.edges,
+      this.toResolutionContext(upstream)
+    );
+    if (edgeSelections.length === 0) {
+      throw new Error("OCCT backend: extend surface edges matched 0 entities");
+    }
+    for (const selection of edgeSelections) {
+      if (selection.kind !== "edge") {
+        throw new Error("OCCT backend: extend surface edges must resolve to edges");
+      }
+    }
+
+    const boundaryEdges = this.collectEdgesFromShape(sourceShape);
+    if (boundaryEdges.length !== 4) {
+      throw new Error(
+        "OCCT backend: extend surface currently supports rectangular planar faces only"
+      );
+    }
+    for (const selection of edgeSelections) {
+      const edgeShape = selection.meta["shape"];
+      if (!edgeShape || !this.containsShape(boundaryEdges, edgeShape)) {
+        throw new Error(
+          "OCCT backend: extend surface edges must belong to the source boundary"
+        );
+      }
+    }
+
+    const plane = this.planeBasisFromFace(sourceShape);
+    const xDir = this.edgeDirection(boundaryEdges[0], "extend surface boundary");
+    const yDir = normalizeVector(cross(plane.normal, xDir));
+    if (!isFiniteVec(yDir)) {
+      throw new Error("OCCT backend: extend surface failed to resolve boundary basis");
+    }
+
+    const boundarySamples = boundaryEdges.flatMap((edge) =>
+      this.sampleEdgePoints(edge, { edgeSegmentLength: 0.5, edgeMaxSegments: 8 })
+    );
+    if (boundarySamples.length < 8) {
+      throw new Error("OCCT backend: extend surface failed to sample source boundary");
+    }
+    const extents = this.projectBoundsOnBasis(boundarySamples, plane.origin, xDir, yDir);
+    const tolerance = Math.max(
+      1e-5,
+      Math.max(extents.uMax - extents.uMin, extents.vMax - extents.vMin) * 1e-4
+    );
+
+    const sides = new Set<"uMin" | "uMax" | "vMin" | "vMax">();
+    for (const selection of edgeSelections) {
+      const edgeShape = selection.meta["shape"];
+      if (!edgeShape) continue;
+      const side = this.classifyPlanarBoundaryEdge(
+        edgeShape,
+        plane.origin,
+        xDir,
+        yDir,
+        extents,
+        tolerance
+      );
+      if (!side) {
+        throw new Error(
+          "OCCT backend: extend surface only supports axis-aligned rectangular boundary edges"
+        );
+      }
+      sides.add(side);
+    }
+    if (sides.size === 0) {
+      throw new Error("OCCT backend: extend surface resolved no extendable boundary edges");
+    }
+
+    const distance = expectNumber(feature.distance, "extend surface distance");
+    const next = { ...extents };
+    if (sides.has("uMin")) next.uMin -= distance;
+    if (sides.has("uMax")) next.uMax += distance;
+    if (sides.has("vMin")) next.vMin -= distance;
+    if (sides.has("vMax")) next.vMax += distance;
+
+    const extended = this.makePlanarRectFace(plane.origin, xDir, yDir, next);
+    if (!this.isValidShape(extended, "face")) {
+      throw new Error("OCCT backend: extend surface produced invalid result");
+    }
+
+    const ownerShape = sourceFace.meta["owner"] ?? sourceShape;
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:face`,
+          kind: "face" as const,
+          meta: { shape: extended },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      extended,
+      feature.id,
+      feature.result,
+      feature.tags,
+      {
+        rootKind: "face",
+        ledgerPlan: this.makeFaceMutationSelectionLedgerPlan(upstream, ownerShape, [
+          { from: sourceFace, to: extended },
+        ]),
+      }
+    );
+    return { outputs, selections };
+  }
+
+  private execKnit(
+    feature: Knit,
+    upstream: KernelResult
+  ): KernelResult {
+    const sourceTargets = feature.sources.flatMap((source) =>
+      resolveSelectorSet(source, this.toResolutionContext(upstream))
+    );
+    if (sourceTargets.length === 0) {
+      throw new Error("OCCT backend: knit sources matched 0 entities");
+    }
+    for (const target of sourceTargets) {
+      if (target.kind !== "face" && target.kind !== "surface") {
+        throw new Error("OCCT backend: knit sources must resolve to face/surface");
+      }
+    }
+
+    const sourceFaces = this.uniqueKernelSelectionsById(
+      sourceTargets.flatMap((target) => this.faceSelectionsForTarget(target, upstream))
+    );
+    if (sourceFaces.length === 0) {
+      throw new Error("OCCT backend: knit sources resolved no source faces");
+    }
+
+    const faceShapes = this.uniqueShapeList(
+      sourceFaces
+        .map((selection) => selection.meta["shape"])
+        .filter((shape): shape is any => !!shape)
+        .map((shape) => this.toFace(shape))
+    );
+    if (faceShapes.length === 0) {
+      throw new Error("OCCT backend: knit sources resolved no face shapes");
+    }
+
+    const tolerance =
+      feature.tolerance === undefined
+        ? 1e-6
+        : expectNumber(feature.tolerance, "knit tolerance");
+    const seedShape =
+      faceShapes.length === 1 ? faceShapes[0] : this.makeCompoundFromShapes(faceShapes);
+    const sewed = this.sewShapeFaces(seedShape, tolerance) ?? seedShape;
+
+    let outputShape = sewed;
+    let outputKind: "solid" | "surface" | "face";
+    if (feature.makeSolid) {
+      const solid = this.makeSolidFromShells(sewed);
+      if (!solid || !this.shapeHasSolid(solid) || !this.isValidShape(solid)) {
+        throw new Error(
+          "OCCT backend: knit_non_watertight: unable to form solid from stitched surfaces"
+        );
+      }
+      outputShape = this.normalizeSolid(solid);
+      outputKind = "solid";
+    } else {
+      outputKind = this.countFaces(outputShape) === 1 ? "face" : "surface";
+    }
+
+    const outputs = new Map([
+      [
+        feature.result,
+        {
+          id: `${feature.id}:${outputKind}`,
+          kind: outputKind,
+          meta: { shape: outputShape },
+        },
+      ],
+    ]);
+    const selections = this.collectSelections(
+      outputShape,
+      feature.id,
+      feature.result,
+      feature.tags,
+      outputKind === "solid"
+        ? {
+            ledgerPlan: this.makeKnitSelectionLedgerPlan(sourceFaces),
+          }
+        : {
+            rootKind: "face",
+            ledgerPlan: this.makeKnitSelectionLedgerPlan(sourceFaces),
+          }
     );
     return { outputs, selections };
   }
@@ -4761,10 +5110,17 @@ export class OcctBackend implements Backend {
       }
     }
     const faceAssignments = this.assignStableSelectionIds("face", faceEntries);
+    const faceBindings: FaceSelectionBinding[] = [];
     for (let i = 0; i < faceEntries.length; i += 1) {
       const entry = faceEntries[i];
       const assignment = faceAssignments[i];
       if (!entry || !assignment) continue;
+      faceBindings.push({
+        shape: entry.shape,
+        id: assignment.id,
+        slot: assignment.record.slot,
+        role: assignment.record.role,
+      });
       selections.push({
         id: assignment.id,
         kind: "face",
@@ -4778,6 +5134,7 @@ export class OcctBackend implements Backend {
       (this.occt as any).TopAbs_ShapeEnum.TopAbs_EDGE,
       (edge) => this.edgeMetadata(edge, shape, featureId, ownerKey, tags)
     );
+    this.annotateEdgeAdjacencyMetadata(shape, edgeEntries, faceBindings);
     if (opts?.ledgerPlan?.edges) {
       opts.ledgerPlan.edges(edgeEntries);
     }
@@ -5097,12 +5454,7 @@ export class OcctBackend implements Backend {
     ownerShape: any,
     replacements: Array<{ from: KernelSelection; to: any }>
   ): SelectionLedgerPlan {
-    const ownerFaces = upstream.selections.filter(
-      (selection): selection is KernelSelection =>
-        selection.kind === "face" &&
-        !!selection.meta["owner"] &&
-        this.shapesSame(selection.meta["owner"], ownerShape)
-    );
+    const ownerFaces = this.ownerFaceSelectionsForShape(upstream, ownerShape);
     const replacementSources = new Set(
       replacements
         .map((entry) => entry.from?.id)
@@ -5159,10 +5511,12 @@ export class OcctBackend implements Backend {
     edgeTargets: KernelSelection[],
     builder: any
   ): SelectionLedgerPlan {
+    const ownerFaces = this.ownerFaceSelectionsForShape(upstream, ownerShape);
     const mutationPlan = this.makeFaceMutationSelectionLedgerPlan(upstream, ownerShape, []);
     return {
       faces: (entries) => {
         mutationPlan.faces?.(entries);
+        this.annotateModifiedFaceSelections(entries, ownerFaces, builder);
         this.annotateEdgeModifierFaceSelections(entries, label, edgeTargets, builder);
       },
       edges: (entries) => {
@@ -5181,6 +5535,23 @@ export class OcctBackend implements Backend {
       faces: (entries) => {
         mutationPlan.faces?.(entries);
         this.annotateSplitFaceSelections(entries, faceTargets);
+      },
+    };
+  }
+
+  private makeKnitSelectionLedgerPlan(sourceFaces: KernelSelection[]): SelectionLedgerPlan {
+    const mergedFrom = this.uniqueKernelSelectionIds(sourceFaces);
+    return {
+      solid:
+        mergedFrom.length > 0
+          ? {
+              slot: "body",
+              role: "body",
+              lineage: { kind: "merged", from: mergedFrom },
+            }
+          : undefined,
+      faces: (entries) => {
+        this.annotateKnitFaceSelections(entries, sourceFaces, mergedFrom);
       },
     };
   }
@@ -5398,7 +5769,15 @@ export class OcctBackend implements Backend {
     faceTargets: KernelSelection[],
     builder: any
   ): void {
-    const unmatched = entries.slice();
+    this.annotateModifiedFaceSelections(entries, faceTargets, builder);
+  }
+
+  private annotateModifiedFaceSelections(
+    entries: CollectedSubshape[],
+    faceTargets: KernelSelection[],
+    builder: any
+  ): void {
+    const unmatched = entries.filter((entry) => !entry.ledger?.slot);
     for (const target of faceTargets) {
       const sourceShape = target.meta["shape"];
       if (!sourceShape) continue;
@@ -5423,6 +5802,15 @@ export class OcctBackend implements Backend {
         break;
       }
     }
+  }
+
+  private ownerFaceSelectionsForShape(upstream: KernelResult, ownerShape: any): KernelSelection[] {
+    return upstream.selections.filter(
+      (selection): selection is KernelSelection =>
+        selection.kind === "face" &&
+        !!selection.meta["owner"] &&
+        this.shapesSame(selection.meta["owner"], ownerShape)
+    );
   }
 
   private annotateEdgeModifierFaceSelections(
@@ -5500,6 +5888,10 @@ export class OcctBackend implements Backend {
       if (matched.length === 0) continue;
 
       matched.sort((a, b) => {
+        const aSlot = this.edgeModifierDerivedBoundarySlot(a, slotRoot) ?? "";
+        const bSlot = this.edgeModifierDerivedBoundarySlot(b, slotRoot) ?? "";
+        const bySlot = aSlot.localeCompare(bSlot);
+        if (bySlot !== 0) return bySlot;
         const aTie = hashValue(this.selectionTieBreakerFingerprint("edge", a.meta));
         const bTie = hashValue(this.selectionTieBreakerFingerprint("edge", b.meta));
         const byTie = aTie.localeCompare(bTie);
@@ -5507,16 +5899,52 @@ export class OcctBackend implements Backend {
         return this.shapeHash(a.shape) - this.shapeHash(b.shape);
       });
 
+      const slotCounts = new Map<string, number>();
+      for (const entry of matched) {
+        const slot = this.edgeModifierDerivedBoundarySlot(entry, slotRoot);
+        if (!slot) continue;
+        slotCounts.set(slot, (slotCounts.get(slot) ?? 0) + 1);
+      }
+      const slotIndexes = new Map<string, number>();
       for (let edgeIndex = 0; edgeIndex < matched.length; edgeIndex += 1) {
         const entry = matched[edgeIndex];
         if (!entry) continue;
+        let slot =
+          this.edgeModifierDerivedBoundarySlot(entry, slotRoot) ?? `${slotRoot}.edge.${edgeIndex + 1}`;
+        const duplicateCount = slotCounts.get(slot) ?? 0;
+        if (duplicateCount > 1) {
+          const index = (slotIndexes.get(slot) ?? 0) + 1;
+          slotIndexes.set(slot, index);
+          slot = `${slot}.part.${index}`;
+        }
         this.applySelectionLedgerHint(entry, {
           role: "edge",
           lineage: { kind: "modified", from: target.id },
-          slot: `${slotRoot}.edge.${edgeIndex + 1}`,
+          slot,
         });
       }
     }
+  }
+
+  private edgeModifierDerivedBoundarySlot(
+    entry: CollectedSubshape,
+    slotRoot: string
+  ): string | null {
+    const adjacentSlots = Array.isArray(entry.meta["adjacentFaceSlots"])
+      ? (entry.meta["adjacentFaceSlots"] as unknown[])
+          .filter((slot): slot is string => typeof slot === "string" && slot.trim().length > 0)
+          .map((slot) => slot.trim())
+      : [];
+    if (adjacentSlots.length === 0) return null;
+    const descendantSlots = adjacentSlots.filter(
+      (slot) => slot === slotRoot || slot.startsWith(`${slotRoot}.part.`)
+    );
+    if (descendantSlots.length === 0) return null;
+    const preservedSlots = adjacentSlots.filter(
+      (slot) => !(slot === slotRoot || slot.startsWith(`${slotRoot}.part.`))
+    );
+    if (preservedSlots.length !== 1) return null;
+    return `${slotRoot}.bound.${preservedSlots[0]}`;
   }
 
   private annotateSplitFaceSelections(
@@ -5573,6 +6001,57 @@ export class OcctBackend implements Backend {
         }
         this.applySelectionLedgerHint(current.entry, hint);
       }
+    }
+  }
+
+  private annotateKnitFaceSelections(
+    entries: CollectedSubshape[],
+    sourceFaces: KernelSelection[],
+    mergedFrom: ID[]
+  ): void {
+    const unmatched = entries.filter((entry) => !entry.ledger?.slot);
+    for (let i = 0; i < sourceFaces.length; i += 1) {
+      const source = sourceFaces[i];
+      if (!source) continue;
+      const sourceShape = source.meta["shape"];
+      if (!sourceShape) continue;
+      let index = unmatched.findIndex((entry) => this.shapesSame(entry.shape, sourceShape));
+      if (index < 0) {
+        index = this.bestFaceMutationFallbackIndex(unmatched, source);
+      }
+      if (index < 0) continue;
+      const [entry] = unmatched.splice(index, 1);
+      if (!entry) continue;
+      const sourceSlot = this.selectionSlotForLineage(source);
+      const sourceRole = this.selectionRoleForLineage(source);
+      const slot = sourceSlot
+        ? `merge.part.${i + 1}.${sourceSlot}`
+        : `merge.part.${i + 1}`;
+      this.applySelectionLedgerHint(entry, {
+        slot,
+        role: sourceRole ?? "surface",
+        lineage: { kind: "merged", from: [source.id] },
+      });
+    }
+
+    unmatched.sort((a, b) => {
+      const aTie = hashValue(this.selectionTieBreakerFingerprint("face", a.meta));
+      const bTie = hashValue(this.selectionTieBreakerFingerprint("face", b.meta));
+      const byTie = aTie.localeCompare(bTie);
+      if (byTie !== 0) return byTie;
+      return this.shapeHash(a.shape) - this.shapeHash(b.shape);
+    });
+    for (let i = 0; i < unmatched.length; i += 1) {
+      const entry = unmatched[i];
+      if (!entry) continue;
+      this.applySelectionLedgerHint(entry, {
+        slot: `merge.generated.${i + 1}`,
+        role: "surface",
+        lineage: {
+          kind: "merged",
+          from: mergedFrom.length > 0 ? mergedFrom : sourceFaces.map((source) => source.id),
+        },
+      });
     }
   }
 
@@ -6219,6 +6698,171 @@ export class OcctBackend implements Backend {
       }
     }
     return { selections: upstream.selections, named };
+  }
+
+  private resolveSingleSelection(
+    selector: Selector,
+    upstream: KernelResult,
+    label: string
+  ): KernelSelection {
+    const matches = resolveSelectorSet(selector, this.toResolutionContext(upstream));
+    if (matches.length === 0) {
+      throw new Error(`OCCT backend: ${label} selector matched 0 entities`);
+    }
+    if (matches.length !== 1) {
+      throw new Error(`OCCT backend: ${label} selector must resolve to exactly 1 entity`);
+    }
+    const [match] = matches;
+    if (!match) {
+      throw new Error(`OCCT backend: ${label} selector matched no entity`);
+    }
+    return match as KernelSelection;
+  }
+
+  private faceSelectionsForTarget(
+    target: KernelSelection,
+    upstream: KernelResult
+  ): KernelSelection[] {
+    const shape = target.meta["shape"];
+    if (!shape) return [];
+    const matches = this.uniqueKernelSelectionsById(
+      upstream.selections.filter(
+        (selection): selection is KernelSelection =>
+          selection.kind === "face" &&
+          !!selection.meta["shape"] &&
+          (this.shapesSame(selection.meta["shape"], shape) ||
+            (!!selection.meta["owner"] && this.shapesSame(selection.meta["owner"], shape)))
+      )
+    );
+    if (matches.length > 0) {
+      return matches.slice().sort((a, b) => a.id.localeCompare(b.id));
+    }
+    if (target.kind === "face") {
+      return [target];
+    }
+    return [];
+  }
+
+  private uniqueKernelSelectionsById(selections: KernelSelection[]): KernelSelection[] {
+    const byId = new Map<string, KernelSelection>();
+    for (const selection of selections) {
+      if (!byId.has(selection.id)) {
+        byId.set(selection.id, selection);
+      }
+    }
+    return Array.from(byId.values());
+  }
+
+  private uniqueKernelSelectionIds(selections: KernelSelection[]): ID[] {
+    return Array.from(new Set(selections.map((selection) => selection.id)));
+  }
+
+  private shapeBoundsOverlap(a: any, b: any, tolerance = 1e-6): boolean {
+    const left = this.shapeBounds(a);
+    const right = this.shapeBounds(b);
+    return !(
+      left.max[0] < right.min[0] - tolerance ||
+      right.max[0] < left.min[0] - tolerance ||
+      left.max[1] < right.min[1] - tolerance ||
+      right.max[1] < left.min[1] - tolerance ||
+      left.max[2] < right.min[2] - tolerance ||
+      right.max[2] < left.min[2] - tolerance
+    );
+  }
+
+  private edgeDirection(edge: any, label: string): [number, number, number] {
+    const points = this.sampleEdgePoints(edge, { edgeSegmentLength: 0.5, edgeMaxSegments: 8 });
+    if (points.length < 2) {
+      throw new Error(`OCCT backend: ${label} edge has insufficient sample points`);
+    }
+    const start = points[0];
+    const end = points[points.length - 1];
+    if (!start || !end) {
+      throw new Error(`OCCT backend: ${label} edge points are missing`);
+    }
+    const direction = normalizeVector(this.subVec(end, start));
+    if (!isFiniteVec(direction)) {
+      throw new Error(`OCCT backend: ${label} edge direction is degenerate`);
+    }
+    return direction;
+  }
+
+  private projectBoundsOnBasis(
+    points: Array<[number, number, number]>,
+    origin: [number, number, number],
+    xDir: [number, number, number],
+    yDir: [number, number, number]
+  ): { uMin: number; uMax: number; vMin: number; vMax: number } {
+    let uMin = Infinity;
+    let uMax = -Infinity;
+    let vMin = Infinity;
+    let vMax = -Infinity;
+    for (const point of points) {
+      const delta = this.subVec(point, origin);
+      const u = dot(delta, xDir);
+      const v = dot(delta, yDir);
+      if (u < uMin) uMin = u;
+      if (u > uMax) uMax = u;
+      if (v < vMin) vMin = v;
+      if (v > vMax) vMax = v;
+    }
+    if (![uMin, uMax, vMin, vMax].every((value) => Number.isFinite(value))) {
+      throw new Error("OCCT backend: failed to project planar bounds");
+    }
+    return { uMin, uMax, vMin, vMax };
+  }
+
+  private classifyPlanarBoundaryEdge(
+    edge: any,
+    origin: [number, number, number],
+    xDir: [number, number, number],
+    yDir: [number, number, number],
+    extents: { uMin: number; uMax: number; vMin: number; vMax: number },
+    tolerance: number
+  ): "uMin" | "uMax" | "vMin" | "vMax" | null {
+    const points = this.sampleEdgePoints(edge, { edgeSegmentLength: 0.5, edgeMaxSegments: 8 });
+    if (points.length < 2) return null;
+    const projected = this.projectBoundsOnBasis(points, origin, xDir, yDir);
+    const near = (a: number, b: number) => Math.abs(a - b) <= tolerance;
+    if (near(projected.uMin, extents.uMin) && near(projected.uMax, extents.uMin)) {
+      return "uMin";
+    }
+    if (near(projected.uMin, extents.uMax) && near(projected.uMax, extents.uMax)) {
+      return "uMax";
+    }
+    if (near(projected.vMin, extents.vMin) && near(projected.vMax, extents.vMin)) {
+      return "vMin";
+    }
+    if (near(projected.vMin, extents.vMax) && near(projected.vMax, extents.vMax)) {
+      return "vMax";
+    }
+    return null;
+  }
+
+  private makePlanarRectFace(
+    origin: [number, number, number],
+    xDir: [number, number, number],
+    yDir: [number, number, number],
+    extents: { uMin: number; uMax: number; vMin: number; vMax: number }
+  ): any {
+    const corner = (u: number, v: number): [number, number, number] => [
+      origin[0] + xDir[0] * u + yDir[0] * v,
+      origin[1] + xDir[1] * u + yDir[1] * v,
+      origin[2] + xDir[2] * u + yDir[2] * v,
+    ];
+    const corners: Array<[number, number, number]> = [
+      corner(extents.uMin, extents.vMin),
+      corner(extents.uMax, extents.vMin),
+      corner(extents.uMax, extents.vMax),
+      corner(extents.uMin, extents.vMax),
+    ];
+    const wire = this.makeWireFromEdges([
+      this.makeLineEdge(corners[0] as [number, number, number], corners[1] as [number, number, number]),
+      this.makeLineEdge(corners[1] as [number, number, number], corners[2] as [number, number, number]),
+      this.makeLineEdge(corners[2] as [number, number, number], corners[3] as [number, number, number]),
+      this.makeLineEdge(corners[3] as [number, number, number], corners[0] as [number, number, number]),
+    ]);
+    return this.readFace(this.makeFaceFromWire(wire));
   }
 
   private shapeBounds(shape: any): { min: [number, number, number]; max: [number, number, number] } {
@@ -7101,6 +7745,58 @@ export class OcctBackend implements Backend {
       faces.push(this.toFace(explorer.Current()));
     }
     return faces;
+  }
+
+  private annotateEdgeAdjacencyMetadata(
+    shape: any,
+    edgeEntries: CollectedSubshape[],
+    faceBindings: FaceSelectionBinding[]
+  ): void {
+    if (edgeEntries.length === 0 || faceBindings.length === 0) return;
+    const adjacency = this.buildEdgeAdjacency(shape);
+    if (!adjacency) return;
+
+    const byFaceHash = new Map<number, FaceSelectionBinding[]>();
+    for (const binding of faceBindings) {
+      const hash = this.shapeHash(binding.shape);
+      const bucket = byFaceHash.get(hash) ?? [];
+      bucket.push(binding);
+      byFaceHash.set(hash, bucket);
+    }
+
+    const lookupBinding = (face: any): FaceSelectionBinding | null => {
+      const hash = this.shapeHash(face);
+      const bucket = byFaceHash.get(hash);
+      if (!bucket) return null;
+      for (const binding of bucket) {
+        if (this.shapesSame(binding.shape, face)) return binding;
+      }
+      return null;
+    };
+
+    for (const entry of edgeEntries) {
+      const adjacent = this.adjacentFaces(adjacency, entry.shape);
+      if (adjacent.length === 0) continue;
+      const adjacentFaceIds = new Set<string>();
+      const adjacentFaceSlots = new Set<string>();
+      const adjacentFaceRoles = new Set<string>();
+      for (const face of adjacent) {
+        const binding = lookupBinding(face);
+        if (!binding) continue;
+        adjacentFaceIds.add(binding.id);
+        if (binding.slot) adjacentFaceSlots.add(binding.slot);
+        if (binding.role) adjacentFaceRoles.add(binding.role);
+      }
+      if (adjacentFaceIds.size > 0) {
+        entry.meta.adjacentFaceIds = Array.from(adjacentFaceIds).sort();
+      }
+      if (adjacentFaceSlots.size > 0) {
+        entry.meta.adjacentFaceSlots = Array.from(adjacentFaceSlots).sort();
+      }
+      if (adjacentFaceRoles.size > 0) {
+        entry.meta.adjacentFaceRoles = Array.from(adjacentFaceRoles).sort();
+      }
+    }
   }
 
   private collectEdgesFromShape(shape: any): any[] {
