@@ -99,6 +99,10 @@ Response:
 Notes:
 - `featureStages` includes an explicit `stage` entry for every `featureKinds` item.
 - Additional keys may appear for mode-specific variants (for example `feature.extrude:mode.surface`).
+- `optionalFeatures.assembly.solve` indicates endpoint availability only; it does
+  not promote assembly solve to a stable contract tier by itself.
+- Assembly solve remains dependent on stable part-level connector resolution and
+  semantic references from part builds.
 
 ## Health
 `GET /v1/health`

@@ -7,6 +7,8 @@ experimental rather than part of the deterministic part compile pipeline.
 Current Step 1 contract direction:
 - Mate connectors are authored on parts.
 - Assembly intent is stored in a separate assembly file/document.
+- This data model can move forward before full assembly solver maturity, but it
+  depends on stable part-level connector and semantic-reference behavior.
 
 ## Assembly (Data-Only in v1)
 
@@ -37,6 +39,12 @@ import { buildAssembly, solveAssembly } from "trueform/experimental";
 
 - `buildAssembly(assembly, parts, options?) -> AssemblySolveResult`
 - `solveAssembly(assembly, partConnectors, options?) -> AssemblySolveResult`
+
+Solver maturity note:
+- Assembly authoring/data contracts are safer to build out now than broad solver
+  guarantees.
+- Treat solver output as experimental until the required part-level semantic
+  topology and connector behavior is stable for the target workflows.
 
 ## Mate DOF
 

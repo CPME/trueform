@@ -36,6 +36,7 @@ flowchart LR
 - Runtime target is Node + OpenCascade.js.
 - Core compile is part-centric; assembly solving APIs are experimental and outside the core compile pipeline.
 - Step 1 contract direction: mate connectors live on parts, and assembly intent is stored in a separate assembly file/document.
+- Assembly data contracts can evolve ahead of solver maturity, but stable assembly workflows still depend on stable part-level semantic references and connector behavior.
 - Experimental native OCCT backend supports server-side CAD compute and AP242 export via native HTTP transport.
 
 ## Quickstart

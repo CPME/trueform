@@ -55,9 +55,15 @@ and public API stability tiers.
    - Mate connectors are authored and stored at the part level.
 2. Storage:
    - Assembly intent is stored in a separate assembly file/document.
+   - Assembly documents are safe to evolve as a data contract before solver
+     maturity, as long as they resolve through stable part-level connector
+     definitions.
 3. Solver scope:
    - Assembly solving helpers can exist as experimental utilities.
    - Assembly solving is not a required stage of core deterministic part compile.
+   - Assembly solver/runtime behavior should not be treated as production-stable
+     until the required part-level semantic reference and connector behavior is
+     stable for the dependent workflows.
 
 ## Assembly Part Reference Shape (Step 1 draft)
 
