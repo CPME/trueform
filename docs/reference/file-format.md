@@ -11,7 +11,8 @@ Step 1 contract direction:
 ## Container Types
 
 - `.tfp` (part container): implemented.
-- `.tfa` (assembly container): contract direction; schema and tooling are in progress.
+- `.tfa` (assembly container): draft target only; schema and tooling are not yet a
+  complete shipped contract.
 
 ## Container Layout
 
@@ -62,6 +63,10 @@ Part document (`.tfp`) example:
 ```
 
 Assembly document (`.tfa`) draft example:
+
+This is a target-shape example, not a statement that the current shipped
+`IntentDocument` and container helpers fully support `.tfa` assembly documents
+today.
 
 ```
 {
@@ -127,21 +132,22 @@ Notes:
 
 ## Bundle Compatibility And Migration (Step 1)
 
-Legacy bundle format (single document with both `parts` and `assemblies`) is
-supported during transition.
+Legacy bundle format (single document with both `parts` and `assemblies`) remains
+the current practical compatibility shape while split assembly containers are
+still draft-only.
 
-Read compatibility:
-- Loaders accept legacy bundles and split formats.
+Target read compatibility once split assembly containers land:
+- Loaders should accept legacy bundles and split formats.
 - For legacy bundles, loaders synthesize virtual imports:
   - `id = "part:<part.id>"`
   - `partId = <part.id>`
   - `path` omitted (in-document source)
 
-Write behavior:
-- Default write mode is split:
+Target write behavior once split assembly containers land:
+- Default write mode should be split:
   - part documents in `.tfp`
   - assembly documents in `.tfa` with `document.imports`
-- Legacy bundle write mode is compatibility-only and must be explicit.
+- Legacy bundle write mode should remain compatibility-only and explicit.
 
 Deprecation direction:
 1. Transition: read both formats; write split by default.
@@ -153,6 +159,9 @@ Notes:
 - Feature order in arrays is preserved.
 - In v1 direction, part connectors are defined in part documents.
 - In v1 direction, assembly intent is serialized in separate assembly documents.
+- Current implementation note: `src/tf/container.ts` implements the generic
+  container read/write path for current document payloads; do not assume complete
+  `.tfa` read/write behavior until the v1 contract explicitly promotes it.
 
 ## manifest.json (Container Metadata)
 

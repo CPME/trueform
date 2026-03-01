@@ -135,94 +135,35 @@ Stage 4: Consolidate And Promote
 - Promote feature maturity only when semantic topology continuity is verified.
 - Keep docs, capabilities, and staged feature policy synchronized.
 
-## Suggested Multi-Agent Split
+## Serial Execution Rule
 
-Yes. These tasks can be split across multiple agents if one agent owns each
-workstream and one integrator agent controls merge order and handoffs.
+This plan should be executed in strict sequence by one active executor at a time.
 
-Recommended agent roles:
+Reason:
 
-- Agent 0: Integrator
-  - owns sequencing, branch hygiene, merge order, conflict resolution, and final
-    consistency review
-  - owns cross-workstream signoff on semantic topology invariants
-- Agent 1: Contract Docs Agent
-  - owns Workstream A
-  - leads Stage 1
-  - updates source-of-truth architecture and contract docs
-- Agent 2: V1 Contract Agent
-  - owns Workstream B
-  - leads Stage 2
-  - turns placeholder v1 behavior into explicit implemented/deferred contract
-- Agent 3: Packaging Agent
-  - owns Workstream C
-  - leads Stage 3
-  - performs package extraction while preserving compatibility and semantic
-    topology behavior
-- Agent 4: Runtime Platform Agent
-  - owns Workstream D
-  - co-leads Stage 2 for runtime payload work and leads runtime-facing parts of
-    Stage 4
-  - aligns service, OpenAPI, capabilities, and client-facing payload contracts
-- Agent 5: Feature Maturity Agent
-  - owns Workstream E
-  - supports Stage 2 with semantic topology criteria
-  - leads feature graduation and new geometric feature compliance in Stage 4
+- each stage changes the contract assumptions for the next stage
+- semantic topology metadata is a shared cross-cutting contract
+- package moves become noisy and risky if the contract is not already stable
+- feature promotion is only safe after docs, contract, and packaging converge
 
-Parallelism rules:
+Execution rule:
 
-1. Safe parallel tracks
-   - Agent 1 and Agent 4 can work in parallel on different docs only if they do
-     not edit the same source-of-truth files in the same batch.
-   - Agent 2 and Agent 4 can work in parallel during Stage 2 if Agent 2 defines
-     the contract first and Agent 4 implements runtime-visible payload changes
-     against that contract.
-   - Agent 5 can prepare feature criteria and test templates while Stages 1-3 are
-     in progress, but should not promote features before Stage 4.
-2. Serialized handoffs
-   - Agent 3 should begin large package moves only after Agent 2's contract
-     outputs are merged.
-   - Agent 5 should begin feature promotion only after Agent 3 stabilizes package
-     boundaries and Agent 4 stabilizes runtime-facing contracts.
-3. Merge discipline
-   - Agent 0 merges Stage 1 outputs first.
-   - Agent 0 merges Stage 2 contract-defining changes before runtime or package
-     follow-ons.
-   - Agent 0 keeps semantic topology contract changes in one reviewable thread so
-     downstream agents are not guessing at the stable metadata shape.
+1. Complete Stage 1 and merge it before starting Stage 2.
+2. Complete Stage 2 and merge it before starting Stage 3.
+3. Complete Stage 3 and merge it before starting Stage 4.
+4. Treat semantic topology behavior as a blocking invariant in every stage.
+5. If a later stage discovers a contract gap, return to the earlier contract doc,
+   fix it, and re-baseline before proceeding.
 
-Recommended task split to hand out:
+Working model:
 
-- Give Agent 1:
-  - `specs/summary.md`
-  - `specs/spec.md`
-  - `docs/reference/architecture.md`
-  - `docs/reference/file-format.md`
-  - import-path correctness sweeps in public docs
-- Give Agent 2:
-  - `specs/v1-contract.md`
-  - contract updates for assertions/dimensions/assemblies
-  - the minimum semantic topology contract definition
-- Give Agent 3:
-  - `packages/*`
-  - root compatibility facades
-  - boundary guardrails and package-level tests
-- Give Agent 4:
-  - `src/api.ts`
-  - `apps/tf-service/server.mjs`
-  - `src/service_client.ts`
-  - runtime docs/OpenAPI alignment
-- Give Agent 5:
-  - `src/feature_staging.ts`
-  - feature-specific docs
-  - feature e2e and probe tests
-  - semantic topology continuity checks for new geometric features
+- one executor owns the active stage
+- only files required for the active stage should change in the same batch
+- each stage should end with an explicit checkpoint commit before the next stage
 
 ## Workstream A: Documentation And Contract Alignment
 
 Goal: make the documentation hierarchy accurately reflect the implemented system.
-
-Suggested owner: Agent 1 (Contract Docs Agent)
 
 ### Problems To Solve
 
@@ -263,8 +204,6 @@ Suggested owner: Agent 1 (Contract Docs Agent)
 
 Goal: close the most important "represented but not fully integrated" parts of v1.
 
-Suggested owner: Agent 2 (V1 Contract Agent)
-
 ### Problems To Solve
 
 - Assemblies exist in the model, but they are not part of the stable compile path.
@@ -302,8 +241,6 @@ Suggested owner: Agent 2 (V1 Contract Agent)
 
 Goal: move from the current compatibility facade to the intended multi-package
 layout.
-
-Suggested owner: Agent 3 (Packaging Agent)
 
 ### Problems To Solve
 
@@ -350,8 +287,6 @@ Suggested owner: Agent 3 (Packaging Agent)
 
 Goal: make the API layer part of the core architecture story, not an adjacent app.
 
-Suggested owner: Agent 4 (Runtime Platform Agent)
-
 ### Problems To Solve
 
 - The runtime service is real and substantial, but most high-level architecture docs
@@ -389,8 +324,6 @@ Suggested owner: Agent 4 (Runtime Platform Agent)
 ## Workstream E: Feature Surface Maturity And Promotion
 
 Goal: align advertised capability with feature reliability and staging policy.
-
-Suggested owner: Agent 5 (Feature Maturity Agent)
 
 ### Problems To Solve
 
@@ -450,9 +383,6 @@ Suggested owner: Agent 5 (Feature Maturity Agent)
 
 ### Stage 1: Align The Contract
 
-Lead agent: Agent 1
-Supporting agents: Agent 4 (runtime docs review), Agent 0 (integration review)
-
 - Refresh `specs/summary.md`.
 - Refresh `specs/spec.md` framing.
 - Fix incorrect example import paths.
@@ -465,10 +395,6 @@ Boundary:
 
 ### Stage 2: Finish The V1 Boundary
 
-Lead agent: Agent 2
-Supporting agents: Agent 4 (runtime payload contract), Agent 5 (semantic topology
-feature criteria), Agent 0 (merge ordering)
-
 - Make assertions/dimensions first-class runtime outputs.
 - Decide the concrete v1 assembly and `.tfa` boundary.
 - Remove or reclassify placeholder-only contract claims.
@@ -480,9 +406,6 @@ Boundary:
 
 ### Stage 3: Make The Package Layout Real
 
-Lead agent: Agent 3
-Supporting agents: Agent 0 (merge control), Agent 2 (contract guardrails review)
-
 - Replace package forwarders with package-owned sources.
 - Keep root compatibility exports intact.
 - Add cross-package contract tests for each extracted module boundary.
@@ -492,9 +415,6 @@ Boundary:
 - Packaging work must preserve API behavior and semantic topology continuity.
 
 ### Stage 4: Consolidate And Promote
-
-Lead agents: Agent 4 and Agent 5
-Supporting agents: Agent 0 (promotion gate), Agent 1 (final docs coherence)
 
 - Update architecture docs to include runtime APIs and async job execution.
 - Keep viewer, service, and native server documentation aligned with the same

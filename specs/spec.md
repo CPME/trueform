@@ -1,26 +1,40 @@
 ## Goal
 
-Build a **reusable TypeScript library for webapps** that lets agents author **declarative design intent** (features, datums, constraints, assertions) and **compile** it into geometry using OpenCascade.js (with a clean seam to add native Open CASCADE Technology later).
+Build a **reusable TypeScript modeling platform for webapps** that lets agents author **declarative design intent** (features, datums, constraints, assertions) and **compile** it into geometry using OpenCascade.js (with a clean seam to add native Open CASCADE Technology later).
 
 Audience: implementers. For a high-level overview, see `specs/summary.md`.
 
+Current implementation note:
+- The shipped surface today is the `trueform` root package plus explicit subpaths
+  (`trueform/backend`, `trueform/backend-spi`, `trueform/experimental`,
+  `trueform/export`, `trueform/api`).
+- Workspace extraction to `@trueform/*` packages is in progress; this spec
+  describes the durable architecture and target module boundaries.
+
 ---
 
-## Deliverable structure (recommended monorepo)
+## Deliverable structure (target monorepo)
 
-### Package 1: `@cad/intent`
+### Package 1: `@trueform/core`
 
 **Pure TS. No WASM. No kernel types.**
 
 * Intent IR types (Document/Part/Feature/Datum/Selector/Assertion)
-* Builders (nice API for agents)
 * Normalizer (units, expression eval, canonical ordering)
 * Dependency DAG planner (deterministic feature order)
 * Selector DSL + resolver interface (backend-agnostic)
 * Assertion DSL (data only) + evaluation plan
 * Validation: under/over-constrained checks for features (DoF checks)
 
-### Package 2: `@cad/backend-ocjs`
+### Package 2: `@trueform/dsl`
+
+**Pure TS. Authoring helpers only.**
+
+* Builders (nice API for agents)
+* DSL convenience wrappers over core IR
+* No backend implementation imports
+
+### Package 3: `@trueform/backend-ocjs`
 
 **The OpenCascade.js executor.**
 
@@ -32,7 +46,7 @@ Audience: implementers. For a high-level overview, see `specs/summary.md`.
   * exporting (mesh/STEP/STL as supported)
 * Implements evaluators for assertions (cheap/local tier)
 
-(Optional later) Package 3: `@cad/backend-occt` (server/native)
+(Optional later / experimental) Package 4: `@trueform/backend-native` (server/native)
 
 ---
 
@@ -81,14 +95,14 @@ It is the **single authoritative IR** for geometry, semantic references, functio
 
 Types:
 
-* `AssemblyRef = { instance, selector }`
+* `AssemblyRef = { instance, connector }`
 * `Transform = { translation?, rotation?, matrix? }`
   * `matrix` is a 4x4 column-major array (length 16)
 
 Notes:
 
 * Transforms are authoritative in v1; mates are recorded as intent/validation.
-* Assembly selectors always scope through an instance id + selector.
+* Assembly references scope through an instance id + connector id.
 
 ### Feature node contract
 
@@ -185,7 +199,8 @@ Do **not** store assertion results in the IR—results are build artifacts.
 
 ## Compiler pipeline (deterministic)
 
-Implemented in `@cad/intent`, executed with a backend.
+Implemented in the stable core/compiler layer (shipped through `trueform` today,
+with package extraction to `@trueform/*` in progress), executed with a backend.
 
 1. **Normalize**
 

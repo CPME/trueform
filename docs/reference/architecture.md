@@ -10,8 +10,9 @@ flowchart TB
   B --> C["Deterministic Build Executor"]
   C --> D["Backend Boundary (SPI)"]
   D --> E["OpenCascade.js Kernel"]
-  E --> F["Named Outputs + Selection Metadata"]
+  E --> F["Named Outputs + Semantic Topology Metadata"]
   F --> G["Mesh / STEP / Runtime APIs"]
+  G --> H["Runtime Service<br/>jobs, sessions, artifacts"]
 
   classDef author fill:#d6f5e3,stroke:#1b5e20,color:#0f3a14;
   classDef compile fill:#d8e9ff,stroke:#0d47a1,color:#082a61;
@@ -21,7 +22,7 @@ flowchart TB
   class A author;
   class B,C compile;
   class D,E backend;
-  class F,G output;
+  class F,G,H output;
 ```
 
 ## Intent IR (Source of Truth)
@@ -43,6 +44,15 @@ flowchart TB
 - Datums provide stable anchors.
 - Selectors are semantic queries (e.g., “largest planar face normal to +Z”).
 - Ambiguity is a compile error.
+
+## Semantic Topology
+
+- Stable references are carried through datums, selectors, named selections, and
+  semantic selection metadata.
+- Topology-changing operations should preserve semantic continuity through
+  `createdBy`, owner/role metadata, aliases, and lineage where possible.
+- When semantic continuity cannot be preserved, the system should fail explicitly
+  rather than silently degrading to raw topology traversal.
 
 ## Backend Boundary
 

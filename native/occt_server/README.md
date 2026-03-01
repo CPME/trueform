@@ -27,7 +27,7 @@ cd /home/eveber/code/trueform
 Use `HttpOcctTransport` + `OcctNativeBackend`:
 
 ```ts
-import { HttpOcctTransport, OcctNativeBackend } from "trueform";
+import { HttpOcctTransport, OcctNativeBackend } from "trueform/experimental";
 
 const transport = new HttpOcctTransport({ baseUrl: "http://127.0.0.1:8081" });
 const backend = new OcctNativeBackend({ transport });
