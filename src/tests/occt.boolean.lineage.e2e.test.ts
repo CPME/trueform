@@ -3,6 +3,25 @@ import { dsl } from "../dsl.js";
 import { buildPart } from "../executor.js";
 import { assertValidShape, getBackendContext, runTests } from "./occt_test_utils.js";
 
+function buildSubtractPocketPart() {
+  return dsl.part("boolean-lineage-subtract", [
+    dsl.extrude("base", dsl.profileRect(20, 20), 12, "body:left"),
+    dsl.extrude("tool-seed", dsl.profileRect(8, 8), 6, "body:tool-seed"),
+    dsl.moveBody("tool-move", dsl.selectorNamed("body:tool-seed"), "body:right", [
+      "tool-seed",
+    ], {
+      translation: [0, 0, 6],
+    }),
+    dsl.booleanOp(
+      "subtract-1",
+      "subtract",
+      dsl.selectorNamed("body:left"),
+      dsl.selectorNamed("body:right"),
+      "body:main"
+    ),
+  ]);
+}
+
 const tests = [
   {
     name: "occt boolean lineage: union preserves unchanged left bottom face slot",
@@ -48,22 +67,7 @@ const tests = [
     name: "occt boolean lineage: subtract preserves unchanged left bottom face slot",
     fn: async () => {
       const { backend, occt } = await getBackendContext();
-      const part = dsl.part("boolean-lineage-subtract", [
-        dsl.extrude("base", dsl.profileRect(20, 20), 12, "body:left"),
-        dsl.extrude("tool-seed", dsl.profileRect(8, 8), 6, "body:tool-seed"),
-        dsl.moveBody("tool-move", dsl.selectorNamed("body:tool-seed"), "body:right", [
-          "tool-seed",
-        ], {
-          translation: [0, 0, 6],
-        }),
-        dsl.booleanOp(
-          "subtract-1",
-          "subtract",
-          dsl.selectorNamed("body:left"),
-          dsl.selectorNamed("body:right"),
-          "body:main"
-        ),
-      ]);
+      const part = buildSubtractPocketPart();
 
       const result = buildPart(part, backend);
       const output = result.final.outputs.get("body:main");
@@ -82,6 +86,70 @@ const tests = [
         kind: "modified",
         from: "face:body.left~base.bottom",
       });
+    },
+  },
+  {
+    name: "occt boolean lineage: subtract emits semantic cut face slots from tool faces",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const result = buildPart(buildSubtractPocketPart(), backend);
+      const output = result.final.outputs.get("body:main");
+      assert.ok(output, "missing subtract result");
+      assertValidShape(occt, output.meta["shape"] as any, "subtract cut-face result");
+
+      const cutBottom = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "subtract-1" &&
+          selection.meta["selectionSlot"] === "cut.bottom"
+      );
+      assert.ok(cutBottom, "missing semantic cut.bottom face");
+      assert.equal(cutBottom.id, "face:body.main~subtract-1.cut.bottom");
+      assert.deepEqual(cutBottom.meta["selectionLineage"], {
+        kind: "modified",
+        from: "face:body.right~tool-move.bottom",
+      });
+
+      const cutWall = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "subtract-1" &&
+          typeof selection.meta["selectionSlot"] === "string" &&
+          (selection.meta["selectionSlot"] as string).startsWith("cut.side.")
+      );
+      assert.ok(cutWall, "missing semantic cut side face");
+
+      const cutTop = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "subtract-1" &&
+          selection.meta["selectionSlot"] === "cut.top"
+      );
+      assert.equal(cutTop, undefined, "tool exit cap should not be mislabeled as cut.top");
+    },
+  },
+  {
+    name: "occt boolean lineage: subtract emits semantic cut edge slots",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const result = buildPart(buildSubtractPocketPart(), backend);
+      const output = result.final.outputs.get("body:main");
+      assert.ok(output, "missing subtract result");
+      assertValidShape(occt, output.meta["shape"] as any, "subtract cut-edge result");
+
+      const edge = result.final.selections.find(
+        (selection) =>
+          selection.kind === "edge" &&
+          selection.meta["createdBy"] === "subtract-1" &&
+          typeof selection.meta["selectionSlot"] === "string" &&
+          (selection.meta["selectionSlot"] as string).startsWith("cut.") &&
+          (selection.meta["selectionSlot"] as string).includes(".join.cut.")
+      );
+      assert.ok(edge, "missing semantic cut join edge");
+      assert.match(
+        edge.id,
+        /^edge:body\.main~subtract-1\.cut\..+\.join\.cut\..+(?:\.part\.\d+)?$/
+      );
     },
   },
 ];

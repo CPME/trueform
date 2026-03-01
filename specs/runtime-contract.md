@@ -336,8 +336,10 @@ Diagnostics expectations for broken references:
   compiler to preserve references without relying on traversal order.
 - semantic ids can include feature-derived slots, not only hashes. Examples:
   - `face:body.main~base.top`
+  - `face:body.main~subtract-1.cut.bottom`
   - `edge:body.main~edge-fillet.fillet.seed.1.bound.top`
   - `edge:body.main~edge-chamfer.chamfer.seed.1.join.chamfer.seed.2`
+  - `edge:body.main~subtract-1.cut.bottom.join.cut.side.1`
 - when an output cannot be named semantically, runtime falls back to a
   deterministic hashed suffix. Clients should still treat the full id as the
   canonical stable token.
@@ -392,6 +394,20 @@ Client guidance:
 - Treat `*.bound.*`, `*.join.*`, and `*.seam` as stronger semantic anchors than
   `*.end.<n>`, and treat `*.end.<n>` as stronger than legacy `*.edge.<n>`
   fallback ids.
+
+## Boolean Subtract Semantic Cut IDs
+`feature.boolean` with `op: "subtract"` can emit semantic `cut.*` slots for
+tool-derived cavity faces and their descendant edges.
+
+- Face examples:
+  - `face:body.main~subtract-1.cut.bottom`
+  - `face:body.main~subtract-1.cut.side.1`
+- Edge examples:
+  - `edge:body.main~subtract-1.cut.bottom.join.cut.side.1`
+  - `edge:body.main~subtract-1.cut.side.1.join.cut.side.2`
+- `cut.*` ids are emitted only when runtime can justify the mapping from the
+  subtract tool's semantic face slots. Remaining boolean topology may still use
+  deterministic hashed fallback ids.
 
 ## Stable Payload Fixtures
 Mirror fixture:

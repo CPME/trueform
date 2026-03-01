@@ -2000,12 +2000,21 @@ export class OcctBackend implements Backend {
     })();
 
     let moved = ownerShape;
+    const faceReplacements =
+      this.ownerFaceSelectionsForShape(upstream, ownerShape).map((selection) => ({
+        from: selection,
+        to: selection.meta["shape"],
+      }));
     if (feature.scale !== undefined) {
       const scale = expectNumber(feature.scale, "move body scale");
       if (!(scale > 0)) {
         throw new Error("OCCT backend: move body scale must be positive");
       }
       moved = this.transformShapeScale(moved, transformOrigin, scale);
+      for (const replacement of faceReplacements) {
+        if (!replacement.to) continue;
+        replacement.to = this.transformShapeScale(replacement.to, transformOrigin, scale);
+      }
     }
     if (feature.rotationAxis !== undefined || feature.rotationAngle !== undefined) {
       if (feature.rotationAxis === undefined || feature.rotationAngle === undefined) {
@@ -2020,6 +2029,10 @@ export class OcctBackend implements Backend {
       );
       const angle = expectNumber(feature.rotationAngle, "move body rotationAngle");
       moved = this.transformShapeRotate(moved, transformOrigin, axis, angle);
+      for (const replacement of faceReplacements) {
+        if (!replacement.to) continue;
+        replacement.to = this.transformShapeRotate(replacement.to, transformOrigin, axis, angle);
+      }
     }
     if (feature.translation !== undefined) {
       const delta: [number, number, number] = [
@@ -2028,6 +2041,10 @@ export class OcctBackend implements Backend {
         expectNumber(feature.translation[2], "move body translation[2]"),
       ];
       moved = this.transformShapeTranslate(moved, delta);
+      for (const replacement of faceReplacements) {
+        if (!replacement.to) continue;
+        replacement.to = this.transformShapeTranslate(replacement.to, delta);
+      }
     }
 
     const outputKind: "solid" | "face" | "surface" = this.shapeHasSolid(moved)
@@ -2050,7 +2067,18 @@ export class OcctBackend implements Backend {
       feature.id,
       feature.result,
       feature.tags,
-      { rootKind: outputKind === "solid" ? "solid" : "face" }
+      {
+        rootKind: outputKind === "solid" ? "solid" : "face",
+        ledgerPlan: this.makeFaceMutationSelectionLedgerPlan(
+          upstream,
+          ownerShape,
+          faceReplacements.filter(
+            (
+              replacement
+            ): replacement is { from: KernelSelection; to: any } => !!replacement.to
+          )
+        ),
+      }
     );
     return { outputs, selections };
   }
@@ -4621,8 +4649,8 @@ export class OcctBackend implements Backend {
     }
 
     const op = feature.op;
-    const result = this.makeBoolean(op, left, right);
-    let solid = this.readShape(result);
+    const builder = this.makeBoolean(op, left, right);
+    let solid = this.readShape(builder);
     if (op === "subtract") {
       solid = this.splitByTools(solid, [left, right]);
     }
@@ -4643,7 +4671,7 @@ export class OcctBackend implements Backend {
       feature.result,
       feature.tags,
       {
-        ledgerPlan: this.makeBooleanSelectionLedgerPlan(upstream, left, right),
+        ledgerPlan: this.makeBooleanSelectionLedgerPlan(op, upstream, left, right, builder),
       }
     );
     return { outputs, selections };
@@ -5630,18 +5658,153 @@ export class OcctBackend implements Backend {
   }
 
   private makeBooleanSelectionLedgerPlan(
+    op: "union" | "subtract" | "intersect",
     upstream: KernelResult,
     leftShape: any,
-    rightShape: any
+    rightShape: any,
+    builder: any
   ): SelectionLedgerPlan {
     const leftPlan = this.makeFaceMutationSelectionLedgerPlan(upstream, leftShape, []);
-    const rightPlan = this.makeFaceMutationSelectionLedgerPlan(upstream, rightShape, []);
+    const rightPlan =
+      op === "subtract" ? null : this.makeFaceMutationSelectionLedgerPlan(upstream, rightShape, []);
+    const rightFaces =
+      op === "subtract" ? this.ownerFaceSelectionsForShape(upstream, rightShape) : [];
     return {
       faces: (entries) => {
         leftPlan.faces?.(entries);
-        rightPlan.faces?.(entries);
+        rightPlan?.faces?.(entries);
+        if (op === "subtract") {
+          this.annotateBooleanCutFaceSelections(entries, rightFaces, builder);
+        }
       },
+      edges:
+        op === "subtract"
+          ? (entries) => {
+              this.annotateBooleanCutEdgeSelections(entries);
+            }
+          : undefined,
     };
+  }
+
+  private annotateBooleanCutFaceSelections(
+    entries: CollectedSubshape[],
+    toolFaces: KernelSelection[],
+    builder: any
+  ): void {
+    const unmatched = entries.filter((entry) => !entry.ledger?.slot);
+    for (let i = 0; i < toolFaces.length; i += 1) {
+      const target = toolFaces[i];
+      if (!target) continue;
+      const sourceShape = target.meta["shape"];
+      if (!sourceShape) continue;
+      const slotRoot = this.selectionSlotForLineage(target)
+        ? `cut.${this.selectionSlotForLineage(target)}`
+        : `cut.seed.${i + 1}`;
+      const candidates = this.uniqueShapeList([
+        sourceShape,
+        ...this.collectModifiedShapes(builder, sourceShape).flatMap((shape) => {
+          const faces = this.collectFacesFromShape(shape);
+          return faces.length > 0 ? faces : [shape];
+        }),
+        ...this.collectGeneratedShapes(builder, sourceShape).flatMap((shape) => {
+          const faces = this.collectFacesFromShape(shape);
+          return faces.length > 0 ? faces : [shape];
+        }),
+      ]);
+      let generatedIndex = 0;
+      for (const candidate of candidates) {
+        const index = unmatched.findIndex((entry) => this.shapesSame(entry.shape, candidate));
+        if (index < 0) continue;
+        const [entry] = unmatched.splice(index, 1);
+        if (!entry) continue;
+        generatedIndex += 1;
+        this.applySelectionLedgerHint(entry, {
+          role: "cut",
+          lineage: { kind: "modified", from: target.id },
+          slot: generatedIndex === 1 ? slotRoot : `${slotRoot}.part.${generatedIndex}`,
+        });
+      }
+      if (generatedIndex > 0) continue;
+      if (this.selectionRoleForLineage(target) !== "side") continue;
+      const fallbackIndex = this.bestFaceMutationFallbackIndex(unmatched, target);
+      if (fallbackIndex < 0) continue;
+      const [fallback] = unmatched.splice(fallbackIndex, 1);
+      if (!fallback) continue;
+      this.applySelectionLedgerHint(fallback, {
+        role: "cut",
+        lineage: { kind: "modified", from: target.id },
+        slot: slotRoot,
+      });
+    }
+  }
+
+  private annotateBooleanCutEdgeSelections(entries: CollectedSubshape[]): void {
+    const unmatched = entries.filter((entry) => !entry.ledger?.slot);
+    const matched = unmatched.filter((entry) => this.booleanCutDerivedEdgeSlot(entry) !== null);
+    if (matched.length === 0) return;
+
+    matched.sort((a, b) => {
+      const aSlot = this.booleanCutDerivedEdgeSlot(a) ?? "";
+      const bSlot = this.booleanCutDerivedEdgeSlot(b) ?? "";
+      const bySlot = aSlot.localeCompare(bSlot);
+      if (bySlot !== 0) return bySlot;
+      const aTie = hashValue(this.selectionTieBreakerFingerprint("edge", a.meta));
+      const bTie = hashValue(this.selectionTieBreakerFingerprint("edge", b.meta));
+      const byTie = aTie.localeCompare(bTie);
+      if (byTie !== 0) return byTie;
+      return this.shapeHash(a.shape) - this.shapeHash(b.shape);
+    });
+
+    const slotCounts = new Map<string, number>();
+    for (const entry of matched) {
+      const slot = this.booleanCutDerivedEdgeSlot(entry);
+      if (!slot) continue;
+      slotCounts.set(slot, (slotCounts.get(slot) ?? 0) + 1);
+    }
+    const slotIndexes = new Map<string, number>();
+    for (const entry of matched) {
+      let slot = this.booleanCutDerivedEdgeSlot(entry);
+      if (!slot) continue;
+      const duplicateCount = slotCounts.get(slot) ?? 0;
+      if (duplicateCount > 1) {
+        const index = (slotIndexes.get(slot) ?? 0) + 1;
+        slotIndexes.set(slot, index);
+        slot = `${slot}.part.${index}`;
+      }
+      this.applySelectionLedgerHint(entry, {
+        role: "edge",
+        lineage: { kind: "created" },
+        slot,
+      });
+    }
+  }
+
+  private booleanCutDerivedEdgeSlot(entry: CollectedSubshape): string | null {
+    const adjacentSlots = Array.isArray(entry.meta["adjacentFaceSlots"])
+      ? (entry.meta["adjacentFaceSlots"] as unknown[])
+          .filter((slot): slot is string => typeof slot === "string" && slot.trim().length > 0)
+          .map((slot) => slot.trim())
+      : [];
+    if (adjacentSlots.length === 0) return null;
+
+    const cutSlots = adjacentSlots
+      .filter((slot) => slot === "cut" || slot.startsWith("cut."))
+      .slice()
+      .sort();
+    const otherSlots = adjacentSlots
+      .filter((slot) => !(slot === "cut" || slot.startsWith("cut.")))
+      .slice()
+      .sort();
+
+    if (cutSlots.length === 1 && otherSlots.length === 1) {
+      return `${cutSlots[0]}.bound.${otherSlots[0]}`;
+    }
+    if (cutSlots.length === 2 && otherSlots.length === 0) {
+      const [root, target] = cutSlots;
+      if (!root || !target) return null;
+      return `${root}.join.${target}`;
+    }
+    return null;
   }
 
   private annotateFaceMutationSelections(

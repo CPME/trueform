@@ -61,8 +61,10 @@ Examples:
 
 ```ts
 selectorNamed("face:body.main~base.top");
+selectorNamed("face:body.main~subtract-1.cut.bottom");
 selectorNamed("edge:body.main~edge-fillet.fillet.seed.1.bound.top");
 selectorNamed("edge:body.main~edge-chamfer.chamfer.seed.1.join.chamfer.seed.2");
+selectorNamed("edge:body.main~subtract-1.cut.bottom.join.cut.side.1");
 selectorNamed("edge:body.main~edge-fillet.fillet.seed.1.seam");
 ```
 
@@ -71,7 +73,7 @@ Guidance:
 - Use emitted stable ids primarily for cross-build reuse, runtime interaction,
   inspection, and external tool round-tripping.
 - Use the full emitted id exactly as returned by the runtime.
-- Prefer semantic ids like `*.bound.*`, `*.join.*`, and `*.seam` when present.
+- Prefer semantic ids like `cut.*`, `*.bound.*`, `*.join.*`, and `*.seam` when present.
 - Raw numeric ids (for example `face:12` or `edge:4`) are not part of the stable
   semantic-topology contract.
 - If runtime emits a weaker deterministic id (for example `*.end.1`,
