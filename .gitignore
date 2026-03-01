@@ -8,6 +8,7 @@ pnpm-debug.log*
 *.log
 tools/viewer/assets/
 tools/sketch/assets/
+docs/public/examples/dsl/*~RF*.TMP
 docs/public/api/*
 !docs/public/api/.gitkeep
 docs/.vitepress/cache/
