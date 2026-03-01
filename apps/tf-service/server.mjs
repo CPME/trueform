@@ -588,12 +588,22 @@ export function createTfServiceServer(options = {}) {
     const faces = [];
     const edges = [];
     const solids = [];
+    const points = [];
+    const pointSeen = new Set();
     for (const selection of selections) {
       if (selection.kind === "face") faces.push(selection.id);
       if (selection.kind === "edge") edges.push(selection.id);
       if (selection.kind === "solid") solids.push(selection.id);
+      const pointAnchors = derivePointAnchors(selection);
+      if (!pointAnchors || typeof pointAnchors !== "object") continue;
+      for (const anchor of Object.values(pointAnchors)) {
+        const id = anchor?.id;
+        if (typeof id !== "string" || id.length === 0 || pointSeen.has(id)) continue;
+        pointSeen.add(id);
+        points.push(id);
+      }
     }
-    return { faces, edges, solids };
+    return { faces, edges, solids, points };
   }
 
   function finiteNumber(value) {

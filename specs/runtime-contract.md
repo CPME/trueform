@@ -188,6 +188,10 @@ Job result (`GET /v1/jobs/:id`):
       "edges": [
         "edge:body.main~base.loop.1",
         "edge:body.main~base.loop.2"
+      ],
+      "points": [
+        "face:body.main~base.top.point.center",
+        "edge:body.main~base.loop.1.point.mid"
       ]
     },
     "mesh": {
@@ -209,6 +213,9 @@ Build result notes:
   possible (`<kind>:<owner>~<feature>.<slot-or-fallback>`).
 - If a semantic slot cannot be named directly, the runtime may use a deterministic
   fallback suffix, but the full token remains the canonical stable id.
+- `selections.points` is an additive index of derived point anchors. These are
+  stable point-reference tokens built from semantic parent geometry plus a
+  locator suffix (`.point.center`, `.point.mid`, `.point.start`, `.point.end`).
 - Clients may round-trip these tokens for inspection and HUD workflows, but
   authoring flows should still prefer datums, selectors, and named outputs.
 

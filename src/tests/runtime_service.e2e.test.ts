@@ -518,6 +518,9 @@ const tests = [
         assert.equal(Array.isArray(buildJob1.result?.validation?.assertions), true);
         const firstFaceId = String(buildJob1.result?.selections?.faces?.[0] ?? "");
         assert.ok(firstFaceId.length > 0, "Missing face selection id for measure endpoint");
+        const firstPointId = String(buildJob1.result?.selections?.points?.[0] ?? "");
+        assert.ok(firstPointId.length > 0, "Missing point selection id in build result");
+        assert.match(firstPointId, /\.point\.(center|mid|start|end)$/);
         const measureResult = await fetchJsonWithStatus<{
           target?: string;
           metrics?: Array<{ kind?: string; value?: number; unit?: string; label?: string }>;
