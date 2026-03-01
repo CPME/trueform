@@ -86,6 +86,11 @@
       "image": "/examples/dsl/selection-ledger-chamfer-edge-review.iso.png"
     },
     {
+      "id": "selection-ledger-stack-audit",
+      "title": "Selection Ledger Multi-Feature Audit",
+      "image": "/examples/dsl/selection-ledger-stack-audit.iso.png"
+    },
+    {
       "id": "variable-chamfer",
       "title": "Variable Chamfer",
       "image": "/examples/dsl/variable-chamfer.iso.png"

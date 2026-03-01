@@ -631,6 +631,134 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     },
   },
   {
+    id: "selection-ledger-stack-audit",
+    title: "Selection Ledger Multi-Feature Audit",
+    part: (() => {
+      const baseSketch = sketch2d(
+        "sketch-base-audit",
+        [
+          {
+            name: "profile:base-audit",
+            profile: profileSketchLoop(["base-1", "base-2", "base-3", "base-4"]),
+          },
+        ],
+        {
+          entities: [
+            sketchLine("base-1", [-30, -20], [30, -20]),
+            sketchLine("base-2", [30, -20], [30, 20]),
+            sketchLine("base-3", [30, 20], [-30, 20]),
+            sketchLine("base-4", [-30, 20], [-30, -20]),
+          ],
+        }
+      );
+      const bossSketch = sketch2d(
+        "sketch-boss-audit",
+        [
+          {
+            name: "profile:boss-audit",
+            profile: profileSketchLoop(["boss-1", "boss-2", "boss-3", "boss-4"]),
+          },
+        ],
+        {
+          plane: planeDatum("boss-plane-audit"),
+          deps: ["boss-plane-audit"],
+          entities: [
+            sketchLine("boss-1", [-10, -8], [10, -8]),
+            sketchLine("boss-2", [10, -8], [10, 8]),
+            sketchLine("boss-3", [10, 8], [-10, 8]),
+            sketchLine("boss-4", [-10, 8], [-10, -8]),
+          ],
+        }
+      );
+      return part("selection-ledger-stack-audit", [
+        baseSketch,
+        extrude(
+          "base",
+          profileRef("profile:base-audit"),
+          12,
+          "body:base",
+          ["sketch-base-audit"]
+        ),
+        datumPlane("boss-plane-audit", "+Z", [0, 0, 12], ["base"]),
+        bossSketch,
+        extrude(
+          "boss",
+          profileRef("profile:boss-audit"),
+          14,
+          "body:boss",
+          ["sketch-boss-audit"]
+        ),
+        fillet(
+          "boss-fillet",
+          selectorEdge([predCreatedBy("boss")], [rankMaxZ()]),
+          2,
+          { result: "body:boss-filleted", deps: ["boss"] }
+        ),
+        booleanOp(
+          "union-main",
+          "union",
+          selectorNamed("body:base"),
+          selectorNamed("body:boss-filleted"),
+          "body:main",
+          ["base", "boss-fillet"]
+        ),
+      ]);
+    })(),
+    render: {
+      meshOpts: {
+        linearDeflection: 0.1,
+        angularDeflection: 0.1,
+        parallel: true,
+      },
+      renderOpts: {
+        viewDir: [1.28, -1.12, 0.96],
+      },
+      layers: [
+        {
+          output: "body:main",
+          color: [205, 214, 224],
+          alpha: 0.8,
+          wireframe: true,
+          wireColor: [30, 38, 48],
+          wireDepthTest: false,
+          depthTest: true,
+        },
+      ],
+      selectionHighlights: [
+        {
+          selectionId: "face:body.main~union-main.side.base-2",
+          color: [234, 179, 8],
+          alpha: 0.28,
+          wireframe: false,
+          depthTest: true,
+        },
+        {
+          selectionId: "face:body.main~union-main.fillet.seed.1",
+          color: [34, 197, 94],
+          alpha: 0.5,
+          wireframe: false,
+          depthTest: true,
+        },
+        {
+          selectionId: "edge:body.boss~boss.hd02c8fff3fcee9ed.3",
+          alpha: 0,
+          wireframe: true,
+          wireColor: [249, 115, 22],
+          wireDepthTest: false,
+          depthTest: false,
+        },
+        {
+          selectionId: "edge:body.main~union-main.hac46414663d12f7f.20",
+          alpha: 0,
+          wireframe: true,
+          wireColor: [6, 182, 212],
+          wireDepthTest: false,
+          depthTest: false,
+        },
+      ],
+    },
+  },
+  {
     id: "variable-chamfer",
     title: "Variable Chamfer",
     part: part("example-variable-chamfer", [

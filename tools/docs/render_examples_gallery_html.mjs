@@ -32,6 +32,7 @@ const dslCodeTargets = {
   "hole-advanced": { doc: "features", heading: "Hole" },
   fillet: { doc: "features", heading: "Fillet" },
   "selection-ledger-fillet-edge-review": { doc: "features", heading: "Fillet" },
+  "selection-ledger-stack-audit": { doc: "features", heading: "Fillet" },
   "variable-fillet": { doc: "features", heading: "Variable Fillet" },
   chamfer: { doc: "features", heading: "Chamfer" },
   "selection-ledger-chamfer-edge-review": { doc: "features", heading: "Chamfer" },

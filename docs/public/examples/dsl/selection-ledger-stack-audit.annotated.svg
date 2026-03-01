@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <style>
+    .panel { fill: rgba(15, 23, 36, 0.9); stroke: #20324a; stroke-width: 2; rx: 14; }
+    .title { fill: #eef4fb; font: 700 26px ui-sans-serif, system-ui, sans-serif; }
+    .legend { fill: #d7e3f2; font: 500 16px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .note { fill: #a9bbd0; font: 500 15px ui-sans-serif, system-ui, sans-serif; }
+    .swatch-a { fill: #f97316; stroke: #101820; stroke-width: 2; }
+    .swatch-b { fill: #06b6d4; stroke: #101820; stroke-width: 2; }
+    .swatch-c { fill: #22c55e; stroke: #101820; stroke-width: 2; }
+    .swatch-d { fill: #eab308; stroke: #101820; stroke-width: 2; }
+  </style>
+
+  <image href="selection-ledger-stack-audit.iso.png" x="0" y="0" width="1200" height="900" />
+
+  <rect x="24" y="24" width="904" height="244" class="panel" />
+  <text x="44" y="62" class="title">Selection Ledger Multi-Feature Audit</text>
+
+  <circle cx="56" cy="92" r="10" class="swatch-a" />
+  <text x="78" y="98" class="legend">A  source edge (pre-fillet)  edge:body.boss~boss.hd02c8fff3fcee9ed.3</text>
+
+  <circle cx="56" cy="126" r="10" class="swatch-b" />
+  <text x="78" y="132" class="legend">B  current edge (post-fillet)  edge:body.main~union-main.hac46414663d12f7f.20</text>
+
+  <circle cx="56" cy="160" r="10" class="swatch-c" />
+  <text x="78" y="166" class="legend">C  fillet face  face:body.main~union-main.fillet.seed.1</text>
+
+  <circle cx="56" cy="194" r="10" class="swatch-d" />
+  <text x="78" y="200" class="legend">D  preserved base face  face:body.main~union-main.side.base-2</text>
+
+  <text x="44" y="234" class="note">Orange is a historical seed edge from the boss step. Cyan, green, and gold are current topology on the final union body.</text>
+  <text x="44" y="256" class="note">This is an audit view: it intentionally mixes lineage source and final-result highlights to verify continuity across sketch, extrude, fillet, and union.</text>
+</svg>
