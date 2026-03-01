@@ -18,3 +18,4 @@ aidocs/*
 agents.local.md
 native/occt_server/build/
 tools/_tmp_render_thread_views.mjs
+tools/viewer/.viewer-server.pid
