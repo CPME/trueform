@@ -1576,6 +1576,20 @@ export const IR_SCHEMA = {
       },
       additionalProperties: false,
     },
+    CurveIntersect: {
+      type: "object",
+      required: ["id", "kind", "first", "second", "result"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "feature.curve.intersect" },
+        deps: { type: "array", items: { $ref: "#/$defs/ID" } },
+        tags: { type: "array", items: { type: "string" } },
+        first: { $ref: "#/$defs/Selector" },
+        second: { $ref: "#/$defs/Selector" },
+        result: { type: "string" },
+      },
+      additionalProperties: false,
+    },
     Draft: {
       type: "object",
       required: [
@@ -1898,6 +1912,7 @@ export const IR_SCHEMA = {
         { $ref: "#/$defs/MoveBody" },
         { $ref: "#/$defs/SplitBody" },
         { $ref: "#/$defs/SplitFace" },
+        { $ref: "#/$defs/CurveIntersect" },
         { $ref: "#/$defs/Draft" },
         { $ref: "#/$defs/Thicken" },
         { $ref: "#/$defs/Unwrap" },

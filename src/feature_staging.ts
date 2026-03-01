@@ -37,6 +37,10 @@ export const TF_STAGED_FEATURES: Readonly<Record<string, FeatureStageEntry>> = O
     stage: "staging" as const,
     notes: "Knit is staging while stitched-shell promotion and broader topology coverage harden.",
   },
+  "feature.curve.intersect": {
+    stage: "staging" as const,
+    notes: "Curve intersect is staging while support expands beyond the initial deterministic section-curve subset.",
+  },
   "feature.extrude:mode.surface": {
     stage: "staging" as const,
     notes: "Surface-mode extrude remains in staging while robustness improves.",

@@ -22,6 +22,7 @@ const dslCodeTargets = {
   "extrude-surface": { doc: "features", heading: "Extrude" },
   "selection-ledger-extrude-review": { doc: "features", heading: "Extrude" },
   surface: { doc: "features", heading: "Surface" },
+  "curve-intersect": { doc: "features", heading: "Curve Intersect (Staging)" },
   revolve: { doc: "features", heading: "Revolve" },
   "selection-ledger-revolve-review": { doc: "features", heading: "Revolve" },
   loft: { doc: "features", heading: "Loft" },

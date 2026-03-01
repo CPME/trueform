@@ -18,6 +18,7 @@ export {
   moveBody,
   splitBody,
   splitFace,
+  curveIntersect,
   patternCircular,
   patternLinear,
   pipe,

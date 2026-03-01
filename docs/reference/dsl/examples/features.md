@@ -35,6 +35,47 @@ const examplePart = part("example-surface", [
 ]);
 ```
 
+## Curve Intersect (Staging)
+
+![Curve Intersect example](/examples/dsl/curve-intersect.iso.png)
+
+```ts
+const line = sketchLine("line-1", [10, 0], [10, 16]);
+const sketch = sketch2d(
+  "sketch-curve-intersect",
+  [{ name: "profile:wall", profile: profileSketchLoop(["line-1"], { open: true }) }],
+  { plane: planeDatum("sketch-plane"), entities: [line] }
+);
+
+const examplePart = part("example-curve-intersect", [
+  datumPlane("sketch-plane", "+Y"),
+  sketch,
+  revolve(
+    "surface-revolve",
+    profileRef("profile:wall"),
+    "+Z",
+    "full",
+    "surface:cylinder",
+    { mode: "surface" }
+  ),
+  datumPlane("cut-plane", axisVector([0, 1, 1]), [0, 0, 8]),
+  plane("cut-face", 80, 80, "surface:cut", {
+    plane: planeDatum("cut-plane"),
+    deps: ["cut-plane"],
+  }),
+  curveIntersect(
+    "curve-intersect-1",
+    selectorNamed("surface:cylinder"),
+    selectorNamed("surface:cut"),
+    "curve:main"
+  ),
+]);
+```
+
+Notes:
+- Returns a curve output (`kind: "edge"`), intended as a stable semantic input for downstream surfacing.
+- Current v1 scope is the deterministic section-curve subset and is staged while broader intersection coverage hardens.
+
 ## Revolve
 
 ![Revolve example](/examples/dsl/revolve.iso.png)

@@ -45,6 +45,7 @@ import type {
   TrimSurface,
   ExtendSurface,
   Knit,
+  CurveIntersect,
   Draft,
   RankRule,
   Revolve,
@@ -711,6 +712,22 @@ export const knit = (
     tolerance: opts?.tolerance,
     makeSolid: opts?.makeSolid,
     result: result ?? (opts?.makeSolid ? `body:${id}` : `surface:${id}`),
+    deps,
+  });
+
+export const curveIntersect = (
+  id: ID,
+  first: Selector,
+  second: Selector,
+  result?: string,
+  deps?: ID[]
+): CurveIntersect =>
+  compact({
+    id,
+    kind: "feature.curve.intersect",
+    first,
+    second,
+    result: result ?? `curve:${id}`,
     deps,
   });
 

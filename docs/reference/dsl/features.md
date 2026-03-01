@@ -19,6 +19,7 @@ import {
   moveBody,
   splitBody,
   splitFace,
+  curveIntersect,
   thicken,
   unwrap,
   hole,
@@ -53,6 +54,7 @@ import {
 - `moveBody(id, source, result?, deps?, opts?) -> MoveBody`
 - `splitBody(id, source, tool, result?, deps?, opts?) -> SplitBody`
 - `splitFace(id, faces, tool, result?, deps?) -> SplitFace`
+- `curveIntersect(id, first, second, result?, deps?) -> CurveIntersect` (staging)
 - `draft(id, source, faces, neutralPlane, pullDirection, angle, result?, deps?) -> Draft`
 - `thicken(id, surface, thickness, result?, deps?, opts?) -> Thicken`
 - `unwrap(id, source, result?, deps?, opts?) -> Unwrap` (strict/default and experimental modes)
@@ -76,6 +78,7 @@ Compatibility helpers (still exported):
 Examples:
 - [Extrude](./examples/features#extrude)
 - [Surface](./examples/features#surface)
+- [Curve Intersect (Staging)](./examples/features#curve-intersect-staging)
 - [Revolve](./examples/features#revolve)
 - [Loft](./examples/features#loft)
 - [Sweep](./examples/features#sweep)

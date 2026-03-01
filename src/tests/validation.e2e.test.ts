@@ -239,6 +239,22 @@ const tests = [
     },
   },
   {
+    name: "validation: curve intersect is staged and can be blocked",
+    fn: async () => {
+      const part = dsl.part("staged-curve-intersect", [
+        dsl.curveIntersect(
+          "curve-1",
+          dsl.selectorNamed("surface:a"),
+          dsl.selectorNamed("surface:b")
+        ),
+      ]);
+      assert.throws(
+        () => normalizePart(part, undefined, { stagedFeatures: "error" }),
+        /staging feature/i
+      );
+    },
+  },
+  {
     name: "validation: move body is stable when staged policy is error",
     fn: async () => {
       const part = dsl.part("staged-move", [

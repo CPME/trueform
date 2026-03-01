@@ -21,6 +21,11 @@
       "image": "/examples/dsl/extrude-surface.iso.png"
     },
     {
+      "id": "curve-intersect",
+      "title": "Curve Intersect (Staging)",
+      "image": "/examples/dsl/curve-intersect.iso.png"
+    },
+    {
       "id": "revolve",
       "title": "Revolve",
       "image": "/examples/dsl/revolve.iso.png"

@@ -1348,6 +1348,21 @@ function validateFeature(feature: IntentFeature): void {
       );
       return;
     }
+    case "feature.curve.intersect": {
+      const curve = feature as {
+        first?: Selector;
+        second?: Selector;
+        result?: string;
+      };
+      validateSelector(curve.first);
+      validateSelector(curve.second);
+      ensureNonEmptyString(
+        curve.result,
+        "validation_feature_result",
+        "Curve intersect result is required"
+      );
+      return;
+    }
     case "feature.thicken": {
       const thicken = feature as {
         surface?: Selector;

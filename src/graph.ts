@@ -127,6 +127,7 @@ function featureResultName(feature: IntentFeature): string | undefined {
     case "feature.trim.surface":
     case "feature.extend.surface":
     case "feature.knit":
+    case "feature.curve.intersect":
     case "feature.draft":
     case "feature.shell":
     case "feature.thicken":
@@ -375,6 +376,8 @@ function featureSelectors(feature: IntentFeature): Selector[] {
       return [feature.source, feature.edges];
     case "feature.knit":
       return feature.sources.slice();
+    case "feature.curve.intersect":
+      return [feature.first, feature.second];
     case "feature.draft":
       return [feature.source, feature.faces];
     case "feature.shell": {

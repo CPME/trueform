@@ -42,6 +42,7 @@ export class MockBackend implements Backend {
         "feature.trim.surface",
         "feature.extend.surface",
         "feature.knit",
+        "feature.curve.intersect",
         "feature.draft",
         "feature.thicken",
         "feature.unwrap",
@@ -163,6 +164,8 @@ export class MockBackend implements Backend {
         return (feature as { makeSolid?: boolean }).makeSolid === true
           ? this.emitSolid(feature)
           : this.emitSurface(feature, "surface");
+      case "feature.curve.intersect":
+        return this.emitCurve(feature);
       case "feature.shell":
       case "feature.draft":
       case "feature.thicken":
@@ -283,6 +286,34 @@ export class MockBackend implements Backend {
       );
     }
     return { outputs, selections: [] };
+  }
+
+  private emitCurve(feature: IntentFeature): KernelResult {
+    const resultName =
+      "result" in feature && typeof (feature as { result?: string }).result === "string"
+        ? (feature as { result: string }).result
+        : `curve:${feature.id}`;
+    const curve = this.makeSelection("edge", {
+      createdBy: feature.id,
+      ownerKey: resultName,
+      role: "curve",
+      selectionSlot: "curve.1",
+      center: [0, 0, 0],
+      startPoint: [-5, 0, 0],
+      midPoint: [0, 0, 0],
+      endPoint: [5, 0, 0],
+    });
+    return {
+      outputs: new Map([
+        [
+          resultName,
+          this.makeObj("edge", curve.id, {
+            ...curve.meta,
+          }),
+        ],
+      ]),
+      selections: [curve],
+    };
   }
 
   private emitHole(

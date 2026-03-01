@@ -157,6 +157,7 @@ export type IntentFeature =
   | TrimSurface
   | ExtendSurface
   | Knit
+  | CurveIntersect
   | Draft
   | Thicken
   | Unwrap
@@ -519,6 +520,13 @@ export type Knit = FeatureBase & {
   sources: Selector[];
   tolerance?: Scalar;
   makeSolid?: boolean;
+  result: string;
+};
+
+export type CurveIntersect = FeatureBase & {
+  kind: "feature.curve.intersect";
+  first: Selector;
+  second: Selector;
   result: string;
 };
 

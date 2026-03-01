@@ -302,6 +302,8 @@ function normalizeFeature(
     case "feature.extend.surface":
       clone.distance = normalizeScalar(clone.distance, "length", ctx);
       break;
+    case "feature.curve.intersect":
+      break;
     case "feature.knit":
       if (clone.tolerance !== undefined) {
         clone.tolerance = normalizeScalar(clone.tolerance, "length", ctx);

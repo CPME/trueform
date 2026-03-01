@@ -113,6 +113,14 @@
       </div>
     </a>
 
+    <a class="card" href="#code-dsl-curve-intersect">
+      <img src="./dsl/curve-intersect.iso.png" alt="Curve Intersect (Staging)" loading="lazy" />
+      <div class="card-body">
+        <div class="card-title">Curve Intersect (Staging)</div>
+        <div class="card-meta">Features</div>
+      </div>
+    </a>
+
     <a class="card" href="#code-dsl-revolve">
       <img src="./dsl/revolve.iso.png" alt="Revolve" loading="lazy" />
       <div class="card-body">
@@ -551,6 +559,42 @@ const examplePart = part(&quot;example-surface&quot;, [
       <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Extrude</p>
       <pre><code>const examplePart = part(&quot;example-extrude&quot;, [
   extrude(&quot;base&quot;, profileRect(80, 50), 12, &quot;body:main&quot;),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-curve-intersect">
+      <h3>Curve Intersect (Staging) (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Curve Intersect (Staging)</p>
+      <pre><code>const line = sketchLine(&quot;line-1&quot;, [10, 0], [10, 16]);
+const sketch = sketch2d(
+  &quot;sketch-curve-intersect&quot;,
+  [{ name: &quot;profile:wall&quot;, profile: profileSketchLoop([&quot;line-1&quot;], { open: true }) }],
+  { plane: planeDatum(&quot;sketch-plane&quot;), entities: [line] }
+);
+
+const examplePart = part(&quot;example-curve-intersect&quot;, [
+  datumPlane(&quot;sketch-plane&quot;, &quot;+Y&quot;),
+  sketch,
+  revolve(
+    &quot;surface-revolve&quot;,
+    profileRef(&quot;profile:wall&quot;),
+    &quot;+Z&quot;,
+    &quot;full&quot;,
+    &quot;surface:cylinder&quot;,
+    { mode: &quot;surface&quot; }
+  ),
+  datumPlane(&quot;cut-plane&quot;, axisVector([0, 1, 1]), [0, 0, 8]),
+  plane(&quot;cut-face&quot;, 80, 80, &quot;surface:cut&quot;, {
+    plane: planeDatum(&quot;cut-plane&quot;),
+    deps: [&quot;cut-plane&quot;],
+  }),
+  curveIntersect(
+    &quot;curve-intersect-1&quot;,
+    selectorNamed(&quot;surface:cylinder&quot;),
+    selectorNamed(&quot;surface:cut&quot;),
+    &quot;curve:main&quot;
+  ),
 ]);</code></pre>
       <a class="back-link" href="#top">Back to gallery</a>
     </article>

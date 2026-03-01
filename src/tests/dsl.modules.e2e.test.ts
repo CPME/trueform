@@ -107,6 +107,12 @@ const tests = [
         { translation: [5, 0, 0] }
       );
       assert.equal(moved.kind, "feature.move.body");
+      const curve = features.curveIntersect(
+        "curve-1",
+        selectors.selectorNamed("surface:a"),
+        selectors.selectorNamed("surface:b")
+      );
+      assert.equal(curve.kind, "feature.curve.intersect");
       const deleted = features.deleteFace(
         "delete-1",
         selectors.selectorNamed("body:main"),

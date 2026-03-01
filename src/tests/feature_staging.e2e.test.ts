@@ -10,7 +10,7 @@ import { runTests } from "./occt_test_utils.js";
 
 const tests = [
   {
-    name: "feature staging: registry includes rib/web, surfacing slice 1, and remaining surface-mode staging entries",
+    name: "feature staging: registry includes rib/web, surfacing slice 1, curve intersect, and remaining surface-mode staging entries",
     fn: async () => {
       const keys = listStagedFeatureKeys();
       assert.ok(keys.includes("feature.rib"));
@@ -18,6 +18,7 @@ const tests = [
       assert.ok(keys.includes("feature.trim.surface"));
       assert.ok(keys.includes("feature.extend.surface"));
       assert.ok(keys.includes("feature.knit"));
+      assert.ok(keys.includes("feature.curve.intersect"));
       assert.ok(!keys.includes("feature.surface"));
       assert.ok(!keys.includes("feature.revolve:mode.surface"));
       assert.ok(keys.includes("feature.extrude:mode.surface"));
@@ -80,6 +81,19 @@ const tests = [
       const feature = dsl.knit("knit-1", [dsl.selectorNamed("surface:a"), dsl.selectorNamed("surface:b")]);
       const stage = getFeatureStage(feature);
       assert.equal(stage.key, "feature.knit");
+      assert.equal(stage.stage, "staging");
+    },
+  },
+  {
+    name: "feature staging: curve intersect resolves to staging entry",
+    fn: async () => {
+      const feature = dsl.curveIntersect(
+        "curve-1",
+        dsl.selectorNamed("surface:a"),
+        dsl.selectorNamed("surface:b")
+      );
+      const stage = getFeatureStage(feature);
+      assert.equal(stage.key, "feature.curve.intersect");
       assert.equal(stage.stage, "staging");
     },
   },

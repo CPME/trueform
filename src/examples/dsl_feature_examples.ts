@@ -2,6 +2,7 @@ import { part } from "../dsl/core.js";
 import type { IntentPart } from "../dsl.js";
 import type { MeshOptions } from "../backend.js";
 import {
+  axisVector,
   booleanOp,
   draft,
   loft,
@@ -48,6 +49,7 @@ import {
   sketchProfileLoop,
   sketchRectCorner,
   surface,
+  curveIntersect,
   thicken,
   unwrap,
 } from "../dsl/geometry.js";
@@ -237,6 +239,80 @@ export const dslFeatureExamples: DslFeatureExample[] = [
           wireframe: true,
           wireColor: [32, 40, 52],
           wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
+  },
+  {
+    id: "curve-intersect",
+    title: "Curve Intersect (Staging)",
+    part: (() => {
+      const line = sketchLine("line-1", [10, 0], [10, 16]);
+      const sketch = sketch2d(
+        "sketch-curve-intersect",
+        [
+          {
+            name: "profile:wall",
+            profile: profileSketchLoop(["line-1"], { open: true }),
+          },
+        ],
+        {
+          plane: planeDatum("sketch-plane"),
+          entities: [line],
+        }
+      );
+      return part("example-curve-intersect", [
+        datumPlane("sketch-plane", "+Y"),
+        sketch,
+        revolve(
+          "surface-revolve",
+          profileRef("profile:wall"),
+          "+Z",
+          "full",
+          "surface:cylinder",
+          { mode: "surface" }
+        ),
+        datumPlane("cut-plane", axisVector([0, 1, 1]), [0, 0, 8]),
+        plane("cut-face", 80, 80, "surface:cut", {
+          plane: planeDatum("cut-plane"),
+          deps: ["cut-plane"],
+        }),
+        curveIntersect(
+          "curve-intersect-1",
+          selectorNamed("surface:cylinder"),
+          selectorNamed("surface:cut"),
+          "curve:main"
+        ),
+      ]);
+    })(),
+    render: {
+      layers: [
+        {
+          output: "surface:cylinder",
+          color: [154, 192, 230],
+          alpha: 0.28,
+          wireframe: true,
+          wireColor: [58, 74, 96],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+        {
+          output: "surface:cut",
+          color: [214, 225, 236],
+          alpha: 0.2,
+          wireframe: true,
+          wireColor: [92, 108, 126],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+        {
+          output: "curve:main",
+          color: [219, 94, 78],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [219, 94, 78],
+          wireDepthTest: false,
           depthTest: true,
         },
       ],

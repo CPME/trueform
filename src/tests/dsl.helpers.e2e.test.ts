@@ -435,6 +435,14 @@ const tests = [
       assert.equal(splitFace.kind, "feature.split.face");
       assert.equal(splitFace.result, "body:split-face-1");
 
+      const curveIntersect = dsl.curveIntersect(
+        "curve-1",
+        dsl.selectorNamed("surface:first"),
+        dsl.selectorNamed("surface:second")
+      );
+      assert.equal(curveIntersect.kind, "feature.curve.intersect");
+      assert.equal(curveIntersect.result, "curve:curve-1");
+
       const draft = dsl.draft(
         "draft-1",
         dsl.selectorNamed("body:base"),

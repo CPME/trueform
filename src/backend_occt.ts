@@ -67,6 +67,7 @@ import {
   TrimSurface,
   ExtendSurface,
   Knit,
+  CurveIntersect,
   Draft,
   Thicken,
   Unwrap,
@@ -222,6 +223,7 @@ export class OcctBackend implements Backend {
         "feature.trim.surface",
         "feature.extend.surface",
         "feature.knit",
+        "feature.curve.intersect",
         "feature.draft",
         "feature.thicken",
         "feature.unwrap",
@@ -347,6 +349,12 @@ export class OcctBackend implements Backend {
         return this.execKnit(
           input.feature as Knit,
           input.upstream
+        );
+      case "feature.curve.intersect":
+        return this.execCurveIntersect(
+          input.feature as CurveIntersect,
+          input.upstream,
+          input.resolve
         );
       case "feature.draft":
         return this.execDraft(
@@ -2523,6 +2531,98 @@ export class OcctBackend implements Backend {
             ledgerPlan: this.makeKnitSelectionLedgerPlan(sourceFaces),
           }
     );
+    return { outputs, selections };
+  }
+
+  private execCurveIntersect(
+    feature: CurveIntersect,
+    upstream: KernelResult,
+    resolve: ExecuteInput["resolve"]
+  ): KernelResult {
+    const first = resolve(feature.first, upstream);
+    const second = resolve(feature.second, upstream);
+    const supportedKinds = new Set<KernelSelection["kind"]>(["face", "surface", "solid"]);
+    if (!supportedKinds.has(first.kind) || !supportedKinds.has(second.kind)) {
+      throw new Error(
+        "OCCT backend: curve intersect currently supports face/surface/solid inputs"
+      );
+    }
+
+    const firstShape = first.meta["shape"];
+    const secondShape = second.meta["shape"];
+    if (!firstShape || !secondShape) {
+      throw new Error("OCCT backend: curve intersect inputs are missing shape metadata");
+    }
+
+    const builder = this.makeSection(firstShape, secondShape);
+    const rawShape = this.readShape(builder);
+    const edges = this.uniqueShapeList(this.collectEdgesFromShape(rawShape));
+    if (edges.length === 0) {
+      throw new Error("OCCT backend: curve_intersect_no_intersection");
+    }
+    const outputShape = this.makeCompoundFromShapes(edges);
+    const selections = this.collectSelections(
+      outputShape,
+      feature.id,
+      feature.result,
+      feature.tags,
+      {
+        ledgerPlan: {
+          edges: (entries) => {
+            const sorted = entries.slice().sort((a, b) => {
+              const aTie = hashValue(this.selectionTieBreakerFingerprint("edge", a.meta));
+              const bTie = hashValue(this.selectionTieBreakerFingerprint("edge", b.meta));
+              const byTie = aTie.localeCompare(bTie);
+              if (byTie !== 0) return byTie;
+              return this.shapeHash(a.shape) - this.shapeHash(b.shape);
+            });
+            for (let i = 0; i < sorted.length; i += 1) {
+              const entry = sorted[i];
+              if (!entry) continue;
+              this.applySelectionLedgerHint(entry, {
+                slot: `curve.${i + 1}`,
+                role: "curve",
+                lineage: { kind: "created" },
+              });
+            }
+          },
+        },
+      }
+    );
+    const edgeSelections = selections.filter(
+      (selection): selection is KernelSelection => selection.kind === "edge"
+    );
+    if (edgeSelections.length === 0) {
+      throw new Error("OCCT backend: curve_intersect_no_edges");
+    }
+
+    const outputSelection =
+      edgeSelections.length === 1
+        ? edgeSelections[0]
+        : null;
+    const outputs = new Map([
+      [
+        feature.result,
+        outputSelection
+          ? {
+              id: outputSelection.id,
+              kind: "edge" as const,
+              meta: { ...outputSelection.meta },
+            }
+          : {
+              id: feature.result,
+              kind: "edge" as const,
+              meta: {
+                shape: outputShape,
+                ownerKey: feature.result,
+                createdBy: feature.id,
+                role: "curve",
+                edgeCount: edgeSelections.length,
+                featureTags: feature.tags,
+              },
+            },
+      ],
+    ]);
     return { outputs, selections };
   }
 
@@ -7332,6 +7432,26 @@ export class OcctBackend implements Backend {
       }
     }
     throw new Error(`OCCT backend: failed to construct ${ctor}`);
+  }
+
+  private makeSection(left: any, right: any) {
+    const progress = this.makeProgressRange();
+    const candidates: Array<unknown[]> = [
+      [left, right, false, progress],
+      [left, right, false],
+      [left, right, progress],
+      [left, right],
+    ];
+    for (const args of candidates) {
+      try {
+        const builder = this.newOcct("BRepAlgoAPI_Section", ...args);
+        this.tryBuild(builder);
+        return builder;
+      } catch {
+        continue;
+      }
+    }
+    throw new Error("OCCT backend: failed to construct BRepAlgoAPI_Section");
   }
 
   private splitByTools(result: any, tools: any[]): any {
