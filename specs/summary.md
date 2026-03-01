@@ -20,6 +20,8 @@ Non-promises:
 - IR-only source of truth (no kernel history stored)
 - JSON-serializable builders
 - Core compile is part-centric in v1; assembly solving is experimental
+- Assembly data contracts can evolve ahead of solver maturity, but split assembly
+  storage remains draft-only until explicitly promoted
 - Features: `Sketch2D` (line/arc/circle/ellipse/rect/slot/polygon/spline/point), `profile.rect/circle/poly/sketch`, `Extrude`, `Surface`, `Revolve`, `Loft`, `Sweep`, `Pipe`, `PipeSweep`, `HexTubeSweep`, `Mirror`, `Shell`, `TrimSurface`, `ExtendSurface`, `Knit`, `Draft`, `Thicken`, `Thread`, `Hole`, `Pattern` (linear/circular layout + feature/body replication), `Fillet`, `Chamfer`, `Boolean`
 - Outputs are named; `body:main` remains a common convention but is not the only valid output
 - Runtime target: Node + OpenCascade.js
