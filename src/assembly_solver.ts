@@ -368,7 +368,6 @@ function solveDampedLeastSquares(
   residuals: number[],
   damping: number
 ): number[] {
-  const m = jacobian.length;
   const n = jacobian[0]?.length ?? 0;
   const jt = transpose(jacobian);
   const jtJ = multiply(jt, jacobian);

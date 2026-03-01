@@ -42,7 +42,6 @@ const coreFiles = [
   ...dslFiles.map((f) => relativize(f)),
   "src/compiler.ts",
   "src/ir.ts",
-  "src/ir_convert.ts",
   "src/ir_normalize.ts",
   "src/ir_schema.ts",
   "src/ir_validate.ts",

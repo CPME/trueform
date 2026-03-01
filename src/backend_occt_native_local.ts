@@ -3,9 +3,6 @@ import type {
   KernelResult,
   KernelSelection,
   MeshData,
-  MeshOptions,
-  StepExportOptions,
-  StlExportOptions,
 } from "./backend.js";
 import { resolveSelector } from "./selectors.js";
 import { OcctBackend, type OcctModule } from "./backend_occt.js";

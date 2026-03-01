@@ -114,6 +114,26 @@ function tryCtor(occt, names, argsList) {
   throw new Error(`Failed constructors [${names.join(", ")}]: ${msg}`);
 }
 
+function makeXY(be, x, y) {
+  return be.newOcct("gp_XY", x, y);
+}
+
+function makePnt2d(be, x, y) {
+  try {
+    return be.newOcct("gp_Pnt2d", x, y);
+  } catch {
+    return be.newOcct("gp_Pnt2d", makeXY(be, x, y));
+  }
+}
+
+function makeDir2d(be, x, y) {
+  try {
+    return be.newOcct("gp_Dir2d", x, y);
+  } catch {
+    return be.newOcct("gp_Dir2d", makeXY(be, x, y));
+  }
+}
+
 function makeHelixWireUv(be, cfg) {
   const occt = be.occt;
   const origin = be.makePnt(0, 0, 0);
@@ -129,10 +149,10 @@ function makeHelixWireUv(be, cfg) {
     [[ax3, cfg.radius]]
   );
 
-  const p0 = be.makePnt2d(0, 0);
+  const p0 = makePnt2d(be, 0, 0);
   const uStep = Math.PI * 2;
   const vStep = cfg.pitch;
-  const d2 = be.makeDir2d(uStep, vStep);
+  const d2 = makeDir2d(be, uStep, vStep);
   const line2d = tryNewOcct(be, "Geom2d_Line", [
     [p0, d2],
     [be.newOcct("gp_Ax2d", p0, d2)],

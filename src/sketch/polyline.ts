@@ -1,5 +1,4 @@
 import type {
-  Point2D,
   SketchEntity,
   SketchPolygon,
   SketchRectangle,

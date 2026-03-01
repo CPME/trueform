@@ -1,5 +1,5 @@
 import type { Backend, KernelResult, KernelSelection, KernelObject, MeshOptions } from "./backend.js";
-import type { IntentAssertion, IntentPart, Units, ID, Selector } from "./ir.js";
+import type { IntentAssertion, IntentPart, Units, ID } from "./ir.js";
 import { buildParamContext, normalizeScalar, ParamOverrides } from "./params.js";
 import { resolveSelector } from "./selectors.js";
 

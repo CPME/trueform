@@ -45,7 +45,6 @@ import {
   HexTubeSweep,
   PlaneRef,
   Path3D,
-  PathSegment,
   PatternCircular,
   PatternLinear,
   Point2D,
@@ -1139,7 +1138,7 @@ export class OcctBackend implements Backend {
     return { low, high };
   }
 
-  private execPipe(feature: Pipe, upstream: KernelResult): KernelResult {
+  private execPipe(feature: Pipe, _upstream: KernelResult): KernelResult {
     const axisDir = axisVector(feature.axis);
     const length = expectNumber(feature.length, "feature.length");
     if (length <= 0) {
@@ -1276,7 +1275,7 @@ export class OcctBackend implements Backend {
     return { outputs, selections: [] };
   }
 
-  private execPipeSweep(feature: PipeSweep, upstream: KernelResult): KernelResult {
+  private execPipeSweep(feature: PipeSweep, _upstream: KernelResult): KernelResult {
     const outerDia = expectNumber(feature.outerDiameter, "pipe sweep outerDiameter");
     const innerDia =
       feature.innerDiameter === undefined
@@ -1395,7 +1394,7 @@ export class OcctBackend implements Backend {
     return { outputs, selections };
   }
 
-  private execHexTubeSweep(feature: HexTubeSweep, upstream: KernelResult): KernelResult {
+  private execHexTubeSweep(feature: HexTubeSweep, _upstream: KernelResult): KernelResult {
     const outerAcross = expectNumber(
       feature.outerAcrossFlats,
       "hex tube sweep outerAcrossFlats"
@@ -8191,18 +8190,6 @@ export class OcctBackend implements Backend {
     ];
   }
 
-  private buildSketchProfileFace(
-    profile: Extract<Profile, { kind: "profile.sketch" }>,
-    entityMap: Map<ID, SketchEntity>,
-    plane: PlaneBasis
-  ) {
-    const outer = this.buildSketchWire(profile.loop, entityMap, plane);
-    const holes = (profile.holes ?? []).map((hole) =>
-      this.buildSketchWire(hole, entityMap, plane)
-    );
-    return this.buildSketchProfileFaceFromWires(outer, holes);
-  }
-
   private buildSketchProfileFaceFromWires(outer: any, holes: any[]) {
     const faceBuilder = this.makeFaceFromWire(outer);
     for (const hole of holes) {
@@ -8794,10 +8781,6 @@ export class OcctBackend implements Backend {
     return false;
   }
 
-  private assertClosedLoop(segments: EdgeSegment[]) {
-    this.checkLoopContinuity(segments, false);
-  }
-
   private checkLoopContinuity(
     segments: EdgeSegment[],
     allowOpen: boolean
@@ -9038,28 +9021,6 @@ export class OcctBackend implements Backend {
     throw new Error("OCCT backend: gp_XYZ_2 constructor not available");
   }
 
-  private makeXY(x: number, y: number) {
-    return this.newOcct("gp_XY", x, y);
-  }
-
-  private makePnt2d(x: number, y: number) {
-    try {
-      return this.newOcct("gp_Pnt2d", x, y);
-    } catch {
-      const xy = this.makeXY(x, y);
-      return this.newOcct("gp_Pnt2d", xy);
-    }
-  }
-
-  private makeDir2d(x: number, y: number) {
-    try {
-      return this.newOcct("gp_Dir2d", x, y);
-    } catch {
-      const xy = this.makeXY(x, y);
-      return this.newOcct("gp_Dir2d", xy);
-    }
-  }
-
   private makeAx2(pnt: any, dir: any) {
     const occt = this.occt as any;
     if (occt.gp_Ax2_3) return new occt.gp_Ax2_3(pnt, dir);
@@ -9142,38 +9103,6 @@ export class OcctBackend implements Backend {
     if (occt.gp_Circ_2) return new occt.gp_Circ_2(ax2, radius);
     throw new Error("OCCT backend: gp_Circ_2 constructor not available");
   }
-
-  private makeCylindricalSurface(
-    ax2: any,
-    radius: number,
-    pnt?: any,
-    dir?: any,
-    xDir?: any
-  ) {
-    try {
-      return this.newOcct("Geom_CylindricalSurface", ax2, radius);
-    } catch {
-      // fall through
-    }
-    if (pnt && dir && xDir) {
-      try {
-        const ax3 = this.newOcct("gp_Ax3", pnt, dir, xDir);
-        return this.newOcct("Geom_CylindricalSurface", ax3, radius);
-      } catch {
-        // fall through
-      }
-    }
-    if (pnt && dir) {
-      try {
-        const ax3 = this.newOcct("gp_Ax3", pnt, dir);
-        return this.newOcct("Geom_CylindricalSurface", ax3, radius);
-      } catch {
-        // fall through
-      }
-    }
-    throw new Error("OCCT backend: failed to construct cylindrical surface");
-  }
-
 
   private ensureTriangulation(shape: any, opts: MeshOptions) {
     const linear = opts.linearDeflection ?? 0.5;
