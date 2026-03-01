@@ -400,9 +400,11 @@ Client guidance:
 tool-derived cavity faces and their descendant edges.
 
 - Face examples:
+  - `face:body.main~subtract-1.top`
   - `face:body.main~subtract-1.cut.bottom`
   - `face:body.main~subtract-1.cut.side.1`
 - Edge examples:
+  - `edge:body.main~subtract-1.cut.side.1.bound.top`
   - `edge:body.main~subtract-1.cut.bottom.join.cut.side.1`
   - `edge:body.main~subtract-1.cut.side.1.join.cut.side.2`
 - `cut.*` ids are emitted only when runtime can justify the mapping from the

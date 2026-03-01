@@ -126,6 +126,23 @@ const tests = [
           selection.meta["selectionSlot"] === "cut.top"
       );
       assert.equal(cutTop, undefined, "tool exit cap should not be mislabeled as cut.top");
+
+      const top = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "subtract-1" &&
+          selection.meta["selectionSlot"] === "top"
+      );
+      assert.ok(top, "missing preserved top face");
+      assert.equal(top.id, "face:body.main~subtract-1.top");
+
+      const side = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "subtract-1" &&
+          selection.meta["selectionSlot"] === "side.1"
+      );
+      assert.ok(side, "missing preserved side.1 face");
     },
   },
   {
@@ -149,6 +166,20 @@ const tests = [
       assert.match(
         edge.id,
         /^edge:body\.main~subtract-1\.cut\..+\.join\.cut\..+(?:\.part\.\d+)?$/
+      );
+
+      const boundary = result.final.selections.find(
+        (selection) =>
+          selection.kind === "edge" &&
+          selection.meta["createdBy"] === "subtract-1" &&
+          typeof selection.meta["selectionSlot"] === "string" &&
+          (selection.meta["selectionSlot"] as string).startsWith("cut.") &&
+          (selection.meta["selectionSlot"] as string).includes(".bound.top")
+      );
+      assert.ok(boundary, "missing semantic cut boundary edge");
+      assert.match(
+        boundary.id,
+        /^edge:body\.main~subtract-1\.cut\..+\.bound\.top(?:\.part\.\d+)?$/
       );
     },
   },

@@ -5665,6 +5665,8 @@ export class OcctBackend implements Backend {
     builder: any
   ): SelectionLedgerPlan {
     const leftPlan = this.makeFaceMutationSelectionLedgerPlan(upstream, leftShape, []);
+    const leftFaces =
+      op === "subtract" ? this.ownerFaceSelectionsForShape(upstream, leftShape) : [];
     const rightPlan =
       op === "subtract" ? null : this.makeFaceMutationSelectionLedgerPlan(upstream, rightShape, []);
     const rightFaces =
@@ -5675,6 +5677,7 @@ export class OcctBackend implements Backend {
         rightPlan?.faces?.(entries);
         if (op === "subtract") {
           this.annotateBooleanCutFaceSelections(entries, rightFaces, builder);
+          this.annotateBooleanPreservedFaceSelections(entries, leftFaces, builder);
         }
       },
       edges:
@@ -5684,6 +5687,108 @@ export class OcctBackend implements Backend {
             }
           : undefined,
     };
+  }
+
+  private annotateBooleanPreservedFaceSelections(
+    entries: CollectedSubshape[],
+    sourceFaces: KernelSelection[],
+    builder: any
+  ): void {
+    const remaining = entries.filter((entry) => !entry.ledger?.slot);
+    for (let i = 0; i < sourceFaces.length; i += 1) {
+      const source = sourceFaces[i];
+      if (!source) continue;
+      const sourceShape = source.meta["shape"];
+      if (!sourceShape) continue;
+
+      const matched = this.uniqueShapeList([
+        sourceShape,
+        ...this.collectModifiedShapes(builder, sourceShape).flatMap((shape) => {
+          const faces = this.collectFacesFromShape(shape);
+          return faces.length > 0 ? faces : [shape];
+        }),
+      ]);
+      const exactMatches: CollectedSubshape[] = [];
+      for (const candidate of matched) {
+        const index = remaining.findIndex((entry) => this.shapesSame(entry.shape, candidate));
+        if (index < 0) continue;
+        const [entry] = remaining.splice(index, 1);
+        if (!entry) continue;
+        exactMatches.push(entry);
+      }
+      if (exactMatches.length > 0) {
+        this.assignBooleanPreservedFaceMatches(exactMatches, source);
+        continue;
+      }
+
+      const ranked = remaining
+        .map((entry) => ({
+          entry,
+          ordering: this.splitBranchOrdering(entry, source),
+        }))
+        .filter(
+          (
+            candidate
+          ): candidate is {
+            entry: CollectedSubshape;
+            ordering: [number, number, number];
+          } => candidate.ordering !== null
+        )
+        .sort((a, b) => {
+          const byX = a.ordering[0] - b.ordering[0];
+          if (Math.abs(byX) > 1e-9) return byX;
+          const byY = a.ordering[1] - b.ordering[1];
+          if (Math.abs(byY) > 1e-9) return byY;
+          const byZ = a.ordering[2] - b.ordering[2];
+          if (Math.abs(byZ) > 1e-9) return byZ;
+          return 0;
+        });
+      if (ranked.length === 0) continue;
+      const matches = ranked.map((candidate) => candidate.entry);
+      for (const entry of matches) {
+        const index = remaining.indexOf(entry);
+        if (index >= 0) remaining.splice(index, 1);
+      }
+      this.assignBooleanPreservedFaceMatches(matches, source);
+    }
+  }
+
+  private assignBooleanPreservedFaceMatches(
+    matches: CollectedSubshape[],
+    source: KernelSelection
+  ): void {
+    if (matches.length === 0) return;
+    const sourceSlot = this.selectionSlotForLineage(source);
+    const sourceRole = this.selectionRoleForLineage(source);
+    if (matches.length === 1) {
+      const [entry] = matches;
+      if (!entry) return;
+      const hint: SelectionLedgerHint = {
+        lineage: { kind: "modified", from: source.id },
+      };
+      if (sourceSlot) hint.slot = sourceSlot;
+      if (sourceRole) hint.role = sourceRole;
+      this.applySelectionLedgerHint(entry, hint);
+      return;
+    }
+
+    const slotRoot = sourceSlot ? `split.${sourceSlot}` : "split.seed";
+    for (let branchIndex = 0; branchIndex < matches.length; branchIndex += 1) {
+      const entry = matches[branchIndex];
+      if (!entry) continue;
+      const hint: SelectionLedgerHint = {
+        slot: `${slotRoot}.branch.${branchIndex + 1}`,
+        lineage: {
+          kind: "split",
+          from: source.id,
+          branch: `${branchIndex + 1}`,
+        },
+      };
+      if (sourceRole) {
+        hint.role = sourceRole;
+      }
+      this.applySelectionLedgerHint(entry, hint);
+    }
   }
 
   private annotateBooleanCutFaceSelections(
