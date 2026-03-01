@@ -71,18 +71,37 @@ function sideStableFaceId(selections: SelectionRecord[]): string | null {
   );
 }
 
+function subtractCutBottomStableFaceId(selections: SelectionRecord[]): string | null {
+  return findSelectionId(
+    selections,
+    (selection) =>
+      selection.kind === "face" &&
+      selection.meta["createdBy"] === "subtract-1" &&
+      selection.meta["selectionSlot"] === "cut.bottom"
+  );
+}
+
 function stepByFeatureId(result: BuildResult, featureId: string) {
   return result.steps.find((step) => step.featureId === featureId);
 }
 
-function assertBaseSelectionPreserved(result: BuildResult, selectionId: string, label: string): void {
-  const baseStep = stepByFeatureId(result, "base");
-  assert.ok(baseStep, `missing base step for ${label}`);
+function assertFeatureSelectionPreserved(
+  result: BuildResult,
+  featureId: string,
+  selectionId: string,
+  label: string
+): void {
+  const step = stepByFeatureId(result, featureId);
+  assert.ok(step, `missing ${featureId} step for ${label}`);
   assert.equal(
-    baseStep.result.selections.some((selection) => selection.id === selectionId),
+    step.result.selections.some((selection) => selection.id === selectionId),
     true,
-    `expected edited base build to preserve captured ${label} selection id`
+    `expected edited ${featureId} build to preserve captured ${label} selection id`
   );
+}
+
+function assertBaseSelectionPreserved(result: BuildResult, selectionId: string, label: string): void {
+  assertFeatureSelectionPreserved(result, "base", selectionId, label);
 }
 
 function assertBodyFaceIncrease(
@@ -304,6 +323,81 @@ const matrix: MatrixCase[] = [
         "body:main",
         "stable-id chamfer"
       );
+    },
+  },
+  {
+    name: "stable boolean cut face id keeps move face resolved after upstream edits",
+    buildSeedPart: () =>
+      dsl.part("selector-matrix-seed-boolean-cut", [
+        dsl.extrude("base", dsl.profileRect(20, 20), 12, "body:left"),
+        dsl.extrude("tool-seed", dsl.profileRect(8, 8), 6, "body:tool-seed"),
+        dsl.moveBody("tool-move", dsl.selectorNamed("body:tool-seed"), "body:right", [
+          "tool-seed",
+        ], {
+          translation: [0, 0, 6],
+        }),
+        dsl.booleanOp(
+          "subtract-1",
+          "subtract",
+          dsl.selectorNamed("body:left"),
+          dsl.selectorNamed("body:right"),
+          "body:main"
+        ),
+      ]),
+    captureSelectionId: subtractCutBottomStableFaceId,
+    buildEditedPart: (selectionId) =>
+      dsl.part("selector-matrix-boolean-cut", [
+        dsl.moveFace(
+          "move-cut-floor",
+          dsl.selectorNamed("body:main"),
+          dsl.selectorNamed(selectionId),
+          "body:moved",
+          undefined,
+          { translation: [0, 0, -1], heal: true }
+        ),
+        dsl.booleanOp(
+          "subtract-1",
+          "subtract",
+          dsl.selectorNamed("body:left"),
+          dsl.selectorNamed("body:right"),
+          "body:main"
+        ),
+        dsl.moveBody("tool-move", dsl.selectorNamed("body:tool-seed"), "body:right", [
+          "tool-seed",
+        ], {
+          translation: [0, 0, 7],
+        }),
+        dsl.extrude("tool-seed", dsl.profileRect(10, 6), 7, "body:tool-seed"),
+        dsl.extrude("base", dsl.profileRect(28, 18), 14, "body:left"),
+      ]),
+    assertEdited: ({ occt, result, selectionId }) => {
+      assert.ok(
+        result.order.indexOf("base") < result.order.indexOf("subtract-1"),
+        `expected base before subtract-1 (order=${result.order.join(",")})`
+      );
+      assert.ok(
+        result.order.indexOf("tool-seed") < result.order.indexOf("tool-move"),
+        `expected tool-seed before tool-move (order=${result.order.join(",")})`
+      );
+      assert.ok(
+        result.order.indexOf("tool-move") < result.order.indexOf("subtract-1"),
+        `expected tool-move before subtract-1 (order=${result.order.join(",")})`
+      );
+      assert.ok(
+        result.order.indexOf("subtract-1") < result.order.indexOf("move-cut-floor"),
+        `expected subtract-1 before move-cut-floor (order=${result.order.join(",")})`
+      );
+      assertFeatureSelectionPreserved(
+        result,
+        "subtract-1",
+        selectionId,
+        "stable-id boolean cut face"
+      );
+      const finalBody = result.final.outputs.get("body:moved");
+      assert.ok(finalBody, "missing move-face output body:moved");
+      const finalShape = finalBody.meta["shape"] as any;
+      assert.ok(finalShape, "missing move-face shape");
+      assertValidShape(occt, finalShape, "stable-id boolean cut move-face solid");
     },
   },
 ];

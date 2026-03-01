@@ -7097,7 +7097,17 @@ export class OcctBackend implements Backend {
         obj.kind === "solid" ||
         obj.kind === "surface"
       ) {
-        named.set(key, { id: obj.id, kind: obj.kind, meta: obj.meta });
+        named.set(key, {
+          id: obj.id,
+          kind: obj.kind,
+          meta: {
+            ...obj.meta,
+            ownerKey:
+              typeof obj.meta["ownerKey"] === "string" && obj.meta["ownerKey"].trim().length > 0
+                ? obj.meta["ownerKey"]
+                : key,
+          },
+        });
       }
     }
     return { selections: upstream.selections, named };
