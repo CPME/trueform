@@ -1,0 +1,341 @@
+# Vision Gap Bridge Plan (2026-03-01)
+
+Status: Draft
+Owner: core/runtime/docs
+
+Purpose: define a concrete path from the current v1 implementation to the broader
+TrueForm vision described in `AGENTS.md`, while reducing drift between code,
+public docs, and durable specs.
+
+## Why This Plan Exists
+
+The codebase already spans all four vision layers:
+
+- DSL authoring
+- IR as the canonical interchange
+- kernel execution via OCCT.js and experimental native OCCT
+- runtime APIs for application builders
+
+The gap is not direction. The gap is consistency, maturity, and packaging:
+
+- the implementation is broader than some core specs describe
+- multiple v1 contracts are still marked as "direction" rather than fully implemented
+- the runtime/platform surface is ahead of the canonical architecture summary
+- the workspace split exists, but the root package still carries most real logic
+
+This plan closes those gaps in a way that preserves the current stable part
+compile contract.
+
+## Current State Snapshot
+
+### What Is Real Today
+
+- Stable root library facade with explicit subpaths:
+  - `trueform`
+  - `trueform/backend`
+  - `trueform/backend-spi`
+  - `trueform/experimental`
+  - `trueform/api`
+  - `trueform/export`
+- Deterministic part compile pipeline:
+  - normalized IR
+  - dependency DAG
+  - deterministic feature order
+  - backend execution
+- Incremental part rebuild support exists in the executor.
+- Runtime HTTP service exists for build, mesh, export, artifacts, sessions, and jobs.
+- Native OCCT integration exists as:
+  - TS transports/backends in `trueform/experimental`
+  - a separate native C++ server
+- The implemented feature surface is materially larger than the original v1 summary.
+
+### What Is Still Partial
+
+- Assembly intent exists in IR, but core compile ignores assemblies.
+- Functional tolerancing intent and assertions exist in IR, but core compile treats
+  them as data-first placeholders rather than first-class build outputs.
+- `.tfa` assembly container direction is documented, but not yet a complete schema +
+  tooling implementation.
+- Workspace packages exist, but most package entrypoints are still placeholders or
+  forwarders to root `src/` code.
+- Some specs still describe an earlier, narrower system than the current code.
+
+## Bridge Goals
+
+1. Align the architecture docs with the implemented system so the source-of-truth
+docs describe the actual repo, not the earlier design only.
+2. Finish the v1 contract boundaries so "direction" items become explicit shipped
+behavior or are clearly deferred.
+3. Turn the current single-package-plus-subpaths implementation into the intended
+multi-package architecture without breaking stable imports.
+4. Promote the API/runtime layer from "present but adjacent" into a first-class part
+of the documented platform story.
+5. Keep the webapp constraints intact:
+   - no browser-side B-Rep leakage
+   - async-friendly runtime execution
+   - deterministic selectors
+   - mesh/view separation
+
+## Workstream A: Documentation And Contract Alignment
+
+Goal: make the documentation hierarchy accurately reflect the implemented system.
+
+### Problems To Solve
+
+- `specs/summary.md` understates the implemented feature surface and still reflects
+  older output assumptions.
+- `specs/spec.md` is valuable as a conceptual architecture spec, but parts of it no
+  longer match active package naming or the runtime platform shape.
+- `docs/reference/file-format.md` documents `.tfa` direction ahead of actual schema
+  support, which is acceptable only if the "draft" boundary is made explicit and
+  kept narrow.
+- some secondary docs still point users to import paths that are no longer correct.
+
+### Deliverables
+
+1. Refresh `specs/summary.md` to match:
+   - implemented feature families
+   - named outputs
+   - actual staging status
+   - runtime/API scope
+2. Split `specs/spec.md` into:
+   - architecture invariants that are true now
+   - future target architecture clearly labeled as target state
+3. Tighten `docs/reference/file-format.md` wording so:
+   - `.tfp` is documented as implemented
+   - `.tfa` is documented as draft/in-progress only
+   - unsupported shape fields are not presented as fully landed behavior
+4. Audit docs for import-path correctness, especially experimental/native examples.
+5. Update `specs/docs-map.md` whenever a new durable architecture or migration doc
+   becomes a source-of-truth reference.
+
+### Exit Criteria
+
+- A reader can identify what is shipped, experimental, and draft without reading code.
+- Public docs, `README.md`, `specs/summary.md`, and `specs/v1-contract.md` do not
+  contradict each other on feature scope, packaging, or import paths.
+
+## Workstream B: Complete The V1 Contract
+
+Goal: close the most important "represented but not fully integrated" parts of v1.
+
+### Problems To Solve
+
+- Assemblies exist in the model, but they are not part of the stable compile path.
+- Constraints and assertions are represented in IR, but not surfaced consistently as
+  runtime/build results.
+- Container and assembly storage contracts are ahead of implementation.
+
+### Deliverables
+
+1. Make assembly handling explicit in one of two ways:
+   - implement the next intended loader/runtime path, or
+   - formally freeze assemblies as experimental/data-only for the remainder of v1
+2. Promote assertions and dimension/constraint evaluation into documented build
+   outputs for runtime clients.
+3. Decide and document the exact v1 boundary for `.tfa`:
+   - parser support
+   - writer support
+   - import resolution behavior
+   - compatibility with legacy bundled documents
+4. Ensure every v1 contract claim has:
+   - a test
+   - a capabilities/API declaration if runtime-visible
+   - a stable doc reference
+
+### Exit Criteria
+
+- There are no major v1 contract items that exist only as types plus warnings.
+- The "v1 direction" sections can be reduced to either "implemented" or "deferred".
+
+## Workstream C: Package Architecture Migration
+
+Goal: move from the current compatibility facade to the intended multi-package
+layout.
+
+### Problems To Solve
+
+- Workspaces exist, but most packages are placeholders.
+- Core logic still primarily lives in root `src/`.
+- The conceptual architecture says "modular packages", while the operational
+  architecture is still "single package with explicit subpaths".
+
+### Deliverables
+
+1. Complete `tf-core` extraction:
+   - IR
+   - compiler
+   - executor
+   - validation
+   - selectors
+   - cache/profile helpers
+2. Complete `tf-dsl` extraction:
+   - authoring helpers
+   - no backend imports
+3. Complete backend package extraction:
+   - `tf-backend-ocjs`
+   - `tf-backend-native`
+4. Complete export package extraction:
+   - STEP/GLB/3MF/DXF/SVG tooling
+5. Keep `trueform` as a compatibility facade during the transition with explicit
+   tests for export identity and import compatibility.
+
+### Guardrails
+
+- No stable root import breakage during the transition phases.
+- No kernel-shaped SPI types leaked back into the stable root package.
+- Package extraction must improve, not blur, boundary enforcement.
+
+### Exit Criteria
+
+- Package-local sources are primary, not forwarders.
+- The root package is demonstrably a facade over package modules rather than the
+  only real implementation location.
+
+## Workstream D: Runtime/API As A First-Class Platform Layer
+
+Goal: make the API layer part of the core architecture story, not an adjacent app.
+
+### Problems To Solve
+
+- The runtime service is real and substantial, but most high-level architecture docs
+  still describe only the DSL -> backend path.
+- The API contract, job model, and asset pipeline are underrepresented in the
+  current architecture narrative.
+
+### Deliverables
+
+1. Elevate the architecture docs to include:
+   - runtime service
+   - async jobs
+   - build sessions
+   - asset/artifact retrieval
+   - capability discovery
+2. Clarify which runtime APIs are:
+   - stable contract
+   - optional capability-gated
+   - experimental
+3. Ensure runtime endpoints and capability flags stay synchronized with docs and
+   OpenAPI definitions.
+4. Keep runtime payloads backend-agnostic:
+   - no OCCT handles
+   - no raw topology ids
+   - mesh and diagnostics only
+
+### Exit Criteria
+
+- The documented architecture includes the runtime platform as part of the product.
+- App builders can understand the intended integration path without reverse
+  engineering `apps/tf-service/server.mjs`.
+
+## Workstream E: Feature Surface Maturity And Promotion
+
+Goal: align advertised capability with feature reliability and staging policy.
+
+### Problems To Solve
+
+- The feature surface has expanded quickly.
+- Some features are correctly marked as staging, but docs/specs are not fully
+  synchronized.
+- Promotion decisions need to be tied to visual signoff, parity, and runtime
+  capability reporting.
+
+### Deliverables
+
+1. Reconcile advertised feature lists across:
+   - docs homepage
+   - summary/spec docs
+   - feature staging registry
+   - runtime capability output
+2. Define graduation criteria for each staging feature:
+   - targeted e2e coverage
+   - failure-mode coverage where applicable
+   - selector stability/parity evidence
+   - required visual review artifacts
+3. Keep unsupported or partial behaviors explicit with errors, not soft ambiguity.
+
+### Exit Criteria
+
+- Every advertised feature is either:
+  - stable
+  - staging
+  - intentionally omitted from the public contract
+- Feature maturity can be understood from one authoritative source.
+
+## Sequencing
+
+1. Documentation and contract alignment
+- Reduce docs drift before expanding the contract further.
+
+2. Complete the v1 contract boundary
+- Convert placeholder areas into explicit implemented or deferred status.
+
+3. Package extraction
+- Move code only after the contract and docs say what belongs where.
+
+4. Runtime platform promotion
+- Reflect the service layer as a first-class architectural layer.
+
+5. Feature promotion and broader roadmap work
+- Expand stable capability only after contracts, packaging, and docs are coherent.
+
+## Success Metrics
+
+- Zero known contradictions between:
+  - `README.md`
+  - `docs/`
+  - `specs/summary.md`
+  - `specs/v1-contract.md`
+  - runtime capability reporting
+- No major architecture doc claims that require reading code to discover they are
+  still draft-only.
+- Stable package boundaries are enforced by tests and guardrails, not convention.
+- A new contributor can identify:
+  - stable API surface
+  - experimental API surface
+  - draft future direction
+  in under 15 minutes from docs alone.
+
+## Recommended Near-Term Execution
+
+### Phase 1: Stop The Drift
+
+- Refresh `specs/summary.md`.
+- Refresh `specs/spec.md` framing.
+- Fix incorrect example import paths.
+- Tighten `docs/reference/file-format.md` draft language.
+
+### Phase 2: Finish The Contract
+
+- Make assertions/dimensions first-class runtime outputs.
+- Decide the concrete v1 assembly and `.tfa` boundary.
+- Remove or reclassify placeholder-only contract claims.
+
+### Phase 3: Make The Package Layout Real
+
+- Replace package forwarders with package-owned sources.
+- Keep root compatibility exports intact.
+- Add cross-package contract tests for each extracted module boundary.
+
+### Phase 4: Consolidate The Platform Story
+
+- Update architecture docs to include runtime APIs and async job execution.
+- Keep viewer, service, and native server documentation aligned with the same
+  platform model.
+
+## Non-Goals For This Plan
+
+- Replacing the current stable part compile contract.
+- Turning assembly solve into a required core compile stage.
+- Exposing backend internals in stable APIs.
+- Allowing docs to advertise speculative capabilities without explicit draft labels.
+
+## Related
+
+- `AGENTS.md`
+- `specs/docs-map.md`
+- `specs/summary.md`
+- `specs/spec.md`
+- `specs/v1-contract.md`
+- `specs/packaging-split-timeline.md`
+- `specs/webapp-runtime-two-milestones.md`

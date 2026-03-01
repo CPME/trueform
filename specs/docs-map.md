@@ -15,6 +15,7 @@ Purpose: define the source of truth for each topic to prevent drift.
 - Functional tolerancing intent: `specs/functional-tolerancing-intent.md`
 - Feature maturity/staging registry: `specs/feature-staging.md`
 - Runtime execution milestone plan: `specs/webapp-runtime-two-milestones.md`
+- Vision-to-current-state bridge plan: `specs/vision-gap-bridge-plan-2026-03-01.md`
 - Pre-feature execution board (runtime/platform before feature dev): `specs/pre-feature-sprint-board.md`
 - Roadmap ideas (non-MVP): `specs/geometric-abstractions.md`
 - Sketch constraint solver proposal: `specs/sketch-constraint-solver-outline.md`
