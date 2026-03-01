@@ -114,7 +114,7 @@ Use this workflow for feature development and promotion decisions.
    - Export viewer assets with `TF_VIEWER_ONLY=<example-id> npm run viewer:export`.
    - Serve viewer with `npm run viewer:serve`.
    - Include exact artifact paths in the review summary.
-   - On WSL, use `wslview /home/eveber/code/trueform/docs/public/examples/dsl/<image>.png` to open review images in Windows. Do not rely on `xdg-open`, which targets Linux-side GUI apps and is unreliable for this setup.
+   - On WSL, use `wslview <linux-path>` to open local files in Windows (including review images). Do not rely on `xdg-open`, which targets Linux-side GUI apps and is unreliable for this setup.
 
 4. Reviewer visual approval (reviewer)
    - Reviewer checks generated images/viewer output and replies with explicit approval.
