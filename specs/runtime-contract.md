@@ -8,6 +8,8 @@ It prioritizes interactive modeling, async jobs, and backend-agnostic selectors.
 - Keep B-Rep exclusively on the server (no kernel objects sent to the browser).
 - Make the client and server backend-agnostic (OCCT.js and native OCCT can both serve this contract).
 - Enable multi-tenant SaaS while remaining OSS-friendly.
+- Make stable semantic references the client contract for selections, measurements,
+  and downstream interactions.
 
 ## Versioning
 - All endpoints are versioned under `/v1`.
@@ -174,12 +176,15 @@ Job result (`GET /v1/jobs/:id`):
     "outputs": {
       "body:main": {
         "kind": "solid",
-        "selectionId": "solid:1"
+        "selectionId": "solid:body.main~base.seed"
       }
     },
     "selections": {
-      "faces": ["face:1", "face:2"],
-      "edges": ["edge:1", "edge:2"]
+      "faces": ["face:body.main~base.top", "face:body.main~base.bottom"],
+      "edges": [
+        "edge:body.main~base.loop.1",
+        "edge:body.main~base.loop.2"
+      ]
     },
     "mesh": {
       "profile": "interactive",
@@ -193,6 +198,16 @@ Job result (`GET /v1/jobs/:id`):
 }
 ```
 
+Build result notes:
+- `outputs.*.selectionId` and `selections.*` are stable semantic reference tokens,
+  not raw kernel traversal ids.
+- Tokens should be derived from semantic ownership and producer context where
+  possible (`<kind>:<owner>~<feature>.<slot-or-fallback>`).
+- If a semantic slot cannot be named directly, the runtime may use a deterministic
+  fallback suffix, but the full token remains the canonical stable id.
+- Clients may round-trip these tokens for inspection and HUD workflows, but
+  authoring flows should still prefer datums, selectors, and named outputs.
+
 ## Measure
 `POST /v1/measure`
 
@@ -200,14 +215,14 @@ Request:
 ```json
 {
   "buildId": "build_456",
-  "target": "face:1"
+  "target": "face:body.main~base.top"
 }
 ```
 
 Response:
 ```json
 {
-  "target": "face:1",
+  "target": "face:body.main~base.top",
   "metrics": [
     { "kind": "area", "value": 314.159, "unit": "mm^2", "label": "area" },
     { "kind": "radius", "value": 10, "unit": "mm", "label": "radius" },
@@ -217,8 +232,10 @@ Response:
 ```
 
 Notes:
-- `target` accepts runtime output names (for example `body:main`) or resolved selection ids
-  (for example `face:12`, `edge:4`).
+- `target` accepts runtime output names (for example `body:main`) or stable
+  semantic selection ids (for example `face:body.main~base.top`).
+- Raw numeric topology ids (for example `face:12`, `edge:4`) are not part of the
+  stable client contract.
 - The endpoint is synchronous and intended for HUD/inspection interactions.
 - Availability is explicitly gated by `/v1/capabilities.optionalFeatures.measure.endpoint`.
 
