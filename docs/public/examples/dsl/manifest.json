@@ -71,6 +71,11 @@
       "image": "/examples/dsl/selection-ledger-fillet-edge-review.iso.png"
     },
     {
+      "id": "selection-ledger-fillet-seam-review",
+      "title": "Selection Ledger Fillet Seam Review",
+      "image": "/examples/dsl/selection-ledger-fillet-seam-review.iso.png"
+    },
+    {
       "id": "variable-fillet",
       "title": "Variable Fillet",
       "image": "/examples/dsl/variable-fillet.iso.png"
@@ -84,6 +89,11 @@
       "id": "selection-ledger-chamfer-edge-review",
       "title": "Selection Ledger Chamfer Edge Review",
       "image": "/examples/dsl/selection-ledger-chamfer-edge-review.iso.png"
+    },
+    {
+      "id": "selection-ledger-chamfer-join-review",
+      "title": "Selection Ledger Chamfer Join Review",
+      "image": "/examples/dsl/selection-ledger-chamfer-join-review.iso.png"
     },
     {
       "id": "selection-ledger-stack-audit",

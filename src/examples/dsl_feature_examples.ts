@@ -539,6 +539,65 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     },
   },
   {
+    id: "selection-ledger-fillet-seam-review",
+    title: "Selection Ledger Fillet Seam Review",
+    part: part("selection-ledger-fillet-seam-review", [
+      extrude("cyl", profileCircle(14), 28, "body:main"),
+      fillet(
+        "review-fillet-seam",
+        selectorEdge([predCreatedBy("cyl")], [rankMaxZ()]),
+        3,
+        ["cyl"]
+      ),
+    ]),
+    render: {
+      meshOpts: {
+        linearDeflection: 0.12,
+        angularDeflection: 0.12,
+        parallel: true,
+      },
+      renderOpts: {
+        viewDir: [1.55, -0.35, 0.4],
+      },
+      layers: [
+        {
+          output: "body:main",
+          color: [214, 206, 194],
+          alpha: 0.74,
+          wireframe: true,
+          wireColor: [40, 34, 28],
+          wireDepthTest: false,
+          depthTest: true,
+        },
+      ],
+      selectionHighlights: [
+        {
+          selectionId: "face:body.main~review-fillet-seam.fillet.seed.1",
+          color: [34, 197, 94],
+          alpha: 0.5,
+          wireframe: false,
+          depthTest: false,
+        },
+        {
+          selectionId: "edge:body.main~review-fillet-seam.fillet.seed.1.bound.top",
+          alpha: 0,
+          wireframe: true,
+          wireColor: [249, 115, 22],
+          wireDepthTest: false,
+          depthTest: false,
+        },
+        {
+          selectionId: "edge:body.main~review-fillet-seam.fillet.seed.1.seam",
+          alpha: 0,
+          wireframe: true,
+          wireColor: [236, 72, 153],
+          wireDepthTest: false,
+          depthTest: false,
+        },
+      ],
+    },
+  },
+  {
     id: "variable-fillet",
     title: "Variable Fillet",
     part: part("example-variable-fillet", [
@@ -637,6 +696,64 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         },
         {
           selectionId: "edge:body.main~review-chamfer.chamfer.seed.1.bound.side.1",
+          alpha: 0,
+          wireframe: true,
+          wireColor: [236, 72, 153],
+          wireDepthTest: false,
+          depthTest: false,
+        },
+      ],
+    },
+  },
+  {
+    id: "selection-ledger-chamfer-join-review",
+    title: "Selection Ledger Chamfer Join Review",
+    part: part("selection-ledger-chamfer-join-review", [
+      extrude("block", profileRect(36, 24), 16, "body:main"),
+      chamfer(
+        "review-chamfer-join",
+        selectorEdge([predCreatedBy("block")], [rankMaxZ()]),
+        2,
+        ["block"]
+      ),
+    ]),
+    render: {
+      meshOpts: {
+        linearDeflection: 0.12,
+        angularDeflection: 0.12,
+        parallel: true,
+      },
+      renderOpts: {
+        viewDir: [1.3, -1.05, 0.72],
+      },
+      layers: [
+        {
+          output: "body:main",
+          color: [198, 215, 196],
+          alpha: 0.78,
+          wireframe: true,
+          wireColor: [30, 44, 32],
+          wireDepthTest: false,
+          depthTest: true,
+        },
+      ],
+      selectionHighlights: [
+        {
+          selectionId: "face:body.main~review-chamfer-join.chamfer.seed.1",
+          color: [6, 182, 212],
+          alpha: 0.44,
+          wireframe: false,
+          depthTest: false,
+        },
+        {
+          selectionId: "face:body.main~review-chamfer-join.chamfer.seed.2",
+          color: [34, 197, 94],
+          alpha: 0.44,
+          wireframe: false,
+          depthTest: false,
+        },
+        {
+          selectionId: "edge:body.main~review-chamfer-join.chamfer.seed.1.join.chamfer.seed.2",
           alpha: 0,
           wireframe: true,
           wireColor: [236, 72, 153],
