@@ -99,6 +99,15 @@ export type DslFeatureExample = {
       wireDepthTest?: boolean;
       depthTest?: boolean;
     }>;
+    selectionHighlights?: Array<{
+      selectionId: string;
+      color?: [number, number, number];
+      alpha?: number;
+      wireframe?: boolean;
+      wireColor?: [number, number, number];
+      wireDepthTest?: boolean;
+      depthTest?: boolean;
+    }>;
   };
 };
 
@@ -502,6 +511,23 @@ export const dslFeatureExamples: DslFeatureExample[] = [
           depthTest: true,
         },
       ],
+      selectionHighlights: [
+        {
+          selectionId: "face:body.main~review-fillet.fillet.seed.1",
+          color: [34, 197, 94],
+          alpha: 0.46,
+          wireframe: false,
+          depthTest: true,
+        },
+        {
+          selectionId: "edge:body.main~cyl.h74080499fc506b52.1",
+          alpha: 0,
+          wireframe: true,
+          wireColor: [249, 115, 22],
+          wireDepthTest: false,
+          depthTest: false,
+        },
+      ],
     },
   },
   {
@@ -583,6 +609,23 @@ export const dslFeatureExamples: DslFeatureExample[] = [
           wireColor: [30, 44, 32],
           wireDepthTest: false,
           depthTest: true,
+        },
+      ],
+      selectionHighlights: [
+        {
+          selectionId: "face:body.main~review-chamfer.chamfer.seed.1",
+          color: [6, 182, 212],
+          alpha: 0.42,
+          wireframe: false,
+          depthTest: true,
+        },
+        {
+          selectionId: "edge:body.main~cyl.h74080499fc506b52.1",
+          alpha: 0,
+          wireframe: true,
+          wireColor: [249, 115, 22],
+          wireDepthTest: false,
+          depthTest: false,
         },
       ],
     },

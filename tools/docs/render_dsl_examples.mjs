@@ -55,6 +55,29 @@ async function readExistingManifestEntries() {
   }
 }
 
+function meshSelection(selection, backend, meshOpts) {
+  return backend.mesh(
+    {
+      id: selection.id,
+      kind: selection.kind,
+      meta: selection.meta,
+    },
+    meshOpts
+  );
+}
+
+function findSelectionById(result, selectionId) {
+  const finalSelection = result.final.selections.find((entry) => entry.id === selectionId);
+  if (finalSelection) return finalSelection;
+  for (let i = result.steps.length - 1; i >= 0; i -= 1) {
+    const stepSelection = result.steps[i]?.result?.selections?.find(
+      (entry) => entry.id === selectionId
+    );
+    if (stepSelection) return stepSelection;
+  }
+  return null;
+}
+
 async function verifyExistingExamples() {
   const missing = [];
   const manifestPath = path.join(outDir, "manifest.json");
@@ -177,6 +200,23 @@ try {
           depthTest: layer.depthTest,
         };
       });
+      for (const highlight of renderConfig.selectionHighlights ?? []) {
+        const selection = findSelectionById(result, highlight.selectionId);
+        if (!selection) {
+          throw new Error(
+            `Example ${example.id} missing selection ${highlight.selectionId} for render highlight`
+          );
+        }
+        layers.push({
+          mesh: meshSelection(selection, backend, mergedMeshOpts),
+          baseColor: highlight.color,
+          baseAlpha: highlight.alpha,
+          wireframe: highlight.wireframe,
+          wireColor: highlight.wireColor,
+          wireDepthTest: highlight.wireDepthTest,
+          depthTest: highlight.depthTest,
+        });
+      }
       png = renderIsometricPngLayers(layers, {
         width: 1200,
         height: 900,
@@ -194,11 +234,40 @@ try {
         resolution,
         occt
       );
-      png = renderIsometricPng(meshWithThreads, {
-        width: 1200,
-        height: 900,
-        ...(renderConfig.renderOpts ?? {}),
-      });
+      const layers = [
+        {
+          mesh: meshWithThreads,
+        },
+      ];
+      for (const highlight of renderConfig.selectionHighlights ?? []) {
+        const selection = findSelectionById(result, highlight.selectionId);
+        if (!selection) {
+          throw new Error(
+            `Example ${example.id} missing selection ${highlight.selectionId} for render highlight`
+          );
+        }
+        layers.push({
+          mesh: meshSelection(selection, backend, mergedMeshOpts),
+          baseColor: highlight.color,
+          baseAlpha: highlight.alpha,
+          wireframe: highlight.wireframe,
+          wireColor: highlight.wireColor,
+          wireDepthTest: highlight.wireDepthTest,
+          depthTest: highlight.depthTest,
+        });
+      }
+      png =
+        layers.length === 1
+          ? renderIsometricPng(meshWithThreads, {
+              width: 1200,
+              height: 900,
+              ...(renderConfig.renderOpts ?? {}),
+            })
+          : renderIsometricPngLayers(layers, {
+              width: 1200,
+              height: 900,
+              ...(renderConfig.renderOpts ?? {}),
+            });
     }
     const filename = `${example.id}.iso.png`;
     await fs.writeFile(path.join(outDir, filename), png);

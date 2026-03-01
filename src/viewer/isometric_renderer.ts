@@ -49,8 +49,13 @@ export function renderIsometricPngLayers(
     throw new Error("At least one render layer is required");
   }
   for (const layer of layers) {
-    if (!layer.mesh || !Array.isArray(layer.mesh.positions)) {
-      throw new Error("Render layer mesh positions are required");
+    if (!layer.mesh) {
+      throw new Error("Render layer mesh is required");
+    }
+    const hasPositions = Array.isArray(layer.mesh.positions);
+    const hasEdges = Array.isArray(layer.mesh.edgePositions);
+    if (!hasPositions && !hasEdges) {
+      throw new Error("Render layer requires mesh positions or edge positions");
     }
   }
 
@@ -75,18 +80,9 @@ export function renderIsometricPngLayers(
   let maxY = -Infinity;
   let maxZ = -Infinity;
   for (const layer of layers) {
-    const positions = layer.mesh.positions;
-    for (let i = 0; i < positions.length; i += 3) {
-      const x = positions[i] ?? 0;
-      const y = positions[i + 1] ?? 0;
-      const z = positions[i + 2] ?? 0;
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      if (z < minZ) minZ = z;
-      if (x > maxX) maxX = x;
-      if (y > maxY) maxY = y;
-      if (z > maxZ) maxZ = z;
-    }
+    extendBounds(layer.mesh.positions, 3);
+    extendBounds(layer.mesh.edgePositions, 3);
+    extendBounds(layer.mesh.edgePositions, 6);
   }
   if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
     throw new Error("Render layers have no vertices");
@@ -102,11 +98,32 @@ export function renderIsometricPngLayers(
   let viewMaxX = -Infinity;
   let viewMaxY = -Infinity;
   for (const layer of layers) {
-    const positions = layer.mesh.positions;
-    for (let i = 0; i < positions.length; i += 3) {
-      const px = (positions[i] ?? 0) - center[0];
-      const py = (positions[i + 1] ?? 0) - center[1];
-      const pz = (positions[i + 2] ?? 0) - center[2];
+    extendViewBounds(layer.mesh.positions, 3);
+    extendViewBounds(layer.mesh.edgePositions, 3);
+    extendViewBounds(layer.mesh.edgePositions, 6);
+  }
+
+  function extendBounds(values: number[] | undefined, stride: number): void {
+    if (!Array.isArray(values) || values.length < 3) return;
+    for (let i = 0; i + 2 < values.length; i += stride) {
+      const x = values[i] ?? 0;
+      const y = values[i + 1] ?? 0;
+      const z = values[i + 2] ?? 0;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (z < minZ) minZ = z;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+      if (z > maxZ) maxZ = z;
+    }
+  }
+
+  function extendViewBounds(values: number[] | undefined, stride: number): void {
+    if (!Array.isArray(values) || values.length < 3) return;
+    for (let i = 0; i + 2 < values.length; i += stride) {
+      const px = (values[i] ?? 0) - center[0];
+      const py = (values[i + 1] ?? 0) - center[1];
+      const pz = (values[i + 2] ?? 0) - center[2];
       const vx = dot(right, [px, py, pz]);
       const vy = dot(up, [px, py, pz]);
       if (vx < viewMinX) viewMinX = vx;
@@ -147,29 +164,8 @@ export function renderIsometricPngLayers(
 
   for (const layer of layers) {
     const mesh = layer.mesh;
-    const positions = mesh.positions;
+    const positions = Array.isArray(mesh.positions) ? mesh.positions : [];
     const vertexCount = Math.floor(positions.length / 3);
-    if (vertexCount === 0) continue;
-
-    const viewX = new Float32Array(vertexCount);
-    const viewY = new Float32Array(vertexCount);
-    const viewZ = new Float32Array(vertexCount);
-    const screenX = new Float32Array(vertexCount);
-    const screenY = new Float32Array(vertexCount);
-    for (let i = 0; i < vertexCount; i += 1) {
-      const idx = i * 3;
-      const px = (positions[idx] ?? 0) - center[0];
-      const py = (positions[idx + 1] ?? 0) - center[1];
-      const pz = (positions[idx + 2] ?? 0) - center[2];
-      const vx = dot(right, [px, py, pz]);
-      const vy = dot(up, [px, py, pz]);
-      const vz = dot(viewDir, [px, py, pz]);
-      viewX[i] = vx;
-      viewY[i] = vy;
-      viewZ[i] = vz;
-      screenX[i] = screenCenterX + (vx - viewMidX) * scale;
-      screenY[i] = screenCenterY - (vy - viewMidY) * scale;
-    }
 
     const normals = mesh.normals;
     const normalsOk = Array.isArray(normals) && normals.length === positions.length;
@@ -183,66 +179,88 @@ export function renderIsometricPngLayers(
       ? globalZ
       : new Float32Array(width * height).fill(-Infinity);
 
-    const indices = buildTriangleIndices(mesh, vertexCount);
+    if (vertexCount > 0) {
+      const viewX = new Float32Array(vertexCount);
+      const viewY = new Float32Array(vertexCount);
+      const viewZ = new Float32Array(vertexCount);
+      const screenX = new Float32Array(vertexCount);
+      const screenY = new Float32Array(vertexCount);
+      for (let i = 0; i < vertexCount; i += 1) {
+        const idx = i * 3;
+        const px = (positions[idx] ?? 0) - center[0];
+        const py = (positions[idx + 1] ?? 0) - center[1];
+        const pz = (positions[idx + 2] ?? 0) - center[2];
+        const vx = dot(right, [px, py, pz]);
+        const vy = dot(up, [px, py, pz]);
+        const vz = dot(viewDir, [px, py, pz]);
+        viewX[i] = vx;
+        viewY[i] = vy;
+        viewZ[i] = vz;
+        screenX[i] = screenCenterX + (vx - viewMidX) * scale;
+        screenY[i] = screenCenterY - (vy - viewMidY) * scale;
+      }
 
-    for (let t = 0; t + 2 < indices.length; t += 3) {
-      const i0 = indices[t] ?? 0;
-      const i1 = indices[t + 1] ?? 0;
-      const i2 = indices[t + 2] ?? 0;
-      if (i0 >= vertexCount || i1 >= vertexCount || i2 >= vertexCount) continue;
+      const indices = buildTriangleIndices(mesh, vertexCount);
 
-      const x0 = screenX[i0] ?? 0;
-      const y0 = screenY[i0] ?? 0;
-      const z0 = -(viewZ[i0] ?? 0);
-      const x1 = screenX[i1] ?? 0;
-      const y1 = screenY[i1] ?? 0;
-      const z1 = -(viewZ[i1] ?? 0);
-      const x2 = screenX[i2] ?? 0;
-      const y2 = screenY[i2] ?? 0;
-      const z2 = -(viewZ[i2] ?? 0);
+      for (let t = 0; t + 2 < indices.length; t += 3) {
+        const i0 = indices[t] ?? 0;
+        const i1 = indices[t + 1] ?? 0;
+        const i2 = indices[t + 2] ?? 0;
+        if (i0 >= vertexCount || i1 >= vertexCount || i2 >= vertexCount) continue;
 
-      const denom = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
-      if (Math.abs(denom) < 1e-6) continue;
+        const x0 = screenX[i0] ?? 0;
+        const y0 = screenY[i0] ?? 0;
+        const z0 = -(viewZ[i0] ?? 0);
+        const x1 = screenX[i1] ?? 0;
+        const y1 = screenY[i1] ?? 0;
+        const z1 = -(viewZ[i1] ?? 0);
+        const x2 = screenX[i2] ?? 0;
+        const y2 = screenY[i2] ?? 0;
+        const z2 = -(viewZ[i2] ?? 0);
 
-      const shade = computeTriangleShade(
-        i0,
-        i1,
-        i2,
-        normalsOk ? normals : null,
-        viewX,
-        viewY,
-        viewZ,
-        right,
-        up,
-        viewDir,
-        lightDirView
-      );
-      const intensity = clamp(ambient + diffuse * shade, 0, 1);
-      const r = clampByte((baseColor[0] ?? 0) * intensity);
-      const g = clampByte((baseColor[1] ?? 0) * intensity);
-      const b = clampByte((baseColor[2] ?? 0) * intensity);
+        const denom = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
+        if (Math.abs(denom) < 1e-6) continue;
 
-      const minPx = clampInt(Math.floor(Math.min(x0, x1, x2)), 0, width - 1);
-      const maxPx = clampInt(Math.ceil(Math.max(x0, x1, x2)), 0, width - 1);
-      const minPy = clampInt(Math.floor(Math.min(y0, y1, y2)), 0, height - 1);
-      const maxPy = clampInt(Math.ceil(Math.max(y0, y1, y2)), 0, height - 1);
-      for (let py = minPy; py <= maxPy; py += 1) {
-        for (let px = minPx; px <= maxPx; px += 1) {
-          const fx = px + 0.5;
-          const fy = py + 0.5;
-          const w0 = ((y1 - y2) * (fx - x2) + (x2 - x1) * (fy - y2)) / denom;
-          const w1 = ((y2 - y0) * (fx - x2) + (x0 - x2) * (fy - y2)) / denom;
-          const w2 = 1 - w0 - w1;
-          const insidePositive = w0 >= 0 && w1 >= 0 && w2 >= 0;
-          const insideNegative = w0 <= 0 && w1 <= 0 && w2 <= 0;
-          if (!insidePositive && !insideNegative) continue;
-          const z = w0 * z0 + w1 * z1 + w2 * z2;
-          const idx = py * width + px;
-          const prior = zBuffer[idx] ?? -Infinity;
-          if (z < prior - 1e-6) continue;
-          zBuffer[idx] = z;
-          if (depthTest) globalZ[idx] = z;
-          blendPixel(rgba, idx * 4, r, g, b, baseAlpha);
+        const shade = computeTriangleShade(
+          i0,
+          i1,
+          i2,
+          normalsOk ? normals : null,
+          viewX,
+          viewY,
+          viewZ,
+          right,
+          up,
+          viewDir,
+          lightDirView
+        );
+        const intensity = clamp(ambient + diffuse * shade, 0, 1);
+        const r = clampByte((baseColor[0] ?? 0) * intensity);
+        const g = clampByte((baseColor[1] ?? 0) * intensity);
+        const b = clampByte((baseColor[2] ?? 0) * intensity);
+
+        const minPx = clampInt(Math.floor(Math.min(x0, x1, x2)), 0, width - 1);
+        const maxPx = clampInt(Math.ceil(Math.max(x0, x1, x2)), 0, width - 1);
+        const minPy = clampInt(Math.floor(Math.min(y0, y1, y2)), 0, height - 1);
+        const maxPy = clampInt(Math.ceil(Math.max(y0, y1, y2)), 0, height - 1);
+        for (let py = minPy; py <= maxPy; py += 1) {
+          for (let px = minPx; px <= maxPx; px += 1) {
+            const fx = px + 0.5;
+            const fy = py + 0.5;
+            const w0 = ((y1 - y2) * (fx - x2) + (x2 - x1) * (fy - y2)) / denom;
+            const w1 = ((y2 - y0) * (fx - x2) + (x0 - x2) * (fy - y2)) / denom;
+            const w2 = 1 - w0 - w1;
+            const insidePositive = w0 >= 0 && w1 >= 0 && w2 >= 0;
+            const insideNegative = w0 <= 0 && w1 <= 0 && w2 <= 0;
+            if (!insidePositive && !insideNegative) continue;
+            const z = w0 * z0 + w1 * z1 + w2 * z2;
+            const idx = py * width + px;
+            const prior = zBuffer[idx] ?? -Infinity;
+            if (z < prior - 1e-6) continue;
+            zBuffer[idx] = z;
+            if (depthTest) globalZ[idx] = z;
+            blendPixel(rgba, idx * 4, r, g, b, baseAlpha);
+          }
         }
       }
     }
