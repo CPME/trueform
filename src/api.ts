@@ -178,6 +178,15 @@ export type RuntimeMeasureResponse = {
   metrics: RuntimeMeasureMetric[];
 };
 
+export type RuntimePointLocator = "center" | "mid" | "start" | "end";
+
+export type RuntimePointAnchor = {
+  id: string;
+  sourceId: string;
+  locator: RuntimePointLocator;
+  at: [number, number, number];
+};
+
 export const TF_RUNTIME_OPENAPI = {
   openapi: "3.1.0",
   info: {

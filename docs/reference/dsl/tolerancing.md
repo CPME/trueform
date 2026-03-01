@@ -31,6 +31,10 @@ Notes:
     - `center` for faces/edges/solids/surfaces
     - `mid` for edges
     - `start` / `end` for open edges
+  - Runtime mesh selection metadata can expose the same derived anchors under
+    `selection.meta.pointAnchors` for application-side discovery. That metadata
+    is descriptive only; authored documents should still use
+    `refPoint(selectorNamed("<source-id>"), "<locator>")`.
 
 Examples:
 - [Cosmetic thread](./examples/tolerancing#cosmetic-thread)

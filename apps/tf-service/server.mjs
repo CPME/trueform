@@ -477,11 +477,66 @@ export function createTfServiceServer(options = {}) {
     return output;
   }
 
+  function isPointTriplet(value) {
+    return (
+      Array.isArray(value) &&
+      value.length === 3 &&
+      value.every((entry) => typeof entry === "number" && Number.isFinite(entry))
+    );
+  }
+
+  function pointAnchor(selection, locator, point) {
+    return {
+      id: `${selection.id}.point.${locator}`,
+      sourceId: selection.id,
+      locator,
+      at: [point[0], point[1], point[2]],
+    };
+  }
+
+  function derivePointAnchors(selection) {
+    const meta = selection?.meta && typeof selection.meta === "object" ? selection.meta : {};
+    const kind = selection?.kind;
+    const anchors = {};
+
+    const center =
+      kind === "edge" && isPointTriplet(meta.curveCenter)
+        ? meta.curveCenter
+        : isPointTriplet(meta.center)
+          ? meta.center
+          : null;
+    if (center && (kind === "face" || kind === "edge" || kind === "solid" || kind === "surface")) {
+      anchors.center = pointAnchor(selection, "center", center);
+    }
+
+    if (kind !== "edge") {
+      return Object.keys(anchors).length > 0 ? anchors : undefined;
+    }
+
+    const mid = isPointTriplet(meta.midPoint) ? meta.midPoint : center;
+    if (mid) anchors.mid = pointAnchor(selection, "mid", mid);
+
+    const closed = meta.closedEdge === true;
+    if (!closed && isPointTriplet(meta.startPoint)) {
+      anchors.start = pointAnchor(selection, "start", meta.startPoint);
+    }
+    if (!closed && isPointTriplet(meta.endPoint)) {
+      anchors.end = pointAnchor(selection, "end", meta.endPoint);
+    }
+
+    return Object.keys(anchors).length > 0 ? anchors : undefined;
+  }
+
   function sanitizeSelections(selections) {
     return selections.map((selection) => ({
       id: selection.id,
       kind: selection.kind,
-      meta: serializeSelectionMeta(selection.meta),
+      meta: (() => {
+        const meta = serializeSelectionMeta(selection.meta);
+        const pointAnchors = derivePointAnchors(selection);
+        if (pointAnchors) meta.pointAnchors = pointAnchors;
+        return meta;
+      })(),
     }));
   }
 

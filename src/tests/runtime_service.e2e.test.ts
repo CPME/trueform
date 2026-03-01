@@ -1667,6 +1667,50 @@ const tests = [
           stableFaceId.startsWith("face:body.main~base."),
           `expected stable face id, got ${stableFaceId}`
         );
+        const facePointAnchors =
+          topFace?.meta?.["pointAnchors"] && typeof topFace.meta["pointAnchors"] === "object"
+            ? (topFace.meta["pointAnchors"] as Record<string, unknown>)
+            : null;
+        const faceCenterAnchor =
+          facePointAnchors?.["center"] && typeof facePointAnchors["center"] === "object"
+            ? (facePointAnchors["center"] as Record<string, unknown>)
+            : null;
+        assert.equal(faceCenterAnchor?.["id"], `${stableFaceId}.point.center`);
+        assert.equal(faceCenterAnchor?.["sourceId"], stableFaceId);
+        assert.deepEqual(faceCenterAnchor?.["at"], topFace?.meta?.["center"]);
+
+        const openEdge = findMeshSelection(
+          seedMesh,
+          (selection) =>
+            selection.kind === "edge" &&
+            selection.meta?.["closedEdge"] !== true &&
+            Array.isArray(selection.meta?.["startPoint"]) &&
+            Array.isArray(selection.meta?.["endPoint"])
+        );
+        assert.ok(openEdge, "missing open edge selection with point anchors");
+        const edgePointAnchors =
+          openEdge?.meta?.["pointAnchors"] && typeof openEdge.meta["pointAnchors"] === "object"
+            ? (openEdge.meta["pointAnchors"] as Record<string, unknown>)
+            : null;
+        const edgeStartAnchor =
+          edgePointAnchors?.["start"] && typeof edgePointAnchors["start"] === "object"
+            ? (edgePointAnchors["start"] as Record<string, unknown>)
+            : null;
+        const edgeMidAnchor =
+          edgePointAnchors?.["mid"] && typeof edgePointAnchors["mid"] === "object"
+            ? (edgePointAnchors["mid"] as Record<string, unknown>)
+            : null;
+        const edgeEndAnchor =
+          edgePointAnchors?.["end"] && typeof edgePointAnchors["end"] === "object"
+            ? (edgePointAnchors["end"] as Record<string, unknown>)
+            : null;
+        const openEdgeId = String(openEdge?.id ?? "");
+        assert.ok(openEdgeId.length > 0, "missing open edge id");
+        assert.equal(edgeStartAnchor?.["id"], `${openEdgeId}.point.start`);
+        assert.equal(edgeMidAnchor?.["id"], `${openEdgeId}.point.mid`);
+        assert.equal(edgeEndAnchor?.["id"], `${openEdgeId}.point.end`);
+        assert.deepEqual(edgeStartAnchor?.["at"], openEdge?.meta?.["startPoint"]);
+        assert.deepEqual(edgeEndAnchor?.["at"], openEdge?.meta?.["endPoint"]);
 
         const editedPart = dsl.part("runtime-stable-selection-edited", [
           dsl.sketch2d(

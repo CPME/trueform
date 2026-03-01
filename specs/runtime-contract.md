@@ -453,6 +453,33 @@ Required keys by kind:
 
 Optional keys:
 - `normal`, `normalVec`, `featureTags`, `role`, `surfaceType`, `radius`, `length`
+- edge geometry helpers when available:
+  - `startPoint`, `endPoint`, `midPoint`
+  - `curveCenter` for circular edges
+  - `closedEdge`
+- `pointAnchors`
+  - Structured point locators derived from the parent semantic selection.
+  - This is additive selection metadata, not a new top-level selection kind.
+  - Shape:
+    ```json
+    {
+      "center": {
+        "id": "face:body.main~base.top.point.center",
+        "sourceId": "face:body.main~base.top",
+        "locator": "center",
+        "at": [0, 0, 10]
+      },
+      "mid": {
+        "id": "edge:body.main~base.side.1.point.mid",
+        "sourceId": "edge:body.main~base.side.1",
+        "locator": "mid",
+        "at": [10, 0, 5]
+      }
+    }
+    ```
+  - Applications can use these anchors for UI/discovery, but authored refs
+    should still be expressed as `refPoint(selectorNamed("<sourceId>"), "<locator>")`
+    so intent stays attached to the parent semantic selection.
 
 Selection metadata is exposed to the client only for selectors and debug overlays.
 
