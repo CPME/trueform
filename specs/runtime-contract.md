@@ -304,8 +304,15 @@ Diagnostics expectations for broken references:
 - durable face ids emitted by build results. Legacy numeric ids
   (`face:<number>`) are unsupported and non-persistent.
 - stable selection ids include an owner token plus a producer token
-  (`face:<owner>~<feature>.<hash>`), which allows clients and the compiler to
-  preserve references without relying on traversal order.
+  (`face:<owner>~<feature>.<slot-or-fallback>`), which allows clients and the
+  compiler to preserve references without relying on traversal order.
+- semantic ids can include feature-derived slots, not only hashes. Examples:
+  - `face:body.main~base.top`
+  - `edge:body.main~edge-fillet.fillet.seed.1.bound.top`
+  - `edge:body.main~edge-chamfer.chamfer.seed.1.join.chamfer.seed.2`
+- when an output cannot be named semantically, runtime falls back to a
+  deterministic hashed suffix. Clients should still treat the full id as the
+  canonical stable token.
 
 ## Modifier Named Outputs
 `feature.hole`, `feature.fillet`, and `feature.chamfer` accept optional `result` names.
@@ -313,6 +320,39 @@ Diagnostics expectations for broken references:
 - When `result` is provided, the modified body is published under that name.
 - When omitted, runtime preserves the owner output key behavior for backward compatibility.
 - Downstream `selector.named(...)` references to modifier outputs should target explicit `result` names for deterministic graph dependency inference.
+
+## Semantic Descendant Edge IDs
+Modifier features can emit semantic descendant edge ids for newly created final
+topology. External services should use these ids exactly as returned by build
+results, typically by passing them back through `selector.named(...)`.
+
+- `*.bound.<face-slot>`
+  - Means the descendant edge lies between the modifier-created face and a
+    preserved neighboring face.
+  - Example:
+    `edge:body.main~edge-fillet.fillet.seed.1.bound.top`
+- `*.join.<other-modifier-slot>`
+  - Means the descendant edge lies between two modifier-created faces.
+  - Example:
+    `edge:body.main~edge-chamfer.chamfer.seed.1.join.chamfer.seed.2`
+- `*.edge.<n>`
+  - Deterministic fallback for a descendant edge that is real and stable but
+    not yet classified more precisely (for example seam-like or ambiguous cases).
+
+Related metadata on emitted edge selections:
+- `selectionSlot`
+  - The semantic slot portion used in the canonical id when available.
+- `selectionLineage`
+  - Provenance such as `{ "kind": "modified", "from": "<source-edge-id>" }`.
+- `adjacentFaceSlots`
+  - The neighboring face slots used to classify boundary/join edges.
+
+Client guidance:
+- Prefer the full emitted id as the canonical reference token.
+- You may inspect `selectionSlot`, `selectionLineage`, and `adjacentFaceSlots`
+  for UI or auditing, but do not reconstruct ids yourself.
+- Treat `*.bound.*` and `*.join.*` as stronger semantic anchors than
+  `*.edge.<n>`, which is a deliberate fallback.
 
 ## Stable Payload Fixtures
 Mirror fixture:

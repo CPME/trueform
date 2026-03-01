@@ -5861,8 +5861,8 @@ export class OcctBackend implements Backend {
       if (matched.length === 0) continue;
 
       matched.sort((a, b) => {
-        const aSlot = this.edgeModifierDerivedBoundarySlot(a, slotRoot) ?? "";
-        const bSlot = this.edgeModifierDerivedBoundarySlot(b, slotRoot) ?? "";
+        const aSlot = this.edgeModifierDerivedEdgeSlot(a, label, slotRoot) ?? "";
+        const bSlot = this.edgeModifierDerivedEdgeSlot(b, label, slotRoot) ?? "";
         const bySlot = aSlot.localeCompare(bSlot);
         if (bySlot !== 0) return bySlot;
         const aTie = hashValue(this.selectionTieBreakerFingerprint("edge", a.meta));
@@ -5874,7 +5874,7 @@ export class OcctBackend implements Backend {
 
       const slotCounts = new Map<string, number>();
       for (const entry of matched) {
-        const slot = this.edgeModifierDerivedBoundarySlot(entry, slotRoot);
+        const slot = this.edgeModifierDerivedEdgeSlot(entry, label, slotRoot);
         if (!slot) continue;
         slotCounts.set(slot, (slotCounts.get(slot) ?? 0) + 1);
       }
@@ -5883,7 +5883,8 @@ export class OcctBackend implements Backend {
         const entry = matched[edgeIndex];
         if (!entry) continue;
         let slot =
-          this.edgeModifierDerivedBoundarySlot(entry, slotRoot) ?? `${slotRoot}.edge.${edgeIndex + 1}`;
+          this.edgeModifierDerivedEdgeSlot(entry, label, slotRoot) ??
+          `${slotRoot}.edge.${edgeIndex + 1}`;
         const duplicateCount = slotCounts.get(slot) ?? 0;
         if (duplicateCount > 1) {
           const index = (slotIndexes.get(slot) ?? 0) + 1;
@@ -5899,8 +5900,9 @@ export class OcctBackend implements Backend {
     }
   }
 
-  private edgeModifierDerivedBoundarySlot(
+  private edgeModifierDerivedEdgeSlot(
     entry: CollectedSubshape,
+    label: "fillet" | "chamfer",
     slotRoot: string
   ): string | null {
     const adjacentSlots = Array.isArray(entry.meta["adjacentFaceSlots"])
@@ -5913,11 +5915,16 @@ export class OcctBackend implements Backend {
       (slot) => slot === slotRoot || slot.startsWith(`${slotRoot}.part.`)
     );
     if (descendantSlots.length === 0) return null;
-    const preservedSlots = adjacentSlots.filter(
+    const neighborSlots = adjacentSlots.filter(
       (slot) => !(slot === slotRoot || slot.startsWith(`${slotRoot}.part.`))
     );
-    if (preservedSlots.length !== 1) return null;
-    return `${slotRoot}.bound.${preservedSlots[0]}`;
+    if (neighborSlots.length !== 1) return null;
+    const neighborSlot = neighborSlots[0];
+    if (!neighborSlot) return null;
+    if (neighborSlot.startsWith(`${label}.`)) {
+      return `${slotRoot}.join.${neighborSlot}`;
+    }
+    return `${slotRoot}.bound.${neighborSlot}`;
   }
 
   private annotateSplitFaceSelections(
@@ -6797,16 +6804,21 @@ export class OcctBackend implements Backend {
     if (points.length < 2) return null;
     const projected = this.projectBoundsOnBasis(points, origin, xDir, yDir);
     const near = (a: number, b: number) => Math.abs(a - b) <= tolerance;
-    if (near(projected.uMin, extents.uMin) && near(projected.uMax, extents.uMin)) {
+    const uSpan = projected.uMax - projected.uMin;
+    const vSpan = projected.vMax - projected.vMin;
+    const uMid = (projected.uMin + projected.uMax) / 2;
+    const vMid = (projected.vMin + projected.vMax) / 2;
+    const axisTolerance = tolerance * 4;
+    if (uSpan <= axisTolerance && near(uMid, extents.uMin)) {
       return "uMin";
     }
-    if (near(projected.uMin, extents.uMax) && near(projected.uMax, extents.uMax)) {
+    if (uSpan <= axisTolerance && near(uMid, extents.uMax)) {
       return "uMax";
     }
-    if (near(projected.vMin, extents.vMin) && near(projected.vMax, extents.vMin)) {
+    if (vSpan <= axisTolerance && near(vMid, extents.vMin)) {
       return "vMin";
     }
-    if (near(projected.vMin, extents.vMax) && near(projected.vMax, extents.vMax)) {
+    if (vSpan <= axisTolerance && near(vMid, extents.vMax)) {
       return "vMax";
     }
     return null;

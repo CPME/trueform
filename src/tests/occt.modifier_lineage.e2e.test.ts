@@ -254,6 +254,52 @@ const tests = [
     },
   },
   {
+    name: "occt modifier lineage: multi-edge chamfer uses join slots for derived-to-derived edges",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const part = dsl.part("chamfer-join-lineage", [
+        dsl.extrude("block", dsl.profileRect(20, 12), 10, "body:main"),
+        dsl.chamfer(
+          "edge-chamfer",
+          dsl.selectorEdge([dsl.predCreatedBy("block")], [dsl.rankMaxZ()]),
+          2,
+          ["block"]
+        ),
+      ]);
+
+      const result = buildPart(part, backend);
+      const output = result.final.outputs.get("body:main");
+      assert.ok(output, "missing chamfer result");
+      assertValidShape(occt, output.meta["shape"] as any, "multi-edge chamfer lineage result");
+
+      const slots = result.final.selections
+        .filter(
+          (selection) =>
+            selection.kind === "edge" &&
+            selection.meta["createdBy"] === "edge-chamfer" &&
+            typeof selection.meta["selectionSlot"] === "string"
+        )
+        .map((selection) => String(selection.meta["selectionSlot"]));
+
+      assert.ok(
+        slots.some((slot) => slot.includes(".join.chamfer.seed.")),
+        `expected at least one derived-to-derived join slot, got ${JSON.stringify(slots)}`
+      );
+      assert.ok(
+        !slots.some((slot) => slot.includes(".bound.chamfer.seed.")),
+        `expected no derived-to-derived bound slots, got ${JSON.stringify(slots)}`
+      );
+      assert.ok(
+        slots.some((slot) => slot === "chamfer.seed.1.bound.top"),
+        `expected top boundary slot, got ${JSON.stringify(slots)}`
+      );
+      assert.ok(
+        slots.some((slot) => slot === "chamfer.seed.1.bound.side.1"),
+        `expected preserved-face side boundary slot, got ${JSON.stringify(slots)}`
+      );
+    },
+  },
+  {
     name: "occt modifier lineage: draft preserves selected side slot with modified lineage",
     fn: async () => {
       const { backend, occt } = await getBackendContext();
