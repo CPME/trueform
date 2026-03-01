@@ -76,6 +76,65 @@ of the documented platform story.
    - deterministic selectors
    - mesh/view separation
 
+## Semantic Topology Rule
+
+Semantic topology is a required architectural constraint for the bridge work, not
+an optional implementation detail.
+
+Definition for this plan:
+
+- features must continue to reference geometry through semantic selectors, named
+  selections, and datums rather than transient kernel topology
+- backend execution must preserve and propagate stable selection semantics across
+  create/modify/split/merge operations
+- runtime and exported metadata must expose stable semantic references, never raw
+  topology ids, as the integration contract
+
+Required behavior for all new features, especially geometric features:
+
+1. Accept semantic inputs:
+   - selectors
+   - named selections
+   - datums
+2. Emit semantic outputs that can be re-resolved on rebuild:
+   - stable owner keys
+   - `createdBy`
+   - role/slot metadata where applicable
+   - lineage for created/modified/split/merged topology
+   - aliases when semantic continuity requires them
+3. Preserve semantic topology through feature composition:
+   - downstream features must resolve against the semantic layer, not ad hoc kernel
+     traversal
+   - feature work that cannot preserve the semantic layer must fail explicitly
+4. Carry semantic topology through docs and tests:
+   - docs must describe the intended stable-reference behavior
+   - tests must cover semantic continuity, not only geometry existence
+
+This rule applies across every workstream below.
+
+## Concise Stage Summary
+
+Stage 1: Align The Contract
+- Refresh the source-of-truth docs so they match the shipped system.
+- Make semantic topology explicit in architecture, runtime, and feature docs.
+- Reduce all "direction vs shipped" ambiguity before expanding scope.
+
+Stage 2: Finish The V1 Boundary
+- Convert placeholder v1 areas into explicit implemented or deferred behavior.
+- Make assertions, dimensions, and stable semantic references part of the runtime
+  contract where applicable.
+- Decide the exact scope of assembly and `.tfa` behavior for v1.
+
+Stage 3: Make The Package Layout Real
+- Complete the package split without breaking stable imports.
+- Move real module ownership into package-local sources.
+- Keep semantic topology contracts stable while code moves.
+
+Stage 4: Consolidate And Promote
+- Elevate the runtime platform into the main architecture story.
+- Promote feature maturity only when semantic topology continuity is verified.
+- Keep docs, capabilities, and staged feature policy synchronized.
+
 ## Workstream A: Documentation And Contract Alignment
 
 Goal: make the documentation hierarchy accurately reflect the implemented system.
@@ -142,6 +201,10 @@ Goal: close the most important "represented but not fully integrated" parts of v
    - a test
    - a capabilities/API declaration if runtime-visible
    - a stable doc reference
+5. Define the minimum semantic topology contract for v1:
+   - what selection metadata is stable
+   - what lineage forms must be preserved
+   - where explicit failure is required when continuity cannot be guaranteed
 
 ### Exit Criteria
 
@@ -185,6 +248,8 @@ layout.
 - No stable root import breakage during the transition phases.
 - No kernel-shaped SPI types leaked back into the stable root package.
 - Package extraction must improve, not blur, boundary enforcement.
+- Package moves must not regress semantic topology metadata shape or selector
+  behavior.
 
 ### Exit Criteria
 
@@ -220,7 +285,9 @@ Goal: make the API layer part of the core architecture story, not an adjacent ap
 4. Keep runtime payloads backend-agnostic:
    - no OCCT handles
    - no raw topology ids
-   - mesh and diagnostics only
+   - semantic references, mesh, and diagnostics only
+5. Document which runtime payload fields constitute the stable semantic topology
+   contract for clients.
 
 ### Exit Criteria
 
@@ -250,9 +317,13 @@ Goal: align advertised capability with feature reliability and staging policy.
 2. Define graduation criteria for each staging feature:
    - targeted e2e coverage
    - failure-mode coverage where applicable
-   - selector stability/parity evidence
+   - semantic topology continuity evidence
    - required visual review artifacts
-3. Keep unsupported or partial behaviors explicit with errors, not soft ambiguity.
+3. Require every new geometric feature to:
+   - consume semantic selectors
+   - emit stable semantic topology metadata
+   - preserve or explicitly terminate lineage on topology-changing operations
+4. Keep unsupported or partial behaviors explicit with errors, not soft ambiguity.
 
 ### Exit Criteria
 
@@ -261,23 +332,7 @@ Goal: align advertised capability with feature reliability and staging policy.
   - staging
   - intentionally omitted from the public contract
 - Feature maturity can be understood from one authoritative source.
-
-## Sequencing
-
-1. Documentation and contract alignment
-- Reduce docs drift before expanding the contract further.
-
-2. Complete the v1 contract boundary
-- Convert placeholder areas into explicit implemented or deferred status.
-
-3. Package extraction
-- Move code only after the contract and docs say what belongs where.
-
-4. Runtime platform promotion
-- Reflect the service layer as a first-class architectural layer.
-
-5. Feature promotion and broader roadmap work
-- Expand stable capability only after contracts, packaging, and docs are coherent.
+- No feature is promoted without documented semantic topology behavior and tests.
 
 ## Success Metrics
 
@@ -295,33 +350,55 @@ Goal: align advertised capability with feature reliability and staging policy.
   - experimental API surface
   - draft future direction
   in under 15 minutes from docs alone.
+- New geometric features preserve stable semantic references across rebuilds and
+  topology-changing operations, or fail explicitly where continuity is not possible.
 
-## Recommended Near-Term Execution
+## Staged Execution Plan
 
-### Phase 1: Stop The Drift
+### Stage 1: Align The Contract
 
 - Refresh `specs/summary.md`.
 - Refresh `specs/spec.md` framing.
 - Fix incorrect example import paths.
 - Tighten `docs/reference/file-format.md` draft language.
+- Document the semantic topology contract in architecture-facing docs.
 
-### Phase 2: Finish The Contract
+Boundary:
+- No package moves or new stable feature promotions until architecture and contract
+  docs match the shipped system.
+
+### Stage 2: Finish The V1 Boundary
 
 - Make assertions/dimensions first-class runtime outputs.
 - Decide the concrete v1 assembly and `.tfa` boundary.
 - Remove or reclassify placeholder-only contract claims.
+- Define the minimum stable semantic topology metadata contract for v1.
 
-### Phase 3: Make The Package Layout Real
+Boundary:
+- The result of this stage is a clear shipped-vs-deferred contract, including stable
+  reference behavior.
+
+### Stage 3: Make The Package Layout Real
 
 - Replace package forwarders with package-owned sources.
 - Keep root compatibility exports intact.
 - Add cross-package contract tests for each extracted module boundary.
+- Treat semantic topology metadata and selector behavior as migration invariants.
 
-### Phase 4: Consolidate The Platform Story
+Boundary:
+- Packaging work must preserve API behavior and semantic topology continuity.
+
+### Stage 4: Consolidate And Promote
 
 - Update architecture docs to include runtime APIs and async job execution.
 - Keep viewer, service, and native server documentation aligned with the same
   platform model.
+- Promote features only after semantic topology continuity is covered by docs,
+  tests, and capability/staging policy.
+
+Boundary:
+- Feature promotion follows contract completion and packaging stabilization, not the
+  other way around.
 
 ## Non-Goals For This Plan
 
