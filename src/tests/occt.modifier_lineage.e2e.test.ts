@@ -37,6 +37,24 @@ function topEdgeSelection(result: ReturnType<typeof buildPart>, featureId: strin
   );
 }
 
+function descendantEdgeSelections(
+  result: ReturnType<typeof buildPart>,
+  featureId: string,
+  slotPrefix: string
+) {
+  return result.final.selections
+    .filter(
+      (selection) =>
+        selection.kind === "edge" &&
+        selection.meta["createdBy"] === featureId &&
+        typeof selection.meta["selectionSlot"] === "string" &&
+        (selection.meta["selectionSlot"] as string).startsWith(slotPrefix)
+    )
+    .sort((a, b) =>
+      String(a.meta["selectionSlot"]).localeCompare(String(b.meta["selectionSlot"]))
+    );
+}
+
 function findStepSelection(
   result: ReturnType<typeof buildPart>,
   featureId: string,
@@ -155,6 +173,29 @@ const tests = [
         kind: "modified",
         from: source.id,
       });
+
+      const descendantEdges = descendantEdgeSelections(
+        result,
+        "edge-fillet",
+        "fillet.seed.1.edge."
+      );
+      assert.ok(
+        descendantEdges.length >= 2,
+        `expected at least 2 descendant fillet edges, got ${descendantEdges.length}`
+      );
+      assert.equal(
+        descendantEdges[0]?.id,
+        "edge:body.main~edge-fillet.fillet.seed.1.edge.1"
+      );
+      for (let i = 0; i < descendantEdges.length; i += 1) {
+        const edge = descendantEdges[i];
+        assert.ok(edge, `missing descendant fillet edge ${i + 1}`);
+        assert.equal(edge.meta["selectionSlot"], `fillet.seed.1.edge.${i + 1}`);
+        assert.deepEqual(edge.meta["selectionLineage"], {
+          kind: "modified",
+          from: source.id,
+        });
+      }
     },
   },
   {
@@ -191,6 +232,29 @@ const tests = [
         kind: "modified",
         from: source.id,
       });
+
+      const descendantEdges = descendantEdgeSelections(
+        result,
+        "edge-chamfer",
+        "chamfer.seed.1.edge."
+      );
+      assert.ok(
+        descendantEdges.length >= 2,
+        `expected at least 2 descendant chamfer edges, got ${descendantEdges.length}`
+      );
+      assert.equal(
+        descendantEdges[0]?.id,
+        "edge:body.main~edge-chamfer.chamfer.seed.1.edge.1"
+      );
+      for (let i = 0; i < descendantEdges.length; i += 1) {
+        const edge = descendantEdges[i];
+        assert.ok(edge, `missing descendant chamfer edge ${i + 1}`);
+        assert.equal(edge.meta["selectionSlot"], `chamfer.seed.1.edge.${i + 1}`);
+        assert.deepEqual(edge.meta["selectionLineage"], {
+          kind: "modified",
+          from: source.id,
+        });
+      }
     },
   },
   {

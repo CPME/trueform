@@ -5165,6 +5165,9 @@ export class OcctBackend implements Backend {
         mutationPlan.faces?.(entries);
         this.annotateEdgeModifierFaceSelections(entries, label, edgeTargets, builder);
       },
+      edges: (entries) => {
+        this.annotateEdgeModifierEdgeSelections(entries, label, edgeTargets, builder);
+      },
     };
   }
 
@@ -5455,6 +5458,63 @@ export class OcctBackend implements Backend {
           slot: generatedIndex === 1 ? slotRoot : `${slotRoot}.part.${generatedIndex}`,
         };
         this.applySelectionLedgerHint(entry, hint);
+      }
+    }
+  }
+
+  private annotateEdgeModifierEdgeSelections(
+    entries: CollectedSubshape[],
+    label: "fillet" | "chamfer",
+    edgeTargets: KernelSelection[],
+    builder: any
+  ): void {
+    const unmatched = entries.filter((entry) => !entry.ledger?.slot);
+    for (let i = 0; i < edgeTargets.length; i += 1) {
+      const target = edgeTargets[i];
+      if (!target) continue;
+      const sourceShape = target.meta["shape"];
+      if (!sourceShape) continue;
+      const slotRoot = this.selectionSlotForLineage(target)
+        ? `${label}.${this.selectionSlotForLineage(target)}`
+        : `${label}.seed.${i + 1}`;
+      const descendantEdges = this.uniqueShapeList(
+        this.collectGeneratedShapes(builder, sourceShape).flatMap((shape) => {
+          const faces = this.collectFacesFromShape(shape);
+          if (faces.length > 0) {
+            return faces.flatMap((face) => this.collectEdgesFromShape(face));
+          }
+          const edges = this.collectEdgesFromShape(shape);
+          return edges.length > 0 ? edges : [shape];
+        })
+      );
+      if (descendantEdges.length === 0) continue;
+
+      const matched: CollectedSubshape[] = [];
+      for (const candidate of descendantEdges) {
+        const index = unmatched.findIndex((entry) => this.shapesSame(entry.shape, candidate));
+        if (index < 0) continue;
+        const [entry] = unmatched.splice(index, 1);
+        if (!entry) continue;
+        matched.push(entry);
+      }
+      if (matched.length === 0) continue;
+
+      matched.sort((a, b) => {
+        const aTie = hashValue(this.selectionTieBreakerFingerprint("edge", a.meta));
+        const bTie = hashValue(this.selectionTieBreakerFingerprint("edge", b.meta));
+        const byTie = aTie.localeCompare(bTie);
+        if (byTie !== 0) return byTie;
+        return this.shapeHash(a.shape) - this.shapeHash(b.shape);
+      });
+
+      for (let edgeIndex = 0; edgeIndex < matched.length; edgeIndex += 1) {
+        const entry = matched[edgeIndex];
+        if (!entry) continue;
+        this.applySelectionLedgerHint(entry, {
+          role: "edge",
+          lineage: { kind: "modified", from: target.id },
+          slot: `${slotRoot}.edge.${edgeIndex + 1}`,
+        });
       }
     }
   }
@@ -7041,6 +7101,21 @@ export class OcctBackend implements Backend {
       faces.push(this.toFace(explorer.Current()));
     }
     return faces;
+  }
+
+  private collectEdgesFromShape(shape: any): any[] {
+    const occt = this.occt as any;
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_EDGE,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    const edges: any[] = [];
+    for (; explorer.More(); explorer.Next()) {
+      edges.push(this.toEdge(explorer.Current()));
+    }
+    return edges;
   }
 
   private uniqueShapeList(shapes: any[]): any[] {
