@@ -16,9 +16,38 @@ and public API stability tiers.
 2. Compile contract:
    - Core deterministic compile is part-centric in v1.
    - Selector ambiguity is a compile/build error.
+   - Stable references resolve through datums, selectors, and named selections,
+     not raw kernel topology ids.
 3. Backend contract:
    - Backends execute normalized feature intent.
+   - Backends must preserve semantic topology metadata where continuity is
+     deterministically known, and fail explicitly where it is not.
    - Backend internals stay out of stable authoring contracts.
+
+## Stable Reference Contract (v1)
+
+1. Stable reference model:
+   - Stable references are expressed through:
+     - datums
+     - selectors
+     - named selections
+   - Raw kernel face/edge ids are not part of the stable contract.
+2. Semantic topology continuity:
+   - Topology-changing features should preserve semantic continuity through
+     selection metadata such as:
+     - `createdBy`
+     - owner keys
+     - role/slot metadata where applicable
+     - lineage (`created`, `modified`, `split`, `merged`)
+     - aliases where semantic continuity requires them
+3. Failure behavior:
+   - If a feature cannot preserve stable semantic references for a claimed
+     workflow, it must fail explicitly rather than silently degrade to unstable
+     topology traversal.
+4. Scope:
+   - This is a stable contract for part workflows.
+   - Runtime payloads may expose semantic references and diagnostics derived from
+     this layer, but must not expose raw kernel topology ids.
 
 ## Assembly Contract (v1 direction)
 
@@ -82,6 +111,7 @@ Stable:
 - IR types and schema identifiers.
 - DSL authoring helpers for core features.
 - Core compile/build contracts for parts.
+- Stable semantic reference behavior for part workflows.
 - Root package entrypoint (`trueform`) is limited to stable core APIs.
 
 Experimental:
