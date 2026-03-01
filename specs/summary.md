@@ -24,7 +24,7 @@ Non-promises:
 - Primary output: `body:main` (single-body v1)
 - Runtime target: Node + OpenCascade.js
 - Export tooling exists in dedicated modules (`src/export/*`) and is distinct from core compile
-- Unsupported features (e.g., rib, full feature/body patterns) must throw explicit errors in the OCJS backend. `Draft` is now available as a staging feature.
+- Features that remain in development are tracked in `src/feature_staging.ts`; unsupported workflows (for example, full feature/body patterns) must still throw explicit errors in the OCJS backend.
 
 ## What Problem It Solves
 
