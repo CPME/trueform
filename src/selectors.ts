@@ -181,9 +181,12 @@ function scoreStableSelectionRebind(
 
   if (parsedSlot.relation === "bound" || parsedSlot.relation === "join") {
     if (candidateParsed.relation === "other") return lineageScore;
-    if (candidateParsed.root !== parsedSlot.root) return 0;
     if (candidateParsed.relation === parsedSlot.relation && "target" in candidateParsed) {
-      return candidateParsed.target === parsedSlot.target ? 95 : 0;
+      const rootScore = scoreSlotMigration(parsedSlot.root, candidateParsed.root);
+      if (rootScore <= 0) return 0;
+      const targetScore = scoreSlotMigration(parsedSlot.target, candidateParsed.target);
+      if (targetScore <= 0) return 0;
+      return 88 + Math.min(rootScore, targetScore);
     }
     if (
       candidateParsed.relation !== "bound" &&
@@ -199,7 +202,7 @@ function scoreStableSelectionRebind(
       targetLooksDerived &&
       candidateParsed.relation === "join" &&
       "target" in candidateParsed &&
-      candidateParsed.target === target &&
+      scoreSlotMigration(target, candidateParsed.target) > 0 &&
       candidateHasAdjacentFaceSlot(selection, target)
     ) {
       return 90;
@@ -208,7 +211,7 @@ function scoreStableSelectionRebind(
       parsedSlot.relation === "join" &&
       candidateParsed.relation === "bound" &&
       "target" in candidateParsed &&
-      candidateParsed.target === target &&
+      scoreSlotMigration(target, candidateParsed.target) > 0 &&
       candidateHasAdjacentFaceSlot(selection, target)
     ) {
       return 70;
@@ -217,11 +220,18 @@ function scoreStableSelectionRebind(
   }
 
   if (parsedSlot.relation === "seam") {
-    return candidateParsed.relation === "seam" && candidateParsed.root === parsedSlot.root ? 85 : 0;
+    return candidateParsed.relation === "seam" &&
+      scoreSlotMigration(parsedSlot.root, candidateParsed.root) > 0
+      ? 85
+      : 0;
   }
 
   if (parsedSlot.relation === "end") {
-    return candidateSlot === `${parsedSlot.root}.end.${parsedSlot.index}` ? 85 : 0;
+    return candidateParsed.relation === "end" &&
+      candidateParsed.index === parsedSlot.index &&
+      scoreSlotMigration(parsedSlot.root, candidateParsed.root) > 0
+      ? 85
+      : 0;
   }
 
   return lineageScore;
@@ -275,6 +285,35 @@ function scoreLineageSelectionRebind(
   return 0;
 }
 
+function scoreSlotMigration(parsedSlot: string, candidateSlot: string): number {
+  if (parsedSlot === candidateSlot) return 10;
+
+  const parsedSplit = parseSplitBranchSlot(parsedSlot);
+  const candidateSplit = parseSplitBranchSlot(candidateSlot);
+  if (parsedSplit && candidateSplit) {
+    return parsedSplit.sourceSlot === candidateSplit.sourceSlot &&
+      parsedSplit.branch === candidateSplit.branch
+      ? 8
+      : 0;
+  }
+  if (!parsedSplit && candidateSplit && candidateSplit.sourceSlot === parsedSlot) {
+    return 6;
+  }
+  if (parsedSplit && !candidateSplit && candidateSlot === parsedSplit.sourceSlot) {
+    return 5;
+  }
+
+  const parsedDuplicate = parseLegacyDuplicateSlot(parsedSlot);
+  if (!parsedDuplicate) return 0;
+  if (parsedDuplicate.index === "1" && candidateSlot === parsedDuplicate.baseSlot) {
+    return 4;
+  }
+  if (parsedDuplicate.index === "2" && candidateSlot === `right.${parsedDuplicate.baseSlot}`) {
+    return 3;
+  }
+  return 0;
+}
+
 function selectionLineageSourceSlot(selection: Selection): string | null {
   const lineage = selection.meta["selectionLineage"];
   if (!lineage || typeof lineage !== "object") return null;
@@ -321,7 +360,9 @@ function parseLegacyDuplicateSlot(
 function candidateHasAdjacentFaceSlot(selection: Selection, target: string): boolean {
   const adjacent = selection.meta["adjacentFaceSlots"];
   if (!Array.isArray(adjacent)) return false;
-  return adjacent.some((entry) => typeof entry === "string" && entry === target);
+  return adjacent.some(
+    (entry) => typeof entry === "string" && scoreSlotMigration(target, entry) > 0
+  );
 }
 
 function parseStableSelectionRef(value: string): ParsedStableSelectionRef | null {

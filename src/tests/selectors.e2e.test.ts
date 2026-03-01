@@ -229,6 +229,55 @@ const tests = [
     },
   },
   {
+    name: "selectors: semantic edge ids rebind from plain face slot to split face slot",
+    fn: async () => {
+      const selector = dsl.selectorNamed("edge:body.main~intersect-1.side.1.bound.top");
+      const ctx = {
+        selections: [
+          {
+            id: "edge:body.main~intersect-1.split.side.1.branch.1.bound.top",
+            kind: "edge" as const,
+            meta: {
+              ownerKey: "body:main",
+              createdBy: "intersect-1",
+              selectionSlot: "split.side.1.branch.1.bound.top",
+              adjacentFaceSlots: ["split.side.1.branch.1", "top"],
+            },
+          },
+        ],
+        named: new Map(),
+      };
+      const resolved = resolveSelector(selector, ctx);
+      assert.equal(
+        resolved.id,
+        "edge:body.main~intersect-1.split.side.1.branch.1.bound.top"
+      );
+    },
+  },
+  {
+    name: "selectors: legacy duplicate union edge slot rebinds to disambiguated right edge slot",
+    fn: async () => {
+      const selector = dsl.selectorNamed("edge:body.main~union-1.side.1.2.bound.top");
+      const ctx = {
+        selections: [
+          {
+            id: "edge:body.main~union-1.right.side.1.bound.top",
+            kind: "edge" as const,
+            meta: {
+              ownerKey: "body:main",
+              createdBy: "union-1",
+              selectionSlot: "right.side.1.bound.top",
+              adjacentFaceSlots: ["right.side.1", "top"],
+            },
+          },
+        ],
+        named: new Map(),
+      };
+      const resolved = resolveSelector(selector, ctx);
+      assert.equal(resolved.id, "edge:body.main~union-1.right.side.1.bound.top");
+    },
+  },
+  {
     name: "selectors: weak edge.N fallbacks do not auto-rebind to semantic edges",
     fn: async () => {
       const selector = dsl.selectorNamed("edge:body.main~edge-fillet.fillet.seed.1.edge.1");
