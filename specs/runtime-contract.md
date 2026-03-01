@@ -337,6 +337,7 @@ Diagnostics expectations for broken references:
 - semantic ids can include feature-derived slots, not only hashes. Examples:
   - `face:body.main~base.top`
   - `face:body.main~subtract-1.cut.bottom`
+  - `face:body.main~intersect-1.side.1`
   - `edge:body.main~edge-fillet.fillet.seed.1.bound.top`
   - `edge:body.main~edge-chamfer.chamfer.seed.1.join.chamfer.seed.2`
   - `edge:body.main~subtract-1.cut.bottom.join.cut.side.1`
@@ -410,6 +411,17 @@ tool-derived cavity faces and their descendant edges.
 - `cut.*` ids are emitted only when runtime can justify the mapping from the
   subtract tool's semantic face slots. Remaining boolean topology may still use
   deterministic hashed fallback ids.
+
+## Boolean Intersect Semantic Face IDs
+`feature.boolean` with `op: "intersect"` can preserve semantic face slots for
+overlap faces when runtime can justify the mapping back to one operand face.
+
+- Face examples:
+  - `face:body.main~intersect-1.top`
+  - `face:body.main~intersect-1.bottom`
+  - `face:body.main~intersect-1.side.1`
+- In simple overlap cases, intersect results can keep the canonical face slot
+  names instead of falling back to hashed ids.
 
 ## Stable Payload Fixtures
 Mirror fixture:

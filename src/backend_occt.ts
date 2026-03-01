@@ -5666,11 +5666,15 @@ export class OcctBackend implements Backend {
   ): SelectionLedgerPlan {
     const leftPlan = this.makeFaceMutationSelectionLedgerPlan(upstream, leftShape, []);
     const leftFaces =
-      op === "subtract" ? this.ownerFaceSelectionsForShape(upstream, leftShape) : [];
+      op === "subtract" || op === "intersect"
+        ? this.ownerFaceSelectionsForShape(upstream, leftShape)
+        : [];
     const rightPlan =
       op === "subtract" ? null : this.makeFaceMutationSelectionLedgerPlan(upstream, rightShape, []);
     const rightFaces =
-      op === "subtract" ? this.ownerFaceSelectionsForShape(upstream, rightShape) : [];
+      op === "subtract" || op === "intersect"
+        ? this.ownerFaceSelectionsForShape(upstream, rightShape)
+        : [];
     return {
       faces: (entries) => {
         leftPlan.faces?.(entries);
@@ -5678,6 +5682,9 @@ export class OcctBackend implements Backend {
         if (op === "subtract") {
           this.annotateBooleanCutFaceSelections(entries, rightFaces, builder);
           this.annotateBooleanPreservedFaceSelections(entries, leftFaces, builder);
+        } else if (op === "intersect") {
+          this.annotateBooleanPreservedFaceSelections(entries, leftFaces, builder);
+          this.annotateBooleanPreservedFaceSelections(entries, rightFaces, builder);
         }
       },
       edges:

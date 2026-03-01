@@ -22,6 +22,25 @@ function buildSubtractPocketPart() {
   ]);
 }
 
+function buildIntersectOverlapPart() {
+  return dsl.part("boolean-lineage-intersect", [
+    dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:left"),
+    dsl.extrude("tool-seed", dsl.profileRect(8, 8), 12, "body:tool-seed"),
+    dsl.moveBody("tool-move", dsl.selectorNamed("body:tool-seed"), "body:right", [
+      "tool-seed",
+    ], {
+      translation: [0, 0, 4],
+    }),
+    dsl.booleanOp(
+      "intersect-1",
+      "intersect",
+      dsl.selectorNamed("body:left"),
+      dsl.selectorNamed("body:right"),
+      "body:main"
+    ),
+  ]);
+}
+
 const tests = [
   {
     name: "occt boolean lineage: union preserves unchanged left bottom face slot",
@@ -181,6 +200,54 @@ const tests = [
         boundary.id,
         /^edge:body\.main~subtract-1\.cut\..+\.bound\.top(?:\.part\.\d+)?$/
       );
+    },
+  },
+  {
+    name: "occt boolean lineage: intersect preserves semantic overlap face slots",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const result = buildPart(buildIntersectOverlapPart(), backend);
+      const output = result.final.outputs.get("body:main");
+      assert.ok(output, "missing intersect result");
+      assertValidShape(occt, output.meta["shape"] as any, "intersect lineage result");
+
+      const top = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "intersect-1" &&
+          selection.meta["selectionSlot"] === "top"
+      );
+      assert.ok(top, "missing preserved intersect top face");
+      assert.equal(top.id, "face:body.main~intersect-1.top");
+      assert.deepEqual(top.meta["selectionLineage"], {
+        kind: "modified",
+        from: "face:body.left~base.top",
+      });
+
+      const bottom = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "intersect-1" &&
+          selection.meta["selectionSlot"] === "bottom"
+      );
+      assert.ok(bottom, "missing preserved intersect bottom face");
+      assert.equal(bottom.id, "face:body.main~intersect-1.bottom");
+      assert.deepEqual(bottom.meta["selectionLineage"], {
+        kind: "modified",
+        from: "face:body.right~tool-move.bottom",
+      });
+
+      const sideSlots = result.final.selections
+        .filter(
+          (selection) =>
+            selection.kind === "face" &&
+            selection.meta["createdBy"] === "intersect-1" &&
+            typeof selection.meta["selectionSlot"] === "string" &&
+            /^side\.\d+$/.test(selection.meta["selectionSlot"] as string)
+        )
+        .map((selection) => selection.meta["selectionSlot"] as string)
+        .sort();
+      assert.deepEqual(sideSlots, ["side.1", "side.2", "side.3", "side.4"]);
     },
   },
 ];
