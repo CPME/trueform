@@ -51,11 +51,13 @@ Examples:
 selectorNamed("face:body.main~base.top");
 selectorNamed("edge:body.main~edge-fillet.fillet.seed.1.bound.top");
 selectorNamed("edge:body.main~edge-chamfer.chamfer.seed.1.join.chamfer.seed.2");
+selectorNamed("edge:body.main~edge-fillet.fillet.seed.1.seam");
 ```
 
 Guidance:
 - Use the full emitted id exactly as returned by the runtime.
-- Prefer semantic ids like `*.bound.*` and `*.join.*` when present.
-- If runtime emits a fallback id (for example `*.edge.1` or a hashed suffix),
+- Prefer semantic ids like `*.bound.*`, `*.join.*`, and `*.seam` when present.
+- If runtime emits a weaker deterministic id (for example `*.end.1`,
+  `*.edge.1`, or a hashed suffix),
   it is still valid and stable; treat it as an opaque token rather than trying
   to infer geometry from the name.

@@ -352,9 +352,19 @@ results, typically by passing them back through `selector.named(...)`.
   - Means the descendant edge lies between two modifier-created faces.
   - Example:
     `edge:body.main~edge-chamfer.chamfer.seed.1.join.chamfer.seed.2`
+- `*.seam`
+  - Means the descendant edge is a seam-like edge on a modifier-created face
+    (common on periodic geometry such as cylindrical or toroidal blends).
+  - Example:
+    `edge:body.main~edge-fillet.fillet.seed.1.seam`
+- `*.end.<n>`
+  - Means the descendant edge belongs to the modifier-created family but is not
+    yet classified as a preserved-face boundary or a modifier-to-modifier join.
+  - This is still deterministic, but semantically weaker than `bound.*`,
+    `join.*`, or `seam`.
 - `*.edge.<n>`
   - Deterministic fallback for a descendant edge that is real and stable but
-    not yet classified more precisely (for example seam-like or ambiguous cases).
+    predates richer semantic classification.
 
 Related metadata on emitted edge selections:
 - `selectionSlot`
@@ -368,8 +378,9 @@ Client guidance:
 - Prefer the full emitted id as the canonical reference token.
 - You may inspect `selectionSlot`, `selectionLineage`, and `adjacentFaceSlots`
   for UI or auditing, but do not reconstruct ids yourself.
-- Treat `*.bound.*` and `*.join.*` as stronger semantic anchors than
-  `*.edge.<n>`, which is a deliberate fallback.
+- Treat `*.bound.*`, `*.join.*`, and `*.seam` as stronger semantic anchors than
+  `*.end.<n>`, and treat `*.end.<n>` as stronger than legacy `*.edge.<n>`
+  fallback ids.
 
 ## Stable Payload Fixtures
 Mirror fixture:

@@ -188,6 +188,14 @@ const tests = [
       );
       assert.ok(descendantSlots.has("fillet.seed.1.bound.top"));
       assert.ok(descendantSlots.has("fillet.seed.1.bound.side.1"));
+      const seam = result.final.selections.find(
+        (selection) =>
+          selection.kind === "edge" &&
+          selection.meta["createdBy"] === "edge-fillet" &&
+          selection.meta["selectionSlot"] === "fillet.seed.1.seam"
+      );
+      assert.ok(seam, "missing fillet seam edge lineage");
+      assert.equal(seam.id, "edge:body.main~edge-fillet.fillet.seed.1.seam");
       for (const edge of descendantEdges) {
         assert.deepEqual(edge.meta["selectionLineage"], {
           kind: "modified",

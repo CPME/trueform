@@ -107,6 +107,9 @@ function resolveNamedSingle(
   const aliasHit = ctx.selections.find((selection) => selectionHasAlias(selection, normalized));
   if (aliasHit) return { selection: aliasHit };
 
+  const rebound = resolveStableSelectionRebind(normalized, ctx);
+  if (rebound) return { selection: rebound };
+
   const legacyError = legacyNumericSelectorError(normalized);
   if (legacyError) return { selection: null, error: legacyError };
   return { selection: null };
@@ -116,6 +119,182 @@ function selectionHasAlias(selection: Selection, target: string): boolean {
   const aliases = selection.meta["selectionAliases"];
   if (!Array.isArray(aliases)) return false;
   return aliases.some((entry) => typeof entry === "string" && entry === target);
+}
+
+type ParsedStableSelectionRef = {
+  kind: Selection["kind"];
+  ownerToken: string;
+  createdByToken: string;
+  slot: string;
+};
+
+type ParsedSelectionSlot =
+  | { root: string; relation: "bound" | "join"; target: string }
+  | { root: string; relation: "seam" }
+  | { root: string; relation: "end"; index: string }
+  | { root: string; relation: "edge"; index: string }
+  | { root: string; relation: "other" };
+
+function resolveStableSelectionRebind(
+  target: string,
+  ctx: ResolutionContext
+): Selection | null {
+  const parsed = parseStableSelectionRef(target);
+  if (!parsed) return null;
+  const parsedSlot = parseSelectionSlot(parsed.slot);
+  if (parsedSlot.relation === "edge") return null;
+
+  const candidates = ctx.selections.filter((selection) => {
+    if (selection.kind !== parsed.kind) return false;
+    const owner = normalizeSelectionToken(requireMetaString(selection.meta["ownerKey"]));
+    const createdBy = normalizeSelectionToken(requireMetaString(selection.meta["createdBy"]));
+    return owner === parsed.ownerToken && createdBy === parsed.createdByToken;
+  });
+  if (candidates.length === 0) return null;
+
+  const scored = candidates
+    .map((selection) => ({
+      selection,
+      score: scoreStableSelectionRebind(parsed, parsedSlot, selection),
+    }))
+    .filter((entry) => entry.score > 0);
+  if (scored.length === 0) return null;
+  scored.sort((a, b) => b.score - a.score || a.selection.id.localeCompare(b.selection.id));
+  const best = scored[0];
+  if (!best) return null;
+  const second = scored[1];
+  if (second && second.score === best.score) return null;
+  return best.selection;
+}
+
+function scoreStableSelectionRebind(
+  parsed: ParsedStableSelectionRef,
+  parsedSlot: ParsedSelectionSlot,
+  selection: Selection
+): number {
+  const candidateSlot = requireMetaString(selection.meta["selectionSlot"]);
+  if (!candidateSlot) return 0;
+  if (candidateSlot === parsed.slot) return 100;
+
+  const candidateParsed = parseSelectionSlot(candidateSlot);
+  if (candidateParsed.relation === "other") return 0;
+
+  if (parsedSlot.relation === "bound" || parsedSlot.relation === "join") {
+    if (candidateParsed.root !== parsedSlot.root) return 0;
+    if (candidateParsed.relation === parsedSlot.relation && "target" in candidateParsed) {
+      return candidateParsed.target === parsedSlot.target ? 95 : 0;
+    }
+    if (
+      candidateParsed.relation !== "bound" &&
+      candidateParsed.relation !== "join"
+    ) {
+      return 0;
+    }
+    const label = parsedSlot.root.split(".")[0] ?? "";
+    const target = parsedSlot.target;
+    const targetLooksDerived = label.length > 0 && target.startsWith(`${label}.`);
+    if (
+      parsedSlot.relation === "bound" &&
+      targetLooksDerived &&
+      candidateParsed.relation === "join" &&
+      "target" in candidateParsed &&
+      candidateParsed.target === target &&
+      candidateHasAdjacentFaceSlot(selection, target)
+    ) {
+      return 90;
+    }
+    if (
+      parsedSlot.relation === "join" &&
+      candidateParsed.relation === "bound" &&
+      "target" in candidateParsed &&
+      candidateParsed.target === target &&
+      candidateHasAdjacentFaceSlot(selection, target)
+    ) {
+      return 70;
+    }
+    return 0;
+  }
+
+  if (parsedSlot.relation === "seam") {
+    return candidateParsed.relation === "seam" && candidateParsed.root === parsedSlot.root ? 85 : 0;
+  }
+
+  if (parsedSlot.relation === "end") {
+    return candidateSlot === `${parsedSlot.root}.end.${parsedSlot.index}` ? 85 : 0;
+  }
+
+  return 0;
+}
+
+function candidateHasAdjacentFaceSlot(selection: Selection, target: string): boolean {
+  const adjacent = selection.meta["adjacentFaceSlots"];
+  if (!Array.isArray(adjacent)) return false;
+  return adjacent.some((entry) => typeof entry === "string" && entry === target);
+}
+
+function parseStableSelectionRef(value: string): ParsedStableSelectionRef | null {
+  const match = value.trim().match(/^(edge|face|solid|surface):(.+)$/i);
+  if (!match) return null;
+  const kind = (match[1] ?? "").toLowerCase() as Selection["kind"];
+  const body = match[2] ?? "";
+  const split = body.indexOf("~");
+  if (split <= 0) return null;
+  const ownerToken = normalizeSelectionToken(body.slice(0, split));
+  const remainder = body.slice(split + 1);
+  const slotMarker = remainder.indexOf(".");
+  if (slotMarker <= 0) return null;
+  const createdByToken = normalizeSelectionToken(remainder.slice(0, slotMarker));
+  const slot = remainder.slice(slotMarker + 1).trim();
+  if (!ownerToken || !createdByToken || !slot) return null;
+  return { kind, ownerToken, createdByToken, slot };
+}
+
+function parseSelectionSlot(slot: string): ParsedSelectionSlot {
+  const trimmed = slot.trim();
+  const boundaryMatch = trimmed.match(/^(.*)\.(bound|join)\.(.+)$/);
+  if (boundaryMatch) {
+    return {
+      root: boundaryMatch[1] ?? "",
+      relation: boundaryMatch[2] as "bound" | "join",
+      target: boundaryMatch[3] ?? "",
+    };
+  }
+  const seamMatch = trimmed.match(/^(.*)\.seam(?:\.part\.\d+)?$/);
+  if (seamMatch) {
+    return {
+      root: seamMatch[1] ?? "",
+      relation: "seam",
+    };
+  }
+  const endMatch = trimmed.match(/^(.*)\.end\.(\d+)$/);
+  if (endMatch) {
+    return {
+      root: endMatch[1] ?? "",
+      relation: "end",
+      index: endMatch[2] ?? "",
+    };
+  }
+  const edgeMatch = trimmed.match(/^(.*)\.edge\.(\d+)$/);
+  if (edgeMatch) {
+    return {
+      root: edgeMatch[1] ?? "",
+      relation: "edge",
+      index: edgeMatch[2] ?? "",
+    };
+  }
+  return { root: trimmed, relation: "other" };
+}
+
+function normalizeSelectionToken(value: string): string {
+  return value
+    .trim()
+    .replace(/[^A-Za-z0-9_-]+/g, ".")
+    .replace(/\.+/g, ".")
+    .replace(/^\.|\.$/g, "");
+}
+
+function requireMetaString(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
 function parseNamedTargetList(name: string): string[] {

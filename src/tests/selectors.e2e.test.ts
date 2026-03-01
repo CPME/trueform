@@ -96,6 +96,59 @@ const tests = [
     },
   },
   {
+    name: "selectors: semantic stable ids rebind across bound-to-join upgrades",
+    fn: async () => {
+      const selector = dsl.selectorNamed(
+        "edge:body.main~edge-chamfer.chamfer.seed.1.bound.chamfer.seed.2"
+      );
+      const ctx = {
+        selections: [
+          {
+            id: "edge:body.main~edge-chamfer.chamfer.seed.1.join.chamfer.seed.2",
+            kind: "edge" as const,
+            meta: {
+              ownerKey: "body:main",
+              createdBy: "edge-chamfer",
+              selectionSlot: "chamfer.seed.1.join.chamfer.seed.2",
+              adjacentFaceSlots: ["chamfer.seed.1", "chamfer.seed.2"],
+            },
+          },
+        ],
+        named: new Map(),
+      };
+      const resolved = resolveSelector(selector, ctx);
+      assert.equal(
+        resolved.id,
+        "edge:body.main~edge-chamfer.chamfer.seed.1.join.chamfer.seed.2"
+      );
+    },
+  },
+  {
+    name: "selectors: weak edge.N fallbacks do not auto-rebind to semantic edges",
+    fn: async () => {
+      const selector = dsl.selectorNamed("edge:body.main~edge-fillet.fillet.seed.1.edge.1");
+      const ctx = {
+        selections: [
+          {
+            id: "edge:body.main~edge-fillet.fillet.seed.1.bound.top",
+            kind: "edge" as const,
+            meta: {
+              ownerKey: "body:main",
+              createdBy: "edge-fillet",
+              selectionSlot: "fillet.seed.1.bound.top",
+              adjacentFaceSlots: ["fillet.seed.1", "top"],
+            },
+          },
+        ],
+        named: new Map(),
+      };
+      assert.throws(
+        () => resolveSelector(selector, ctx),
+        (err) => err instanceof CompileError && err.code === "selector_named_missing"
+      );
+    },
+  },
+  {
     name: "selectors: legacy numeric ids raise migration diagnostics",
     fn: async () => {
       const selector = dsl.selectorNamed("face:42");

@@ -5886,7 +5886,11 @@ export class OcctBackend implements Backend {
           this.edgeModifierDerivedEdgeSlot(entry, label, slotRoot) ??
           `${slotRoot}.edge.${edgeIndex + 1}`;
         const duplicateCount = slotCounts.get(slot) ?? 0;
-        if (duplicateCount > 1) {
+        if (slot.endsWith(".end")) {
+          const index = (slotIndexes.get(slot) ?? 0) + 1;
+          slotIndexes.set(slot, index);
+          slot = `${slot}.${index}`;
+        } else if (duplicateCount > 1) {
           const index = (slotIndexes.get(slot) ?? 0) + 1;
           slotIndexes.set(slot, index);
           slot = `${slot}.part.${index}`;
@@ -5918,13 +5922,30 @@ export class OcctBackend implements Backend {
     const neighborSlots = adjacentSlots.filter(
       (slot) => !(slot === slotRoot || slot.startsWith(`${slotRoot}.part.`))
     );
-    if (neighborSlots.length !== 1) return null;
-    const neighborSlot = neighborSlots[0];
-    if (!neighborSlot) return null;
-    if (neighborSlot.startsWith(`${label}.`)) {
-      return `${slotRoot}.join.${neighborSlot}`;
+    if (neighborSlots.length === 1) {
+      const neighborSlot = neighborSlots[0];
+      if (!neighborSlot) return null;
+      if (neighborSlot.startsWith(`${label}.`)) {
+        return `${slotRoot}.join.${neighborSlot}`;
+      }
+      return `${slotRoot}.bound.${neighborSlot}`;
     }
-    return `${slotRoot}.bound.${neighborSlot}`;
+
+    const adjacentIds = Array.isArray(entry.meta["adjacentFaceIds"])
+      ? (entry.meta["adjacentFaceIds"] as unknown[]).filter(
+          (id): id is string => typeof id === "string" && id.trim().length > 0
+        )
+      : [];
+    if (neighborSlots.length === 0 && descendantSlots.length > 0) {
+      if (adjacentIds.length <= 1) {
+        return `${slotRoot}.seam`;
+      }
+      return `${slotRoot}.end`;
+    }
+    if (neighborSlots.length > 1) {
+      return `${slotRoot}.end`;
+    }
+    return null;
   }
 
   private annotateSplitFaceSelections(
