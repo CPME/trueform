@@ -109,6 +109,8 @@ Use this workflow for feature development and promotion decisions.
    - Add/update DSL example in `src/examples/dsl_feature_examples.ts`.
    - Run `npm run docs:examples`.
    - Ensure review PNG is produced in `docs/public/examples/dsl/<example>.iso.png`.
+   - Before presenting a review artifact to the reviewer, inspect the generated PNG locally yourself. Use the local image inspection tool on the PNG (for example via the in-session image viewer) to catch legend overlap, occluded highlights, low-contrast colors, or confusing labels before handing it off.
+   - Prefer PNG review artifacts for the agent visual pass. If an annotated asset is authored as SVG, keep the PNG render as the primary visual check and use the SVG only for labels/legend layout.
 
 3. Interactive review package (agent + reviewer)
    - Export viewer assets with `TF_VIEWER_ONLY=<example-id> npm run viewer:export`.

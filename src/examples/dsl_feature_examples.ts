@@ -711,13 +711,13 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         parallel: true,
       },
       renderOpts: {
-        viewDir: [1.28, -1.12, 0.96],
+        viewDir: [1.54, -1.42, 1.18],
       },
       layers: [
         {
           output: "body:main",
           color: [205, 214, 224],
-          alpha: 0.8,
+          alpha: 0.58,
           wireframe: true,
           wireColor: [30, 38, 48],
           wireDepthTest: false,
@@ -726,18 +726,18 @@ export const dslFeatureExamples: DslFeatureExample[] = [
       ],
       selectionHighlights: [
         {
-          selectionId: "face:body.main~union-main.side.base-2",
+          selectionId: "face:body.main~union-main.side.base-1",
           color: [234, 179, 8],
-          alpha: 0.28,
+          alpha: 0.55,
           wireframe: false,
-          depthTest: true,
+          depthTest: false,
         },
         {
           selectionId: "face:body.main~union-main.fillet.seed.1",
           color: [34, 197, 94],
-          alpha: 0.5,
+          alpha: 0.92,
           wireframe: false,
-          depthTest: true,
+          depthTest: false,
         },
         {
           selectionId: "edge:body.boss~boss.hd02c8fff3fcee9ed.3",

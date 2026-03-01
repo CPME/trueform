@@ -35,7 +35,7 @@
   <circle cx="1264" cy="306" r="10" class="swatch-d" />
   <text x="1286" y="311" class="legend-label">D  preserved base face</text>
   <text x="1286" y="331" class="legend-id">face:body.main~union-main.</text>
-  <text x="1286" y="348" class="legend-id">side.base-2</text>
+  <text x="1286" y="348" class="legend-id">side.base-1</text>
 
   <text x="1252" y="382" class="note">Orange is a historical seed edge from the boss step.</text>
   <text x="1252" y="404" class="note">Cyan, green, and gold are current topology on</text>
