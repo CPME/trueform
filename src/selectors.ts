@@ -175,11 +175,12 @@ function scoreStableSelectionRebind(
   const candidateSlot = requireMetaString(selection.meta["selectionSlot"]);
   if (!candidateSlot) return 0;
   if (candidateSlot === parsed.slot) return 100;
+  const lineageScore = scoreLineageSelectionRebind(parsed.slot, selection, candidateSlot);
 
   const candidateParsed = parseSelectionSlot(candidateSlot);
-  if (candidateParsed.relation === "other") return 0;
 
   if (parsedSlot.relation === "bound" || parsedSlot.relation === "join") {
+    if (candidateParsed.relation === "other") return lineageScore;
     if (candidateParsed.root !== parsedSlot.root) return 0;
     if (candidateParsed.relation === parsedSlot.relation && "target" in candidateParsed) {
       return candidateParsed.target === parsedSlot.target ? 95 : 0;
@@ -212,7 +213,7 @@ function scoreStableSelectionRebind(
     ) {
       return 70;
     }
-    return 0;
+    return lineageScore;
   }
 
   if (parsedSlot.relation === "seam") {
@@ -223,7 +224,98 @@ function scoreStableSelectionRebind(
     return candidateSlot === `${parsedSlot.root}.end.${parsedSlot.index}` ? 85 : 0;
   }
 
+  return lineageScore;
+}
+
+function scoreLineageSelectionRebind(
+  parsedSlot: string,
+  selection: Selection,
+  candidateSlot: string
+): number {
+  const lineageSourceSlot = selectionLineageSourceSlot(selection);
+  if (!lineageSourceSlot) return 0;
+
+  const parsedSplit = parseSplitBranchSlot(parsedSlot);
+  const candidateSplit = parseSplitBranchSlot(candidateSlot);
+  if (parsedSplit && candidateSplit) {
+    return parsedSplit.sourceSlot === candidateSplit.sourceSlot &&
+      parsedSplit.branch === candidateSplit.branch
+      ? 84
+      : 0;
+  }
+  if (
+    !parsedSplit &&
+    candidateSplit &&
+    candidateSplit.sourceSlot === parsedSlot &&
+    lineageSourceSlot === parsedSlot
+  ) {
+    return 74;
+  }
+  if (
+    parsedSplit &&
+    !candidateSplit &&
+    candidateSlot === parsedSplit.sourceSlot &&
+    lineageSourceSlot === parsedSplit.sourceSlot
+  ) {
+    return 72;
+  }
+
+  const parsedDuplicate = parseLegacyDuplicateSlot(parsedSlot);
+  if (!parsedDuplicate) return 0;
+  if (parsedDuplicate.baseSlot !== lineageSourceSlot) return 0;
+  if (parsedDuplicate.index === "1" && candidateSlot === parsedDuplicate.baseSlot) {
+    return 70;
+  }
+  if (
+    parsedDuplicate.index === "2" &&
+    candidateSlot === `right.${parsedDuplicate.baseSlot}`
+  ) {
+    return 68;
+  }
   return 0;
+}
+
+function selectionLineageSourceSlot(selection: Selection): string | null {
+  const lineage = selection.meta["selectionLineage"];
+  if (!lineage || typeof lineage !== "object") return null;
+  const from = (lineage as Record<string, unknown>)["from"];
+  if (typeof from !== "string" || from.trim().length === 0) return null;
+  const parsed = parseStableSelectionRef(from);
+  return parsed?.slot ?? null;
+}
+
+function parseSplitBranchSlot(
+  slot: string
+): { sourceSlot: string; branch: string } | null {
+  const match = slot.trim().match(/^split\.(.+)\.branch\.(\d+)$/);
+  if (!match) return null;
+  const sourceSlot = match[1]?.trim() ?? "";
+  const branch = match[2]?.trim() ?? "";
+  if (!sourceSlot || !branch) return null;
+  return { sourceSlot, branch };
+}
+
+function parseLegacyDuplicateSlot(
+  slot: string
+): { baseSlot: string; index: string } | null {
+  const trimmed = slot.trim();
+  if (
+    trimmed.includes(".branch.") ||
+    trimmed.includes(".part.") ||
+    trimmed.includes(".bound.") ||
+    trimmed.includes(".join.") ||
+    trimmed.includes(".seam") ||
+    trimmed.includes(".end.") ||
+    trimmed.includes(".edge.")
+  ) {
+    return null;
+  }
+  const match = trimmed.match(/^(.*)\.(\d+)$/);
+  if (!match) return null;
+  const baseSlot = match[1]?.trim() ?? "";
+  const index = match[2]?.trim() ?? "";
+  if (!baseSlot || !index) return null;
+  return { baseSlot, index };
 }
 
 function candidateHasAdjacentFaceSlot(selection: Selection, target: string): boolean {

@@ -124,6 +124,111 @@ const tests = [
     },
   },
   {
+    name: "selectors: semantic face ids rebind from plain slot to split branch via lineage",
+    fn: async () => {
+      const selector = dsl.selectorNamed("face:body.main~intersect-1.top");
+      const ctx = {
+        selections: [
+          {
+            id: "face:body.main~intersect-1.split.top.branch.1",
+            kind: "face" as const,
+            meta: {
+              ownerKey: "body:main",
+              createdBy: "intersect-1",
+              selectionSlot: "split.top.branch.1",
+              selectionLineage: {
+                kind: "split",
+                from: "face:body.left~base.top",
+                branch: "1",
+              },
+            },
+          },
+        ],
+        named: new Map(),
+      };
+      const resolved = resolveSelector(selector, ctx);
+      assert.equal(resolved.id, "face:body.main~intersect-1.split.top.branch.1");
+    },
+  },
+  {
+    name: "selectors: semantic face ids rebind from split branch back to plain slot via lineage",
+    fn: async () => {
+      const selector = dsl.selectorNamed("face:body.main~intersect-1.split.top.branch.1");
+      const ctx = {
+        selections: [
+          {
+            id: "face:body.main~intersect-1.top",
+            kind: "face" as const,
+            meta: {
+              ownerKey: "body:main",
+              createdBy: "intersect-1",
+              selectionSlot: "top",
+              selectionLineage: {
+                kind: "modified",
+                from: "face:body.left~base.top",
+              },
+            },
+          },
+        ],
+        named: new Map(),
+      };
+      const resolved = resolveSelector(selector, ctx);
+      assert.equal(resolved.id, "face:body.main~intersect-1.top");
+    },
+  },
+  {
+    name: "selectors: legacy duplicate union slot rebinds to disambiguated right slot via lineage",
+    fn: async () => {
+      const selector = dsl.selectorNamed("face:body.main~union-1.side.1.2");
+      const ctx = {
+        selections: [
+          {
+            id: "face:body.main~union-1.right.side.1",
+            kind: "face" as const,
+            meta: {
+              ownerKey: "body:main",
+              createdBy: "union-1",
+              selectionSlot: "right.side.1",
+              selectionLineage: {
+                kind: "modified",
+                from: "face:body.right~tool-move.side.1",
+              },
+            },
+          },
+        ],
+        named: new Map(),
+      };
+      const resolved = resolveSelector(selector, ctx);
+      assert.equal(resolved.id, "face:body.main~union-1.right.side.1");
+    },
+  },
+  {
+    name: "selectors: legacy duplicate union slot rebinds first duplicate to canonical slot via lineage",
+    fn: async () => {
+      const selector = dsl.selectorNamed("face:body.main~union-1.side.1.1");
+      const ctx = {
+        selections: [
+          {
+            id: "face:body.main~union-1.side.1",
+            kind: "face" as const,
+            meta: {
+              ownerKey: "body:main",
+              createdBy: "union-1",
+              selectionSlot: "side.1",
+              selectionLineage: {
+                kind: "modified",
+                from: "face:body.left~base.side.1",
+              },
+            },
+          },
+        ],
+        named: new Map(),
+      };
+      const resolved = resolveSelector(selector, ctx);
+      assert.equal(resolved.id, "face:body.main~union-1.side.1");
+    },
+  },
+  {
     name: "selectors: weak edge.N fallbacks do not auto-rebind to semantic edges",
     fn: async () => {
       const selector = dsl.selectorNamed("edge:body.main~edge-fillet.fillet.seed.1.edge.1");
