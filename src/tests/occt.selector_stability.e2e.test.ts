@@ -81,6 +81,16 @@ function subtractCutBottomStableFaceId(selections: SelectionRecord[]): string | 
   );
 }
 
+function unionRightSideStableFaceId(selections: SelectionRecord[]): string | null {
+  return findSelectionId(
+    selections,
+    (selection) =>
+      selection.kind === "face" &&
+      selection.meta["createdBy"] === "union-1" &&
+      selection.meta["selectionSlot"] === "right.side.1"
+  );
+}
+
 function stepByFeatureId(result: BuildResult, featureId: string) {
   return result.steps.find((step) => step.featureId === featureId);
 }
@@ -398,6 +408,81 @@ const matrix: MatrixCase[] = [
       const finalShape = finalBody.meta["shape"] as any;
       assert.ok(finalShape, "missing move-face shape");
       assertValidShape(occt, finalShape, "stable-id boolean cut move-face solid");
+    },
+  },
+  {
+    name: "stable union face id keeps move face resolved after upstream edits",
+    buildSeedPart: () =>
+      dsl.part("selector-matrix-seed-union-face", [
+        dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:left"),
+        dsl.extrude("tool-seed", dsl.profileRect(8, 8), 6, "body:tool-seed"),
+        dsl.moveBody("tool-move", dsl.selectorNamed("body:tool-seed"), "body:right", [
+          "tool-seed",
+        ], {
+          translation: [0, 0, 10],
+        }),
+        dsl.booleanOp(
+          "union-1",
+          "union",
+          dsl.selectorNamed("body:left"),
+          dsl.selectorNamed("body:right"),
+          "body:main"
+        ),
+      ]),
+    captureSelectionId: unionRightSideStableFaceId,
+    buildEditedPart: (selectionId) =>
+      dsl.part("selector-matrix-union-face", [
+        dsl.moveFace(
+          "move-union-side",
+          dsl.selectorNamed("body:main"),
+          dsl.selectorNamed(selectionId),
+          "body:moved",
+          undefined,
+          { translation: [0, -1, 0], heal: true }
+        ),
+        dsl.booleanOp(
+          "union-1",
+          "union",
+          dsl.selectorNamed("body:left"),
+          dsl.selectorNamed("body:right"),
+          "body:main"
+        ),
+        dsl.moveBody("tool-move", dsl.selectorNamed("body:tool-seed"), "body:right", [
+          "tool-seed",
+        ], {
+          translation: [0, 0, 12],
+        }),
+        dsl.extrude("tool-seed", dsl.profileRect(10, 6), 8, "body:tool-seed"),
+        dsl.extrude("base", dsl.profileRect(28, 18), 12, "body:left"),
+      ]),
+    assertEdited: ({ occt, result, selectionId }) => {
+      assert.ok(
+        result.order.indexOf("base") < result.order.indexOf("union-1"),
+        `expected base before union-1 (order=${result.order.join(",")})`
+      );
+      assert.ok(
+        result.order.indexOf("tool-seed") < result.order.indexOf("tool-move"),
+        `expected tool-seed before tool-move (order=${result.order.join(",")})`
+      );
+      assert.ok(
+        result.order.indexOf("tool-move") < result.order.indexOf("union-1"),
+        `expected tool-move before union-1 (order=${result.order.join(",")})`
+      );
+      assert.ok(
+        result.order.indexOf("union-1") < result.order.indexOf("move-union-side"),
+        `expected union-1 before move-union-side (order=${result.order.join(",")})`
+      );
+      assertFeatureSelectionPreserved(
+        result,
+        "union-1",
+        selectionId,
+        "stable-id union face"
+      );
+      const finalBody = result.final.outputs.get("body:moved");
+      assert.ok(finalBody, "missing move-face output body:moved");
+      const finalShape = finalBody.meta["shape"] as any;
+      assert.ok(finalShape, "missing move-face shape");
+      assertValidShape(occt, finalShape, "stable-id union move-face solid");
     },
   },
 ];

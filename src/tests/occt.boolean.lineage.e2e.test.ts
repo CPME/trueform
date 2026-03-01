@@ -41,27 +41,31 @@ function buildIntersectOverlapPart() {
   ]);
 }
 
+function buildUnionStackPart() {
+  return dsl.part("boolean-lineage-union", [
+    dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:left"),
+    dsl.extrude("tool-seed", dsl.profileRect(8, 8), 6, "body:tool-seed"),
+    dsl.moveBody("tool-move", dsl.selectorNamed("body:tool-seed"), "body:right", [
+      "tool-seed",
+    ], {
+      translation: [0, 0, 10],
+    }),
+    dsl.booleanOp(
+      "union-1",
+      "union",
+      dsl.selectorNamed("body:left"),
+      dsl.selectorNamed("body:right"),
+      "body:main"
+    ),
+  ]);
+}
+
 const tests = [
   {
     name: "occt boolean lineage: union preserves unchanged left bottom face slot",
     fn: async () => {
       const { backend, occt } = await getBackendContext();
-      const part = dsl.part("boolean-lineage-union", [
-        dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:left"),
-        dsl.extrude("tool-seed", dsl.profileRect(8, 8), 6, "body:tool-seed"),
-        dsl.moveBody("tool-move", dsl.selectorNamed("body:tool-seed"), "body:right", [
-          "tool-seed",
-        ], {
-          translation: [0, 0, 10],
-        }),
-        dsl.booleanOp(
-          "union-1",
-          "union",
-          dsl.selectorNamed("body:left"),
-          dsl.selectorNamed("body:right"),
-          "body:main"
-        ),
-      ]);
+      const part = buildUnionStackPart();
 
       const result = buildPart(part, backend);
       const output = result.final.outputs.get("body:main");
@@ -80,6 +84,51 @@ const tests = [
         kind: "modified",
         from: "face:body.left~base.bottom",
       });
+    },
+  },
+  {
+    name: "occt boolean lineage: union emits disambiguated right face slots",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const result = buildPart(buildUnionStackPart(), backend);
+      const output = result.final.outputs.get("body:main");
+      assert.ok(output, "missing union result");
+      assertValidShape(occt, output.meta["shape"] as any, "union disambiguated face result");
+
+      const leftSide = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "union-1" &&
+          selection.meta["selectionSlot"] === "side.1"
+      );
+      assert.ok(leftSide, "missing left side.1 face");
+      assert.equal(leftSide.id, "face:body.main~union-1.side.1");
+      assert.deepEqual(leftSide.meta["selectionLineage"], {
+        kind: "modified",
+        from: "face:body.left~base.side.1",
+      });
+
+      const rightSide = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "union-1" &&
+          selection.meta["selectionSlot"] === "right.side.1"
+      );
+      assert.ok(rightSide, "missing right.side.1 face");
+      assert.equal(rightSide.id, "face:body.main~union-1.right.side.1");
+      assert.deepEqual(rightSide.meta["selectionLineage"], {
+        kind: "modified",
+        from: "face:body.right~tool-move.side.1",
+      });
+
+      const top = result.final.selections.find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "union-1" &&
+          selection.meta["selectionSlot"] === "top"
+      );
+      assert.ok(top, "missing preserved union top face");
+      assert.equal(top.id, "face:body.main~union-1.top");
     },
   },
   {

@@ -61,6 +61,7 @@ Examples:
 
 ```ts
 selectorNamed("face:body.main~base.top");
+selectorNamed("face:body.main~union-1.right.side.1");
 selectorNamed("face:body.main~subtract-1.top");
 selectorNamed("face:body.main~subtract-1.cut.bottom");
 selectorNamed("face:body.main~intersect-1.side.1");

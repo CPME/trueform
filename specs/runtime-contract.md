@@ -336,6 +336,7 @@ Diagnostics expectations for broken references:
   compiler to preserve references without relying on traversal order.
 - semantic ids can include feature-derived slots, not only hashes. Examples:
   - `face:body.main~base.top`
+  - `face:body.main~union-1.right.side.1`
   - `face:body.main~subtract-1.cut.bottom`
   - `face:body.main~intersect-1.side.1`
   - `edge:body.main~edge-fillet.fillet.seed.1.bound.top`
@@ -411,6 +412,19 @@ tool-derived cavity faces and their descendant edges.
 - `cut.*` ids are emitted only when runtime can justify the mapping from the
   subtract tool's semantic face slots. Remaining boolean topology may still use
   deterministic hashed fallback ids.
+
+## Boolean Union Semantic Face IDs
+`feature.boolean` with `op: "union"` can preserve semantic face slots from both
+operands. When both operands contribute the same slot name, the right operand is
+disambiguated with a `right.` prefix.
+
+- Face examples:
+  - `face:body.main~union-1.bottom`
+  - `face:body.main~union-1.top`
+  - `face:body.main~union-1.side.1`
+  - `face:body.main~union-1.right.side.1`
+- This keeps the left operand on the canonical slot name and avoids unstable
+  tie-suffixed ids such as `side.1.1` / `side.1.2`.
 
 ## Boolean Intersect Semantic Face IDs
 `feature.boolean` with `op: "intersect"` can preserve semantic face slots for
