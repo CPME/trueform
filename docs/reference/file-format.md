@@ -216,7 +216,8 @@ This ensures stable hashes for caching and diffing.
 ## File Handling
 
 Open:
-1. Unzip the `.tfp` (part) or `.tfa` (assembly) container.
+1. Unzip the `.tfp` container, or a `.tfa` container once split assembly
+   containers are explicitly promoted.
 2. Parse `manifest.json` and `document.json`.
 3. Validate schema versions.
 4. Hash `document.json` and compare to manifest.
@@ -226,7 +227,8 @@ Save:
 1. Serialize the IR to `document.json`.
 2. Compute document hash and update `manifest.json`.
 3. Optionally include preview mesh + thumbnail artifacts and hashes.
-4. Zip into a `.tfp` (part) or `.tfa` (assembly) container.
+4. Zip into a `.tfp` (part) container today, or a `.tfa` (assembly) container
+   once split assembly storage is explicitly promoted.
 5. Optionally regenerate sidecar artifacts.
 
 ## Minimal Example

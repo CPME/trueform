@@ -84,25 +84,25 @@ Draft resolution rule:
 Current legacy shape:
 - A single document may contain both `parts` and `assemblies`.
 
-Target shape:
+Draft target shape (not yet a shipped default):
 - Part intent lives in `.tfp` part containers.
 - Assembly intent lives in `.tfa` assembly containers with `document.imports`.
 
-Compatibility behavior:
+Target compatibility behavior once split assembly storage is promoted:
 1. Reader compatibility:
-   - Readers must accept legacy single-document bundles during transition.
+   - Readers should accept legacy single-document bundles during transition.
    - When reading a legacy bundle, loaders create virtual imports using
      `part:<part.id>` keys so assembly instance references can resolve through
      one import path.
 2. Writer default:
-   - New write flows default to split output (`.tfa` + referenced `.tfp` parts).
-   - Legacy bundle write mode is allowed only as an explicit compatibility option.
+   - New write flows should default to split output (`.tfa` + referenced `.tfp` parts).
+   - Legacy bundle write mode should remain an explicit compatibility option.
 3. Build/compile behavior:
    - Core part compile stays unchanged.
-   - Assembly loaders must resolve instances through import keys (virtual or explicit).
+   - Assembly loaders should resolve instances through import keys (virtual or explicit).
 
 Deprecation timeline (version-gated, not date-gated):
-1. v0.x transition start:
+1. Transition start after split assembly storage is promoted:
    - Read legacy bundles and split format.
    - Write split by default; legacy bundle write remains opt-in.
 2. next minor after transition:
