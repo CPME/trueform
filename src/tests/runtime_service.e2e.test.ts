@@ -1718,6 +1718,64 @@ const tests = [
     },
   },
   {
+    name: "runtime service: async selector failures use documented error envelope",
+    fn: async () => {
+      const runtime = await startRuntimeServer();
+      try {
+        const capabilities = await fetchJson<{
+          errorContract?: { selectorCodes?: string[] };
+        }>(`${runtime.baseUrl}/v1/capabilities`);
+        const selectorCodes = new Set(capabilities.errorContract?.selectorCodes ?? []);
+
+        const failingPart = dsl.part("runtime-async-selector-envelope", [
+          dsl.extrude("base", dsl.profileRect(10, 8), 6, "body:seed"),
+          dsl.datumPlane("mirror-plane", "+X"),
+          dsl.mirror(
+            "mirror-missing",
+            dsl.selectorNamed("body:missing-source"),
+            dsl.planeDatum("mirror-plane"),
+            "body:mirror"
+          ),
+        ]);
+        const submit = await fetchJsonWithStatus<{ id: string; jobId: string; state: string }>(
+          `${runtime.baseUrl}/v1/build`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              part: failingPart,
+              options: { meshProfile: "interactive" },
+            }),
+          }
+        );
+        assert.equal(submit.id, submit.jobId);
+        assert.equal(
+          submit.state === "queued" || submit.state === "running",
+          true,
+          `unexpected accepted state: ${submit.state}`
+        );
+
+        const job = await pollJob(runtime.baseUrl, submit.jobId);
+        assert.equal(job.id, submit.jobId);
+        assert.equal(job.jobId, submit.jobId);
+        assert.equal(job.state, "failed");
+        assert.equal(job.result, null);
+        assert.ok(job.error, "expected structured job error");
+        assert.equal(job.error?.code, "selector_named_missing");
+        assert.equal(selectorCodes.has(String(job.error?.code ?? "")), true);
+        assert.equal(typeof job.error?.message, "string");
+        assert.equal((job.error?.message?.length ?? 0) > 0, true);
+        assert.equal(job.error?.details?.featureId, "mirror-missing");
+        assert.equal(job.error?.details?.featureKind, "feature.mirror");
+        assert.equal(job.error?.details?.referenceKind, "named_output");
+        assert.equal(job.error?.details?.referenceId, "body:missing-source");
+      } finally {
+        await runtime.stop();
+      }
+    },
+  },
+  {
     name: "runtime service: semantic topology ids match between build results and mesh payloads",
     fn: async () => {
       const runtime = await startRuntimeServer();
