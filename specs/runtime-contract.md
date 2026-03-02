@@ -92,6 +92,54 @@ Response:
     "release": { "preflight": false, "bundle": false },
     "pmi": { "stepAp242": false, "supportMatrix": false },
     "featureStaging": { "registry": true }
+  },
+  "errorContract": {
+    "envelope": {
+      "sync": "{ error: { code, message, details? } }",
+      "async": "{ id, jobId, state, result|null, error: { code, message, details? } }"
+    },
+    "selectorCodes": [
+      "selector_named_missing",
+      "selector_ambiguous",
+      "selector_empty",
+      "selector_empty_after_rank",
+      "selector_legacy_numeric_unsupported"
+    ],
+    "genericCodes": ["runtime_error"],
+    "clientRule": "Treat error.code as the stable programmatic key; message text is diagnostic only."
+  },
+  "semanticTopology": {
+    "enabled": true,
+    "contractVersion": "beta-2026-03-02",
+    "selectionTransport": {
+      "canonicalSelectionIdField": "selection.id",
+      "buildResultIndex": "result.selections lists canonical ids by kind across the full final selection set.",
+      "meshSelections": "result.mesh.asset.selections reuses canonical ids for the requested output scope only.",
+      "relationship": "mesh selections are a scoped subset of build-result canonical ids when the same topology is present in both payloads.",
+      "clientRule": "Persist emitted selection ids exactly as returned and do not synthesize ids from metadata."
+    },
+    "selectorRebinding": {
+      "policy": "deterministic_and_conservative",
+      "supportedMigrations": [
+        "plain semantic slot <-> split.*.branch.*",
+        "legacy union tie suffixes -> right.* disambiguation",
+        "matching face-slot migrations propagated into semantic edge slots"
+      ]
+    },
+    "supportedWorkflows": [
+      "direct-pick semantic face ids for primary prismatic output faces",
+      "direct-pick semantic edge ids for primary prismatic output edges",
+      "split face slot families",
+      "fillet/chamfer semantic edge families",
+      "boolean subtract semantic cut faces and cut-derived edges",
+      "boolean union semantic face and edge ids with right.* disambiguation",
+      "boolean intersect semantic overlap face and edge ids"
+    ],
+    "unsupportedWorkflows": [
+      "broad heuristic selector repair beyond documented migrations",
+      "automatic migration of legacy numeric selectors",
+      "general-purpose vertex or free-point direct-pick ids"
+    ]
   }
 }
 ```
@@ -103,6 +151,46 @@ Notes:
   not promote assembly solve to a stable contract tier by itself.
 - Assembly solve remains dependent on stable part-level connector resolution and
   semantic references from part builds.
+- `errorContract` publishes the stable programmatic error-code surface for
+  runtime and selector failures.
+- `semanticTopology` is the capability/version signal for direct-pick semantic
+  selection ids in the beta contract.
+
+## Semantic Topology Capability Contract
+The runtime publishes semantic-topology support through
+`/v1/capabilities.semanticTopology`.
+
+Client rules:
+- Treat `semanticTopology.enabled` and `semanticTopology.contractVersion` as the
+  gating signal for direct-pick semantic-id flows.
+- Persist the full emitted `selection.id` token exactly as returned.
+- Use `selection.meta` fields such as `selectionSlot`, `selectionLineage`, or
+  `adjacentFaceSlots` for display or diagnostics only.
+- Do not synthesize new ids from metadata.
+
+Selection transport rules:
+- `result.selections` is the canonical build-result index of ids by kind across
+  the full final selection set for the build.
+- `result.mesh.asset.selections` reuses those same canonical ids, but scopes the
+  list to the requested output mesh.
+- When the same topology appears in both payloads, mesh selection ids must be a
+  subset of the ids exposed in `result.selections`.
+
+## Stable Error Contract
+The runtime uses the same structured error envelope across sync HTTP failures
+and async job failures.
+
+Programmatic rules:
+- Key client behavior off `error.code`.
+- Treat `error.message` as diagnostic text, not as a stable matching surface.
+- Expect selector failures to use the explicit `selector_*` codes published in
+  `/v1/capabilities.errorContract.selectorCodes`.
+
+Reference docs:
+- Beta scope matrix:
+  [specs/semantic-topology-beta-scope-2026-03-02.md](/home/eveber/code/trueform/specs/semantic-topology-beta-scope-2026-03-02.md)
+- Canonical runtime fixtures:
+  [specs/semantic-topology-runtime-fixtures-2026-03-02.md](/home/eveber/code/trueform/specs/semantic-topology-runtime-fixtures-2026-03-02.md)
 
 ## Health
 `GET /v1/health`

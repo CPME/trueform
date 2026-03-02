@@ -14,6 +14,8 @@ import { residualsForTesting } from "../../dist/assembly.js";
 import {
   TF_API_ENDPOINTS,
   TF_RUNTIME_OPTIONAL_FEATURES,
+  TF_RUNTIME_ERROR_CONTRACT,
+  TF_RUNTIME_SEMANTIC_TOPOLOGY,
   TF_API_VERSION,
   TF_RUNTIME_OPENAPI,
   resolveRuntimeFeatureStages,
@@ -1980,6 +1982,8 @@ export function createTfServiceServer(options = {}) {
             buildSessionTtlMs: BUILD_SESSION_TTL_MS,
           },
           optionalFeatures: TF_RUNTIME_OPTIONAL_FEATURES,
+          errorContract: TF_RUNTIME_ERROR_CONTRACT,
+          semanticTopology: TF_RUNTIME_SEMANTIC_TOPOLOGY,
         });
         return;
       }

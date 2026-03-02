@@ -321,6 +321,23 @@ function makeRuntimeMultiOutputDoc() {
   return { part, document };
 }
 
+function makeRuntimeBooleanUnionPart() {
+  return dsl.part("runtime-boolean-union", [
+    dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:left"),
+    dsl.extrude("tool-seed", dsl.profileRect(8, 8), 6, "body:tool-seed"),
+    dsl.moveBody("tool-move", dsl.selectorNamed("body:tool-seed"), "body:right", ["tool-seed"], {
+      translation: [0, 0, 10],
+    }),
+    dsl.booleanOp(
+      "union-1",
+      "union",
+      dsl.selectorNamed("body:left"),
+      dsl.selectorNamed("body:right"),
+      "body:main"
+    ),
+  ]);
+}
+
 const tests = [
   {
     name: "runtime service: documents, lifecycle, cache keys, and mesh profile contract",
@@ -350,6 +367,29 @@ const tests = [
             bom?: { derive?: boolean };
             release?: { preflight?: boolean };
             featureStaging?: { registry?: boolean };
+          };
+          errorContract?: {
+            envelope?: { sync?: string; async?: string };
+            selectorCodes?: string[];
+            genericCodes?: string[];
+            clientRule?: string;
+          };
+          semanticTopology?: {
+            enabled?: boolean;
+            contractVersion?: string;
+            selectionTransport?: {
+              canonicalSelectionIdField?: string;
+              buildResultIndex?: string;
+              meshSelections?: string;
+              relationship?: string;
+              clientRule?: string;
+            };
+            selectorRebinding?: {
+              policy?: string;
+              supportedMigrations?: string[];
+            };
+            supportedWorkflows?: string[];
+            unsupportedWorkflows?: string[];
           };
         }>(`${runtime.baseUrl}/v1/capabilities`);
         assert.equal(capabilities.apiVersion, "1.2");
@@ -388,6 +428,53 @@ const tests = [
         assert.equal(capabilities.featureStages?.["feature.thread"]?.stage, "stable");
         assert.equal(capabilities.featureStages?.["feature.surface"]?.stage, "stable");
         assert.equal(capabilities.featureStages?.["feature.extrude:mode.surface"]?.stage, "staging");
+        assert.equal(capabilities.errorContract?.envelope?.sync, "{ error: { code, message, details? } }");
+        assert.equal(
+          capabilities.errorContract?.envelope?.async,
+          "{ id, jobId, state, result|null, error: { code, message, details? } }"
+        );
+        assert.deepEqual(capabilities.errorContract?.selectorCodes, [
+          "selector_named_missing",
+          "selector_ambiguous",
+          "selector_empty",
+          "selector_empty_after_rank",
+          "selector_legacy_numeric_unsupported",
+        ]);
+        assert.deepEqual(capabilities.errorContract?.genericCodes, ["runtime_error"]);
+        assert.equal(
+          capabilities.errorContract?.clientRule,
+          "Treat error.code as the stable programmatic key; message text is diagnostic only."
+        );
+        assert.equal(capabilities.semanticTopology?.enabled, true);
+        assert.equal(capabilities.semanticTopology?.contractVersion, "beta-2026-03-02");
+        assert.equal(
+          capabilities.semanticTopology?.selectionTransport?.canonicalSelectionIdField,
+          "selection.id"
+        );
+        assert.equal(
+          capabilities.semanticTopology?.selectionTransport?.relationship,
+          "mesh selections are a scoped subset of build-result canonical ids when the same topology is present in both payloads."
+        );
+        assert.equal(
+          capabilities.semanticTopology?.selectionTransport?.clientRule,
+          "Persist emitted selection ids exactly as returned and do not synthesize ids from metadata."
+        );
+        assert.equal(
+          capabilities.semanticTopology?.selectorRebinding?.policy,
+          "deterministic_and_conservative"
+        );
+        assert.equal(
+          capabilities.semanticTopology?.supportedWorkflows?.includes(
+            "boolean union semantic face and edge ids with right.* disambiguation"
+          ),
+          true
+        );
+        assert.equal(
+          capabilities.semanticTopology?.unsupportedWorkflows?.includes(
+            "automatic migration of legacy numeric selectors"
+          ),
+          true
+        );
         const health = await fetchJson<{
           status?: string;
           dependencies?: { opencascade?: { ready?: boolean } };
@@ -1625,6 +1712,72 @@ const tests = [
         assert.equal(sketchJob.error?.details?.featureKind, "feature.sketch2d");
         assert.equal(sketchJob.error?.details?.referenceKind, "legacy_numeric_selector");
         assert.equal(sketchJob.error?.details?.referenceId, "face:130");
+      } finally {
+        await runtime.stop();
+      }
+    },
+  },
+  {
+    name: "runtime service: semantic topology ids match between build results and mesh payloads",
+    fn: async () => {
+      const runtime = await startRuntimeServer();
+      try {
+        const submit = await fetchJsonWithStatus<{ id: string; jobId: string; state: string }>(
+          `${runtime.baseUrl}/v1/build`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              part: makeRuntimeBooleanUnionPart(),
+              options: { meshProfile: "interactive" },
+            }),
+          }
+        );
+        const job = await pollJob(runtime.baseUrl, submit.jobId);
+        assert.equal(job.state, "succeeded");
+
+        const buildFaceIds = new Set(
+          Array.isArray(job.result?.selections?.faces) ? (job.result.selections.faces as string[]) : []
+        );
+        const buildEdgeIds = new Set(
+          Array.isArray(job.result?.selections?.edges) ? (job.result.selections.edges as string[]) : []
+        );
+        const expectedFace = "face:body.main~union-1.right.side.1";
+        const expectedEdge = "edge:body.main~union-1.right.side.1.bound.top";
+        assert.equal(buildFaceIds.has(expectedFace), true);
+        assert.equal(buildEdgeIds.has(expectedEdge), true);
+
+        const meshAssetUrl = String(job.result?.mesh?.asset?.url ?? "");
+        assert.ok(meshAssetUrl.length > 0, "missing mesh asset url");
+        const mesh = await fetchJson<{
+          selections?: Array<{ id?: string; kind?: string; meta?: Record<string, unknown> }>;
+        }>(`${runtime.baseUrl}${meshAssetUrl}`);
+        const meshIds = new Set(
+          (mesh.selections ?? [])
+            .map((selection) => String(selection?.id ?? ""))
+            .filter((id) => id.length > 0)
+        );
+        assert.equal(meshIds.has(expectedFace), true);
+        assert.equal(meshIds.has(expectedEdge), true);
+
+        for (const selection of mesh.selections ?? []) {
+          if (!selection?.id) continue;
+          if (selection.kind === "face") {
+            assert.equal(
+              buildFaceIds.has(selection.id),
+              true,
+              `mesh face id missing from build selection index: ${selection.id}`
+            );
+          }
+          if (selection.kind === "edge") {
+            assert.equal(
+              buildEdgeIds.has(selection.id),
+              true,
+              `mesh edge id missing from build selection index: ${selection.id}`
+            );
+          }
+        }
       } finally {
         await runtime.stop();
       }

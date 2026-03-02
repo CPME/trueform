@@ -66,6 +66,59 @@ export const TF_RUNTIME_OPTIONAL_FEATURES = {
   },
 } as const;
 
+export const TF_RUNTIME_ERROR_CONTRACT = {
+  envelope: {
+    sync: "{ error: { code, message, details? } }",
+    async: "{ id, jobId, state, result|null, error: { code, message, details? } }",
+  },
+  selectorCodes: [
+    "selector_named_missing",
+    "selector_ambiguous",
+    "selector_empty",
+    "selector_empty_after_rank",
+    "selector_legacy_numeric_unsupported",
+  ],
+  genericCodes: ["runtime_error"],
+  clientRule: "Treat error.code as the stable programmatic key; message text is diagnostic only.",
+} as const;
+
+export const TF_RUNTIME_SEMANTIC_TOPOLOGY = {
+  enabled: true,
+  contractVersion: "beta-2026-03-02",
+  selectionTransport: {
+    canonicalSelectionIdField: "selection.id",
+    buildResultIndex:
+      "result.selections lists canonical ids by kind across the full final selection set.",
+    meshSelections:
+      "result.mesh.asset.selections reuses canonical ids for the requested output scope only.",
+    relationship:
+      "mesh selections are a scoped subset of build-result canonical ids when the same topology is present in both payloads.",
+    clientRule: "Persist emitted selection ids exactly as returned and do not synthesize ids from metadata.",
+  },
+  selectorRebinding: {
+    policy: "deterministic_and_conservative",
+    supportedMigrations: [
+      "plain semantic slot <-> split.*.branch.*",
+      "legacy union tie suffixes -> right.* disambiguation",
+      "matching face-slot migrations propagated into semantic edge slots",
+    ],
+  },
+  supportedWorkflows: [
+    "direct-pick semantic face ids for primary prismatic output faces",
+    "direct-pick semantic edge ids for primary prismatic output edges",
+    "split face slot families",
+    "fillet/chamfer semantic edge families",
+    "boolean subtract semantic cut faces and cut-derived edges",
+    "boolean union semantic face and edge ids with right.* disambiguation",
+    "boolean intersect semantic overlap face and edge ids",
+  ],
+  unsupportedWorkflows: [
+    "broad heuristic selector repair beyond documented migrations",
+    "automatic migration of legacy numeric selectors",
+    "general-purpose vertex or free-point direct-pick ids",
+  ],
+} as const;
+
 export const TF_RUNTIME_FEATURE_STAGING = TF_STAGED_FEATURES;
 
 export function resolveRuntimeFeatureStages(
@@ -200,7 +253,24 @@ export const TF_RUNTIME_OPENAPI = {
       get: {
         summary: "Get runtime capabilities",
         responses: {
-          "200": { description: "Capabilities response" },
+          "200": {
+            description: "Capabilities response",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["apiVersion", "optionalFeatures", "errorContract", "semanticTopology"],
+                  properties: {
+                    apiVersion: { type: "string" },
+                    optionalFeatures: { type: "object", additionalProperties: true },
+                    errorContract: { type: "object", additionalProperties: true },
+                    semanticTopology: { type: "object", additionalProperties: true },
+                  },
+                  additionalProperties: true,
+                },
+              },
+            },
+          },
         },
       },
     },
