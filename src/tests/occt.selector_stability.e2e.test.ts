@@ -175,6 +175,57 @@ const matrix: MatrixCase[] = [
     },
   },
   {
+    name: "stable face id keeps hole resolved when only the source owner alias changes",
+    buildSeedPart: () =>
+      dsl.part("selector-matrix-seed-owner-alias", [
+        dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:main"),
+      ]),
+    captureSelectionId: topStableFaceId,
+    buildEditedPart: (selectionId) =>
+      dsl.part("selector-matrix-owner-alias", [
+        dsl.hole("hole-1", dsl.selectorNamed(selectionId), "-Z", 6, "throughAll"),
+        dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:renamed"),
+      ]),
+    assertEdited: ({ occt, result, selectionId }) => {
+      assert.ok(
+        result.order.indexOf("base") < result.order.indexOf("hole-1"),
+        `expected stable face id to anchor hole ordering after owner rename (order=${result.order.join(",")})`
+      );
+      const baseStep = stepByFeatureId(result, "base");
+      assert.ok(baseStep, "missing base step for owner-alias rebind");
+      assert.equal(
+        baseStep.result.selections.some((selection) => selection.id === selectionId),
+        false,
+        "expected owner alias rename to change the emitted base selection id"
+      );
+      const renamedTopFace = (baseStep.result.selections as SelectionRecord[]).find(
+        (selection) =>
+          selection.kind === "face" &&
+          selection.meta["createdBy"] === "base" &&
+          selection.meta["selectionSlot"] === "top"
+      );
+      assert.ok(renamedTopFace, "missing renamed top face selection after owner alias change");
+      assert.notEqual(renamedTopFace?.id, selectionId);
+      assert.ok(
+        renamedTopFace?.id.startsWith("face:body.renamed~base."),
+        `expected renamed top face id to use body:renamed owner token, got ${renamedTopFace?.id ?? ""}`
+      );
+      const baseBody = baseStep.result.outputs.get("body:renamed");
+      const finalBody = result.final.outputs.get("body:renamed");
+      assert.ok(baseBody, "missing renamed base output body:renamed");
+      assert.ok(finalBody, "missing final output body:renamed");
+      const baseShape = baseBody.meta["shape"] as any;
+      const finalShape = finalBody.meta["shape"] as any;
+      assert.ok(baseShape, "missing renamed base shape");
+      assert.ok(finalShape, "missing renamed final shape");
+      assertValidShape(occt, finalShape, "stable-id hole after owner rename solid");
+      assert.ok(
+        countFaces(occt, finalShape) > countFaces(occt, baseShape),
+        "expected hole to add faces after alias-only owner rename"
+      );
+    },
+  },
+  {
     name: "stable face id keeps move face resolved after upstream edits",
     buildSeedPart: () =>
       dsl.part("selector-matrix-seed-move-face", [

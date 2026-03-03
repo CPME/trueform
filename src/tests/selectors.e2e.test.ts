@@ -124,6 +124,61 @@ const tests = [
     },
   },
   {
+    name: "selectors: semantic ids rebind when only the owner alias changes",
+    fn: async () => {
+      const selector = dsl.selectorNamed("face:body.main~extrude-2.top");
+      const ctx = {
+        selections: [
+          {
+            id: "face:body.auto-extrude-2~extrude-2.top",
+            kind: "face" as const,
+            meta: {
+              ownerKey: "body:auto-extrude-2",
+              createdBy: "extrude-2",
+              selectionSlot: "top",
+            },
+          },
+        ],
+        named: new Map(),
+      };
+      const resolved = resolveSelector(selector, ctx);
+      assert.equal(resolved.id, "face:body.auto-extrude-2~extrude-2.top");
+    },
+  },
+  {
+    name: "selectors: owner-alias fallback stays explicit when alias-only rebind is ambiguous",
+    fn: async () => {
+      const selector = dsl.selectorNamed("face:body.main~extrude-2.top");
+      const ctx = {
+        selections: [
+          {
+            id: "face:body.auto-extrude-2~extrude-2.top",
+            kind: "face" as const,
+            meta: {
+              ownerKey: "body:auto-extrude-2",
+              createdBy: "extrude-2",
+              selectionSlot: "top",
+            },
+          },
+          {
+            id: "face:body.auto-extrude-3~extrude-2.top",
+            kind: "face" as const,
+            meta: {
+              ownerKey: "body:auto-extrude-3",
+              createdBy: "extrude-2",
+              selectionSlot: "top",
+            },
+          },
+        ],
+        named: new Map(),
+      };
+      assert.throws(
+        () => resolveSelector(selector, ctx),
+        (err) => err instanceof CompileError && err.code === "selector_named_missing"
+      );
+    },
+  },
+  {
     name: "selectors: semantic face ids rebind from plain slot to split branch via lineage",
     fn: async () => {
       const selector = dsl.selectorNamed("face:body.main~intersect-1.top");

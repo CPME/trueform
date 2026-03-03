@@ -421,7 +421,10 @@ Diagnostics expectations for broken references:
   (`face:<number>`) are unsupported and non-persistent.
 - stable selection ids include an owner token plus a producer token
   (`face:<owner>~<feature>.<slot-or-fallback>`), which allows clients and the
-  compiler to preserve references without relying on traversal order.
+  compiler to preserve references without relying on traversal order. The
+  `<owner>` token is a lookup namespace hint, not the canonical identity key:
+  alias-only owner changes must not invalidate an otherwise still-unique stable
+  id when the producer token and subshape slot still resolve deterministically.
 - semantic ids can include feature-derived slots, not only hashes. Examples:
   - `face:body.main~base.top`
   - `face:body.main~union-1.right.side.1`

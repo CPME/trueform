@@ -144,14 +144,36 @@ function resolveStableSelectionRebind(
   const parsedSlot = parseSelectionSlot(parsed.slot);
   if (parsedSlot.relation === "edge") return null;
 
-  const candidates = ctx.selections.filter((selection) => {
-    if (selection.kind !== parsed.kind) return false;
-    const owner = normalizeSelectionToken(requireMetaString(selection.meta["ownerKey"]));
-    const createdBy = normalizeSelectionToken(requireMetaString(selection.meta["createdBy"]));
-    return owner === parsed.ownerToken && createdBy === parsed.createdByToken;
-  });
-  if (candidates.length === 0) return null;
+  const ownerScoped = stableSelectionRebindCandidates(parsed, ctx, true);
+  if (ownerScoped.length > 0) {
+    return pickStableSelectionRebindCandidate(parsed, parsedSlot, ownerScoped);
+  }
 
+  const producerScoped = stableSelectionRebindCandidates(parsed, ctx, false);
+  if (producerScoped.length === 0) return null;
+  return pickStableSelectionRebindCandidate(parsed, parsedSlot, producerScoped);
+}
+
+function stableSelectionRebindCandidates(
+  parsed: ParsedStableSelectionRef,
+  ctx: ResolutionContext,
+  matchOwner: boolean
+): Selection[] {
+  return ctx.selections.filter((selection) => {
+    if (selection.kind !== parsed.kind) return false;
+    const createdBy = normalizeSelectionToken(requireMetaString(selection.meta["createdBy"]));
+    if (createdBy !== parsed.createdByToken) return false;
+    if (!matchOwner) return true;
+    const owner = normalizeSelectionToken(requireMetaString(selection.meta["ownerKey"]));
+    return owner === parsed.ownerToken;
+  });
+}
+
+function pickStableSelectionRebindCandidate(
+  parsed: ParsedStableSelectionRef,
+  parsedSlot: ParsedSelectionSlot,
+  candidates: Selection[]
+): Selection | null {
   const scored = candidates
     .map((selection) => ({
       selection,
