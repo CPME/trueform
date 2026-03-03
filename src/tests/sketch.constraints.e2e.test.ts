@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { solveSketchConstraintsDetailed } from "../core.js";
+import { solveSketchConstraints, solveSketchConstraintsDetailed } from "../core.js";
 import { dsl, Sketch2D, SketchLine, SketchPoint } from "../dsl.js";
 import { normalizePart } from "../compiler.js";
 import { runTests } from "./occt_test_utils.js";
@@ -101,6 +101,17 @@ const tests = [
       assert.equal(report.remainingDegreesOfFreedom, 13);
       assert.equal(report.status, "underconstrained");
       assert.deepEqual(
+        report.constraintStatus.map((entry) => ({
+          constraintId: entry.constraintId,
+          status: entry.status,
+        })),
+        [
+          { constraintId: "c-parallel", status: "satisfied" },
+          { constraintId: "c-perpendicular", status: "satisfied" },
+          { constraintId: "c-equal", status: "satisfied" },
+        ]
+      );
+      assert.deepEqual(
         report.entityStatus.map((entry) => ({
           entityId: entry.entityId,
           remainingDegreesOfFreedom: entry.remainingDegreesOfFreedom,
@@ -128,6 +139,142 @@ const tests = [
             status: "underconstrained",
           },
         ]
+      );
+    },
+  },
+  {
+    name: "sketch constraints: classify overconstrained solved sketches",
+    fn: async () => {
+      const report = solveSketchConstraintsDetailed(
+        "sketch-overconstrained",
+        [dsl.sketchLine("line-1", [0, 0], [10, 0])],
+        [
+          dsl.sketchConstraintFixPoint("c-fix-start", dsl.sketchPointRef("line-1", "start"), {
+            x: 0,
+            y: 0,
+          }),
+          dsl.sketchConstraintHorizontal("c-horizontal", "line-1"),
+          dsl.sketchConstraintFixPoint("c-fix-end", dsl.sketchPointRef("line-1", "end"), {
+            x: 10,
+            y: 0,
+          }),
+          dsl.sketchConstraintDistance(
+            "c-distance",
+            dsl.sketchPointRef("line-1", "start"),
+            dsl.sketchPointRef("line-1", "end"),
+            10
+          ),
+        ]
+      );
+
+      assert.equal(report.status, "overconstrained");
+      assert.equal(report.remainingDegreesOfFreedom, 0);
+      assert.deepEqual(
+        report.constraintStatus.map((entry) => entry.status),
+        ["satisfied", "satisfied", "satisfied", "satisfied"]
+      );
+      assert.deepEqual(
+        report.entityStatus.map((entry) => ({
+          entityId: entry.entityId,
+          status: entry.status,
+        })),
+        [{ entityId: "line-1", status: "overconstrained" }]
+      );
+    },
+  },
+  {
+    name: "sketch constraints: classify ambiguous fully solved relative layouts",
+    fn: async () => {
+      const report = solveSketchConstraintsDetailed(
+        "sketch-ambiguous",
+        [
+          dsl.sketchLine("line-1", [0, 0], [10, 0]),
+          dsl.sketchLine("line-2", [10, 0], [10, 6]),
+        ],
+        [
+          dsl.sketchConstraintHorizontal("c-horizontal", "line-1"),
+          dsl.sketchConstraintDistance(
+            "c-width",
+            dsl.sketchPointRef("line-1", "start"),
+            dsl.sketchPointRef("line-1", "end"),
+            10
+          ),
+          dsl.sketchConstraintCoincident(
+            "c-join",
+            dsl.sketchPointRef("line-1", "end"),
+            dsl.sketchPointRef("line-2", "start")
+          ),
+          dsl.sketchConstraintVertical("c-vertical", "line-2"),
+          dsl.sketchConstraintDistance(
+            "c-height",
+            dsl.sketchPointRef("line-2", "start"),
+            dsl.sketchPointRef("line-2", "end"),
+            10
+          ),
+          dsl.sketchConstraintEqualLength("c-equal", "line-1", "line-2"),
+          dsl.sketchConstraintPerpendicular("c-perp", "line-1", "line-2"),
+        ]
+      );
+
+      assert.equal(report.status, "ambiguous");
+      assert.equal(report.remainingDegreesOfFreedom, 0);
+      assert.deepEqual(
+        report.entityStatus.map((entry) => ({
+          entityId: entry.entityId,
+          status: entry.status,
+        })),
+        [
+          { entityId: "line-1", status: "ambiguous" },
+          { entityId: "line-2", status: "ambiguous" },
+        ]
+      );
+      assert.deepEqual(
+        report.constraintStatus.map((entry) => entry.status),
+        [
+          "satisfied",
+          "satisfied",
+          "satisfied",
+          "satisfied",
+          "satisfied",
+          "satisfied",
+          "satisfied",
+        ]
+      );
+    },
+  },
+  {
+    name: "sketch constraints: report conflicts in detailed api and throw in strict api",
+    fn: async () => {
+      const entities = [dsl.sketchLine("line-1", [0, 0], [1, 1])];
+      const constraints = [
+        dsl.sketchConstraintFixPoint("c-fix-start", dsl.sketchPointRef("line-1", "start"), {
+          x: 0,
+          y: 0,
+        }),
+        dsl.sketchConstraintHorizontal("c-horizontal", "line-1"),
+        dsl.sketchConstraintFixPoint("c-fix-end", dsl.sketchPointRef("line-1", "end"), {
+          x: 1,
+          y: 1,
+        }),
+      ];
+
+      const report = solveSketchConstraintsDetailed("sketch-conflict", entities, constraints);
+      assert.equal(report.status, "conflict");
+      assert.equal(report.constraintStatus[1]?.constraintId, "c-horizontal");
+      assert.equal(report.constraintStatus[1]?.status, "unsatisfied");
+      assert.equal(report.constraintStatus[1]?.code, "sketch_constraint_unsatisfied");
+      assert.ok(report.constraintStatus[1]?.message?.includes("c-horizontal"));
+      assert.deepEqual(
+        report.entityStatus.map((entry) => ({
+          entityId: entry.entityId,
+          status: entry.status,
+        })),
+        [{ entityId: "line-1", status: "conflict" }]
+      );
+
+      assert.throws(
+        () => solveSketchConstraints("sketch-conflict", [dsl.sketchLine("line-1", [0, 0], [1, 1])], constraints),
+        /c-horizontal/i
       );
     },
   },

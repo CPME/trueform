@@ -11,9 +11,11 @@ export {
   solveSketchConstraintsDetailed,
 } from "./sketch/constraints.js";
 export type {
+  SketchConstraintDiagnosticStatus,
   SketchConstraintEntityStatus,
   SketchConstraintSolveReport,
   SketchConstraintSolveStatus,
+  SketchConstraintStatus,
 } from "./sketch/constraints.js";
 export {
   TF_STAGED_FEATURES,

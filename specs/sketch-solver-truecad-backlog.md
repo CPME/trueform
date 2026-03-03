@@ -48,7 +48,7 @@ Implemented and committed:
 ### P0: Immediate TrueCAD Unlockers
 
 1. Structured red-state outcomes
-Status: pending
+Status: completed on 2026-03-03
 
 Needed outcome:
 - Return structured solver states for:
@@ -67,7 +67,7 @@ Minimum deliverable:
 - Distinguish unsatisfied vs contradictory vs ambiguous outcomes.
 
 2. Per-constraint diagnostics
-Status: pending
+Status: completed on 2026-03-03
 
 Needed outcome:
 - Report constraint-level residuals and failure metadata.
@@ -230,9 +230,11 @@ Why:
 - 2026-03-03: Added line-line constraints (`parallel`, `perpendicular`,
   `equalLength`) and exported a detailed solve report for UI consumers. Commit:
   `9b9a791`.
+- 2026-03-03: Added structured solve outcomes (`overconstrained`, `conflict`,
+  `ambiguous`) and per-constraint diagnostics in the detailed solve report while
+  preserving strict normalization-time throws through the wrapper API.
 
 ### Next Recommended Task
 
-Implement structured red-state outcomes plus per-constraint diagnostics in the
-detailed solve report. That is the highest-value next step for TrueCAD after the
-current black/blue slice.
+Make the detailed solver API non-mutating. That is the next highest-value step
+for cleaner TrueCAD editor-state integration.

@@ -4,7 +4,24 @@ import type { Point2D, SketchConstraint, SketchConstraintPointRef, SketchEntity 
 type NumericPoint = [number, number];
 type NumericVector = [number, number];
 
-export type SketchConstraintSolveStatus = "fully-constrained" | "underconstrained";
+export type SketchConstraintSolveStatus =
+  | "fully-constrained"
+  | "underconstrained"
+  | "overconstrained"
+  | "conflict"
+  | "ambiguous";
+
+export type SketchConstraintDiagnosticStatus = "satisfied" | "unsatisfied";
+
+export type SketchConstraintStatus = {
+  constraintId: string;
+  kind: SketchConstraint["kind"];
+  status: SketchConstraintDiagnosticStatus;
+  residual: number;
+  entityIds: string[];
+  code?: string;
+  message?: string;
+};
 
 export type SketchConstraintEntityStatus = {
   entityId: string;
@@ -19,6 +36,7 @@ export type SketchConstraintSolveReport = {
   remainingDegreesOfFreedom: number;
   status: SketchConstraintSolveStatus;
   entityStatus: SketchConstraintEntityStatus[];
+  constraintStatus: SketchConstraintStatus[];
 };
 
 const SOLVE_EPSILON = 1e-9;
@@ -29,7 +47,18 @@ export function solveSketchConstraints(
   entities: SketchEntity[],
   constraints: SketchConstraint[]
 ): SketchEntity[] {
-  return solveSketchConstraintsDetailed(sketchId, entities, constraints).entities;
+  const report = solveSketchConstraintsDetailed(sketchId, entities, constraints);
+  const failingConstraint = report.constraintStatus.find(
+    (entry) => entry.status === "unsatisfied"
+  );
+  if (failingConstraint) {
+    throw new CompileError(
+      failingConstraint.code ?? "sketch_constraint_unsatisfied",
+      failingConstraint.message ??
+        `Sketch ${sketchId} constraint ${failingConstraint.constraintId} could not be satisfied`
+    );
+  }
+  return report.entities;
 }
 
 export function solveSketchConstraintsDetailed(
@@ -38,7 +67,7 @@ export function solveSketchConstraintsDetailed(
   constraints: SketchConstraint[]
 ): SketchConstraintSolveReport {
   if (constraints.length === 0) {
-    return buildSolveReport(entities, constraints);
+    return buildSolveReport(entities, constraints, []);
   }
 
   const entityMap = new Map(entities.map((entity) => [entity.id, entity]));
@@ -52,49 +81,117 @@ export function solveSketchConstraintsDetailed(
     if (maxDelta <= SOLVE_TOLERANCE) break;
   }
 
-  for (const constraint of constraints) {
-    const residual = measureConstraintResidual(sketchId, entityMap, constraint);
-    if (residual > SOLVE_TOLERANCE * 10) {
-      throw new CompileError(
-        "sketch_constraint_unsatisfied",
-        `Sketch ${sketchId} constraint ${constraint.id} could not be satisfied`
-      );
-    }
-  }
+  const constraintStatus = constraints.map((constraint) =>
+    buildConstraintStatus(sketchId, entityMap, constraint)
+  );
 
-  return buildSolveReport(entities, constraints);
+  return buildSolveReport(entities, constraints, constraintStatus);
 }
 
 function buildSolveReport(
   entities: SketchEntity[],
-  constraints: SketchConstraint[]
+  constraints: SketchConstraint[],
+  constraintStatus: SketchConstraintStatus[]
 ): SketchConstraintSolveReport {
   const totalDegreesOfFreedom = entities.reduce(
     (sum, entity) => sum + estimateEntityDegreesOfFreedom(entity),
     0
   );
   const consumption = estimateConstraintConsumption(constraints);
-  const remainingDegreesOfFreedom = Math.max(0, totalDegreesOfFreedom - consumption.totalConsumed);
+  const rawRemainingDegreesOfFreedom = totalDegreesOfFreedom - consumption.totalConsumed;
+  const remainingDegreesOfFreedom = Math.max(0, rawRemainingDegreesOfFreedom);
+  const unsatisfiedEntities = new Set(
+    constraintStatus
+      .filter((entry) => entry.status === "unsatisfied")
+      .flatMap((entry) => entry.entityIds)
+  );
+  const constrainedEntities = new Set(
+    constraintStatus.flatMap((entry) => entry.entityIds)
+  );
+  const anchorAxes = countAnchorAxes(constraints);
+  const hasConflict = constraintStatus.some((entry) => entry.status === "unsatisfied");
+  const overallStatus: SketchConstraintSolveStatus = hasConflict
+    ? "conflict"
+    : rawRemainingDegreesOfFreedom < 0
+      ? "overconstrained"
+      : remainingDegreesOfFreedom === 0 && constraints.length > 0 && anchorAxes < 2
+        ? "ambiguous"
+        : remainingDegreesOfFreedom === 0
+          ? "fully-constrained"
+          : "underconstrained";
   const perEntityStatus = entities.map((entity) => {
     const total = estimateEntityDegreesOfFreedom(entity);
-    const consumed = Math.min(total, consumption.byEntity.get(entity.id) ?? 0);
-    const remaining = Math.max(0, total - consumed);
+    const rawRemaining = total - (consumption.byEntity.get(entity.id) ?? 0);
+    const remaining = Math.max(0, rawRemaining);
+    let status: SketchConstraintSolveStatus;
+    if (unsatisfiedEntities.has(entity.id)) {
+      status = "conflict";
+    } else if (overallStatus === "ambiguous" && constrainedEntities.has(entity.id)) {
+      status = "ambiguous";
+    } else if (rawRemaining < 0) {
+      status = "overconstrained";
+    } else if (remaining === 0) {
+      status = "fully-constrained";
+    } else {
+      status = "underconstrained";
+    }
     return {
       entityId: entity.id,
       totalDegreesOfFreedom: total,
       remainingDegreesOfFreedom: remaining,
-      status:
-        remaining === 0 ? "fully-constrained" : "underconstrained",
+      status,
     } satisfies SketchConstraintEntityStatus;
   });
   return {
     entities,
     totalDegreesOfFreedom,
     remainingDegreesOfFreedom,
-    status:
-      remainingDegreesOfFreedom === 0 ? "fully-constrained" : "underconstrained",
+    status: overallStatus,
     entityStatus: perEntityStatus,
+    constraintStatus,
   };
+}
+
+function buildConstraintStatus(
+  sketchId: string,
+  entityMap: Map<string, SketchEntity>,
+  constraint: SketchConstraint
+): SketchConstraintStatus {
+  const entityIds = listConstraintEntityIds(constraint);
+  try {
+    const residual = measureConstraintResidual(sketchId, entityMap, constraint);
+    if (residual <= SOLVE_TOLERANCE * 10) {
+      return {
+        constraintId: constraint.id,
+        kind: constraint.kind,
+        status: "satisfied",
+        residual,
+        entityIds,
+      };
+    }
+    return {
+      constraintId: constraint.id,
+      kind: constraint.kind,
+      status: "unsatisfied",
+      residual,
+      entityIds,
+      code: "sketch_constraint_unsatisfied",
+      message: `Sketch ${sketchId} constraint ${constraint.id} could not be satisfied`,
+    };
+  } catch (err) {
+    if (err instanceof CompileError) {
+      return {
+        constraintId: constraint.id,
+        kind: constraint.kind,
+        status: "unsatisfied",
+        residual: Number.POSITIVE_INFINITY,
+        entityIds,
+        code: err.code,
+        message: err.message,
+      };
+    }
+    throw err;
+  }
 }
 
 function estimateConstraintConsumption(
@@ -135,6 +232,34 @@ function estimateConstraintConsumption(
   }
 
   return { totalConsumed, byEntity };
+}
+
+function countAnchorAxes(constraints: SketchConstraint[]): number {
+  let axes = 0;
+  for (const constraint of constraints) {
+    if (constraint.kind !== "sketch.constraint.fixPoint") continue;
+    if (constraint.x !== undefined) axes += 1;
+    if (constraint.y !== undefined) axes += 1;
+  }
+  return axes;
+}
+
+function listConstraintEntityIds(constraint: SketchConstraint): string[] {
+  switch (constraint.kind) {
+    case "sketch.constraint.coincident":
+      return dedupeEntityIds([constraint.a.entity, constraint.b.entity]);
+    case "sketch.constraint.horizontal":
+    case "sketch.constraint.vertical":
+      return [constraint.line];
+    case "sketch.constraint.parallel":
+    case "sketch.constraint.perpendicular":
+    case "sketch.constraint.equalLength":
+      return dedupeEntityIds([constraint.a, constraint.b]);
+    case "sketch.constraint.distance":
+      return dedupeEntityIds([constraint.a.entity, constraint.b.entity]);
+    case "sketch.constraint.fixPoint":
+      return [constraint.point.entity];
+  }
 }
 
 function estimateEntityDegreesOfFreedom(entity: SketchEntity): number {
@@ -520,6 +645,10 @@ function distance(a: NumericPoint, b: NumericPoint): number {
 
 function samePointRef(a: SketchConstraintPointRef, b: SketchConstraintPointRef): boolean {
   return a.entity === b.entity && (a.handle ?? null) === (b.handle ?? null);
+}
+
+function dedupeEntityIds(ids: string[]): string[] {
+  return [...new Set(ids)];
 }
 
 function subtract(a: NumericPoint, b: NumericPoint): NumericVector {
