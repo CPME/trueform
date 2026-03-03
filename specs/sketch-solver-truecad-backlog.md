@@ -38,9 +38,15 @@ Implemented and committed:
 - Commit: `9b9a791` (`Extend sketch constraint solver coverage`)
 
 4. Current UI-usable solve report
-- overall status: `fully-constrained` or `underconstrained`
+- overall status:
+  - `fully-constrained`
+  - `underconstrained`
+  - `overconstrained`
+  - `conflict`
+  - `ambiguous`
 - total and remaining DOF
 - per-entity status
+- per-constraint diagnostics (`constraintStatus[]`)
 - Important: current DOF accounting is heuristic, not rank-based.
 
 ## Priority Order
@@ -212,14 +218,12 @@ Why:
 
 ## Suggested Execution Sequence
 
-1. Add structured red-state outcomes.
-2. Add per-constraint diagnostics.
-3. Make the detailed solver API non-mutating.
-4. Add `angle`.
-5. Add `radius`.
-6. Upgrade DOF analysis.
-7. Upgrade the numerical solve core.
-8. Add the broader CAD constraint families.
+1. Make the detailed solver API non-mutating.
+2. Add `angle`.
+3. Add `radius`.
+4. Upgrade DOF analysis.
+5. Upgrade the numerical solve core.
+6. Add the broader CAD constraint families.
 
 ## Progress Log
 
