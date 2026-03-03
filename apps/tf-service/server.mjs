@@ -181,7 +181,15 @@ export function createTfServiceServer(options = {}) {
       : 12000;
     const sourceText = Buffer.isBuffer(asset.data) ? asset.data.toString("utf8") : String(asset.data);
     const mesh = JSON.parse(sourceText);
-    const arrayKeys = ["positions", "normals", "indices", "edgePositions", "edgeIndices", "faceIds"];
+    const arrayKeys = [
+      "positions",
+      "normals",
+      "indices",
+      "edgePositions",
+      "edgeIndices",
+      "edgeSelectionIndices",
+      "faceIds",
+    ];
     const meta = {};
     for (const [key, value] of Object.entries(mesh)) {
       if (arrayKeys.includes(key)) continue;
@@ -576,6 +584,35 @@ export function createTfServiceServer(options = {}) {
       summary.byKind[kind] = (summary.byKind[kind] || 0) + 1;
     }
     return summary;
+  }
+
+  function buildEdgeSelectionIndices(mesh, selections) {
+    const edgeIndices = Array.isArray(mesh?.edgeIndices) ? mesh.edgeIndices : [];
+    if (edgeIndices.length === 0 || !Array.isArray(selections) || selections.length === 0) {
+      return undefined;
+    }
+
+    const selectionByEdgeIndex = new Map();
+    for (let selectionIndex = 0; selectionIndex < selections.length; selectionIndex += 1) {
+      const selection = selections[selectionIndex];
+      if (selection?.kind !== "edge") continue;
+      const rawIndices = Array.isArray(selection?.meta?.backendEdgeIndices)
+        ? selection.meta.backendEdgeIndices
+        : [];
+      for (const rawIndex of rawIndices) {
+        if (!Number.isInteger(rawIndex) || rawIndex < 0) continue;
+        if (!selectionByEdgeIndex.has(rawIndex)) {
+          selectionByEdgeIndex.set(rawIndex, selectionIndex);
+        }
+      }
+    }
+
+    if (selectionByEdgeIndex.size === 0) return undefined;
+    return edgeIndices.map((edgeIndex) =>
+      Number.isInteger(edgeIndex) && selectionByEdgeIndex.has(edgeIndex)
+        ? selectionByEdgeIndex.get(edgeIndex)
+        : -1
+    );
   }
 
   function buildOutputsMap(outputs) {
@@ -1217,11 +1254,13 @@ export function createTfServiceServer(options = {}) {
     throwIfCanceled(ctx);
     const scopedSelections = scopeSelectionsToTarget(selections, target, output);
     const safeSelections = sanitizeSelections(scopedSelections);
+    const edgeSelectionIndices = buildEdgeSelectionIndices(mesh, safeSelections);
     const selectionSummary = summarizeSelections(safeSelections);
     const triangleCount = triangleCountFromMesh(mesh);
     const bounds = computeBounds(mesh.positions);
     const payload = {
       ...mesh,
+      ...(Array.isArray(edgeSelectionIndices) ? { edgeSelectionIndices } : {}),
       selections: safeSelections,
       selectionSummary,
     };

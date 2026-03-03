@@ -93,6 +93,8 @@ export const TF_RUNTIME_SEMANTIC_TOPOLOGY = {
       "result.mesh.asset.selections reuses canonical ids for the requested output scope only.",
     relationship:
       "mesh selections are a scoped subset of build-result canonical ids when the same topology is present in both payloads.",
+    edgeMeshMapping:
+      "mesh.edgeIndices are raw backend edge-occurrence indices; mesh.edgeSelectionIndices map rendered edge segments to indexes in mesh.selections.",
     clientRule: "Persist emitted selection ids exactly as returned and do not synthesize ids from metadata.",
   },
   selectorRebinding: {

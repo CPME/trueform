@@ -60,7 +60,8 @@ The viewer expects a JSON payload with:
 - `indices`: triangle indices into `positions` (optional but recommended).
 - `normals`: flat xyz array per vertex (optional; viewer will compute if missing).
 - `edgePositions`: flat xyz array for line segments (optional, CAD-style edges).
-- `edgeIndices`: one index per edge segment in `edgePositions` (optional).
+- `edgeIndices`: one raw backend edge-occurrence index per edge segment in `edgePositions` (optional).
+- `edgeSelectionIndices`: one semantic selection-array index per edge segment in `edgePositions` (optional, `-1` when unmapped).
 
 ## Assembly manifest format
 

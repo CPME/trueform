@@ -338,6 +338,12 @@ function makeRuntimeBooleanUnionPart() {
   ]);
 }
 
+function makeRuntimeTrianglePrismPart() {
+  return dsl.part("runtime-triangle-prism", [
+    dsl.extrude("prism", dsl.profilePoly(3, 12), 18, "body:main"),
+  ]);
+}
+
 const tests = [
   {
     name: "runtime service: documents, lifecycle, cache keys, and mesh profile contract",
@@ -824,6 +830,7 @@ const tests = [
           positions?: number[];
           edgePositions?: number[];
           edgeIndices?: number[];
+          edgeSelectionIndices?: number[];
         }>(
           `${runtime.baseUrl}${meshInteractiveAssetUrl}`
         );
@@ -870,6 +877,12 @@ const tests = [
         assert.equal(
           chunkedIndices.length,
           interactiveMesh.indices?.length ?? 0
+        );
+        assert.equal(
+          Array.isArray(chunkedInteractiveMesh.edgeSelectionIndices)
+            ? (chunkedInteractiveMesh.edgeSelectionIndices as number[]).length
+            : 0,
+          interactiveMesh.edgeSelectionIndices?.length ?? 0
         );
 
         const previewAssetId = String(meshPreviewJob.result?.mesh?.asset?.id ?? "");
@@ -1835,6 +1848,123 @@ const tests = [
               `mesh edge id missing from build selection index: ${selection.id}`
             );
           }
+        }
+      } finally {
+        await runtime.stop();
+      }
+    },
+  },
+  {
+    name: "runtime service: triangular prism mesh edge segments map back to semantic edge selections",
+    fn: async () => {
+      const runtime = await startRuntimeServer();
+      try {
+        const submit = await fetchJsonWithStatus<{ id: string; jobId: string; state: string }>(
+          `${runtime.baseUrl}/v1/build`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              part: makeRuntimeTrianglePrismPart(),
+              options: { meshProfile: "interactive" },
+            }),
+          }
+        );
+        const job = await pollJob(runtime.baseUrl, submit.jobId);
+        assert.equal(job.state, "succeeded");
+
+        const buildEdgeIds = Array.isArray(job.result?.selections?.edges)
+          ? (job.result.selections.edges as string[])
+          : [];
+        assert.equal(buildEdgeIds.length, 9, "expected 9 semantic edges for the prism");
+
+        const meshAssetUrl = String(job.result?.mesh?.asset?.url ?? "");
+        assert.ok(meshAssetUrl.length > 0, "missing mesh asset url");
+        const mesh = await fetchJson<{
+          edgePositions?: number[];
+          edgeIndices?: number[];
+          edgeSelectionIndices?: number[];
+          selections?: Array<{ id?: string; kind?: string; meta?: Record<string, unknown> }>;
+        }>(`${runtime.baseUrl}${meshAssetUrl}`);
+
+        const edgePositions = mesh.edgePositions ?? [];
+        const edgeIndices = mesh.edgeIndices ?? [];
+        const edgeSelectionIndices = mesh.edgeSelectionIndices ?? [];
+        const selections = mesh.selections ?? [];
+        const edgeSegments = Math.floor(edgePositions.length / 6);
+
+        assert.ok(edgeSegments > 0, "expected rendered edge segments");
+        assert.equal(edgeIndices.length, edgeSegments);
+        assert.equal(edgeSelectionIndices.length, edgeSegments);
+        assert.ok(
+          Math.max(...edgeIndices) > buildEdgeIds.length - 1,
+          "expected raw edgeIndices to reflect duplicated backend edge traversal occurrences"
+        );
+
+        const meshEdgeSelections = selections.filter((selection) => selection?.kind === "edge");
+        assert.equal(
+          meshEdgeSelections.length,
+          9,
+          "expected scoped mesh selections to expose 9 semantic prism edges"
+        );
+
+        let verticalEdges = 0;
+        let profileEdges = 0;
+        for (const selection of meshEdgeSelections) {
+          const backendEdgeIndices = Array.isArray(selection?.meta?.["backendEdgeIndices"])
+            ? (selection.meta["backendEdgeIndices"] as number[]).filter(
+                (value) => Number.isInteger(value) && value >= 0
+              )
+            : [];
+          assert.ok(
+            backendEdgeIndices.length > 0,
+            `missing backendEdgeIndices for edge selection ${String(selection?.id ?? "")}`
+          );
+
+          const startPoint = Array.isArray(selection?.meta?.["startPoint"])
+            ? (selection.meta["startPoint"] as number[])
+            : [];
+          const endPoint = Array.isArray(selection?.meta?.["endPoint"])
+            ? (selection.meta["endPoint"] as number[])
+            : [];
+          assert.equal(startPoint.length, 3, "edge selections should expose startPoint");
+          assert.equal(endPoint.length, 3, "edge selections should expose endPoint");
+          const zDelta = Math.abs((startPoint[2] ?? 0) - (endPoint[2] ?? 0));
+          if (zDelta > 1e-6) verticalEdges += 1;
+          else profileEdges += 1;
+        }
+
+        assert.equal(verticalEdges, 3, "expected 3 vertical prism edges");
+        assert.equal(profileEdges, 6, "expected 6 profile prism edges");
+
+        const mappedEdgeIds = new Set<string>();
+        for (let i = 0; i < edgeSegments; i += 1) {
+          const selectionIndex = edgeSelectionIndices[i] ?? -1;
+          assert.ok(
+            selectionIndex >= 0 && selectionIndex < selections.length,
+            `segment ${i} should map to a scoped semantic edge selection`
+          );
+          const selection = selections[selectionIndex];
+          assert.equal(selection?.kind, "edge");
+
+          const edgeId = String(selection?.id ?? "");
+          assert.ok(edgeId.length > 0, `segment ${i} should map to an edge id`);
+          mappedEdgeIds.add(edgeId);
+
+          const backendEdgeIndices = Array.isArray(selection?.meta?.["backendEdgeIndices"])
+            ? (selection.meta["backendEdgeIndices"] as number[])
+            : [];
+          assert.equal(
+            backendEdgeIndices.includes(edgeIndices[i] ?? -1),
+            true,
+            `segment ${i} raw edge index should be claimed by ${edgeId}`
+          );
+        }
+
+        assert.equal(mappedEdgeIds.size, 9, "expected all 9 semantic prism edges to be reachable");
+        for (const edgeId of mappedEdgeIds) {
+          assert.equal(buildEdgeIds.includes(edgeId), true, `unexpected mapped edge id ${edgeId}`);
         }
       } finally {
         await runtime.stop();

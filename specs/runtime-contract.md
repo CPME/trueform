@@ -582,12 +582,20 @@ Mesh payload (matches viewer expectations):
   "indices": [0,1,2],
   "normals": [0,0,1, 0,0,1, 0,0,1],
   "edgePositions": [0,0,0, 1,0,0],
-  "edgeIndices": [0]
+  "edgeIndices": [0],
+  "edgeSelectionIndices": [3]
 }
 ```
 
 `edgeIndices` is optional. When present, each entry maps the corresponding
-edge segment in `edgePositions` (6 numbers per segment) to a backend edge index.
+edge segment in `edgePositions` (6 numbers per segment) to the raw edge-occurrence
+index emitted by the backend edge traversal. These values can repeat the same
+semantic edge across multiple traversal occurrences.
+
+`edgeSelectionIndices` is optional. When present, it is the same length as
+`edgeIndices` and maps each rendered edge segment to the corresponding index in
+the same mesh asset's `selections` array. A value of `-1` means that segment did
+not resolve to a scoped semantic edge selection.
 
 ## Selection Metadata Contract
 Selections are backend-agnostic and must provide required metadata keys.
@@ -603,6 +611,8 @@ Optional keys:
   - `startPoint`, `endPoint`, `midPoint`
   - `curveCenter` for circular edges
   - `closedEdge`
+  - `backendEdgeIndices` to list the raw backend edge-occurrence indices in the
+    same index space used by `edgeIndices`
 - `pointAnchors`
   - Structured point locators derived from the parent semantic selection.
   - This is additive selection metadata, not a new top-level selection kind.

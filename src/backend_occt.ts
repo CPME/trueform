@@ -129,6 +129,7 @@ type CollectedSubshape = {
   shape: any;
   meta: Record<string, unknown>;
   ledger?: SelectionLedgerHint;
+  occurrenceIndices?: number[];
 };
 
 type SelectionLedgerHint = {
@@ -5235,6 +5236,12 @@ export class OcctBackend implements Backend {
       (this.occt as any).TopAbs_ShapeEnum.TopAbs_EDGE,
       (edge) => this.edgeMetadata(edge, shape, featureId, ownerKey, tags)
     );
+    for (const entry of edgeEntries) {
+      if (!entry || !Array.isArray(entry.occurrenceIndices) || entry.occurrenceIndices.length === 0) {
+        continue;
+      }
+      entry.meta["backendEdgeIndices"] = entry.occurrenceIndices.slice();
+    }
     this.annotateEdgeAdjacencyMetadata(shape, edgeEntries, faceBindings);
     if (opts?.ledgerPlan?.edges) {
       opts.ledgerPlan.edges(edgeEntries);
@@ -5303,22 +5310,32 @@ export class OcctBackend implements Backend {
   ): CollectedSubshape[] {
     const occt = this.occt as any;
     const collected: CollectedSubshape[] = [];
-    const seen = new Map<number, any[]>();
+    const seen = new Map<number, CollectedSubshape[]>();
     const explorer = new occt.TopExp_Explorer_1();
     explorer.Init(shape, shapeKind, occt.TopAbs_ShapeEnum.TopAbs_SHAPE);
-    for (; explorer.More(); explorer.Next()) {
+    let occurrenceIndex = 0;
+    for (; explorer.More(); explorer.Next(), occurrenceIndex += 1) {
       const current = explorer.Current();
       const hash = this.shapeHash(current);
       const bucket = seen.get(hash);
-      if (bucket && bucket.some((candidate) => this.shapesSame(candidate, current))) {
+      const existing =
+        bucket?.find((candidate) => this.shapesSame(candidate.shape, current)) ?? null;
+      if (existing) {
+        if (Array.isArray(existing.occurrenceIndices)) {
+          existing.occurrenceIndices.push(occurrenceIndex);
+        } else {
+          existing.occurrenceIndices = [occurrenceIndex];
+        }
         continue;
       }
-      if (bucket) bucket.push(current);
-      else seen.set(hash, [current]);
-      collected.push({
+      const entry: CollectedSubshape = {
         shape: current,
         meta: metaFactory(current),
-      });
+        occurrenceIndices: [occurrenceIndex],
+      };
+      if (bucket) bucket.push(entry);
+      else seen.set(hash, [entry]);
+      collected.push(entry);
     }
     return collected;
   }
