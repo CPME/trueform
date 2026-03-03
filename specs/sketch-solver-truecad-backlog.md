@@ -232,7 +232,8 @@ Why:
   `9b9a791`.
 - 2026-03-03: Added structured solve outcomes (`overconstrained`, `conflict`,
   `ambiguous`) and per-constraint diagnostics in the detailed solve report while
-  preserving strict normalization-time throws through the wrapper API.
+  preserving strict normalization-time throws through the wrapper API. Commit:
+  `e9aaa37`.
 
 ### Next Recommended Task
 
