@@ -21,6 +21,7 @@ Purpose: define the source of truth for each topic to prevent drift.
 - Sketch constraint solver proposal: `specs/sketch-constraint-solver-outline.md`
 - Sketch dimensioning TrueForm execution plan: `specs/sketch-dimensioning-trueform-plan.md`
 - Sketch dimensioning TrueCAD integration plan: `specs/sketch-dimensioning-truecad-plan.md`
+- Sketch solver backlog for TrueCAD support: `specs/sketch-solver-truecad-backlog.md`
 - Geometric parity target matrix: `specs/geometric-parity-matrix.md`
 - Geometric benchmark corpus + scoring workflow: `specs/geometric-benchmark-corpus.md`
 - Geometric parity implementation tracker: `specs/geometric-parity-plan.md`
