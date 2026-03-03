@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { solveSketchConstraintsDetailed } from "../core.js";
 import { dsl, Sketch2D, SketchLine, SketchPoint } from "../dsl.js";
 import { normalizePart } from "../compiler.js";
 import { runTests } from "./occt_test_utils.js";
@@ -62,6 +63,72 @@ const tests = [
 
       const point = byId.get("point-1") as SketchPoint;
       assert.deepEqual(point.point, [2, 5]);
+    },
+  },
+  {
+    name: "sketch constraints: solve parallel/perpendicular/equalLength and report dof",
+    fn: async () => {
+      const entities = [
+        dsl.sketchLine("line-ref", [0, 0], [6, 0]),
+        dsl.sketchLine("line-parallel", [20, 2], [23, 6]),
+        dsl.sketchLine("line-perpendicular", [1, 1], [4, 5]),
+        dsl.sketchLine("line-equal", [10, 0], [14, 0]),
+      ];
+      const report = solveSketchConstraintsDetailed("sketch-report", entities, [
+        dsl.sketchConstraintParallel("c-parallel", "line-ref", "line-parallel"),
+        dsl.sketchConstraintPerpendicular(
+          "c-perpendicular",
+          "line-ref",
+          "line-perpendicular"
+        ),
+        dsl.sketchConstraintEqualLength("c-equal", "line-ref", "line-equal"),
+      ]);
+
+      const byId = new Map(report.entities.map((entity) => [entity.id, entity]));
+      const lineParallel = byId.get("line-parallel") as SketchLine;
+      assert.deepEqual(lineParallel.start, [20, 2]);
+      assert.deepEqual(lineParallel.end, [25, 2]);
+
+      const linePerpendicular = byId.get("line-perpendicular") as SketchLine;
+      assert.deepEqual(linePerpendicular.start, [1, 1]);
+      assert.deepEqual(linePerpendicular.end, [1, 6]);
+
+      const lineEqual = byId.get("line-equal") as SketchLine;
+      assert.deepEqual(lineEqual.start, [10, 0]);
+      assert.deepEqual(lineEqual.end, [16, 0]);
+
+      assert.equal(report.totalDegreesOfFreedom, 16);
+      assert.equal(report.remainingDegreesOfFreedom, 13);
+      assert.equal(report.status, "underconstrained");
+      assert.deepEqual(
+        report.entityStatus.map((entry) => ({
+          entityId: entry.entityId,
+          remainingDegreesOfFreedom: entry.remainingDegreesOfFreedom,
+          status: entry.status,
+        })),
+        [
+          {
+            entityId: "line-ref",
+            remainingDegreesOfFreedom: 4,
+            status: "underconstrained",
+          },
+          {
+            entityId: "line-parallel",
+            remainingDegreesOfFreedom: 3,
+            status: "underconstrained",
+          },
+          {
+            entityId: "line-perpendicular",
+            remainingDegreesOfFreedom: 3,
+            status: "underconstrained",
+          },
+          {
+            entityId: "line-equal",
+            remainingDegreesOfFreedom: 3,
+            status: "underconstrained",
+          },
+        ]
+      );
     },
   },
   {

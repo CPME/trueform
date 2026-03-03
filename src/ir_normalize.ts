@@ -661,6 +661,9 @@ function normalizeSketchConstraint(
       };
     case "sketch.constraint.horizontal":
     case "sketch.constraint.vertical":
+    case "sketch.constraint.parallel":
+    case "sketch.constraint.perpendicular":
+    case "sketch.constraint.equalLength":
       return constraint;
     case "sketch.constraint.distance":
       return {

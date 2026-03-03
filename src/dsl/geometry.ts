@@ -177,6 +177,42 @@ export const sketchConstraintVertical = (
     line,
   });
 
+export const sketchConstraintParallel = (
+  id: ID,
+  a: ID,
+  b: ID
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.parallel",
+    a,
+    b,
+  });
+
+export const sketchConstraintPerpendicular = (
+  id: ID,
+  a: ID,
+  b: ID
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.perpendicular",
+    a,
+    b,
+  });
+
+export const sketchConstraintEqualLength = (
+  id: ID,
+  a: ID,
+  b: ID
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.equalLength",
+    a,
+    b,
+  });
+
 export const sketchConstraintDistance = (
   id: ID,
   a: SketchConstraintPointRef,

@@ -2564,6 +2564,20 @@ function validateSketchConstraint(constraint: SketchConstraint): void {
         "Sketch line constraint requires a line id"
       );
       return;
+    case "sketch.constraint.parallel":
+    case "sketch.constraint.perpendicular":
+    case "sketch.constraint.equalLength":
+      ensureNonEmptyString(
+        constraint.a,
+        "validation_sketch_constraint_line",
+        "Sketch line-line constraint requires line a"
+      );
+      ensureNonEmptyString(
+        constraint.b,
+        "validation_sketch_constraint_line",
+        "Sketch line-line constraint requires line b"
+      );
+      return;
     case "sketch.constraint.distance":
       validateSketchConstraintPointRef(constraint.a, "Sketch distance point a");
       validateSketchConstraintPointRef(constraint.b, "Sketch distance point b");

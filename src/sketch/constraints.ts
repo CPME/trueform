@@ -2,6 +2,24 @@ import { CompileError } from "../errors.js";
 import type { Point2D, SketchConstraint, SketchConstraintPointRef, SketchEntity } from "../ir.js";
 
 type NumericPoint = [number, number];
+type NumericVector = [number, number];
+
+export type SketchConstraintSolveStatus = "fully-constrained" | "underconstrained";
+
+export type SketchConstraintEntityStatus = {
+  entityId: string;
+  totalDegreesOfFreedom: number;
+  remainingDegreesOfFreedom: number;
+  status: SketchConstraintSolveStatus;
+};
+
+export type SketchConstraintSolveReport = {
+  entities: SketchEntity[];
+  totalDegreesOfFreedom: number;
+  remainingDegreesOfFreedom: number;
+  status: SketchConstraintSolveStatus;
+  entityStatus: SketchConstraintEntityStatus[];
+};
 
 const SOLVE_EPSILON = 1e-9;
 const SOLVE_TOLERANCE = 1e-6;
@@ -11,7 +29,17 @@ export function solveSketchConstraints(
   entities: SketchEntity[],
   constraints: SketchConstraint[]
 ): SketchEntity[] {
-  if (constraints.length === 0) return entities;
+  return solveSketchConstraintsDetailed(sketchId, entities, constraints).entities;
+}
+
+export function solveSketchConstraintsDetailed(
+  sketchId: string,
+  entities: SketchEntity[],
+  constraints: SketchConstraint[]
+): SketchConstraintSolveReport {
+  if (constraints.length === 0) {
+    return buildSolveReport(entities, constraints);
+  }
 
   const entityMap = new Map(entities.map((entity) => [entity.id, entity]));
   const maxIterations = Math.max(4, constraints.length * 4);
@@ -34,7 +62,97 @@ export function solveSketchConstraints(
     }
   }
 
-  return entities;
+  return buildSolveReport(entities, constraints);
+}
+
+function buildSolveReport(
+  entities: SketchEntity[],
+  constraints: SketchConstraint[]
+): SketchConstraintSolveReport {
+  const totalDegreesOfFreedom = entities.reduce(
+    (sum, entity) => sum + estimateEntityDegreesOfFreedom(entity),
+    0
+  );
+  const consumption = estimateConstraintConsumption(constraints);
+  const remainingDegreesOfFreedom = Math.max(0, totalDegreesOfFreedom - consumption.totalConsumed);
+  const perEntityStatus = entities.map((entity) => {
+    const total = estimateEntityDegreesOfFreedom(entity);
+    const consumed = Math.min(total, consumption.byEntity.get(entity.id) ?? 0);
+    const remaining = Math.max(0, total - consumed);
+    return {
+      entityId: entity.id,
+      totalDegreesOfFreedom: total,
+      remainingDegreesOfFreedom: remaining,
+      status:
+        remaining === 0 ? "fully-constrained" : "underconstrained",
+    } satisfies SketchConstraintEntityStatus;
+  });
+  return {
+    entities,
+    totalDegreesOfFreedom,
+    remainingDegreesOfFreedom,
+    status:
+      remainingDegreesOfFreedom === 0 ? "fully-constrained" : "underconstrained",
+    entityStatus: perEntityStatus,
+  };
+}
+
+function estimateConstraintConsumption(
+  constraints: SketchConstraint[]
+): { totalConsumed: number; byEntity: Map<string, number> } {
+  const byEntity = new Map<string, number>();
+  let totalConsumed = 0;
+
+  for (const constraint of constraints) {
+    const consume = (entityId: string, amount: number): void => {
+      totalConsumed += amount;
+      byEntity.set(entityId, (byEntity.get(entityId) ?? 0) + amount);
+    };
+
+    switch (constraint.kind) {
+      case "sketch.constraint.coincident":
+        consume(constraint.b.entity, 2);
+        break;
+      case "sketch.constraint.horizontal":
+      case "sketch.constraint.vertical":
+        consume(constraint.line, 1);
+        break;
+      case "sketch.constraint.parallel":
+      case "sketch.constraint.perpendicular":
+      case "sketch.constraint.equalLength":
+        consume(constraint.b, 1);
+        break;
+      case "sketch.constraint.distance":
+        consume(constraint.b.entity, 1);
+        break;
+      case "sketch.constraint.fixPoint":
+        consume(
+          constraint.point.entity,
+          (constraint.x === undefined ? 0 : 1) + (constraint.y === undefined ? 0 : 1)
+        );
+        break;
+    }
+  }
+
+  return { totalConsumed, byEntity };
+}
+
+function estimateEntityDegreesOfFreedom(entity: SketchEntity): number {
+  switch (entity.kind) {
+    case "sketch.line":
+      return 4;
+    case "sketch.arc":
+      return 6;
+    case "sketch.circle":
+    case "sketch.ellipse":
+    case "sketch.slot":
+    case "sketch.polygon":
+    case "sketch.rectangle":
+    case "sketch.point":
+      return 2;
+    case "sketch.spline":
+      return 0;
+  }
 }
 
 function applyConstraint(
@@ -67,6 +185,55 @@ function applyConstraint(
       line.writeEnd(next);
       return Math.abs(end[0] - next[0]);
     }
+    case "sketch.constraint.parallel": {
+      const reference = resolveLine(sketchId, entityMap, constraint.a);
+      const target = resolveLine(sketchId, entityMap, constraint.b);
+      const referenceStart = reference.readStart();
+      const referenceEnd = reference.readEnd();
+      const axis = lineDirection(referenceStart, referenceEnd, sketchId, constraint.id);
+      const currentStart = target.readStart();
+      const currentEnd = target.readEnd();
+      const targetLength = targetLineLength(currentStart, currentEnd, distance(referenceStart, referenceEnd));
+      const direction = chooseAlignedDirection(axis, subtract(currentEnd, currentStart));
+      const next = add(currentStart, scale(direction, targetLength));
+      target.writeEnd(next);
+      return distance(currentEnd, next);
+    }
+    case "sketch.constraint.perpendicular": {
+      const reference = resolveLine(sketchId, entityMap, constraint.a);
+      const target = resolveLine(sketchId, entityMap, constraint.b);
+      const referenceStart = reference.readStart();
+      const referenceEnd = reference.readEnd();
+      const axis = lineDirection(referenceStart, referenceEnd, sketchId, constraint.id);
+      const baseCandidates = perpendicularDirections(axis);
+      const currentStart = target.readStart();
+      const currentEnd = target.readEnd();
+      const targetLength = targetLineLength(currentStart, currentEnd, distance(referenceStart, referenceEnd));
+      const direction = chooseClosestDirection(baseCandidates, subtract(currentEnd, currentStart));
+      const next = add(currentStart, scale(direction, targetLength));
+      target.writeEnd(next);
+      return distance(currentEnd, next);
+    }
+    case "sketch.constraint.equalLength": {
+      const reference = resolveLine(sketchId, entityMap, constraint.a);
+      const target = resolveLine(sketchId, entityMap, constraint.b);
+      const referenceStart = reference.readStart();
+      const referenceEnd = reference.readEnd();
+      const referenceVector = subtract(referenceEnd, referenceStart);
+      const referenceLength = vectorLength(referenceVector);
+      const currentStart = target.readStart();
+      const currentEnd = target.readEnd();
+      const currentVector = subtract(currentEnd, currentStart);
+      const direction: NumericVector =
+        vectorLength(currentVector) > SOLVE_EPSILON
+          ? normalize(currentVector)
+          : referenceLength > SOLVE_EPSILON
+            ? normalize(referenceVector)
+            : [1, 0];
+      const next = add(currentStart, scale(direction, referenceLength));
+      target.writeEnd(next);
+      return distance(currentEnd, next);
+    }
     case "sketch.constraint.distance": {
       const a = resolvePointRef(sketchId, entityMap, constraint.a);
       const b = resolvePointRef(sketchId, entityMap, constraint.b);
@@ -78,17 +245,15 @@ function applyConstraint(
       }
       const origin = a.read();
       const current = b.read();
-      const dx = current[0] - origin[0];
-      const dy = current[1] - origin[1];
-      const currentLength = Math.hypot(dx, dy);
+      const delta = subtract(current, origin);
+      const currentLength = vectorLength(delta);
       const targetDistance = toFiniteNumber(
         constraint.distance,
         `Sketch ${sketchId} distance constraint ${constraint.id}`
       );
-      const next: NumericPoint =
-        currentLength <= SOLVE_EPSILON
-          ? [origin[0] + targetDistance, origin[1]]
-          : [origin[0] + (dx * targetDistance) / currentLength, origin[1] + (dy * targetDistance) / currentLength];
+      const direction: NumericVector =
+        currentLength <= SOLVE_EPSILON ? [1, 0] : normalize(delta);
+      const next = add(origin, scale(direction, targetDistance));
       b.write(next);
       return distance(current, next);
     }
@@ -127,6 +292,27 @@ function measureConstraintResidual(
     case "sketch.constraint.vertical": {
       const line = resolveLine(sketchId, entityMap, constraint.line);
       return Math.abs(line.readStart()[0] - line.readEnd()[0]);
+    }
+    case "sketch.constraint.parallel": {
+      const a = resolveLine(sketchId, entityMap, constraint.a);
+      const b = resolveLine(sketchId, entityMap, constraint.b);
+      const ref = lineDirection(a.readStart(), a.readEnd(), sketchId, constraint.id);
+      const target = lineDirection(b.readStart(), b.readEnd(), sketchId, constraint.id);
+      return Math.abs(cross(ref, target));
+    }
+    case "sketch.constraint.perpendicular": {
+      const a = resolveLine(sketchId, entityMap, constraint.a);
+      const b = resolveLine(sketchId, entityMap, constraint.b);
+      const ref = lineDirection(a.readStart(), a.readEnd(), sketchId, constraint.id);
+      const target = lineDirection(b.readStart(), b.readEnd(), sketchId, constraint.id);
+      return Math.abs(dot(ref, target));
+    }
+    case "sketch.constraint.equalLength": {
+      const a = resolveLine(sketchId, entityMap, constraint.a);
+      const b = resolveLine(sketchId, entityMap, constraint.b);
+      const refLength = distance(a.readStart(), a.readEnd());
+      const targetLength = distance(b.readStart(), b.readEnd());
+      return Math.abs(refLength - targetLength);
     }
     case "sketch.constraint.distance": {
       const a = resolvePointRef(sketchId, entityMap, constraint.a);
@@ -334,4 +520,90 @@ function distance(a: NumericPoint, b: NumericPoint): number {
 
 function samePointRef(a: SketchConstraintPointRef, b: SketchConstraintPointRef): boolean {
   return a.entity === b.entity && (a.handle ?? null) === (b.handle ?? null);
+}
+
+function subtract(a: NumericPoint, b: NumericPoint): NumericVector {
+  return [a[0] - b[0], a[1] - b[1]];
+}
+
+function add(point: NumericPoint, delta: NumericVector): NumericPoint {
+  return [point[0] + delta[0], point[1] + delta[1]];
+}
+
+function scale(vector: NumericVector, scalar: number): NumericVector {
+  return [vector[0] * scalar, vector[1] * scalar];
+}
+
+function dot(a: NumericVector, b: NumericVector): number {
+  return a[0] * b[0] + a[1] * b[1];
+}
+
+function cross(a: NumericVector, b: NumericVector): number {
+  return a[0] * b[1] - a[1] * b[0];
+}
+
+function vectorLength(vector: NumericVector): number {
+  return Math.hypot(vector[0], vector[1]);
+}
+
+function normalize(vector: NumericVector): NumericVector {
+  const length = vectorLength(vector);
+  if (length <= SOLVE_EPSILON) return [1, 0];
+  return [vector[0] / length, vector[1] / length];
+}
+
+function lineDirection(
+  start: NumericPoint,
+  end: NumericPoint,
+  sketchId: string,
+  constraintId: string
+): NumericVector {
+  const vector = subtract(end, start);
+  const length = vectorLength(vector);
+  if (length <= SOLVE_EPSILON) {
+    throw new CompileError(
+      "sketch_constraint_invalid_reference",
+      `Sketch ${sketchId} constraint ${constraintId} references a zero-length line`
+    );
+  }
+  return [vector[0] / length, vector[1] / length];
+}
+
+function targetLineLength(
+  start: NumericPoint,
+  end: NumericPoint,
+  fallbackLength: number
+): number {
+  const currentLength = distance(start, end);
+  if (currentLength > SOLVE_EPSILON) return currentLength;
+  if (fallbackLength > SOLVE_EPSILON) return fallbackLength;
+  return 1;
+}
+
+function chooseAlignedDirection(
+  direction: NumericVector,
+  current: NumericVector
+): NumericVector {
+  const positive = normalize(direction);
+  const negative = scale(positive, -1);
+  if (dot(current, positive) >= dot(current, negative)) return positive;
+  return negative;
+}
+
+function perpendicularDirections(direction: NumericVector): [NumericVector, NumericVector] {
+  const normalized = normalize(direction);
+  return [
+    [-normalized[1], normalized[0]],
+    [normalized[1], -normalized[0]],
+  ];
+}
+
+function chooseClosestDirection(
+  candidates: [NumericVector, NumericVector],
+  current: NumericVector
+): NumericVector {
+  if (dot(current, candidates[0]) >= dot(current, candidates[1])) {
+    return candidates[0];
+  }
+  return candidates[1];
 }

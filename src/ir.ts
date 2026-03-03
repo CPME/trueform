@@ -239,6 +239,24 @@ export type SketchConstraint =
     }
   | {
       id: ID;
+      kind: "sketch.constraint.parallel";
+      a: ID;
+      b: ID;
+    }
+  | {
+      id: ID;
+      kind: "sketch.constraint.perpendicular";
+      a: ID;
+      b: ID;
+    }
+  | {
+      id: ID;
+      kind: "sketch.constraint.equalLength";
+      a: ID;
+      b: ID;
+    }
+  | {
+      id: ID;
       kind: "sketch.constraint.distance";
       a: SketchConstraintPointRef;
       b: SketchConstraintPointRef;

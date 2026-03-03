@@ -7,6 +7,15 @@ export * from "./dimensions.js";
 export * from "./build_cache.js";
 export * from "./mesh_profiles.js";
 export {
+  solveSketchConstraints,
+  solveSketchConstraintsDetailed,
+} from "./sketch/constraints.js";
+export type {
+  SketchConstraintEntityStatus,
+  SketchConstraintSolveReport,
+  SketchConstraintSolveStatus,
+} from "./sketch/constraints.js";
+export {
   TF_STAGED_FEATURES,
   listStagedFeatureKeys,
   featureStageKey,

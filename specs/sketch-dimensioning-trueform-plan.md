@@ -23,8 +23,10 @@ consumers without changing the OCCT backend contract.
 
 2. Minimal deterministic solver
 - Support `fixPoint`, `coincident`, `horizontal`, `vertical`, and `distance`.
+- Expand to `parallel`, `perpendicular`, and `equalLength` for line-line relations.
 - Reuse authored coordinates as the deterministic seed.
 - Iterate constraints in declaration order until stable or unsatisfied.
+- Expose a solve report with remaining DOF so UI clients can classify sketch state.
 
 3. Validation and diagnostics
 - Validate constraint structure and reference shapes before solve.
@@ -41,4 +43,3 @@ consumers without changing the OCCT backend contract.
   - `@trueform/core` normalization
   - browser workers in TrueCAD
   - test harnesses and headless tooling
-
