@@ -201,6 +201,7 @@ export type Sketch2D = FeatureBase & {
   plane?: PlaneRef;
   origin?: [number, number, number];
   entities?: SketchEntity[];
+  constraints?: SketchConstraint[];
   profiles: SketchProfile[];
 };
 
@@ -213,6 +214,43 @@ export type SketchProfileBundle = {
   sketch: Sketch2D;
   profile: ProfileRef;
 };
+
+export type SketchConstraintPointRef = {
+  entity: ID;
+  handle?: "start" | "end" | "center" | "point" | "corner";
+};
+
+export type SketchConstraint =
+  | {
+      id: ID;
+      kind: "sketch.constraint.coincident";
+      a: SketchConstraintPointRef;
+      b: SketchConstraintPointRef;
+    }
+  | {
+      id: ID;
+      kind: "sketch.constraint.horizontal";
+      line: ID;
+    }
+  | {
+      id: ID;
+      kind: "sketch.constraint.vertical";
+      line: ID;
+    }
+  | {
+      id: ID;
+      kind: "sketch.constraint.distance";
+      a: SketchConstraintPointRef;
+      b: SketchConstraintPointRef;
+      distance: Scalar;
+    }
+  | {
+      id: ID;
+      kind: "sketch.constraint.fixPoint";
+      point: SketchConstraintPointRef;
+      x?: Scalar;
+      y?: Scalar;
+    };
 
 export type SketchEntityBase = {
   id: ID;

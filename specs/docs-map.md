@@ -19,6 +19,8 @@ Purpose: define the source of truth for each topic to prevent drift.
 - Pre-feature execution board (runtime/platform before feature dev): `specs/pre-feature-sprint-board.md`
 - Roadmap ideas (non-MVP): `specs/geometric-abstractions.md`
 - Sketch constraint solver proposal: `specs/sketch-constraint-solver-outline.md`
+- Sketch dimensioning TrueForm execution plan: `specs/sketch-dimensioning-trueform-plan.md`
+- Sketch dimensioning TrueCAD integration plan: `specs/sketch-dimensioning-truecad-plan.md`
 - Geometric parity target matrix: `specs/geometric-parity-matrix.md`
 - Geometric benchmark corpus + scoring workflow: `specs/geometric-benchmark-corpus.md`
 - Geometric parity implementation tracker: `specs/geometric-parity-plan.md`

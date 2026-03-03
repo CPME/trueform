@@ -9,6 +9,9 @@ import {
   Point3D,
   Profile,
   ProfileRef,
+  Sketch2D,
+  SketchConstraint,
+  SketchConstraintPointRef,
   SketchEntity,
   Scalar,
   Selector,
@@ -19,6 +22,7 @@ import { normalizeSelector } from "./selectors.js";
 import { shouldValidate, validatePart, type ValidationOptions } from "./ir_validate.js";
 import { getFeatureStage } from "./feature_staging.js";
 import { CompileError } from "./errors.js";
+import { solveSketchConstraints } from "./sketch/constraints.js";
 
 export function normalizePart(
   part: IntentPart,
@@ -193,6 +197,19 @@ function normalizeFeature(
       }
       if (clone.origin !== undefined) {
         clone.origin = normalizePoint3(clone.origin, ctx);
+      }
+      if ("constraints" in clone && Array.isArray((clone as Sketch2D).constraints)) {
+        const constraints = ((clone as Sketch2D).constraints ?? []).map((constraint) =>
+          normalizeSketchConstraint(constraint, ctx)
+        );
+        if (clone.entities === undefined) {
+          throw new CompileError(
+            "sketch_constraint_entities_required",
+            `Sketch ${clone.id} defines constraints but has no entities`
+          );
+        }
+        clone.entities = solveSketchConstraints(clone.id, clone.entities, constraints);
+        delete (clone as Sketch2D & { constraints?: SketchConstraint[] }).constraints;
       }
       break;
     case "feature.extrude":
@@ -629,6 +646,52 @@ function normalizeSketchEntity(
         point: normalizePoint2(entity.point, ctx),
       };
   }
+}
+
+function normalizeSketchConstraint(
+  constraint: SketchConstraint,
+  ctx: ReturnType<typeof buildParamContext>
+): SketchConstraint {
+  switch (constraint.kind) {
+    case "sketch.constraint.coincident":
+      return {
+        ...constraint,
+        a: normalizeSketchConstraintPointRef(constraint.a),
+        b: normalizeSketchConstraintPointRef(constraint.b),
+      };
+    case "sketch.constraint.horizontal":
+    case "sketch.constraint.vertical":
+      return constraint;
+    case "sketch.constraint.distance":
+      return {
+        ...constraint,
+        a: normalizeSketchConstraintPointRef(constraint.a),
+        b: normalizeSketchConstraintPointRef(constraint.b),
+        distance: normalizeScalar(constraint.distance, "length", ctx),
+      };
+    case "sketch.constraint.fixPoint":
+      return {
+        ...constraint,
+        point: normalizeSketchConstraintPointRef(constraint.point),
+        x:
+          constraint.x === undefined
+            ? undefined
+            : normalizeScalar(constraint.x, "length", ctx),
+        y:
+          constraint.y === undefined
+            ? undefined
+            : normalizeScalar(constraint.y, "length", ctx),
+      };
+  }
+}
+
+function normalizeSketchConstraintPointRef(
+  ref: SketchConstraintPointRef
+): SketchConstraintPointRef {
+  return {
+    entity: ref.entity,
+    handle: ref.handle,
+  };
 }
 
 function normalizeProfileRef(

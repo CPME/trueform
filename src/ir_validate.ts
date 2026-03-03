@@ -45,6 +45,8 @@ import {
   Scalar,
   Selector,
   SizeConstraint,
+  SketchConstraint,
+  SketchConstraintPointRef,
   SketchEntity,
   SketchProfile,
   Transform,
@@ -682,7 +684,12 @@ function validateFeature(feature: IntentFeature): void {
       return;
     }
     case "feature.sketch2d": {
-      const sketch = feature as { profiles?: SketchProfile[]; plane?: PlaneRef; entities?: SketchEntity[] };
+      const sketch = feature as {
+        profiles?: SketchProfile[];
+        plane?: PlaneRef;
+        entities?: SketchEntity[];
+        constraints?: SketchConstraint[];
+      };
       const profiles = ensureArray<SketchProfile>(
         sketch.profiles,
         "validation_sketch_profiles",
@@ -713,6 +720,16 @@ function validateFeature(feature: IntentFeature): void {
           "validation_sketch_entities_required",
           "Sketch entities are required for profile.sketch"
         );
+      }
+      if (sketch.constraints !== undefined) {
+        const constraints = ensureArray<SketchConstraint>(
+          sketch.constraints,
+          "validation_sketch_constraints",
+          "Sketch constraints must be an array"
+        );
+        for (const constraint of constraints) {
+          validateSketchConstraint(constraint);
+        }
       }
       for (const profile of profiles) {
         validateSketchProfile(profile, entityMap);
@@ -2519,6 +2536,88 @@ function validateSketchEntity(entity: SketchEntity): void {
         "validation_sketch_entity_kind",
         `Unknown sketch entity kind ${String((entity as { kind?: string }).kind)}`
       );
+  }
+}
+
+function validateSketchConstraint(constraint: SketchConstraint): void {
+  ensureObject(
+    constraint,
+    "validation_sketch_constraint",
+    "Sketch constraint must be an object"
+  );
+  ensureNonEmptyString(
+    constraint.id,
+    "validation_sketch_constraint_id",
+    "Sketch constraint id is required"
+  );
+
+  switch (constraint.kind) {
+    case "sketch.constraint.coincident":
+      validateSketchConstraintPointRef(constraint.a, "Sketch coincident point a");
+      validateSketchConstraintPointRef(constraint.b, "Sketch coincident point b");
+      return;
+    case "sketch.constraint.horizontal":
+    case "sketch.constraint.vertical":
+      ensureNonEmptyString(
+        constraint.line,
+        "validation_sketch_constraint_line",
+        "Sketch line constraint requires a line id"
+      );
+      return;
+    case "sketch.constraint.distance":
+      validateSketchConstraintPointRef(constraint.a, "Sketch distance point a");
+      validateSketchConstraintPointRef(constraint.b, "Sketch distance point b");
+      validateScalar(constraint.distance, "Sketch distance constraint");
+      return;
+    case "sketch.constraint.fixPoint":
+      validateSketchConstraintPointRef(constraint.point, "Sketch fixPoint target");
+      if (constraint.x === undefined && constraint.y === undefined) {
+        throw new CompileError(
+          "validation_sketch_constraint_fix_point_target",
+          "Sketch fixPoint constraint requires x and/or y"
+        );
+      }
+      if (constraint.x !== undefined) {
+        validateScalar(constraint.x, "Sketch fixPoint x");
+      }
+      if (constraint.y !== undefined) {
+        validateScalar(constraint.y, "Sketch fixPoint y");
+      }
+      return;
+    default:
+      throw new CompileError(
+        "validation_sketch_constraint_kind",
+        `Unknown sketch constraint kind ${String((constraint as { kind?: unknown }).kind)}`
+      );
+  }
+}
+
+function validateSketchConstraintPointRef(
+  ref: SketchConstraintPointRef,
+  label: string
+): void {
+  ensureObject(
+    ref,
+    "validation_sketch_constraint_ref",
+    `${label} must be an object`
+  );
+  ensureNonEmptyString(
+    ref.entity,
+    "validation_sketch_constraint_ref_entity",
+    `${label} entity is required`
+  );
+  if (ref.handle === undefined) return;
+  if (
+    ref.handle !== "start" &&
+    ref.handle !== "end" &&
+    ref.handle !== "center" &&
+    ref.handle !== "point" &&
+    ref.handle !== "corner"
+  ) {
+    throw new CompileError(
+      "validation_sketch_constraint_ref_handle",
+      `${label} handle ${String(ref.handle)} is not supported`
+    );
   }
 }
 

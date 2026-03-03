@@ -445,6 +445,84 @@ export const IR_SCHEMA = {
       additionalProperties: false,
     },
 
+    SketchConstraintPointRef: {
+      type: "object",
+      required: ["entity"],
+      properties: {
+        entity: { $ref: "#/$defs/ID" },
+        handle: { enum: ["start", "end", "center", "point", "corner"] },
+      },
+      additionalProperties: false,
+    },
+    SketchConstraintCoincident: {
+      type: "object",
+      required: ["id", "kind", "a", "b"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.constraint.coincident" },
+        a: { $ref: "#/$defs/SketchConstraintPointRef" },
+        b: { $ref: "#/$defs/SketchConstraintPointRef" },
+      },
+      additionalProperties: false,
+    },
+    SketchConstraintHorizontal: {
+      type: "object",
+      required: ["id", "kind", "line"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.constraint.horizontal" },
+        line: { $ref: "#/$defs/ID" },
+      },
+      additionalProperties: false,
+    },
+    SketchConstraintVertical: {
+      type: "object",
+      required: ["id", "kind", "line"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.constraint.vertical" },
+        line: { $ref: "#/$defs/ID" },
+      },
+      additionalProperties: false,
+    },
+    SketchConstraintDistance: {
+      type: "object",
+      required: ["id", "kind", "a", "b", "distance"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.constraint.distance" },
+        a: { $ref: "#/$defs/SketchConstraintPointRef" },
+        b: { $ref: "#/$defs/SketchConstraintPointRef" },
+        distance: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
+    SketchConstraintFixPoint: {
+      type: "object",
+      required: ["id", "kind", "point"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.constraint.fixPoint" },
+        point: { $ref: "#/$defs/SketchConstraintPointRef" },
+        x: { $ref: "#/$defs/Scalar" },
+        y: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+      anyOf: [
+        { required: ["x"] },
+        { required: ["y"] },
+      ],
+    },
+    SketchConstraint: {
+      anyOf: [
+        { $ref: "#/$defs/SketchConstraintCoincident" },
+        { $ref: "#/$defs/SketchConstraintHorizontal" },
+        { $ref: "#/$defs/SketchConstraintVertical" },
+        { $ref: "#/$defs/SketchConstraintDistance" },
+        { $ref: "#/$defs/SketchConstraintFixPoint" },
+      ],
+    },
+
     SketchEntityBase: {
       type: "object",
       required: ["id", "kind"],
@@ -1248,6 +1326,7 @@ export const IR_SCHEMA = {
           items: { type: "number" },
         },
         entities: { type: "array", items: { $ref: "#/$defs/SketchEntity" } },
+        constraints: { type: "array", items: { $ref: "#/$defs/SketchConstraint" } },
         profiles: { type: "array", items: { $ref: "#/$defs/SketchProfile" } },
       },
       additionalProperties: false,

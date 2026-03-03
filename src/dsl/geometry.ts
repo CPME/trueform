@@ -54,6 +54,8 @@ import type {
   Sketch2D,
   SketchArc,
   SketchCircle,
+  SketchConstraint,
+  SketchConstraintPointRef,
   SketchEllipse,
   SketchEntity,
   SketchPoint,
@@ -120,6 +122,7 @@ export const sketch2d = (
     origin?: [number, number, number];
     deps?: ID[];
     entities?: SketchEntity[];
+    constraints?: SketchConstraint[];
   }
 ): Sketch2D =>
   compact({
@@ -130,6 +133,75 @@ export const sketch2d = (
     origin: opts?.origin,
     deps: opts?.deps,
     entities: opts?.entities,
+    constraints: opts?.constraints,
+  });
+
+export const sketchPointRef = (
+  entity: ID,
+  handle?: SketchConstraintPointRef["handle"]
+): SketchConstraintPointRef =>
+  compact({
+    entity,
+    handle,
+  });
+
+export const sketchConstraintCoincident = (
+  id: ID,
+  a: SketchConstraintPointRef,
+  b: SketchConstraintPointRef
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.coincident",
+    a,
+    b,
+  });
+
+export const sketchConstraintHorizontal = (
+  id: ID,
+  line: ID
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.horizontal",
+    line,
+  });
+
+export const sketchConstraintVertical = (
+  id: ID,
+  line: ID
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.vertical",
+    line,
+  });
+
+export const sketchConstraintDistance = (
+  id: ID,
+  a: SketchConstraintPointRef,
+  b: SketchConstraintPointRef,
+  distance: Scalar
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.distance",
+    a,
+    b,
+    distance,
+  });
+
+export const sketchConstraintFixPoint = (
+  id: ID,
+  point: SketchConstraintPointRef,
+  opts?: { x?: Scalar; y?: Scalar }
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.fixPoint",
+    point,
+    x: opts?.x,
+    y: opts?.y,
   });
 
 export const sketchLine = (
