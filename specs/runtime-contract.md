@@ -123,7 +123,8 @@ Response:
       "supportedMigrations": [
         "plain semantic slot <-> split.*.branch.*",
         "legacy union tie suffixes -> right.* disambiguation",
-        "matching face-slot migrations propagated into semantic edge slots"
+        "matching face-slot migrations propagated into semantic edge slots",
+        "weak deterministic boolean edge ids -> semantic edge ids when explicit selectionSignature/selectionProvenance metadata yields a unique match"
       ]
     },
     "supportedWorkflows": [
@@ -164,8 +165,9 @@ Client rules:
 - Treat `semanticTopology.enabled` and `semanticTopology.contractVersion` as the
   gating signal for direct-pick semantic-id flows.
 - Persist the full emitted `selection.id` token exactly as returned.
-- Use `selection.meta` fields such as `selectionSlot`, `selectionLineage`, or
-  `adjacentFaceSlots` for display or diagnostics only.
+- Use `selection.meta` fields such as `selectionSlot`, `selectionLineage`,
+  `adjacentFaceSlots`, `selectionSignature`, or `selectionProvenance` for
+  display, diagnostics, or runtime-assisted repair only.
 - Do not synthesize new ids from metadata.
 
 Selection transport rules:

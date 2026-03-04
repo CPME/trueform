@@ -84,6 +84,9 @@ Guidance:
   plain-slot to `split.*.branch.*` transitions and legacy union duplicate slots
   such as `side.1.2` to newer disambiguated forms like `right.side.1`; this
   applies to both face ids and semantic edge ids derived from those face slots.
+- For boolean semantic edges, runtime can also recover from weaker deterministic
+  edge ids (for example `*.edge.1`) when explicit `selectionSignature` and/or
+  `selectionProvenance` metadata yields a unique semantic match.
 - Raw numeric ids (for example `face:12` or `edge:4`) are not part of the stable
   semantic-topology contract.
 - If runtime emits a weaker deterministic id (for example `*.end.1`,

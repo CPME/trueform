@@ -39,6 +39,8 @@ and public API stability tiers.
      - owner keys
      - role/slot metadata where applicable
      - lineage (`created`, `modified`, `split`, `merged`)
+     - semantic provenance/signature metadata where slot ids alone are too weak
+       to preserve deterministic repair (for example boolean-derived edges)
      - aliases where semantic continuity requires them
 3. Failure behavior:
    - If a feature cannot preserve stable semantic references for a claimed

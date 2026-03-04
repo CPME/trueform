@@ -135,6 +135,14 @@ type ParsedSelectionSlot =
   | { root: string; relation: "edge"; index: string }
   | { root: string; relation: "other" };
 
+type BooleanEdgeRebindMetadata = {
+  relation: "bound" | "join";
+  rootSlot: string;
+  targetSlot: string;
+  baseRootSlot: string;
+  baseTargetSlot: string;
+};
+
 function resolveStableSelectionRebind(
   target: string,
   ctx: ResolutionContext
@@ -198,23 +206,32 @@ function scoreStableSelectionRebind(
   if (!candidateSlot) return 0;
   if (candidateSlot === parsed.slot) return 100;
   const lineageScore = scoreLineageSelectionRebind(parsed.slot, selection, candidateSlot);
+  const booleanEdgeMetadataScore = scoreBooleanEdgeMetadataRebind(parsedSlot, selection);
 
   const candidateParsed = parseSelectionSlot(candidateSlot);
 
   if (parsedSlot.relation === "bound" || parsedSlot.relation === "join") {
-    if (candidateParsed.relation === "other") return lineageScore;
+    if (
+      candidateParsed.relation === "other" ||
+      candidateParsed.relation === "edge"
+    ) {
+      return Math.max(lineageScore, booleanEdgeMetadataScore);
+    }
     if (candidateParsed.relation === parsedSlot.relation && "target" in candidateParsed) {
       const rootScore = scoreSlotMigration(parsedSlot.root, candidateParsed.root);
       if (rootScore <= 0) return 0;
       const targetScore = scoreSlotMigration(parsedSlot.target, candidateParsed.target);
       if (targetScore <= 0) return 0;
-      return 88 + Math.min(rootScore, targetScore);
+      return Math.max(
+        88 + Math.min(rootScore, targetScore),
+        booleanEdgeMetadataScore
+      );
     }
     if (
       candidateParsed.relation !== "bound" &&
       candidateParsed.relation !== "join"
     ) {
-      return 0;
+      return Math.max(lineageScore, booleanEdgeMetadataScore);
     }
     const label = parsedSlot.root.split(".")[0] ?? "";
     const target = parsedSlot.target;
@@ -227,7 +244,7 @@ function scoreStableSelectionRebind(
       scoreSlotMigration(target, candidateParsed.target) > 0 &&
       candidateHasAdjacentFaceSlot(selection, target)
     ) {
-      return 90;
+      return Math.max(90, booleanEdgeMetadataScore);
     }
     if (
       parsedSlot.relation === "join" &&
@@ -236,9 +253,9 @@ function scoreStableSelectionRebind(
       scoreSlotMigration(target, candidateParsed.target) > 0 &&
       candidateHasAdjacentFaceSlot(selection, target)
     ) {
-      return 70;
+      return Math.max(70, booleanEdgeMetadataScore);
     }
-    return lineageScore;
+    return Math.max(lineageScore, booleanEdgeMetadataScore);
   }
 
   if (parsedSlot.relation === "seam") {
@@ -257,6 +274,114 @@ function scoreStableSelectionRebind(
   }
 
   return lineageScore;
+}
+
+function scoreBooleanEdgeMetadataRebind(
+  parsedSlot: ParsedSelectionSlot,
+  selection: Selection
+): number {
+  if (parsedSlot.relation !== "bound" && parsedSlot.relation !== "join") {
+    return 0;
+  }
+  const metadata = selectionBooleanEdgeRebindMetadata(selection);
+  if (!metadata) return 0;
+
+  const expectedSignature = buildBooleanEdgeSelectionSignature(parsedSlot);
+  const candidateSignature =
+    typeof selection.meta["selectionSignature"] === "string"
+      ? selection.meta["selectionSignature"].trim()
+      : "";
+  if (candidateSignature && candidateSignature === expectedSignature) {
+    return 96;
+  }
+
+  if (metadata.relation !== parsedSlot.relation) return 0;
+
+  const exactRootScore = scoreSlotMigration(parsedSlot.root, metadata.rootSlot);
+  const exactTargetScore = scoreSlotMigration(parsedSlot.target, metadata.targetSlot);
+  if (exactRootScore > 0 && exactTargetScore > 0) {
+    return 86 + Math.min(exactRootScore, exactTargetScore);
+  }
+
+  const baseRootScore = scoreSlotMigration(parsedSlot.root, metadata.baseRootSlot);
+  const baseTargetScore = scoreSlotMigration(parsedSlot.target, metadata.baseTargetSlot);
+  if (baseRootScore > 0 && baseTargetScore > 0) {
+    return 76 + Math.min(baseRootScore, baseTargetScore);
+  }
+
+  return 0;
+}
+
+function selectionBooleanEdgeRebindMetadata(
+  selection: Selection
+): BooleanEdgeRebindMetadata | null {
+  return (
+    parseBooleanEdgeSelectionProvenance(selection.meta["selectionProvenance"]) ??
+    parseBooleanEdgeSelectionSignature(selection.meta["selectionSignature"])
+  );
+}
+
+function parseBooleanEdgeSelectionProvenance(value: unknown): BooleanEdgeRebindMetadata | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const relation = record["relation"];
+  if (relation !== "bound" && relation !== "join") return null;
+  const rootSlot = requireNonEmptyString(record["rootSlot"]);
+  const targetSlot = requireNonEmptyString(record["targetSlot"]);
+  const baseFaceSlots = record["baseFaceSlots"];
+  if (!rootSlot || !targetSlot || !Array.isArray(baseFaceSlots) || baseFaceSlots.length !== 2) {
+    return null;
+  }
+  const baseRootSlot = requireNonEmptyString(baseFaceSlots[0]);
+  const baseTargetSlot = requireNonEmptyString(baseFaceSlots[1]);
+  if (!baseRootSlot || !baseTargetSlot) return null;
+  return {
+    relation,
+    rootSlot,
+    targetSlot,
+    baseRootSlot,
+    baseTargetSlot,
+  };
+}
+
+function parseBooleanEdgeSelectionSignature(value: unknown): BooleanEdgeRebindMetadata | null {
+  if (typeof value !== "string") return null;
+  const parts = value.trim().split("|");
+  if (parts.length !== 6 || parts[0] !== "boolean.edge.v1") return null;
+  const relation = parts[1];
+  const rootSlot = parts[2];
+  const targetSlot = parts[3];
+  const baseRootSlot = parts[4];
+  const baseTargetSlot = parts[5];
+  if (
+    (relation !== "bound" && relation !== "join") ||
+    !rootSlot ||
+    !targetSlot ||
+    !baseRootSlot ||
+    !baseTargetSlot
+  ) {
+    return null;
+  }
+  return {
+    relation,
+    rootSlot,
+    targetSlot,
+    baseRootSlot,
+    baseTargetSlot,
+  };
+}
+
+function buildBooleanEdgeSelectionSignature(
+  parsedSlot: Extract<ParsedSelectionSlot, { relation: "bound" | "join" }>
+): string {
+  return [
+    "boolean.edge.v1",
+    parsedSlot.relation,
+    parsedSlot.root,
+    parsedSlot.target,
+    semanticBaseSelectionSlot(parsedSlot.root),
+    semanticBaseSelectionSlot(parsedSlot.target),
+  ].join("|");
 }
 
 function scoreLineageSelectionRebind(
@@ -356,6 +481,10 @@ function parseSplitBranchSlot(
   return { sourceSlot, branch };
 }
 
+function semanticBaseSelectionSlot(slot: string): string {
+  return parseSplitBranchSlot(slot)?.sourceSlot ?? slot.trim();
+}
+
 function parseLegacyDuplicateSlot(
   slot: string
 ): { baseSlot: string; index: string } | null {
@@ -385,6 +514,12 @@ function candidateHasAdjacentFaceSlot(selection: Selection, target: string): boo
   return adjacent.some(
     (entry) => typeof entry === "string" && scoreSlotMigration(target, entry) > 0
   );
+}
+
+function requireNonEmptyString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function parseStableSelectionRef(value: string): ParsedStableSelectionRef | null {

@@ -310,6 +310,87 @@ const tests = [
     },
   },
   {
+    name: "selectors: weak boolean edge ids rebind through explicit semantic edge metadata",
+    fn: async () => {
+      const selector = dsl.selectorNamed("edge:body.main~intersect-1.side.1.bound.top");
+      const ctx = {
+        selections: [
+          {
+            id: "edge:body.main~intersect-1.edge.1",
+            kind: "edge" as const,
+            meta: {
+              ownerKey: "body:main",
+              createdBy: "intersect-1",
+              selectionSlot: "edge.1",
+              selectionSignature:
+                "boolean.edge.v1|bound|split.side.1.branch.1|top|side.1|top",
+              selectionProvenance: {
+                version: 1,
+                relation: "bound",
+                faceSlots: ["split.side.1.branch.1", "top"],
+                baseFaceSlots: ["side.1", "top"],
+                rootSlot: "split.side.1.branch.1",
+                targetSlot: "top",
+              },
+            },
+          },
+        ],
+        named: new Map(),
+      };
+      const resolved = resolveSelector(selector, ctx);
+      assert.equal(resolved.id, "edge:body.main~intersect-1.edge.1");
+    },
+  },
+  {
+    name: "selectors: weak boolean edge ids stay conservative when provenance matches are ambiguous",
+    fn: async () => {
+      const selector = dsl.selectorNamed("edge:body.main~intersect-1.side.1.bound.top");
+      const ctx = {
+        selections: [
+          {
+            id: "edge:body.main~intersect-1.edge.1",
+            kind: "edge" as const,
+            meta: {
+              ownerKey: "body:main",
+              createdBy: "intersect-1",
+              selectionSlot: "edge.1",
+              selectionProvenance: {
+                version: 1,
+                relation: "bound",
+                faceSlots: ["split.side.1.branch.1", "top"],
+                baseFaceSlots: ["side.1", "top"],
+                rootSlot: "split.side.1.branch.1",
+                targetSlot: "top",
+              },
+            },
+          },
+          {
+            id: "edge:body.main~intersect-1.edge.2",
+            kind: "edge" as const,
+            meta: {
+              ownerKey: "body:main",
+              createdBy: "intersect-1",
+              selectionSlot: "edge.2",
+              selectionProvenance: {
+                version: 1,
+                relation: "bound",
+                faceSlots: ["split.side.1.branch.2", "top"],
+                baseFaceSlots: ["side.1", "top"],
+                rootSlot: "split.side.1.branch.2",
+                targetSlot: "top",
+              },
+            },
+          },
+        ],
+        named: new Map(),
+      };
+      assert.throws(
+        () => resolveSelector(selector, ctx),
+        (err) => err instanceof CompileError && err.code === "selector_named_missing"
+      );
+    },
+  },
+  {
     name: "selectors: legacy duplicate union edge slot rebinds to disambiguated right edge slot",
     fn: async () => {
       const selector = dsl.selectorNamed("edge:body.main~union-1.side.1.2.bound.top");
