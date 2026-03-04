@@ -120,7 +120,7 @@ const tests = [
         [
           {
             entityId: "line-ref",
-            remainingDegreesOfFreedom: 4,
+            remainingDegreesOfFreedom: 2,
             status: "underconstrained",
           },
           {
@@ -240,7 +240,7 @@ const tests = [
       );
 
       assert.equal(report.status, "ambiguous");
-      assert.equal(report.remainingDegreesOfFreedom, 0);
+      assert.equal(report.remainingDegreesOfFreedom, 2);
       assert.deepEqual(
         report.entityStatus.map((entry) => ({
           entityId: entry.entityId,

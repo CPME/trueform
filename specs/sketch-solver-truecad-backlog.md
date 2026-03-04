@@ -47,9 +47,11 @@ Implemented and committed:
   - `conflict`
   - `ambiguous`
 - total and remaining DOF
+- total/remaining DOF now use Jacobian-rank analysis
 - per-entity status
 - per-constraint diagnostics (`constraintStatus[]`)
-- Important: current DOF accounting is heuristic, not rank-based.
+- Important: per-entity remaining DOF is still a local column-rank estimate, not a
+  full nullspace attribution.
 
 ## Priority Order
 
@@ -136,7 +138,7 @@ Minimum deliverable:
 ### P2: Correctness Upgrade
 
 6. Replace heuristic DOF accounting with rank-based analysis
-Status: pending
+Status: completed on 2026-03-04
 
 Needed outcome:
 - Compute DOF from the actual constrained system, not simple consumption counts.
@@ -220,9 +222,8 @@ Why:
 
 ## Suggested Execution Sequence
 
-1. Upgrade DOF analysis.
-2. Upgrade the numerical solve core.
-3. Add the broader CAD constraint families.
+1. Upgrade the numerical solve core.
+2. Add the broader CAD constraint families.
 
 ## Progress Log
 
@@ -243,8 +244,12 @@ Why:
   normalization, solver behavior, and targeted tests.
 - 2026-03-04: Added `sketch.constraint.radius` for circles and arcs with DSL,
   IR, validation, normalization, solver behavior, and targeted tests.
+- 2026-03-04: Replaced heuristic total/remaining DOF accounting with Jacobian
+  rank analysis and rigid-mode-aware ambiguity classification in the detailed
+  solve report.
 
 ### Next Recommended Task
 
-Replace heuristic DOF accounting with rank-based analysis. That is the next
-highest-value correctness step before broader constraint-family expansion.
+Replace the projection-style solve core with a general numerical solver. That is
+the next highest-value correctness step now that rank-based DOF reporting is in
+place.

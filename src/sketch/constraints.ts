@@ -3,6 +3,15 @@ import type { Point2D, SketchConstraint, SketchConstraintPointRef, SketchEntity 
 
 type NumericPoint = [number, number];
 type NumericVector = [number, number];
+type ScalarVariableKind = "x" | "y" | "scalar";
+
+type ScalarVariable = {
+  entityId: string;
+  kind: ScalarVariableKind;
+  read: () => number;
+  write: (value: number) => void;
+  readPoint?: () => NumericPoint;
+};
 
 export type SketchConstraintSolveStatus =
   | "fully-constrained"
@@ -161,8 +170,12 @@ function buildSolveReport(
     0
   );
   const consumption = estimateConstraintConsumption(constraints);
-  const rawRemainingDegreesOfFreedom = totalDegreesOfFreedom - consumption.totalConsumed;
-  const remainingDegreesOfFreedom = Math.max(0, rawRemainingDegreesOfFreedom);
+  const analysis = analyzeDegreesOfFreedom(entities, constraints);
+  const remainingDegreesOfFreedom =
+    analysis?.remainingDegreesOfFreedom ?? Math.max(0, totalDegreesOfFreedom - consumption.totalConsumed);
+  const internalRemainingDegreesOfFreedom =
+    analysis?.internalRemainingDegreesOfFreedom ?? remainingDegreesOfFreedom;
+  const hasRedundancy = (analysis?.redundantEquations ?? 0) > 0;
   const unsatisfiedEntities = new Set(
     constraintStatus
       .filter((entry) => entry.status === "unsatisfied")
@@ -171,27 +184,28 @@ function buildSolveReport(
   const constrainedEntities = new Set(
     constraintStatus.flatMap((entry) => entry.entityIds)
   );
-  const anchorAxes = countAnchorAxes(constraints);
   const hasConflict = constraintStatus.some((entry) => entry.status === "unsatisfied");
   const overallStatus: SketchConstraintSolveStatus = hasConflict
     ? "conflict"
-    : rawRemainingDegreesOfFreedom < 0
-      ? "overconstrained"
-      : remainingDegreesOfFreedom === 0 && constraints.length > 0 && anchorAxes < 2
+    : constraints.length > 0 && remainingDegreesOfFreedom > 0 && internalRemainingDegreesOfFreedom === 0
         ? "ambiguous"
+        : remainingDegreesOfFreedom === 0 && hasRedundancy
+          ? "overconstrained"
         : remainingDegreesOfFreedom === 0
           ? "fully-constrained"
           : "underconstrained";
   const perEntityStatus = entities.map((entity) => {
     const total = estimateEntityDegreesOfFreedom(entity);
-    const rawRemaining = total - (consumption.byEntity.get(entity.id) ?? 0);
-    const remaining = Math.max(0, rawRemaining);
+    const remaining = analysis?.perEntityRemaining.get(entity.id) ?? Math.max(
+      0,
+      total - (consumption.byEntity.get(entity.id) ?? 0)
+    );
     let status: SketchConstraintSolveStatus;
     if (unsatisfiedEntities.has(entity.id)) {
       status = "conflict";
     } else if (overallStatus === "ambiguous" && constrainedEntities.has(entity.id)) {
       status = "ambiguous";
-    } else if (rawRemaining < 0) {
+    } else if (overallStatus === "overconstrained" && constrainedEntities.has(entity.id)) {
       status = "overconstrained";
     } else if (remaining === 0) {
       status = "fully-constrained";
@@ -255,6 +269,115 @@ function buildConstraintStatus(
     }
     throw err;
   }
+}
+
+function analyzeDegreesOfFreedom(
+  entities: SketchEntity[],
+  constraints: SketchConstraint[]
+): {
+  remainingDegreesOfFreedom: number;
+  internalRemainingDegreesOfFreedom: number;
+  redundantEquations: number;
+  perEntityRemaining: Map<string, number>;
+} | null {
+  if (constraints.length === 0) return null;
+  const entityMap = new Map(entities.map((entity) => [entity.id, entity]));
+  const variables = collectScalarVariables(entities);
+  if (variables.length === 0) {
+    return {
+      remainingDegreesOfFreedom: 0,
+      internalRemainingDegreesOfFreedom: 0,
+      redundantEquations: 0,
+      perEntityRemaining: new Map(),
+    };
+  }
+
+  let baseResidual: number[];
+  let jacobian: number[][];
+  try {
+    baseResidual = buildConstraintResidualVector("analysis", entityMap, constraints);
+    jacobian = buildConstraintJacobian("analysis", entityMap, constraints, variables, baseResidual);
+  } catch {
+    return null;
+  }
+
+  const rank = estimateMatrixRank(jacobian);
+  const remainingDegreesOfFreedom = Math.max(0, variables.length - rank);
+  const rigidModes = estimateRigidBodyModes(jacobian, variables);
+  const internalRemainingDegreesOfFreedom = Math.max(
+    0,
+    remainingDegreesOfFreedom - Math.min(remainingDegreesOfFreedom, rigidModes)
+  );
+  const redundantEquations = Math.max(0, baseResidual.length - rank);
+  const perEntityRemaining = new Map<string, number>();
+
+  for (const entity of entities) {
+    const total = estimateEntityDegreesOfFreedom(entity);
+    if (total === 0) {
+      perEntityRemaining.set(entity.id, 0);
+      continue;
+    }
+    const columns = variables
+      .map((variable, index) => (variable.entityId === entity.id ? index : -1))
+      .filter((index) => index >= 0);
+    if (columns.length === 0) {
+      perEntityRemaining.set(entity.id, total);
+      continue;
+    }
+    const submatrix = jacobian.map((row) => columns.map((index) => row[index] ?? 0));
+    const localRank = estimateMatrixRank(submatrix);
+    perEntityRemaining.set(entity.id, Math.max(0, total - localRank));
+  }
+
+  return {
+    remainingDegreesOfFreedom,
+    internalRemainingDegreesOfFreedom,
+    redundantEquations,
+    perEntityRemaining,
+  };
+}
+
+function buildConstraintResidualVector(
+  sketchId: string,
+  entityMap: Map<string, SketchEntity>,
+  constraints: SketchConstraint[]
+): number[] {
+  return constraints.flatMap((constraint) =>
+    constraintResidualComponents(sketchId, entityMap, constraint)
+  );
+}
+
+function buildConstraintJacobian(
+  sketchId: string,
+  entityMap: Map<string, SketchEntity>,
+  constraints: SketchConstraint[],
+  variables: ScalarVariable[],
+  baseResidual = buildConstraintResidualVector(sketchId, entityMap, constraints)
+): number[][] {
+  if (baseResidual.length === 0 || variables.length === 0) return [];
+  const jacobian = new Array(baseResidual.length)
+    .fill(0)
+    .map(() => new Array(variables.length).fill(0));
+
+  for (let col = 0; col < variables.length; col += 1) {
+    const variable = variables[col];
+    if (!variable) continue;
+    const before = variable.read();
+    const epsilon = variable.kind === "scalar" ? 1e-4 : 1e-5;
+    variable.write(before + epsilon);
+    const next = buildConstraintResidualVector(sketchId, entityMap, constraints);
+    variable.write(before);
+    if (next.length !== baseResidual.length) {
+      throw new Error("Sketch DOF analysis residual vector changed size during perturbation");
+    }
+    for (let row = 0; row < baseResidual.length; row += 1) {
+      const rowData = jacobian[row];
+      if (!rowData) continue;
+      rowData[col] = ((next[row] ?? 0) - (baseResidual[row] ?? 0)) / epsilon;
+    }
+  }
+
+  return jacobian;
 }
 
 function estimateConstraintConsumption(
@@ -508,40 +631,51 @@ function measureConstraintResidual(
   entityMap: Map<string, SketchEntity>,
   constraint: SketchConstraint
 ): number {
+  const components = constraintResidualComponents(sketchId, entityMap, constraint);
+  return components.reduce((max, value) => Math.max(max, Math.abs(value)), 0);
+}
+
+function constraintResidualComponents(
+  sketchId: string,
+  entityMap: Map<string, SketchEntity>,
+  constraint: SketchConstraint
+): number[] {
   switch (constraint.kind) {
     case "sketch.constraint.coincident": {
       const a = resolvePointRef(sketchId, entityMap, constraint.a);
       const b = resolvePointRef(sketchId, entityMap, constraint.b);
-      return distance(a.read(), b.read());
+      const aPoint = a.read();
+      const bPoint = b.read();
+      return [aPoint[0] - bPoint[0], aPoint[1] - bPoint[1]];
     }
     case "sketch.constraint.horizontal": {
       const line = resolveLine(sketchId, entityMap, constraint.line);
-      return Math.abs(line.readStart()[1] - line.readEnd()[1]);
+      return [line.readStart()[1] - line.readEnd()[1]];
     }
     case "sketch.constraint.vertical": {
       const line = resolveLine(sketchId, entityMap, constraint.line);
-      return Math.abs(line.readStart()[0] - line.readEnd()[0]);
+      return [line.readStart()[0] - line.readEnd()[0]];
     }
     case "sketch.constraint.parallel": {
       const a = resolveLine(sketchId, entityMap, constraint.a);
       const b = resolveLine(sketchId, entityMap, constraint.b);
       const ref = lineDirection(a.readStart(), a.readEnd(), sketchId, constraint.id);
       const target = lineDirection(b.readStart(), b.readEnd(), sketchId, constraint.id);
-      return Math.abs(cross(ref, target));
+      return [cross(ref, target)];
     }
     case "sketch.constraint.perpendicular": {
       const a = resolveLine(sketchId, entityMap, constraint.a);
       const b = resolveLine(sketchId, entityMap, constraint.b);
       const ref = lineDirection(a.readStart(), a.readEnd(), sketchId, constraint.id);
       const target = lineDirection(b.readStart(), b.readEnd(), sketchId, constraint.id);
-      return Math.abs(dot(ref, target));
+      return [dot(ref, target)];
     }
     case "sketch.constraint.equalLength": {
       const a = resolveLine(sketchId, entityMap, constraint.a);
       const b = resolveLine(sketchId, entityMap, constraint.b);
       const refLength = distance(a.readStart(), a.readEnd());
       const targetLength = distance(b.readStart(), b.readEnd());
-      return Math.abs(refLength - targetLength);
+      return [refLength - targetLength];
     }
     case "sketch.constraint.distance": {
       const a = resolvePointRef(sketchId, entityMap, constraint.a);
@@ -550,7 +684,7 @@ function measureConstraintResidual(
         constraint.distance,
         `Sketch ${sketchId} distance constraint ${constraint.id}`
       );
-      return Math.abs(distance(a.read(), b.read()) - expected);
+      return [distance(a.read(), b.read()) - expected];
     }
     case "sketch.constraint.angle": {
       const a = resolveLine(sketchId, entityMap, constraint.a);
@@ -563,33 +697,52 @@ function measureConstraintResidual(
       );
       const ref = lineDirection(a.readStart(), a.readEnd(), sketchId, constraint.id);
       const target = lineDirection(b.readStart(), b.readEnd(), sketchId, constraint.id);
-      return Math.abs(angleBetween(ref, target) - expected);
+      return [angleBetween(ref, target) - expected];
     }
     case "sketch.constraint.radius": {
-      const curve = resolveRadiusTarget(sketchId, entityMap, constraint.curve);
+      const entity = entityMap.get(constraint.curve);
+      if (!entity) {
+        throw new CompileError(
+          "sketch_constraint_reference_missing",
+          `Sketch ${sketchId} references missing curve ${constraint.curve}`
+        );
+      }
       const expected = readPositiveRadius(
         constraint.radius,
         `Sketch ${sketchId} radius constraint ${constraint.id}`
       );
-      return curve.residual(expected);
+      if (entity.kind === "sketch.circle") {
+        const current = toFiniteNumber(
+          entity.radius,
+          `Sketch ${sketchId} circle ${constraint.curve} radius`
+        );
+        return [current - expected];
+      }
+      if (entity.kind === "sketch.arc") {
+        const center = readNumericPoint(entity.center, `Sketch ${sketchId} arc ${constraint.curve} center`);
+        const start = readNumericPoint(entity.start, `Sketch ${sketchId} arc ${constraint.curve} start`);
+        const end = readNumericPoint(entity.end, `Sketch ${sketchId} arc ${constraint.curve} end`);
+        return [
+          distance(center, start) - expected,
+          distance(center, end) - expected,
+        ];
+      }
+      throw new CompileError(
+        "sketch_constraint_kind_mismatch",
+        `Sketch ${sketchId} radius constraint ${constraint.curve} must reference a sketch.circle or sketch.arc`
+      );
     }
     case "sketch.constraint.fixPoint": {
       const point = resolvePointRef(sketchId, entityMap, constraint.point);
       const current = point.read();
-      let residual = 0;
+      const out: number[] = [];
       if (constraint.x !== undefined) {
-        residual = Math.max(
-          residual,
-          Math.abs(current[0] - toFiniteNumber(constraint.x, `Sketch ${sketchId} fixPoint x`))
-        );
+        out.push(current[0] - toFiniteNumber(constraint.x, `Sketch ${sketchId} fixPoint x`));
       }
       if (constraint.y !== undefined) {
-        residual = Math.max(
-          residual,
-          Math.abs(current[1] - toFiniteNumber(constraint.y, `Sketch ${sketchId} fixPoint y`))
-        );
+        out.push(current[1] - toFiniteNumber(constraint.y, `Sketch ${sketchId} fixPoint y`));
       }
-      return residual;
+      return out;
     }
   }
 }
@@ -715,6 +868,100 @@ function resolveRadiusTarget(
     "sketch_constraint_kind_mismatch",
     `Sketch ${sketchId} radius constraint ${curveId} must reference a sketch.circle or sketch.arc`
   );
+}
+
+function collectScalarVariables(entities: SketchEntity[]): ScalarVariable[] {
+  const variables: ScalarVariable[] = [];
+  for (const entity of entities) {
+    switch (entity.kind) {
+      case "sketch.line":
+        pushPointVariables(variables, entity.id, () => entity.start, (point) => {
+          entity.start = point;
+        });
+        pushPointVariables(variables, entity.id, () => entity.end, (point) => {
+          entity.end = point;
+        });
+        break;
+      case "sketch.arc":
+        pushPointVariables(variables, entity.id, () => entity.start, (point) => {
+          entity.start = point;
+        });
+        pushPointVariables(variables, entity.id, () => entity.end, (point) => {
+          entity.end = point;
+        });
+        pushPointVariables(variables, entity.id, () => entity.center, (point) => {
+          entity.center = point;
+        });
+        break;
+      case "sketch.circle":
+        pushPointVariables(variables, entity.id, () => entity.center, (point) => {
+          entity.center = point;
+        });
+        variables.push({
+          entityId: entity.id,
+          kind: "scalar",
+          read: () => toFiniteNumber(entity.radius, `Sketch circle ${entity.id} radius`),
+          write: (value) => {
+            entity.radius = value;
+          },
+        });
+        break;
+      case "sketch.ellipse":
+      case "sketch.slot":
+      case "sketch.polygon":
+        pushPointVariables(variables, entity.id, () => entity.center, (point) => {
+          entity.center = point;
+        });
+        break;
+      case "sketch.rectangle":
+        if (entity.mode === "center") {
+          pushPointVariables(variables, entity.id, () => entity.center, (point) => {
+            entity.center = point;
+          });
+        } else {
+          pushPointVariables(variables, entity.id, () => entity.corner, (point) => {
+            entity.corner = point;
+          });
+        }
+        break;
+      case "sketch.point":
+        pushPointVariables(variables, entity.id, () => entity.point, (point) => {
+          entity.point = point;
+        });
+        break;
+      case "sketch.spline":
+        break;
+    }
+  }
+  return variables;
+}
+
+function pushPointVariables(
+  variables: ScalarVariable[],
+  entityId: string,
+  readPoint: () => Point2D,
+  writePoint: (point: Point2D) => void
+): void {
+  variables.push({
+    entityId,
+    kind: "x",
+    read: () => toFiniteNumber(readPoint()[0], `Sketch entity ${entityId} x`),
+    write: (value) => {
+      const point = readPoint();
+      writePoint([value, point[1]]);
+    },
+    readPoint: () => readNumericPoint(readPoint(), `Sketch entity ${entityId}`),
+  });
+  variables.push({
+    entityId,
+    kind: "y",
+    read: () => toFiniteNumber(readPoint()[1], `Sketch entity ${entityId} y`),
+    write: (value) => {
+      const point = readPoint();
+      writePoint([point[0], value]);
+    },
+    readPoint: () => readNumericPoint(readPoint(), `Sketch entity ${entityId}`),
+  });
 }
 
 function resolvePointRef(
@@ -996,6 +1243,90 @@ function angleBetween(a: NumericVector, b: NumericVector): number {
 
 function degToRad(value: number): number {
   return (value * Math.PI) / 180;
+}
+
+function estimateRigidBodyModes(
+  jacobian: number[][],
+  variables: ScalarVariable[]
+): number {
+  if (jacobian.length === 0 || variables.length === 0) return 0;
+  const xMode = variables.map((variable) => (variable.kind === "x" ? 1 : 0));
+  const yMode = variables.map((variable) => (variable.kind === "y" ? 1 : 0));
+  const rotationMode = variables.map((variable) => {
+    if (variable.kind === "scalar" || !variable.readPoint) return 0;
+    const point = variable.readPoint();
+    return variable.kind === "x" ? -point[1] : point[0];
+  });
+  return [xMode, yMode, rotationMode].reduce((count, mode) => {
+    const modeNorm = vectorNorm(mode);
+    if (modeNorm <= SOLVE_EPSILON) return count;
+    const projected = matrixVectorNorm(jacobian, mode);
+    return projected <= 1e-5 * Math.max(1, modeNorm) ? count + 1 : count;
+  }, 0);
+}
+
+function matrixVectorNorm(matrix: number[][], vector: number[]): number {
+  if (matrix.length === 0) return 0;
+  let sum = 0;
+  for (const row of matrix) {
+    const value = row.reduce((acc, entry, index) => acc + entry * (vector[index] ?? 0), 0);
+    sum += value * value;
+  }
+  return Math.sqrt(sum);
+}
+
+function vectorNorm(values: number[]): number {
+  let sum = 0;
+  for (const value of values) sum += value * value;
+  return Math.sqrt(sum);
+}
+
+function estimateMatrixRank(matrix: number[][], relativeTolerance = 1e-6): number {
+  const rows = matrix.length;
+  if (rows === 0) return 0;
+  const cols = matrix[0]?.length ?? 0;
+  if (cols === 0) return 0;
+  const working = matrix.map((row) => row.slice());
+  let maxAbs = 0;
+  for (const row of working) {
+    for (const value of row) maxAbs = Math.max(maxAbs, Math.abs(value));
+  }
+  const tolerance = Math.max(1e-10, maxAbs * relativeTolerance);
+  let rank = 0;
+  let pivotRow = 0;
+
+  for (let col = 0; col < cols && pivotRow < rows; col += 1) {
+    let bestRow = pivotRow;
+    let bestValue = Math.abs(working[pivotRow]?.[col] ?? 0);
+    for (let row = pivotRow + 1; row < rows; row += 1) {
+      const value = Math.abs(working[row]?.[col] ?? 0);
+      if (value > bestValue) {
+        bestValue = value;
+        bestRow = row;
+      }
+    }
+    if (bestValue <= tolerance) continue;
+    if (bestRow !== pivotRow) {
+      const temp = working[pivotRow];
+      working[pivotRow] = working[bestRow] ?? [];
+      working[bestRow] = temp ?? [];
+    }
+    const pivot = working[pivotRow]?.[col] ?? 0;
+    for (let row = pivotRow + 1; row < rows; row += 1) {
+      const factor = (working[row]?.[col] ?? 0) / pivot;
+      if (Math.abs(factor) <= tolerance) continue;
+      const rowData = working[row];
+      const pivotData = working[pivotRow];
+      if (!rowData || !pivotData) continue;
+      for (let c = col; c < cols; c += 1) {
+        rowData[c] = (rowData[c] ?? 0) - factor * (pivotData[c] ?? 0);
+      }
+    }
+    rank += 1;
+    pivotRow += 1;
+  }
+
+  return rank;
 }
 
 function chooseClosestDirection(
