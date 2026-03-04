@@ -16,6 +16,7 @@ import { resolveSelectorSet } from "./selectors.js";
 import { BackendError } from "./errors.js";
 import { TF_STAGED_FEATURES } from "./feature_staging.js";
 import { hashValue } from "./hash.js";
+import { deriveBooleanSemanticEdgeSlot } from "./selection_semantics.js";
 import { tryDynamicMethod } from "./occt/dynamic_call.js";
 import {
   executeEdgeModifier,
@@ -6066,34 +6067,7 @@ export class OcctBackend implements Backend {
   }
 
   private booleanSemanticEdgeSlot(entry: CollectedSubshape): string | null {
-    const adjacentSlots = Array.isArray(entry.meta["adjacentFaceSlots"])
-      ? (entry.meta["adjacentFaceSlots"] as unknown[])
-          .filter((slot): slot is string => typeof slot === "string" && slot.trim().length > 0)
-          .map((slot) => slot.trim())
-          .filter((slot, index, all) => all.indexOf(slot) === index)
-      : [];
-    if (adjacentSlots.length !== 2) return null;
-    const [a, b] = adjacentSlots.slice().sort();
-    if (!a || !b) return null;
-
-    const isRight = (slot: string) => slot.startsWith("right.");
-    const isCap = (slot: string) => slot === "top" || slot === "bottom";
-    const isSide = (slot: string) =>
-      /^side\.\d+$/.test(slot) || /^right\.side\.\d+$/.test(slot);
-
-    if (isRight(a) && !isRight(b)) {
-      return `${a}.bound.${b}`;
-    }
-    if (isRight(b) && !isRight(a)) {
-      return `${b}.bound.${a}`;
-    }
-    if (isSide(a) && isCap(b)) {
-      return `${a}.bound.${b}`;
-    }
-    if (isSide(b) && isCap(a)) {
-      return `${b}.bound.${a}`;
-    }
-    return `${a}.join.${b}`;
+    return deriveBooleanSemanticEdgeSlot(entry.meta["adjacentFaceSlots"]);
   }
 
   private annotateFaceMutationSelections(
