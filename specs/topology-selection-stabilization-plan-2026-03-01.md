@@ -152,6 +152,18 @@ Add semantic naming for newly created boolean topology:
 
 This is the most valuable remaining work for stable selections.
 
+Current guidance:
+
+- Keep the existing `split.*.branch.*` preserved-face families and
+  adjacency-derived edge families as the deterministic compatibility contract for
+  the current beta subset.
+- Do not treat adjacency-derived naming alone as the final long-term identity
+  strategy for booleans.
+- The stronger long-term path is: preserve slot families where a source face can
+  still justify them, then add explicit provenance/signature metadata for
+  boolean-created faces and edges so ids do not depend only on whichever
+  neighboring faces happened to survive.
+
 ### Priority 2: Stronger rebinding
 
 Upgrade from pattern-based semantic rebinding to a fuller lineage/signature
