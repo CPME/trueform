@@ -42,8 +42,6 @@ Implemented and committed:
 4. Current UI-usable solve report
 - overall status:
   - `fully-constrained`
-  - `component-constrained` (component-level/per-entity only; overall report still
-    uses `ambiguous` for floating but internally solved sketches)
   - `underconstrained`
   - `overconstrained`
   - `conflict`
@@ -51,12 +49,18 @@ Implemented and committed:
 - total and remaining DOF
 - total/remaining DOF now use Jacobian-rank analysis
 - connected-component solve status
+  - `component-constrained` is used here when a component is internally rigid
+    but still globally movable
   - per-component remaining DOF
   - per-component remaining rigid-body DOF
   - per-component `grounded`
 - per-entity status
+  - `status` is the primary UI-safe bucket
+  - `status === "fully-constrained"` now means the entity has no remaining
+    local shape DOF and belongs to a grounded component
+  - floating but internally rigid entities remain `underconstrained`
   - includes `componentId`, `componentStatus`, `grounded`, and component
-    remaining rigid-body DOF
+    remaining rigid-body DOF as diagnostics
 - per-constraint diagnostics (`constraintStatus[]`)
 - Important: per-entity remaining DOF is still a local column-rank estimate, not a
   full nullspace attribution.
@@ -261,7 +265,8 @@ Why:
 - 2026-03-04: Added connected-component solve diagnostics so the detailed report
   now distinguishes floating but internally solved components
   (`component-constrained`) from globally grounded `fully-constrained`
-  components/entities.
+  components, while keeping `entity.status` safe for direct CAD UI use:
+  only grounded entities can report `fully-constrained`.
 
 ### Next Recommended Task
 

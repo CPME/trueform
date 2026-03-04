@@ -292,13 +292,13 @@ const tests = [
             entityId: "line-1",
             grounded: false,
             componentStatus: "component-constrained",
-            status: "component-constrained",
+            status: "underconstrained",
           },
           {
             entityId: "line-2",
             grounded: false,
             componentStatus: "component-constrained",
-            status: "component-constrained",
+            status: "underconstrained",
           },
         ]
       );
@@ -396,7 +396,7 @@ const tests = [
             componentId: "component.2",
             grounded: false,
             componentStatus: "component-constrained",
-            status: "component-constrained",
+            status: "underconstrained",
           },
         ]
       );

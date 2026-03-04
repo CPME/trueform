@@ -16,11 +16,14 @@ type ScalarVariable = {
 
 export type SketchConstraintSolveStatus =
   | "fully-constrained"
-  | "component-constrained"
   | "underconstrained"
   | "overconstrained"
   | "conflict"
   | "ambiguous";
+
+export type SketchConstraintComponentSolveStatus =
+  | SketchConstraintSolveStatus
+  | "component-constrained";
 
 export type SketchConstraintDiagnosticStatus = "satisfied" | "unsatisfied";
 
@@ -41,7 +44,7 @@ export type SketchConstraintEntityStatus = {
   remainingDegreesOfFreedom: number;
   grounded: boolean;
   rigidBodyDegreesOfFreedom: number;
-  componentStatus: SketchConstraintSolveStatus;
+  componentStatus: SketchConstraintComponentSolveStatus;
   status: SketchConstraintSolveStatus;
 };
 
@@ -54,7 +57,7 @@ export type SketchConstraintComponentStatus = {
   internalRemainingDegreesOfFreedom: number;
   rigidBodyDegreesOfFreedom: number;
   grounded: boolean;
-  status: SketchConstraintSolveStatus;
+  status: SketchConstraintComponentSolveStatus;
 };
 
 export type SketchConstraintSolveReport = {
@@ -263,11 +266,6 @@ function buildSolveReport(
     } else if (componentSolveStatus === "overconstrained" && constrainedEntities.has(entity.id)) {
       status = "overconstrained";
     } else if (
-      componentSolveStatus === "component-constrained" &&
-      constrainedEntities.has(entity.id)
-    ) {
-      status = "component-constrained";
-    } else if (
       componentSolveStatus === "fully-constrained" &&
       constrainedEntities.has(entity.id)
     ) {
@@ -275,7 +273,7 @@ function buildSolveReport(
     } else if (remaining === 0 && component?.grounded) {
       status = "fully-constrained";
     } else if (remaining === 0) {
-      status = "component-constrained";
+      status = "underconstrained";
     } else {
       status = "underconstrained";
     }
@@ -597,7 +595,7 @@ function buildComponentStatus(
       component.constraintIds.includes(entry.constraintId)
   );
   const hasConstraints = component.constraintIds.length > 0;
-  const status: SketchConstraintSolveStatus = hasConflict
+  const status: SketchConstraintComponentSolveStatus = hasConflict
     ? "conflict"
     : remainingDegreesOfFreedom === 0 && redundantEquations > 0
       ? "overconstrained"
