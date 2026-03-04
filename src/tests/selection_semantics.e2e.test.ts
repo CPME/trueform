@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { deriveBooleanSemanticEdgeSlot } from "../selection_semantics.js";
+import {
+  deriveBooleanSemanticEdgeSlot,
+  describeBooleanSemanticEdge,
+} from "../selection_semantics.js";
 import { runTests } from "./occt_test_utils.js";
 
 const tests = [
@@ -44,6 +47,27 @@ const tests = [
       assert.equal(
         deriveBooleanSemanticEdgeSlot(["right.side.1", "right.side.2"]),
         "right.side.1.join.right.side.2"
+      );
+    },
+  },
+  {
+    name: "selection semantics: semantic edge descriptors capture split provenance and signature",
+    fn: async () => {
+      assert.deepEqual(
+        describeBooleanSemanticEdge(["split.side.1.branch.1", "split.top.branch.1"]),
+        {
+          slot: "split.side.1.branch.1.bound.split.top.branch.1",
+          signature:
+            "boolean.edge.v1|bound|split.side.1.branch.1|split.top.branch.1|side.1|top",
+          provenance: {
+            version: 1,
+            relation: "bound",
+            faceSlots: ["split.side.1.branch.1", "split.top.branch.1"],
+            baseFaceSlots: ["side.1", "top"],
+            rootSlot: "split.side.1.branch.1",
+            targetSlot: "split.top.branch.1",
+          },
+        }
       );
     },
   },

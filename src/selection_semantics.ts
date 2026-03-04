@@ -39,24 +39,70 @@ function isSideSemanticSlot(slot: string): boolean {
   return /^side\.\d+$/.test(base) || /^right\.side\.\d+$/.test(base);
 }
 
-export function deriveBooleanSemanticEdgeSlot(adjacentFaceSlots: unknown): string | null {
+export type BooleanSemanticEdgeDescriptor = {
+  slot: string;
+  signature: string;
+  provenance: {
+    version: 1;
+    relation: "bound" | "join";
+    faceSlots: [string, string];
+    baseFaceSlots: [string, string];
+    rootSlot: string;
+    targetSlot: string;
+  };
+};
+
+export function describeBooleanSemanticEdge(
+  adjacentFaceSlots: unknown
+): BooleanSemanticEdgeDescriptor | null {
   const adjacentSlots = normalizeAdjacentFaceSlots(adjacentFaceSlots);
   if (adjacentSlots.length !== 2) return null;
 
   const [a, b] = adjacentSlots.slice().sort();
   if (!a || !b) return null;
 
+  let rootSlot: string;
+  let targetSlot: string;
+  let relation: "bound" | "join";
+
   if (isRightSemanticSlot(a) && !isRightSemanticSlot(b)) {
-    return `${a}.bound.${b}`;
+    rootSlot = a;
+    targetSlot = b;
+    relation = "bound";
+  } else if (isRightSemanticSlot(b) && !isRightSemanticSlot(a)) {
+    rootSlot = b;
+    targetSlot = a;
+    relation = "bound";
+  } else if (isSideSemanticSlot(a) && isCapSemanticSlot(b)) {
+    rootSlot = a;
+    targetSlot = b;
+    relation = "bound";
+  } else if (isSideSemanticSlot(b) && isCapSemanticSlot(a)) {
+    rootSlot = b;
+    targetSlot = a;
+    relation = "bound";
+  } else {
+    rootSlot = a;
+    targetSlot = b;
+    relation = "join";
   }
-  if (isRightSemanticSlot(b) && !isRightSemanticSlot(a)) {
-    return `${b}.bound.${a}`;
-  }
-  if (isSideSemanticSlot(a) && isCapSemanticSlot(b)) {
-    return `${a}.bound.${b}`;
-  }
-  if (isSideSemanticSlot(b) && isCapSemanticSlot(a)) {
-    return `${b}.bound.${a}`;
-  }
-  return `${a}.join.${b}`;
+
+  const baseRoot = semanticBaseSlot(rootSlot);
+  const baseTarget = semanticBaseSlot(targetSlot);
+  return {
+    slot: `${rootSlot}.${relation}.${targetSlot}`,
+    signature: `boolean.edge.v1|${relation}|${rootSlot}|${targetSlot}|${baseRoot}|${baseTarget}`,
+    provenance: {
+      version: 1,
+      relation,
+      faceSlots: [a, b],
+      baseFaceSlots: [baseRoot, baseTarget],
+      rootSlot,
+      targetSlot,
+    },
+  };
+}
+
+export function deriveBooleanSemanticEdgeSlot(adjacentFaceSlots: unknown): string | null {
+  return describeBooleanSemanticEdge(adjacentFaceSlots)?.slot ?? null;
 }

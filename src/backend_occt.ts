@@ -16,7 +16,10 @@ import { resolveSelectorSet } from "./selectors.js";
 import { BackendError } from "./errors.js";
 import { TF_STAGED_FEATURES } from "./feature_staging.js";
 import { hashValue } from "./hash.js";
-import { deriveBooleanSemanticEdgeSlot } from "./selection_semantics.js";
+import {
+  describeBooleanSemanticEdge,
+  type BooleanSemanticEdgeDescriptor,
+} from "./selection_semantics.js";
 import { tryDynamicMethod } from "./occt/dynamic_call.js";
 import {
   executeEdgeModifier,
@@ -138,6 +141,8 @@ type SelectionLedgerHint = {
   role?: string;
   lineage?: KernelSelectionLineage;
   aliases?: string[];
+  signature?: string;
+  provenance?: Record<string, unknown>;
 };
 
 type SelectionLedgerPlan = {
@@ -5302,6 +5307,12 @@ export class OcctBackend implements Backend {
     if (entry.ledger?.aliases && entry.ledger.aliases.length > 0) {
       entry.meta.selectionAliases = entry.ledger.aliases.slice();
     }
+    if (typeof hint.signature === "string" && hint.signature.length > 0) {
+      entry.meta.selectionSignature = hint.signature;
+    }
+    if (hint.provenance && typeof hint.provenance === "object") {
+      entry.meta.selectionProvenance = { ...hint.provenance };
+    }
   }
 
   private collectUniqueSubshapes(
@@ -5515,6 +5526,8 @@ export class OcctBackend implements Backend {
     return {
       version: 1,
       kind,
+      selectionSignature: this.stringFingerprint(meta.selectionSignature),
+      adjacentFaceSlots: this.stringArrayFingerprint(meta.adjacentFaceSlots),
       center: this.vectorFingerprint(meta.center),
       centerZ: this.numberFingerprint(meta.centerZ),
       area: this.numberFingerprint(meta.area),
@@ -6000,40 +6013,52 @@ export class OcctBackend implements Backend {
 
   private annotateBooleanSemanticEdgeSelections(entries: CollectedSubshape[]): void {
     const unmatched = entries.filter((entry) => !entry.ledger?.slot);
-    const matched = unmatched.filter((entry) => this.booleanSemanticEdgeSlot(entry) !== null);
+    const matched = unmatched
+      .map((entry) => ({
+        entry,
+        descriptor: this.booleanSemanticEdgeDescriptor(entry),
+      }))
+      .filter(
+        (
+          candidate
+        ): candidate is {
+          entry: CollectedSubshape;
+          descriptor: BooleanSemanticEdgeDescriptor;
+        } => candidate.descriptor !== null
+      );
     if (matched.length === 0) return;
 
     matched.sort((a, b) => {
-      const aSlot = this.booleanSemanticEdgeSlot(a) ?? "";
-      const bSlot = this.booleanSemanticEdgeSlot(b) ?? "";
-      const bySlot = aSlot.localeCompare(bSlot);
+      const bySlot = a.descriptor.slot.localeCompare(b.descriptor.slot);
       if (bySlot !== 0) return bySlot;
-      const aTie = hashValue(this.selectionTieBreakerFingerprint("edge", a.meta));
-      const bTie = hashValue(this.selectionTieBreakerFingerprint("edge", b.meta));
+      const bySignature = a.descriptor.signature.localeCompare(b.descriptor.signature);
+      if (bySignature !== 0) return bySignature;
+      const aTie = hashValue(this.selectionTieBreakerFingerprint("edge", a.entry.meta));
+      const bTie = hashValue(this.selectionTieBreakerFingerprint("edge", b.entry.meta));
       const byTie = aTie.localeCompare(bTie);
       if (byTie !== 0) return byTie;
-      return this.shapeHash(a.shape) - this.shapeHash(b.shape);
+      return this.shapeHash(a.entry.shape) - this.shapeHash(b.entry.shape);
     });
 
     const slotCounts = new Map<string, number>();
-    for (const entry of matched) {
-      const slot = this.booleanSemanticEdgeSlot(entry);
-      if (!slot) continue;
+    for (const candidate of matched) {
+      const slot = candidate.descriptor.slot;
       slotCounts.set(slot, (slotCounts.get(slot) ?? 0) + 1);
     }
     const slotIndexes = new Map<string, number>();
-    for (const entry of matched) {
-      let slot = this.booleanSemanticEdgeSlot(entry);
-      if (!slot) continue;
+    for (const candidate of matched) {
+      let slot = candidate.descriptor.slot;
       const duplicateCount = slotCounts.get(slot) ?? 0;
       if (duplicateCount > 1) {
         const index = (slotIndexes.get(slot) ?? 0) + 1;
         slotIndexes.set(slot, index);
         slot = `${slot}.part.${index}`;
       }
-      this.applySelectionLedgerHint(entry, {
+      this.applySelectionLedgerHint(candidate.entry, {
         role: "edge",
         slot,
+        signature: candidate.descriptor.signature,
+        provenance: candidate.descriptor.provenance,
       });
     }
   }
@@ -6066,8 +6091,10 @@ export class OcctBackend implements Backend {
     return null;
   }
 
-  private booleanSemanticEdgeSlot(entry: CollectedSubshape): string | null {
-    return deriveBooleanSemanticEdgeSlot(entry.meta["adjacentFaceSlots"]);
+  private booleanSemanticEdgeDescriptor(
+    entry: CollectedSubshape
+  ): ReturnType<typeof describeBooleanSemanticEdge> {
+    return describeBooleanSemanticEdge(entry.meta["adjacentFaceSlots"]);
   }
 
   private annotateFaceMutationSelections(
@@ -6951,6 +6978,16 @@ export class OcctBackend implements Backend {
   private stringFingerprint(value: unknown): string | undefined {
     if (typeof value !== "string") return undefined;
     const normalized = value.trim();
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  private stringArrayFingerprint(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const normalized = value
+      .filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+      .map((entry) => entry.trim())
+      .slice()
+      .sort();
     return normalized.length > 0 ? normalized : undefined;
   }
 

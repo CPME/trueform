@@ -163,6 +163,10 @@ Current guidance:
   still justify them, then add explicit provenance/signature metadata for
   boolean-created faces and edges so ids do not depend only on whichever
   neighboring faces happened to survive.
+- Initial groundwork for that stronger path is now in place for boolean semantic
+  edges: union/intersect edge selections now carry explicit
+  `selectionSignature` and `selectionProvenance` metadata alongside the stable
+  slot ids.
 
 ### Priority 2: Stronger rebinding
 

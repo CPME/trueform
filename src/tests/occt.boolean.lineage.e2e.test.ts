@@ -148,6 +148,18 @@ const tests = [
       );
       assert.ok(boundary, "missing right.side.1.bound.top edge");
       assert.equal(boundary.id, "edge:body.main~union-1.right.side.1.bound.top");
+      assert.equal(
+        boundary.meta["selectionSignature"],
+        "boolean.edge.v1|bound|right.side.1|top|right.side.1|top"
+      );
+      assert.deepEqual(boundary.meta["selectionProvenance"], {
+        version: 1,
+        relation: "bound",
+        faceSlots: ["right.side.1", "top"],
+        baseFaceSlots: ["right.side.1", "top"],
+        rootSlot: "right.side.1",
+        targetSlot: "top",
+      });
 
       const join = result.final.selections.find(
         (selection) =>
