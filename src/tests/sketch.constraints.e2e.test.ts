@@ -143,6 +143,29 @@ const tests = [
     },
   },
   {
+    name: "sketch constraints: detailed solve does not mutate caller-owned entities",
+    fn: async () => {
+      const entities = [
+        dsl.sketchLine("line-ref", [0, 0], [6, 0]),
+        dsl.sketchLine("line-target", [20, 2], [23, 6]),
+      ];
+
+      const report = solveSketchConstraintsDetailed("sketch-immutable", entities, [
+        dsl.sketchConstraintParallel("c-parallel", "line-ref", "line-target"),
+      ]);
+
+      const originalTarget = entities[1] as SketchLine;
+      assert.deepEqual(originalTarget.start, [20, 2]);
+      assert.deepEqual(originalTarget.end, [23, 6]);
+
+      const solvedTarget = report.entities.find((entity) => entity.id === "line-target") as SketchLine;
+      assert.ok(solvedTarget, "missing solved target line");
+      assert.deepEqual(solvedTarget.start, [20, 2]);
+      assert.deepEqual(solvedTarget.end, [25, 2]);
+      assert.notEqual(solvedTarget, originalTarget);
+    },
+  },
+  {
     name: "sketch constraints: classify overconstrained solved sketches",
     fn: async () => {
       const report = solveSketchConstraintsDetailed(

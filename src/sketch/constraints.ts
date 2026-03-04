@@ -42,6 +42,68 @@ export type SketchConstraintSolveReport = {
 const SOLVE_EPSILON = 1e-9;
 const SOLVE_TOLERANCE = 1e-6;
 
+function cloneSketchEntities(entities: SketchEntity[]): SketchEntity[] {
+  return entities.map((entity) => cloneSketchEntity(entity));
+}
+
+function cloneSketchEntity(entity: SketchEntity): SketchEntity {
+  switch (entity.kind) {
+    case "sketch.line":
+      return {
+        ...entity,
+        start: [...entity.start],
+        end: [...entity.end],
+      };
+    case "sketch.arc":
+      return {
+        ...entity,
+        start: [...entity.start],
+        end: [...entity.end],
+        center: [...entity.center],
+      };
+    case "sketch.circle":
+      return {
+        ...entity,
+        center: [...entity.center],
+      };
+    case "sketch.ellipse":
+      return {
+        ...entity,
+        center: [...entity.center],
+      };
+    case "sketch.rectangle":
+      return entity.mode === "center"
+        ? {
+            ...entity,
+            center: [...entity.center],
+          }
+        : {
+            ...entity,
+            corner: [...entity.corner],
+          };
+    case "sketch.slot":
+      return {
+        ...entity,
+        center: [...entity.center],
+      };
+    case "sketch.polygon":
+      return {
+        ...entity,
+        center: [...entity.center],
+      };
+    case "sketch.spline":
+      return {
+        ...entity,
+        points: entity.points.map((point) => [...point]),
+      };
+    case "sketch.point":
+      return {
+        ...entity,
+        point: [...entity.point],
+      };
+  }
+}
+
 export function solveSketchConstraints(
   sketchId: string,
   entities: SketchEntity[],
@@ -66,11 +128,12 @@ export function solveSketchConstraintsDetailed(
   entities: SketchEntity[],
   constraints: SketchConstraint[]
 ): SketchConstraintSolveReport {
+  const solvedEntities = cloneSketchEntities(entities);
   if (constraints.length === 0) {
-    return buildSolveReport(entities, constraints, []);
+    return buildSolveReport(solvedEntities, constraints, []);
   }
 
-  const entityMap = new Map(entities.map((entity) => [entity.id, entity]));
+  const entityMap = new Map(solvedEntities.map((entity) => [entity.id, entity]));
   const maxIterations = Math.max(4, constraints.length * 4);
 
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
@@ -85,7 +148,7 @@ export function solveSketchConstraintsDetailed(
     buildConstraintStatus(sketchId, entityMap, constraint)
   );
 
-  return buildSolveReport(entities, constraints, constraintStatus);
+  return buildSolveReport(solvedEntities, constraints, constraintStatus);
 }
 
 function buildSolveReport(
