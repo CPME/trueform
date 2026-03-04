@@ -101,6 +101,14 @@ const tests = [
       assert.equal(report.remainingDegreesOfFreedom, 13);
       assert.equal(report.status, "underconstrained");
       assert.deepEqual(
+        report.componentStatus.map((entry) => ({
+          componentId: entry.componentId,
+          grounded: entry.grounded,
+          status: entry.status,
+        })),
+        [{ componentId: "component.1", grounded: false, status: "underconstrained" }]
+      );
+      assert.deepEqual(
         report.constraintStatus.map((entry) => ({
           constraintId: entry.constraintId,
           status: entry.status,
@@ -114,27 +122,42 @@ const tests = [
       assert.deepEqual(
         report.entityStatus.map((entry) => ({
           entityId: entry.entityId,
+          componentId: entry.componentId,
+          grounded: entry.grounded,
+          componentStatus: entry.componentStatus,
           remainingDegreesOfFreedom: entry.remainingDegreesOfFreedom,
           status: entry.status,
         })),
         [
           {
             entityId: "line-ref",
+            componentId: "component.1",
+            grounded: false,
+            componentStatus: "underconstrained",
             remainingDegreesOfFreedom: 2,
             status: "underconstrained",
           },
           {
             entityId: "line-parallel",
+            componentId: "component.1",
+            grounded: false,
+            componentStatus: "underconstrained",
             remainingDegreesOfFreedom: 3,
             status: "underconstrained",
           },
           {
             entityId: "line-perpendicular",
+            componentId: "component.1",
+            grounded: false,
+            componentStatus: "underconstrained",
             remainingDegreesOfFreedom: 3,
             status: "underconstrained",
           },
           {
             entityId: "line-equal",
+            componentId: "component.1",
+            grounded: false,
+            componentStatus: "underconstrained",
             remainingDegreesOfFreedom: 3,
             status: "underconstrained",
           },
@@ -193,6 +216,14 @@ const tests = [
       assert.equal(report.status, "overconstrained");
       assert.equal(report.remainingDegreesOfFreedom, 0);
       assert.deepEqual(
+        report.componentStatus.map((entry) => ({
+          grounded: entry.grounded,
+          rigidBodyDegreesOfFreedom: entry.rigidBodyDegreesOfFreedom,
+          status: entry.status,
+        })),
+        [{ grounded: true, rigidBodyDegreesOfFreedom: 0, status: "overconstrained" }]
+      );
+      assert.deepEqual(
         report.constraintStatus.map((entry) => entry.status),
         ["satisfied", "satisfied", "satisfied", "satisfied"]
       );
@@ -242,13 +273,33 @@ const tests = [
       assert.equal(report.status, "ambiguous");
       assert.equal(report.remainingDegreesOfFreedom, 2);
       assert.deepEqual(
+        report.componentStatus.map((entry) => ({
+          grounded: entry.grounded,
+          rigidBodyDegreesOfFreedom: entry.rigidBodyDegreesOfFreedom,
+          status: entry.status,
+        })),
+        [{ grounded: false, rigidBodyDegreesOfFreedom: 2, status: "component-constrained" }]
+      );
+      assert.deepEqual(
         report.entityStatus.map((entry) => ({
           entityId: entry.entityId,
+          grounded: entry.grounded,
+          componentStatus: entry.componentStatus,
           status: entry.status,
         })),
         [
-          { entityId: "line-1", status: "ambiguous" },
-          { entityId: "line-2", status: "ambiguous" },
+          {
+            entityId: "line-1",
+            grounded: false,
+            componentStatus: "component-constrained",
+            status: "component-constrained",
+          },
+          {
+            entityId: "line-2",
+            grounded: false,
+            componentStatus: "component-constrained",
+            status: "component-constrained",
+          },
         ]
       );
       assert.deepEqual(
@@ -261,6 +312,92 @@ const tests = [
           "satisfied",
           "satisfied",
           "satisfied",
+        ]
+      );
+    },
+  },
+  {
+    name: "sketch constraints: report component grounding and per-entity grounded status",
+    fn: async () => {
+      const report = solveSketchConstraintsDetailed(
+        "sketch-components",
+        [
+          dsl.sketchLine("line-grounded", [0, 0], [7, 2]),
+          dsl.sketchLine("line-floating", [20, 5], [26, 8]),
+        ],
+        [
+          dsl.sketchConstraintFixPoint(
+            "c-grounded-start",
+            dsl.sketchPointRef("line-grounded", "start"),
+            { x: 0, y: 0 }
+          ),
+          dsl.sketchConstraintHorizontal("c-grounded-horizontal", "line-grounded"),
+          dsl.sketchConstraintDistance(
+            "c-grounded-width",
+            dsl.sketchPointRef("line-grounded", "start"),
+            dsl.sketchPointRef("line-grounded", "end"),
+            10
+          ),
+          dsl.sketchConstraintHorizontal("c-floating-horizontal", "line-floating"),
+          dsl.sketchConstraintDistance(
+            "c-floating-width",
+            dsl.sketchPointRef("line-floating", "start"),
+            dsl.sketchPointRef("line-floating", "end"),
+            8
+          ),
+        ]
+      );
+
+      assert.equal(report.status, "ambiguous");
+      assert.equal(report.remainingDegreesOfFreedom, 2);
+      assert.deepEqual(
+        report.componentStatus.map((entry) => ({
+          componentId: entry.componentId,
+          entityIds: entry.entityIds,
+          grounded: entry.grounded,
+          rigidBodyDegreesOfFreedom: entry.rigidBodyDegreesOfFreedom,
+          status: entry.status,
+        })),
+        [
+          {
+            componentId: "component.1",
+            entityIds: ["line-grounded"],
+            grounded: true,
+            rigidBodyDegreesOfFreedom: 0,
+            status: "fully-constrained",
+          },
+          {
+            componentId: "component.2",
+            entityIds: ["line-floating"],
+            grounded: false,
+            rigidBodyDegreesOfFreedom: 2,
+            status: "component-constrained",
+          },
+        ]
+      );
+      assert.deepEqual(
+        report.entityStatus.map((entry) => ({
+          entityId: entry.entityId,
+          componentId: entry.componentId,
+          grounded: entry.grounded,
+          componentStatus: entry.componentStatus,
+          status: entry.status,
+        })),
+        [
+          {
+            entityId: "line-grounded",
+            componentId: "component.1",
+            grounded: true,
+            componentStatus: "fully-constrained",
+            status: "fully-constrained",
+          },
+          {
+            entityId: "line-floating",
+            componentId: "component.2",
+            grounded: false,
+            componentStatus: "component-constrained",
+            status: "component-constrained",
+          },
         ]
       );
     },
@@ -290,9 +427,10 @@ const tests = [
       assert.deepEqual(
         report.entityStatus.map((entry) => ({
           entityId: entry.entityId,
+          componentStatus: entry.componentStatus,
           status: entry.status,
         })),
-        [{ entityId: "line-1", status: "conflict" }]
+        [{ entityId: "line-1", componentStatus: "conflict", status: "conflict" }]
       );
 
       assert.throws(

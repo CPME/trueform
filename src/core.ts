@@ -11,6 +11,7 @@ export {
   solveSketchConstraintsDetailed,
 } from "./sketch/constraints.js";
 export type {
+  SketchConstraintComponentStatus,
   SketchConstraintDiagnosticStatus,
   SketchConstraintEntityStatus,
   SketchConstraintSolveReport,

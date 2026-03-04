@@ -42,13 +42,21 @@ Implemented and committed:
 4. Current UI-usable solve report
 - overall status:
   - `fully-constrained`
+  - `component-constrained` (component-level/per-entity only; overall report still
+    uses `ambiguous` for floating but internally solved sketches)
   - `underconstrained`
   - `overconstrained`
   - `conflict`
   - `ambiguous`
 - total and remaining DOF
 - total/remaining DOF now use Jacobian-rank analysis
+- connected-component solve status
+  - per-component remaining DOF
+  - per-component remaining rigid-body DOF
+  - per-component `grounded`
 - per-entity status
+  - includes `componentId`, `componentStatus`, `grounded`, and component
+    remaining rigid-body DOF
 - per-constraint diagnostics (`constraintStatus[]`)
 - Important: per-entity remaining DOF is still a local column-rank estimate, not a
   full nullspace attribution.
@@ -250,6 +258,10 @@ Why:
 - 2026-03-04: Replaced the projection-first solve loop with a damped
   least-squares solve over driven handles, followed by a short deterministic
   polish pass to preserve existing target-entity semantics.
+- 2026-03-04: Added connected-component solve diagnostics so the detailed report
+  now distinguishes floating but internally solved components
+  (`component-constrained`) from globally grounded `fully-constrained`
+  components/entities.
 
 ### Next Recommended Task
 
