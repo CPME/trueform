@@ -264,6 +264,19 @@ export type SketchConstraint =
     }
   | {
       id: ID;
+      kind: "sketch.constraint.angle";
+      a: ID;
+      b: ID;
+      angle: Scalar;
+    }
+  | {
+      id: ID;
+      kind: "sketch.constraint.radius";
+      curve: ID;
+      radius: Scalar;
+    }
+  | {
+      id: ID;
       kind: "sketch.constraint.fixPoint";
       point: SketchConstraintPointRef;
       x?: Scalar;

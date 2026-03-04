@@ -227,6 +227,32 @@ export const sketchConstraintDistance = (
     distance,
   });
 
+export const sketchConstraintAngle = (
+  id: ID,
+  a: ID,
+  b: ID,
+  angle: Scalar
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.angle",
+    a,
+    b,
+    angle,
+  });
+
+export const sketchConstraintRadius = (
+  id: ID,
+  curve: ID,
+  radius: Scalar
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.radius",
+    curve,
+    radius,
+  });
+
 export const sketchConstraintFixPoint = (
   id: ID,
   point: SketchConstraintPointRef,

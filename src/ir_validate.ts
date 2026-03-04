@@ -2583,6 +2583,27 @@ function validateSketchConstraint(constraint: SketchConstraint): void {
       validateSketchConstraintPointRef(constraint.b, "Sketch distance point b");
       validateScalar(constraint.distance, "Sketch distance constraint");
       return;
+    case "sketch.constraint.angle":
+      ensureNonEmptyString(
+        constraint.a,
+        "validation_sketch_constraint_line",
+        "Sketch angle constraint requires line a"
+      );
+      ensureNonEmptyString(
+        constraint.b,
+        "validation_sketch_constraint_line",
+        "Sketch angle constraint requires line b"
+      );
+      validateSketchConstraintAngle(constraint.angle);
+      return;
+    case "sketch.constraint.radius":
+      ensureNonEmptyString(
+        constraint.curve,
+        "validation_sketch_constraint_curve",
+        "Sketch radius constraint requires a curve id"
+      );
+      validatePositiveScalar(constraint.radius, "Sketch radius constraint");
+      return;
     case "sketch.constraint.fixPoint":
       validateSketchConstraintPointRef(constraint.point, "Sketch fixPoint target");
       if (constraint.x === undefined && constraint.y === undefined) {
@@ -2603,6 +2624,17 @@ function validateSketchConstraint(constraint: SketchConstraint): void {
         "validation_sketch_constraint_kind",
         `Unknown sketch constraint kind ${String((constraint as { kind?: unknown }).kind)}`
       );
+  }
+}
+
+function validateSketchConstraintAngle(value: Scalar): void {
+  validateNonNegativeScalar(value, "Sketch angle constraint");
+  const literal = scalarLiteral(value);
+  if (literal !== null && literal > 180) {
+    throw new CompileError(
+      "validation_sketch_constraint_angle_range",
+      "Sketch angle constraint must be between 0 and 180 degrees"
+    );
   }
 }
 

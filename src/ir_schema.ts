@@ -530,6 +530,29 @@ export const IR_SCHEMA = {
       },
       additionalProperties: false,
     },
+    SketchConstraintAngle: {
+      type: "object",
+      required: ["id", "kind", "a", "b", "angle"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.constraint.angle" },
+        a: { $ref: "#/$defs/ID" },
+        b: { $ref: "#/$defs/ID" },
+        angle: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
+    SketchConstraintRadius: {
+      type: "object",
+      required: ["id", "kind", "curve", "radius"],
+      properties: {
+        id: { $ref: "#/$defs/ID" },
+        kind: { const: "sketch.constraint.radius" },
+        curve: { $ref: "#/$defs/ID" },
+        radius: { $ref: "#/$defs/Scalar" },
+      },
+      additionalProperties: false,
+    },
     SketchConstraintFixPoint: {
       type: "object",
       required: ["id", "kind", "point"],
@@ -555,6 +578,8 @@ export const IR_SCHEMA = {
         { $ref: "#/$defs/SketchConstraintPerpendicular" },
         { $ref: "#/$defs/SketchConstraintEqualLength" },
         { $ref: "#/$defs/SketchConstraintDistance" },
+        { $ref: "#/$defs/SketchConstraintAngle" },
+        { $ref: "#/$defs/SketchConstraintRadius" },
         { $ref: "#/$defs/SketchConstraintFixPoint" },
       ],
     },

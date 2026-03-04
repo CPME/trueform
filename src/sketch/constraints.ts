@@ -280,10 +280,14 @@ function estimateConstraintConsumption(
       case "sketch.constraint.parallel":
       case "sketch.constraint.perpendicular":
       case "sketch.constraint.equalLength":
+      case "sketch.constraint.angle":
         consume(constraint.b, 1);
         break;
       case "sketch.constraint.distance":
         consume(constraint.b.entity, 1);
+        break;
+      case "sketch.constraint.radius":
+        consume(constraint.curve, 1);
         break;
       case "sketch.constraint.fixPoint":
         consume(
@@ -317,9 +321,12 @@ function listConstraintEntityIds(constraint: SketchConstraint): string[] {
     case "sketch.constraint.parallel":
     case "sketch.constraint.perpendicular":
     case "sketch.constraint.equalLength":
+    case "sketch.constraint.angle":
       return dedupeEntityIds([constraint.a, constraint.b]);
     case "sketch.constraint.distance":
       return dedupeEntityIds([constraint.a.entity, constraint.b.entity]);
+    case "sketch.constraint.radius":
+      return [constraint.curve];
     case "sketch.constraint.fixPoint":
       return [constraint.point.entity];
   }
@@ -332,6 +339,7 @@ function estimateEntityDegreesOfFreedom(entity: SketchEntity): number {
     case "sketch.arc":
       return 6;
     case "sketch.circle":
+      return 3;
     case "sketch.ellipse":
     case "sketch.slot":
     case "sketch.polygon":
@@ -445,6 +453,39 @@ function applyConstraint(
       b.write(next);
       return distance(current, next);
     }
+    case "sketch.constraint.angle": {
+      const reference = resolveLine(sketchId, entityMap, constraint.a);
+      const target = resolveLine(sketchId, entityMap, constraint.b);
+      const referenceStart = reference.readStart();
+      const referenceEnd = reference.readEnd();
+      const axis = lineDirection(referenceStart, referenceEnd, sketchId, constraint.id);
+      const currentStart = target.readStart();
+      const currentEnd = target.readEnd();
+      const targetLength = targetLineLength(
+        currentStart,
+        currentEnd,
+        distance(referenceStart, referenceEnd)
+      );
+      const angle = readAngleConstraint(
+        constraint.angle,
+        `Sketch ${sketchId} angle constraint ${constraint.id}`
+      );
+      const direction = chooseClosestDirection(
+        angleDirections(axis, angle),
+        subtract(currentEnd, currentStart)
+      );
+      const next = add(currentStart, scale(direction, targetLength));
+      target.writeEnd(next);
+      return distance(currentEnd, next);
+    }
+    case "sketch.constraint.radius": {
+      const curve = resolveRadiusTarget(sketchId, entityMap, constraint.curve);
+      const targetRadius = readPositiveRadius(
+        constraint.radius,
+        `Sketch ${sketchId} radius constraint ${constraint.id}`
+      );
+      return curve.write(targetRadius);
+    }
     case "sketch.constraint.fixPoint": {
       const point = resolvePointRef(sketchId, entityMap, constraint.point);
       const current = point.read();
@@ -511,6 +552,27 @@ function measureConstraintResidual(
       );
       return Math.abs(distance(a.read(), b.read()) - expected);
     }
+    case "sketch.constraint.angle": {
+      const a = resolveLine(sketchId, entityMap, constraint.a);
+      const b = resolveLine(sketchId, entityMap, constraint.b);
+      const expected = degToRad(
+        readAngleConstraint(
+          constraint.angle,
+          `Sketch ${sketchId} angle constraint ${constraint.id}`
+        )
+      );
+      const ref = lineDirection(a.readStart(), a.readEnd(), sketchId, constraint.id);
+      const target = lineDirection(b.readStart(), b.readEnd(), sketchId, constraint.id);
+      return Math.abs(angleBetween(ref, target) - expected);
+    }
+    case "sketch.constraint.radius": {
+      const curve = resolveRadiusTarget(sketchId, entityMap, constraint.curve);
+      const expected = readPositiveRadius(
+        constraint.radius,
+        `Sketch ${sketchId} radius constraint ${constraint.id}`
+      );
+      return curve.residual(expected);
+    }
     case "sketch.constraint.fixPoint": {
       const point = resolvePointRef(sketchId, entityMap, constraint.point);
       const current = point.read();
@@ -561,6 +623,98 @@ function resolveLine(
       entity.end = point;
     },
   };
+}
+
+function resolveRadiusTarget(
+  sketchId: string,
+  entityMap: Map<string, SketchEntity>,
+  curveId: string
+): {
+  residual: (radius: number) => number;
+  write: (radius: number) => number;
+} {
+  const entity = entityMap.get(curveId);
+  if (!entity) {
+    throw new CompileError(
+      "sketch_constraint_reference_missing",
+      `Sketch ${sketchId} references missing curve ${curveId}`
+    );
+  }
+
+  if (entity.kind === "sketch.circle") {
+    return {
+      residual: (radius) =>
+        Math.abs(
+          toFiniteNumber(entity.radius, `Sketch ${sketchId} circle ${curveId} radius`) - radius
+        ),
+      write: (radius) => {
+        const current = toFiniteNumber(
+          entity.radius,
+          `Sketch ${sketchId} circle ${curveId} radius`
+        );
+        entity.radius = radius;
+        return Math.abs(current - radius);
+      },
+    };
+  }
+
+  if (entity.kind === "sketch.arc") {
+    const readArc = (): {
+      center: NumericPoint;
+      start: NumericPoint;
+      end: NumericPoint;
+      startVector: NumericVector;
+      endVector: NumericVector;
+      startRadius: number;
+      endRadius: number;
+    } => {
+      const center = readNumericPoint(entity.center, `Sketch ${sketchId} arc ${curveId} center`);
+      const start = readNumericPoint(entity.start, `Sketch ${sketchId} arc ${curveId} start`);
+      const end = readNumericPoint(entity.end, `Sketch ${sketchId} arc ${curveId} end`);
+      const startVector = subtract(start, center);
+      const endVector = subtract(end, center);
+      const startRadius = vectorLength(startVector);
+      const endRadius = vectorLength(endVector);
+      if (startRadius <= SOLVE_EPSILON || endRadius <= SOLVE_EPSILON) {
+        throw new CompileError(
+          "sketch_constraint_invalid_reference",
+          `Sketch ${sketchId} radius constraint on ${curveId} requires arc endpoints away from center`
+        );
+      }
+      return {
+        center,
+        start,
+        end,
+        startVector,
+        endVector,
+        startRadius,
+        endRadius,
+      };
+    };
+
+    return {
+      residual: (radius) => {
+        const arc = readArc();
+        return Math.max(
+          Math.abs(arc.startRadius - radius),
+          Math.abs(arc.endRadius - radius)
+        );
+      },
+      write: (radius) => {
+        const arc = readArc();
+        const nextStart = add(arc.center, scale(normalize(arc.startVector), radius));
+        const nextEnd = add(arc.center, scale(normalize(arc.endVector), radius));
+        entity.start = nextStart;
+        entity.end = nextEnd;
+        return Math.max(distance(arc.start, nextStart), distance(arc.end, nextEnd));
+      },
+    };
+  }
+
+  throw new CompileError(
+    "sketch_constraint_kind_mismatch",
+    `Sketch ${sketchId} radius constraint ${curveId} must reference a sketch.circle or sketch.arc`
+  );
 }
 
 function resolvePointRef(
@@ -702,6 +856,28 @@ function toFiniteNumber(value: unknown, label: string): number {
   return value;
 }
 
+function readPositiveRadius(value: unknown, label: string): number {
+  const radius = toFiniteNumber(value, label);
+  if (radius <= 0) {
+    throw new CompileError(
+      "sketch_constraint_scalar_positive",
+      `${label} must be > 0`
+    );
+  }
+  return radius;
+}
+
+function readAngleConstraint(value: unknown, label: string): number {
+  const angle = toFiniteNumber(value, label);
+  if (angle < 0 || angle > 180) {
+    throw new CompileError(
+      "sketch_constraint_angle_range",
+      `${label} must be between 0 and 180 degrees`
+    );
+  }
+  return angle;
+}
+
 function distance(a: NumericPoint, b: NumericPoint): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1]);
 }
@@ -736,6 +912,15 @@ function cross(a: NumericVector, b: NumericVector): number {
 
 function vectorLength(vector: NumericVector): number {
   return Math.hypot(vector[0], vector[1]);
+}
+
+function rotate(vector: NumericVector, radians: number): NumericVector {
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return [
+    vector[0] * cos - vector[1] * sin,
+    vector[0] * sin + vector[1] * cos,
+  ];
 }
 
 function normalize(vector: NumericVector): NumericVector {
@@ -788,6 +973,29 @@ function perpendicularDirections(direction: NumericVector): [NumericVector, Nume
     [-normalized[1], normalized[0]],
     [normalized[1], -normalized[0]],
   ];
+}
+
+function angleDirections(direction: NumericVector, angleDeg: number): [NumericVector, NumericVector] {
+  const normalized = normalize(direction);
+  const radians = degToRad(angleDeg);
+  return [
+    normalize(rotate(normalized, radians)),
+    normalize(rotate(normalized, -radians)),
+  ];
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+function angleBetween(a: NumericVector, b: NumericVector): number {
+  return Math.acos(clamp(dot(a, b), -1, 1));
+}
+
+function degToRad(value: number): number {
+  return (value * Math.PI) / 180;
 }
 
 function chooseClosestDirection(

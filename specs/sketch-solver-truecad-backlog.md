@@ -1,7 +1,7 @@
 # Sketch Solver TrueCAD Backlog
 
 Status: active tracker
-Updated: 2026-03-03
+Updated: 2026-03-04
 
 ## Purpose
 
@@ -29,7 +29,9 @@ Implemented and committed:
 - `parallel`
 - `perpendicular`
 - `equalLength`
-- Commits: `0e01a64`, `9b9a791`
+- `angle`
+- `radius`
+- Commits: `0e01a64`, `9b9a791`, plus 2026-03-04 follow-up additions
 
 3. Shared solver API
 - `solveSketchConstraints(...)`
@@ -88,7 +90,7 @@ Minimum deliverable:
 - Include residual, pass/fail, and message/code.
 
 3. Non-mutating solve API
-Status: pending
+Status: completed on 2026-03-04
 
 Needed outcome:
 - Preserve the current APIs or add a new API that does not mutate caller-owned
@@ -105,7 +107,7 @@ Minimum deliverable:
 ### P1: Dimensioning Coverage
 
 4. `angle` constraint
-Status: pending
+Status: completed on 2026-03-04
 
 Needed outcome:
 - Support line-line angular constraints.
@@ -119,7 +121,7 @@ Minimum deliverable:
   tests.
 
 5. `radius` constraint
-Status: pending
+Status: completed on 2026-03-04
 
 Needed outcome:
 - Support driving radius constraints on circles and arcs.
@@ -218,12 +220,9 @@ Why:
 
 ## Suggested Execution Sequence
 
-1. Make the detailed solver API non-mutating.
-2. Add `angle`.
-3. Add `radius`.
-4. Upgrade DOF analysis.
-5. Upgrade the numerical solve core.
-6. Add the broader CAD constraint families.
+1. Upgrade DOF analysis.
+2. Upgrade the numerical solve core.
+3. Add the broader CAD constraint families.
 
 ## Progress Log
 
@@ -238,8 +237,14 @@ Why:
   `ambiguous`) and per-constraint diagnostics in the detailed solve report while
   preserving strict normalization-time throws through the wrapper API. Commit:
   `e9aaa37`.
+- 2026-03-04: Made `solveSketchConstraintsDetailed(...)` non-mutating so it
+  clones caller-owned entities before applying solve steps.
+- 2026-03-04: Added `sketch.constraint.angle` with DSL, IR, validation,
+  normalization, solver behavior, and targeted tests.
+- 2026-03-04: Added `sketch.constraint.radius` for circles and arcs with DSL,
+  IR, validation, normalization, solver behavior, and targeted tests.
 
 ### Next Recommended Task
 
-Make the detailed solver API non-mutating. That is the next highest-value step
-for cleaner TrueCAD editor-state integration.
+Replace heuristic DOF accounting with rank-based analysis. That is the next
+highest-value correctness step before broader constraint-family expansion.

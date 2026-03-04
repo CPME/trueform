@@ -672,6 +672,16 @@ function normalizeSketchConstraint(
         b: normalizeSketchConstraintPointRef(constraint.b),
         distance: normalizeScalar(constraint.distance, "length", ctx),
       };
+    case "sketch.constraint.angle":
+      return {
+        ...constraint,
+        angle: normalizeScalar(constraint.angle, "angle", ctx),
+      };
+    case "sketch.constraint.radius":
+      return {
+        ...constraint,
+        radius: normalizeScalar(constraint.radius, "length", ctx),
+      };
     case "sketch.constraint.fixPoint":
       return {
         ...constraint,
