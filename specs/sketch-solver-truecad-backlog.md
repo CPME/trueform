@@ -247,9 +247,12 @@ Why:
 - 2026-03-04: Replaced heuristic total/remaining DOF accounting with Jacobian
   rank analysis and rigid-mode-aware ambiguity classification in the detailed
   solve report.
+- 2026-03-04: Replaced the projection-first solve loop with a damped
+  least-squares solve over driven handles, followed by a short deterministic
+  polish pass to preserve existing target-entity semantics.
 
 ### Next Recommended Task
 
-Replace the projection-style solve core with a general numerical solver. That is
-the next highest-value correctness step now that rank-based DOF reporting is in
-place.
+Generalize the numerical solve parameterization beyond point-handle variables,
+especially for coupled arc/circle radius constraints and other shape-specific
+DOFs that still use compatibility-era write semantics.

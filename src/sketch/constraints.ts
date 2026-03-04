@@ -7,6 +7,7 @@ type ScalarVariableKind = "x" | "y" | "scalar";
 
 type ScalarVariable = {
   entityId: string;
+  handle: string;
   kind: ScalarVariableKind;
   read: () => number;
   write: (value: number) => void;
@@ -143,15 +144,8 @@ export function solveSketchConstraintsDetailed(
   }
 
   const entityMap = new Map(solvedEntities.map((entity) => [entity.id, entity]));
-  const maxIterations = Math.max(4, constraints.length * 4);
-
-  for (let iteration = 0; iteration < maxIterations; iteration += 1) {
-    let maxDelta = 0;
-    for (const constraint of constraints) {
-      maxDelta = Math.max(maxDelta, applyConstraint(sketchId, entityMap, constraint));
-    }
-    if (maxDelta <= SOLVE_TOLERANCE) break;
-  }
+  solveSketchConstraintsNumerically(sketchId, solvedEntities, entityMap, constraints);
+  polishSketchConstraints(sketchId, entityMap, constraints);
 
   const constraintStatus = constraints.map((constraint) =>
     buildConstraintStatus(sketchId, entityMap, constraint)
@@ -365,19 +359,217 @@ function buildConstraintJacobian(
     const before = variable.read();
     const epsilon = variable.kind === "scalar" ? 1e-4 : 1e-5;
     variable.write(before + epsilon);
-    const next = buildConstraintResidualVector(sketchId, entityMap, constraints);
+    const nextPlus = buildConstraintResidualVector(sketchId, entityMap, constraints);
+    variable.write(before - epsilon);
+    const nextMinus = buildConstraintResidualVector(sketchId, entityMap, constraints);
     variable.write(before);
-    if (next.length !== baseResidual.length) {
+    if (nextPlus.length !== baseResidual.length || nextMinus.length !== baseResidual.length) {
       throw new Error("Sketch DOF analysis residual vector changed size during perturbation");
     }
     for (let row = 0; row < baseResidual.length; row += 1) {
       const rowData = jacobian[row];
       if (!rowData) continue;
-      rowData[col] = ((next[row] ?? 0) - (baseResidual[row] ?? 0)) / epsilon;
+      rowData[col] = ((nextPlus[row] ?? 0) - (nextMinus[row] ?? 0)) / (2 * epsilon);
     }
   }
 
   return jacobian;
+}
+
+function solveSketchConstraintsNumerically(
+  sketchId: string,
+  entities: SketchEntity[],
+  entityMap: Map<string, SketchEntity>,
+  constraints: SketchConstraint[]
+): void {
+  const variables = collectDrivenVariables(entities, constraints);
+  if (variables.length === 0 || constraints.length === 0) return;
+
+  let damping = 1e-3;
+  const maxIterations = Math.max(10, constraints.length * 6);
+
+  for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+    const residual = buildConstraintResidualVector(sketchId, entityMap, constraints);
+    if (maxAbsValue(residual) <= SOLVE_TOLERANCE) return;
+
+    const jacobian = buildConstraintJacobian(sketchId, entityMap, constraints, variables, residual);
+    if (jacobian.length === 0) return;
+
+    const normalMatrix = buildNormalMatrix(jacobian);
+    const gradient = buildNormalGradient(jacobian, residual);
+    if (vectorNorm(gradient) <= SOLVE_TOLERANCE * Math.max(1, vectorNorm(residual))) {
+      return;
+    }
+
+    const baseValues = variables.map((variable) => variable.read());
+    const currentNorm = vectorNorm(residual);
+    let accepted = false;
+    let trialDamping = damping;
+
+    for (let attempt = 0; attempt < 8 && !accepted; attempt += 1) {
+      const step = solveLinearSystem(
+        addDampedDiagonal(normalMatrix, trialDamping),
+        gradient.map((value) => -value)
+      );
+      if (!step) {
+        trialDamping *= 10;
+        continue;
+      }
+      if (vectorNorm(step) <= SOLVE_TOLERANCE * 0.1) {
+        restoreVariableValues(variables, baseValues);
+        return;
+      }
+
+      let stepScale = 1;
+      for (let lineSearch = 0; lineSearch < 6; lineSearch += 1) {
+        applyVariableStep(variables, baseValues, step, stepScale);
+        const nextResidual = buildConstraintResidualVector(sketchId, entityMap, constraints);
+        if (vectorNorm(nextResidual) + 1e-12 < currentNorm) {
+          damping = Math.max(1e-6, trialDamping * 0.5);
+          accepted = true;
+          break;
+        }
+        restoreVariableValues(variables, baseValues);
+        stepScale *= 0.5;
+      }
+
+      if (!accepted) {
+        trialDamping *= 10;
+      }
+    }
+
+    if (!accepted) {
+      restoreVariableValues(variables, baseValues);
+      return;
+    }
+  }
+}
+
+function polishSketchConstraints(
+  sketchId: string,
+  entityMap: Map<string, SketchEntity>,
+  constraints: SketchConstraint[]
+): void {
+  const maxIterations = Math.max(2, constraints.length);
+  for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+    let maxDelta = 0;
+    for (const constraint of constraints) {
+      maxDelta = Math.max(maxDelta, applyConstraint(sketchId, entityMap, constraint));
+    }
+    if (maxDelta <= SOLVE_TOLERANCE) return;
+  }
+}
+
+function buildNormalMatrix(jacobian: number[][]): number[][] {
+  const rows = jacobian.length;
+  const cols = jacobian[0]?.length ?? 0;
+  const normal = new Array(cols).fill(0).map(() => new Array(cols).fill(0));
+  for (let row = 0; row < rows; row += 1) {
+    const rowData = jacobian[row];
+    if (!rowData) continue;
+    for (let left = 0; left < cols; left += 1) {
+      const leftValue = rowData[left] ?? 0;
+      if (leftValue === 0) continue;
+      for (let right = left; right < cols; right += 1) {
+        const contribution = leftValue * (rowData[right] ?? 0);
+        normal[left]![right] = (normal[left]![right] ?? 0) + contribution;
+        if (left !== right) {
+          normal[right]![left] = (normal[right]![left] ?? 0) + contribution;
+        }
+      }
+    }
+  }
+  return normal;
+}
+
+function buildNormalGradient(jacobian: number[][], residual: number[]): number[] {
+  const cols = jacobian[0]?.length ?? 0;
+  const out = new Array(cols).fill(0);
+  for (let row = 0; row < jacobian.length; row += 1) {
+    const rowData = jacobian[row];
+    if (!rowData) continue;
+    const residualValue = residual[row] ?? 0;
+    for (let col = 0; col < cols; col += 1) {
+      out[col] = (out[col] ?? 0) + (rowData[col] ?? 0) * residualValue;
+    }
+  }
+  return out;
+}
+
+function addDampedDiagonal(matrix: number[][], damping: number): number[][] {
+  return matrix.map((row, rowIndex) =>
+    row.map((value, colIndex) => value + (rowIndex === colIndex ? damping : 0))
+  );
+}
+
+function solveLinearSystem(matrix: number[][], rhs: number[]): number[] | null {
+  const size = matrix.length;
+  if (size === 0) return [];
+  const augmented = matrix.map((row, rowIndex) => [...row, rhs[rowIndex] ?? 0]);
+  const tolerance = 1e-10;
+
+  for (let pivot = 0; pivot < size; pivot += 1) {
+    let bestRow = pivot;
+    let bestValue = Math.abs(augmented[pivot]?.[pivot] ?? 0);
+    for (let row = pivot + 1; row < size; row += 1) {
+      const value = Math.abs(augmented[row]?.[pivot] ?? 0);
+      if (value > bestValue) {
+        bestValue = value;
+        bestRow = row;
+      }
+    }
+    if (bestValue <= tolerance) return null;
+    if (bestRow !== pivot) {
+      const temp = augmented[pivot];
+      augmented[pivot] = augmented[bestRow] ?? [];
+      augmented[bestRow] = temp ?? [];
+    }
+
+    const pivotValue = augmented[pivot]?.[pivot] ?? 0;
+    const pivotRow = augmented[pivot];
+    if (!pivotRow) return null;
+    for (let col = pivot; col <= size; col += 1) {
+      pivotRow[col] = (pivotRow[col] ?? 0) / pivotValue;
+    }
+
+    for (let row = 0; row < size; row += 1) {
+      if (row === pivot) continue;
+      const rowData = augmented[row];
+      if (!rowData) continue;
+      const factor = rowData[pivot] ?? 0;
+      if (Math.abs(factor) <= tolerance) continue;
+      for (let col = pivot; col <= size; col += 1) {
+        rowData[col] = (rowData[col] ?? 0) - factor * (pivotRow[col] ?? 0);
+      }
+    }
+  }
+
+  return augmented.map((row) => row[size] ?? 0);
+}
+
+function applyVariableStep(
+  variables: ScalarVariable[],
+  baseValues: number[],
+  step: number[],
+  scaleFactor: number
+): void {
+  for (let index = 0; index < variables.length; index += 1) {
+    const variable = variables[index];
+    if (!variable) continue;
+    variable.write((baseValues[index] ?? 0) + (step[index] ?? 0) * scaleFactor);
+  }
+}
+
+function restoreVariableValues(variables: ScalarVariable[], values: number[]): void {
+  for (let index = 0; index < variables.length; index += 1) {
+    const variable = variables[index];
+    if (!variable) continue;
+    variable.write(values[index] ?? variable.read());
+  }
+}
+
+function maxAbsValue(values: number[]): number {
+  return values.reduce((max, value) => Math.max(max, Math.abs(value)), 0);
 }
 
 function estimateConstraintConsumption(
@@ -870,62 +1062,160 @@ function resolveRadiusTarget(
   );
 }
 
+function collectDrivenVariables(
+  entities: SketchEntity[],
+  constraints: SketchConstraint[]
+): ScalarVariable[] {
+  const variables = collectScalarVariables(entities);
+  if (variables.length === 0 || constraints.length === 0) return variables;
+  const entityMap = new Map(entities.map((entity) => [entity.id, entity]));
+  const drivenHandles = collectDrivenVariableHandles(entityMap, constraints);
+  if (drivenHandles.size === 0) return [];
+  return variables.filter((variable) =>
+    drivenHandles.has(variableHandleKey(variable.entityId, variable.handle))
+  );
+}
+
+function collectDrivenVariableHandles(
+  entityMap: Map<string, SketchEntity>,
+  constraints: SketchConstraint[]
+): Set<string> {
+  const handles = new Set<string>();
+  const addHandle = (entityId: string, handle: string): void => {
+    handles.add(variableHandleKey(entityId, handle));
+  };
+  const addPointRef = (ref: SketchConstraintPointRef): void => {
+    const entity = entityMap.get(ref.entity);
+    const handle = entity ? normalizedPointRefHandle(entity, ref.handle) : ref.handle ?? null;
+    if (!handle) return;
+    handles.add(variableHandleKey(ref.entity, handle));
+  };
+
+  for (const constraint of constraints) {
+    switch (constraint.kind) {
+      case "sketch.constraint.coincident":
+        addPointRef(constraint.b);
+        break;
+      case "sketch.constraint.distance":
+        addPointRef(constraint.b);
+        break;
+      case "sketch.constraint.radius": {
+        const entity = entityMap.get(constraint.curve);
+        if (entity?.kind === "sketch.circle") {
+          addHandle(constraint.curve, "radius");
+        } else if (entity?.kind === "sketch.arc") {
+          addHandle(constraint.curve, "start");
+          addHandle(constraint.curve, "end");
+        }
+        break;
+      }
+      case "sketch.constraint.fixPoint":
+        addPointRef(constraint.point);
+        break;
+      case "sketch.constraint.horizontal":
+      case "sketch.constraint.vertical":
+      case "sketch.constraint.parallel":
+      case "sketch.constraint.perpendicular":
+      case "sketch.constraint.equalLength":
+      case "sketch.constraint.angle":
+        break;
+    }
+  }
+
+  return handles;
+}
+
+function variableHandleKey(entityId: string, handle: string): string {
+  return `${entityId}#${handle}`;
+}
+
+function normalizedPointRefHandle(
+  entity: SketchEntity,
+  handle: SketchConstraintPointRef["handle"]
+): string | null {
+  switch (entity.kind) {
+    case "sketch.line":
+      return handle === "start" || handle === "end" ? handle : null;
+    case "sketch.arc":
+      return handle === "start" || handle === "end"
+        ? handle
+        : handle === undefined || handle === "center"
+          ? "center"
+          : null;
+    case "sketch.circle":
+    case "sketch.ellipse":
+    case "sketch.slot":
+    case "sketch.polygon":
+      return handle === undefined || handle === "center" ? "center" : null;
+    case "sketch.rectangle":
+      if (entity.mode === "center") {
+        return handle === undefined || handle === "center" ? "center" : null;
+      }
+      return handle === undefined || handle === "corner" ? "corner" : null;
+    case "sketch.point":
+      return handle === undefined || handle === "point" ? "point" : null;
+    case "sketch.spline":
+      return null;
+  }
+}
+
 function collectScalarVariables(entities: SketchEntity[]): ScalarVariable[] {
   const variables: ScalarVariable[] = [];
   for (const entity of entities) {
     switch (entity.kind) {
       case "sketch.line":
-        pushPointVariables(variables, entity.id, () => entity.start, (point) => {
+        pushPointVariables(variables, entity.id, "start", () => entity.start, (point) => {
           entity.start = point;
         });
-        pushPointVariables(variables, entity.id, () => entity.end, (point) => {
+        pushPointVariables(variables, entity.id, "end", () => entity.end, (point) => {
           entity.end = point;
         });
         break;
       case "sketch.arc":
-        pushPointVariables(variables, entity.id, () => entity.start, (point) => {
+        pushPointVariables(variables, entity.id, "start", () => entity.start, (point) => {
           entity.start = point;
         });
-        pushPointVariables(variables, entity.id, () => entity.end, (point) => {
+        pushPointVariables(variables, entity.id, "end", () => entity.end, (point) => {
           entity.end = point;
         });
-        pushPointVariables(variables, entity.id, () => entity.center, (point) => {
+        pushPointVariables(variables, entity.id, "center", () => entity.center, (point) => {
           entity.center = point;
         });
         break;
       case "sketch.circle":
-        pushPointVariables(variables, entity.id, () => entity.center, (point) => {
+        pushPointVariables(variables, entity.id, "center", () => entity.center, (point) => {
           entity.center = point;
         });
         variables.push({
           entityId: entity.id,
+          handle: "radius",
           kind: "scalar",
           read: () => toFiniteNumber(entity.radius, `Sketch circle ${entity.id} radius`),
           write: (value) => {
-            entity.radius = value;
+            entity.radius = Math.max(SOLVE_EPSILON, value);
           },
         });
         break;
       case "sketch.ellipse":
       case "sketch.slot":
       case "sketch.polygon":
-        pushPointVariables(variables, entity.id, () => entity.center, (point) => {
+        pushPointVariables(variables, entity.id, "center", () => entity.center, (point) => {
           entity.center = point;
         });
         break;
       case "sketch.rectangle":
         if (entity.mode === "center") {
-          pushPointVariables(variables, entity.id, () => entity.center, (point) => {
+          pushPointVariables(variables, entity.id, "center", () => entity.center, (point) => {
             entity.center = point;
           });
         } else {
-          pushPointVariables(variables, entity.id, () => entity.corner, (point) => {
+          pushPointVariables(variables, entity.id, "corner", () => entity.corner, (point) => {
             entity.corner = point;
           });
         }
         break;
       case "sketch.point":
-        pushPointVariables(variables, entity.id, () => entity.point, (point) => {
+        pushPointVariables(variables, entity.id, "point", () => entity.point, (point) => {
           entity.point = point;
         });
         break;
@@ -939,11 +1229,13 @@ function collectScalarVariables(entities: SketchEntity[]): ScalarVariable[] {
 function pushPointVariables(
   variables: ScalarVariable[],
   entityId: string,
+  handle: string,
   readPoint: () => Point2D,
   writePoint: (point: Point2D) => void
 ): void {
   variables.push({
     entityId,
+    handle,
     kind: "x",
     read: () => toFiniteNumber(readPoint()[0], `Sketch entity ${entityId} x`),
     write: (value) => {
@@ -954,6 +1246,7 @@ function pushPointVariables(
   });
   variables.push({
     entityId,
+    handle,
     kind: "y",
     read: () => toFiniteNumber(readPoint()[1], `Sketch entity ${entityId} y`),
     write: (value) => {
