@@ -302,6 +302,16 @@ Why:
 - 2026-03-05: Added trust-region/LM safeguards to the numerical solve loop
   (regularized normal equations, trust-radius clamping, gain-ratio damping
   adaptation, and gradient fallback) plus mixed-scale regression coverage.
+- 2026-03-05: Hardened async/session semantics for worker usage:
+  async solves now yield to a macrotask boundary before execution, aborts are
+  re-checked after yield, and session warm-start promotion is guarded so aborted
+  or stale async solves cannot overwrite newer canonical warm-start state.
+- 2026-03-05: Added sketch solver property/fuzz coverage and preview-latency
+  regression guardrails (frame-budget oriented p95/max thresholds) to catch
+  determinism and interaction-performance regressions early.
+- 2026-03-05: Froze the TrueForm-facing sketch solver runtime contract as a v1
+  candidate in `specs/sketch-webapp-runtime-contract.md` (while keeping TrueCAD
+  wiring as a separate pending integration task).
 
 ### Next Recommended Task
 
@@ -337,17 +347,18 @@ Last updated: 2026-03-05
 - Expand curve-family and advanced constraints based on TrueCAD needs.
 - Keep all additions fully tested via targeted e2e suites.
 
-7. [ ] Determinism and replay/perf harness
+7. [x] Determinism and replay/perf harness
 - Add drag-trace replay tests and property/fuzz tests.
 - Add performance regression checks (latency/frame-budget thresholds).
-- Progress: drag-trace replay determinism test added; property/fuzz/perf
-  thresholds still pending.
+- Progress: drag-trace replay determinism, property/fuzz coverage, and
+  preview-latency guardrail thresholds are now covered in sketch solver e2e.
 
 8. [ ] TrueCAD integration contract
 - Define/implement interaction loop contract (preview cadence vs authoritative solve points).
 - Validate same pattern for sketch + assembly drag workflows.
-- Progress: draft contract documented in `specs/sketch-webapp-runtime-contract.md`;
-  runtime wiring in TrueCAD is still pending.
+- Progress: TrueForm solver contract is now frozen as a v1 candidate in
+  `specs/sketch-webapp-runtime-contract.md`; runtime wiring/consumption in
+  TrueCAD is still pending.
 - SME direction captured: prioritize responsiveness over preview fidelity,
   target 60 Hz when feasible, and commit last solvable state on pointer-up
   conflicts with diagnostics.

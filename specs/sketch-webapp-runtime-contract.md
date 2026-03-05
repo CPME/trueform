@@ -1,6 +1,6 @@
 # Sketch Webapp Runtime Contract
 
-Status: draft for implementation
+Status: TrueForm surface frozen (v1 candidate), TrueCAD wiring pending
 Updated: 2026-03-05
 
 ## Goal
@@ -21,6 +21,40 @@ cooperate during high-frequency dragging.
 - Must remain pure and worker-safe.
 
 Rule: Preview is advisory; canonical state comes from TrueForm solve outputs.
+
+## Frozen TrueForm Solver Surface (2026-03-05)
+
+The following API surface is now treated as stable for TrueCAD integration:
+
+1. Solve entry points
+- `solveSketchConstraintsDetailed(...)`
+- `solveSketchConstraintsDetailedAsync(...)`
+- `solveSketchConstraintsAsync(...)`
+- `createSketchConstraintSolveSession(...)`
+
+2. Stable options contract
+- `transientConstraints`
+- `warmStartEntities` (internal/session usage; not for persisted authored data)
+- `changedEntityIds`
+- `changedConstraintIds`
+- `maxIterations`
+- `maxTimeMs`
+- `signal`
+
+3. Stable solve metadata contract
+- `solveMeta.termination`: `converged | not-run | max-iterations | time-budget | aborted`
+- `solveMeta.iterations`
+- `solveMeta.elapsedMs`
+- `solveMeta.maxResidual`
+- `solveMeta.solvedComponentIds`
+- `solveMeta.skippedComponentIds`
+
+4. Async/session behavior guarantees
+- Async solve yields to the next macrotask before executing the canonical solve.
+- Async solve honors abort both before and after the yield boundary.
+- Session warm-start state is not promoted from aborted solves.
+- Session warm-start promotion is version-guarded so stale async results cannot
+  overwrite newer session state.
 
 ## Solve Modes
 
