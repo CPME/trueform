@@ -296,3 +296,40 @@ Why:
 Profiling + targeted tuning of drag-time solve cadence in the webapp loop
 (especially event coalescing and frame-budgeted solve scheduling) now that
 transient/session constraints are available in core.
+
+## Webapp Hardening Plan (Tracked Checklist)
+
+Status: active checklist
+Last updated: 2026-03-05
+
+1. [ ] Incremental session solve API
+- Add warm-start/session handles for drag loops.
+- Support partial/changed-graph updates instead of whole-sketch solves.
+
+2. [ ] Time-budgeted async solving
+- Worker-safe async solve API with cancellation/abort.
+- Return best-so-far solution + residual/diagnostics under frame budgets.
+
+3. [ ] Numerical robustness upgrades
+- Add better trust-region/LM safeguards for near-singular systems.
+- Add variable scaling/normalization to improve stability across units/sizes.
+
+4. [ ] Nullspace/DOF-aware drag behavior
+- Expose admissible free-motion directions for underconstrained states.
+- Keep drag motion in expected DOF subspace to reduce jumpy behavior.
+
+5. [ ] UX-grade diagnostics
+- Add higher-quality conflict attribution (minimal/conflict-set style outputs).
+- Add redundancy explanations suitable for UI tooltips and badges.
+
+6. [ ] Broader constraint coverage (as needed)
+- Expand curve-family and advanced constraints based on TrueCAD needs.
+- Keep all additions fully tested via targeted e2e suites.
+
+7. [ ] Determinism and replay/perf harness
+- Add drag-trace replay tests and property/fuzz tests.
+- Add performance regression checks (latency/frame-budget thresholds).
+
+8. [ ] TrueCAD integration contract
+- Define/implement interaction loop contract (preview cadence vs authoritative solve points).
+- Validate same pattern for sketch + assembly drag workflows.
