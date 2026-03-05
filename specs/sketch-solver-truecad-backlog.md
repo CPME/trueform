@@ -208,7 +208,7 @@ Why this group:
 ### P4: Performance and Interaction Support
 
 14. Connected-component solve partitioning
-Status: pending
+Status: completed on 2026-03-05
 
 Needed outcome:
 - Solve only affected subgraphs/components.
@@ -277,9 +277,11 @@ Why:
 - 2026-03-05: Added `sketch.constraint.tangent`,
   `sketch.constraint.concentric`, and `sketch.constraint.pointOnLine` with DSL,
   IR/validation/normalization coverage, solver behavior, and targeted tests.
+- 2026-03-05: Partitioned numerical solve/polish execution by connected
+  constraint components so independent subgraphs solve in isolation with
+  deterministic component ordering.
 
 ### Next Recommended Task
 
-Connected-component solve partitioning so local edits only re-solve impacted
-subgraphs/components while preserving deterministic status reporting and UI-safe
-entity statuses.
+Temporary/session-only constraints to support drag/inference behavior without
+polluting authored sketch constraint state.

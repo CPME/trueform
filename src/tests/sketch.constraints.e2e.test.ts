@@ -440,6 +440,63 @@ const tests = [
     },
   },
   {
+    name: "sketch constraints: conflicting component does not block independent component solve",
+    fn: async () => {
+      const report = solveSketchConstraintsDetailed(
+        "sketch-component-isolation",
+        [
+          dsl.sketchLine("line-conflict", [0, 0], [1, 1]),
+          dsl.sketchLine("line-stable", [20, 5], [25, 8]),
+        ],
+        [
+          dsl.sketchConstraintFixPoint(
+            "c-conflict-start",
+            dsl.sketchPointRef("line-conflict", "start"),
+            { x: 0, y: 0 }
+          ),
+          dsl.sketchConstraintHorizontal("c-conflict-horizontal", "line-conflict"),
+          dsl.sketchConstraintFixPoint(
+            "c-conflict-end",
+            dsl.sketchPointRef("line-conflict", "end"),
+            { x: 1, y: 1 }
+          ),
+          dsl.sketchConstraintFixPoint(
+            "c-stable-start",
+            dsl.sketchPointRef("line-stable", "start"),
+            { x: 20, y: 5 }
+          ),
+          dsl.sketchConstraintHorizontal("c-stable-horizontal", "line-stable"),
+          dsl.sketchConstraintDistance(
+            "c-stable-length",
+            dsl.sketchPointRef("line-stable", "start"),
+            dsl.sketchPointRef("line-stable", "end"),
+            4
+          ),
+        ]
+      );
+
+      const byId = new Map(report.entities.map((entity) => [entity.id, entity]));
+      const stable = byId.get("line-stable") as SketchLine;
+      assert.deepEqual(stable.start, [20, 5]);
+      assert.deepEqual(stable.end, [24, 5]);
+      assert.equal(report.status, "conflict");
+      assert.deepEqual(
+        report.constraintStatus.map((entry) => ({
+          constraintId: entry.constraintId,
+          status: entry.status,
+        })),
+        [
+          { constraintId: "c-conflict-start", status: "satisfied" },
+          { constraintId: "c-conflict-horizontal", status: "unsatisfied" },
+          { constraintId: "c-conflict-end", status: "satisfied" },
+          { constraintId: "c-stable-start", status: "satisfied" },
+          { constraintId: "c-stable-horizontal", status: "satisfied" },
+          { constraintId: "c-stable-length", status: "satisfied" },
+        ]
+      );
+    },
+  },
+  {
     name: "sketch constraints: numerical solve converges across coupled mixed constraints",
     fn: async () => {
       const report = solveSketchConstraintsDetailed(

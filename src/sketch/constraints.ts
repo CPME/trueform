@@ -185,27 +185,52 @@ export function solveSketchConstraintsDetailed(
   constraints: SketchConstraint[]
 ): SketchConstraintSolveReport {
   const solvedEntities = cloneSketchEntities(entities);
+  const components = buildConstraintComponents(solvedEntities, constraints);
   if (constraints.length === 0) {
-    return buildSolveReport(solvedEntities, constraints, []);
+    return buildSolveReport(solvedEntities, constraints, [], components);
   }
 
   const entityMap = new Map(solvedEntities.map((entity) => [entity.id, entity]));
-  solveSketchConstraintsNumerically(sketchId, solvedEntities, entityMap, constraints);
-  polishSketchConstraints(sketchId, entityMap, constraints);
+  const entityById = new Map(solvedEntities.map((entity) => [entity.id, entity]));
+  const constraintById = new Map(constraints.map((constraint) => [constraint.id, constraint]));
+  const assignedConstraintIds = new Set<string>();
+
+  for (const component of components) {
+    const componentConstraints = component.constraintIds
+      .map((constraintId) => constraintById.get(constraintId))
+      .filter((constraint): constraint is SketchConstraint => !!constraint);
+    if (componentConstraints.length === 0) continue;
+    for (const constraint of componentConstraints) {
+      assignedConstraintIds.add(constraint.id);
+    }
+    const componentEntities = component.entityIds
+      .map((entityId) => entityById.get(entityId))
+      .filter((entity): entity is SketchEntity => !!entity);
+    solveSketchConstraintsNumerically(sketchId, componentEntities, entityMap, componentConstraints);
+    polishSketchConstraints(sketchId, entityMap, componentConstraints);
+  }
+
+  const unassignedConstraints = constraints.filter(
+    (constraint) => !assignedConstraintIds.has(constraint.id)
+  );
+  if (unassignedConstraints.length > 0) {
+    solveSketchConstraintsNumerically(sketchId, [], entityMap, unassignedConstraints);
+    polishSketchConstraints(sketchId, entityMap, unassignedConstraints);
+  }
 
   const constraintStatus = constraints.map((constraint) =>
     buildConstraintStatus(sketchId, entityMap, constraint)
   );
 
-  return buildSolveReport(solvedEntities, constraints, constraintStatus);
+  return buildSolveReport(solvedEntities, constraints, constraintStatus, components);
 }
 
 function buildSolveReport(
   entities: SketchEntity[],
   constraints: SketchConstraint[],
-  constraintStatus: SketchConstraintStatus[]
+  constraintStatus: SketchConstraintStatus[],
+  components = buildConstraintComponents(entities, constraints)
 ): SketchConstraintSolveReport {
-  const components = buildConstraintComponents(entities, constraints);
   const totalDegreesOfFreedom = entities.reduce(
     (sum, entity) => sum + estimateEntityDegreesOfFreedom(entity),
     0
