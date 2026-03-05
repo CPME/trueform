@@ -7,17 +7,23 @@ export * from "./dimensions.js";
 export * from "./build_cache.js";
 export * from "./mesh_profiles.js";
 export {
+  createSketchConstraintSolveSession,
   solveSketchConstraints,
+  solveSketchConstraintsAsync,
   solveSketchConstraintsDetailed,
+  solveSketchConstraintsDetailedAsync,
 } from "./sketch/constraints.js";
 export type {
   SketchConstraintComponentSolveStatus,
   SketchConstraintComponentStatus,
   SketchConstraintDiagnosticStatus,
   SketchConstraintEntityStatus,
+  SketchConstraintSessionSolveInput,
+  SketchConstraintSolveSession,
   SketchConstraintSolveOptions,
   SketchConstraintSolveReport,
   SketchConstraintSolveStatus,
+  SketchConstraintSolveTermination,
   SketchConstraintSource,
   SketchConstraintStatus,
 } from "./sketch/constraints.js";

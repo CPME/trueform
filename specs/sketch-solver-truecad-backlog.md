@@ -290,23 +290,30 @@ Why:
   `solveSketchConstraintsDetailed(...)` via `options.transientConstraints`,
   with source-tagged diagnostics (`authored` vs `transient`) and duplicate id
   guardrails across merged constraint sets.
+- 2026-03-05: Added sketch solve session/runtime APIs:
+  `createSketchConstraintSolveSession(...)`,
+  `solveSketchConstraintsDetailedAsync(...)`, and
+  `solveSketchConstraintsAsync(...)`, including warm-start reuse, changed
+  component targeting (`changedEntityIds` / `changedConstraintIds`), abort/time
+  budget controls, solve termination metadata, and drag-trace replay
+  determinism coverage.
 
 ### Next Recommended Task
 
-Profiling + targeted tuning of drag-time solve cadence in the webapp loop
-(especially event coalescing and frame-budgeted solve scheduling) now that
-transient/session constraints are available in core.
+Numerical robustness upgrades (stronger trust-region/LM safeguards and variable
+scaling/normalization), then nullspace/DOF-aware drag motion guidance for
+underconstrained sketches.
 
 ## Webapp Hardening Plan (Tracked Checklist)
 
 Status: active checklist
 Last updated: 2026-03-05
 
-1. [ ] Incremental session solve API
+1. [x] Incremental session solve API
 - Add warm-start/session handles for drag loops.
 - Support partial/changed-graph updates instead of whole-sketch solves.
 
-2. [ ] Time-budgeted async solving
+2. [x] Time-budgeted async solving
 - Worker-safe async solve API with cancellation/abort.
 - Return best-so-far solution + residual/diagnostics under frame budgets.
 
@@ -329,6 +336,8 @@ Last updated: 2026-03-05
 7. [ ] Determinism and replay/perf harness
 - Add drag-trace replay tests and property/fuzz tests.
 - Add performance regression checks (latency/frame-budget thresholds).
+- Progress: drag-trace replay determinism test added; property/fuzz/perf
+  thresholds still pending.
 
 8. [ ] TrueCAD integration contract
 - Define/implement interaction loop contract (preview cadence vs authoritative solve points).

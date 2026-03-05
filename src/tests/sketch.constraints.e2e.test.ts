@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { solveSketchConstraints, solveSketchConstraintsDetailed } from "../core.js";
+import {
+  createSketchConstraintSolveSession,
+  solveSketchConstraints,
+  solveSketchConstraintsDetailed,
+  solveSketchConstraintsDetailedAsync,
+} from "../core.js";
 import { dsl, Sketch2D, SketchLine, SketchPoint } from "../dsl.js";
 import { normalizePart } from "../compiler.js";
 import { runTests } from "./occt_test_utils.js";
@@ -632,6 +637,161 @@ const tests = [
           ),
         /duplicate constraint id/i
       );
+    },
+  },
+  {
+    name: "sketch constraints: session solver supports warm start and changed-component targeting",
+    fn: async () => {
+      const session = createSketchConstraintSolveSession("sketch-session", [
+        dsl.sketchConstraintFixPoint("c-a-fix", dsl.sketchPointRef("line-a", "start"), {
+          x: 0,
+          y: 0,
+        }),
+        dsl.sketchConstraintHorizontal("c-a-h", "line-a"),
+        dsl.sketchConstraintDistance(
+          "c-a-d",
+          dsl.sketchPointRef("line-a", "start"),
+          dsl.sketchPointRef("line-a", "end"),
+          8
+        ),
+        dsl.sketchConstraintFixPoint("c-b-fix", dsl.sketchPointRef("line-b", "start"), {
+          x: 20,
+          y: 2,
+        }),
+        dsl.sketchConstraintHorizontal("c-b-h", "line-b"),
+        dsl.sketchConstraintDistance(
+          "c-b-d",
+          dsl.sketchPointRef("line-b", "start"),
+          dsl.sketchPointRef("line-b", "end"),
+          5
+        ),
+      ]);
+
+      const first = session.solve({
+        entities: [
+          dsl.sketchLine("line-a", [0, 0], [6, 3]),
+          dsl.sketchLine("line-b", [20, 2], [24, 6]),
+        ],
+      });
+      assert.equal(first.solveMeta.termination, "converged");
+
+      const secondEntities = first.entities.map((entity) => {
+        if (entity.kind !== "sketch.line" || entity.id !== "line-a") return entity;
+        return { ...entity, end: [12, 7] as [number, number] };
+      });
+      const second = session.solve({
+        entities: secondEntities,
+        changedEntityIds: ["line-a"],
+      });
+      assert.equal(second.solveMeta.termination, "converged");
+      assert.deepEqual(second.solveMeta.solvedComponentIds, ["component.1"]);
+      assert.deepEqual(second.solveMeta.skippedComponentIds, ["component.2"]);
+
+      const byId = new Map(second.entities.map((entity) => [entity.id, entity]));
+      const lineA = byId.get("line-a") as SketchLine;
+      const lineB = byId.get("line-b") as SketchLine;
+      assert.deepEqual(lineA.start, [0, 0]);
+      assert.deepEqual(lineA.end, [8, 0]);
+      assert.deepEqual(lineB.start, [20, 2]);
+      assert.deepEqual(lineB.end, [25, 2]);
+    },
+  },
+  {
+    name: "sketch constraints: solve respects iteration budget",
+    fn: async () => {
+      const report = solveSketchConstraintsDetailed(
+        "sketch-budget",
+        [dsl.sketchLine("line-1", [0, 0], [5, 4])],
+        [
+          dsl.sketchConstraintFixPoint("c-fix", dsl.sketchPointRef("line-1", "start"), {
+            x: 0,
+            y: 0,
+          }),
+          dsl.sketchConstraintHorizontal("c-h", "line-1"),
+          dsl.sketchConstraintDistance(
+            "c-d",
+            dsl.sketchPointRef("line-1", "start"),
+            dsl.sketchPointRef("line-1", "end"),
+            10
+          ),
+        ],
+        { maxIterations: 0 }
+      );
+      assert.equal(report.solveMeta.termination, "max-iterations");
+    },
+  },
+  {
+    name: "sketch constraints: solve respects abort signals",
+    fn: async () => {
+      const controller = new AbortController();
+      controller.abort();
+      const report = solveSketchConstraintsDetailed(
+        "sketch-abort",
+        [dsl.sketchLine("line-1", [0, 0], [5, 4])],
+        [dsl.sketchConstraintHorizontal("c-h", "line-1")],
+        { signal: controller.signal }
+      );
+      assert.equal(report.solveMeta.termination, "aborted");
+    },
+  },
+  {
+    name: "sketch constraints: async detailed solve matches sync solve",
+    fn: async () => {
+      const entities = [dsl.sketchLine("line-1", [0, 0], [5, 4])];
+      const constraints = [dsl.sketchConstraintHorizontal("c-h", "line-1")];
+      const syncReport = solveSketchConstraintsDetailed("sketch-sync", entities, constraints);
+      const asyncReport = await solveSketchConstraintsDetailedAsync(
+        "sketch-sync",
+        entities,
+        constraints
+      );
+      const syncLine = syncReport.entities[0] as SketchLine;
+      const asyncLine = asyncReport.entities[0] as SketchLine;
+      assert.deepEqual(asyncLine.start, syncLine.start);
+      assert.deepEqual(asyncLine.end, syncLine.end);
+      assert.equal(asyncReport.constraintStatus[0]?.status, syncReport.constraintStatus[0]?.status);
+    },
+  },
+  {
+    name: "sketch constraints: drag trace replay is deterministic",
+    fn: async () => {
+      const replay = (): Array<[number, number]> => {
+        const session = createSketchConstraintSolveSession("sketch-replay", [
+          dsl.sketchConstraintFixPoint("c-fix", dsl.sketchPointRef("line-1", "start"), {
+            x: 0,
+            y: 0,
+          }),
+          dsl.sketchConstraintHorizontal("c-h", "line-1"),
+          dsl.sketchConstraintDistance(
+            "c-d",
+            dsl.sketchPointRef("line-1", "start"),
+            dsl.sketchPointRef("line-1", "end"),
+            10
+          ),
+        ]);
+        const trace: Array<[number, number]> = [];
+        const dragTargets: Array<[number, number]> = [
+          [8, 4],
+          [11, 6],
+          [13, 2],
+          [9, -3],
+        ];
+        for (const target of dragTargets) {
+          const report = session.solve({
+            entities: [
+              dsl.sketchLine("line-1", [0, 0], target),
+            ],
+            changedEntityIds: ["line-1"],
+          });
+          const line = report.entities[0] as SketchLine;
+          trace.push([line.end[0] as number, line.end[1] as number]);
+        }
+        return trace;
+      };
+
+      const first = replay();
+      const second = replay();
+      assert.deepEqual(second, first);
     },
   },
 ];

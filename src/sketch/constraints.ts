@@ -30,7 +30,20 @@ export type SketchConstraintSource = "authored" | "transient";
 
 export type SketchConstraintSolveOptions = {
   transientConstraints?: SketchConstraint[];
+  warmStartEntities?: SketchEntity[];
+  changedEntityIds?: string[];
+  changedConstraintIds?: string[];
+  maxIterations?: number;
+  maxTimeMs?: number;
+  signal?: AbortSignal;
 };
+
+export type SketchConstraintSolveTermination =
+  | "converged"
+  | "not-run"
+  | "max-iterations"
+  | "time-budget"
+  | "aborted";
 
 export type SketchConstraintStatus = {
   constraintId: string;
@@ -74,6 +87,30 @@ export type SketchConstraintSolveReport = {
   componentStatus: SketchConstraintComponentStatus[];
   entityStatus: SketchConstraintEntityStatus[];
   constraintStatus: SketchConstraintStatus[];
+  solveMeta: {
+    termination: SketchConstraintSolveTermination;
+    iterations: number;
+    elapsedMs: number;
+    maxResidual: number;
+    solvedComponentIds: string[];
+    skippedComponentIds: string[];
+  };
+};
+
+export type SketchConstraintSessionSolveInput = {
+  entities: SketchEntity[];
+  transientConstraints?: SketchConstraint[];
+  changedEntityIds?: string[];
+  changedConstraintIds?: string[];
+  maxIterations?: number;
+  maxTimeMs?: number;
+  signal?: AbortSignal;
+};
+
+export type SketchConstraintSolveSession = {
+  solve: (input: SketchConstraintSessionSolveInput) => SketchConstraintSolveReport;
+  solveAsync: (input: SketchConstraintSessionSolveInput) => Promise<SketchConstraintSolveReport>;
+  reset: () => void;
 };
 
 type SketchConstraintComponent = {
@@ -99,6 +136,17 @@ type SketchConstraintSolveAnalysis = {
   perEntityRemaining: Map<string, number>;
   componentAnalysis: Map<string, SketchConstraintComponentAnalysis>;
   entityToComponent: Map<string, string>;
+};
+
+type SketchSolveExecutionState = {
+  startMs: number;
+  deadlineMs: number | null;
+  iterationBudget: number;
+  iterations: number;
+  signal?: AbortSignal;
+  termination: Exclude<SketchConstraintSolveTermination, "converged" | "not-run"> | null;
+  solvedComponentIds: string[];
+  skippedComponentIds: string[];
 };
 
 const SOLVE_EPSILON = 1e-9;
@@ -191,21 +239,43 @@ export function solveSketchConstraintsDetailed(
   constraints: SketchConstraint[],
   options?: SketchConstraintSolveOptions
 ): SketchConstraintSolveReport {
+  const execution = createSketchSolveExecutionState(options);
   const transientConstraints = options?.transientConstraints ?? [];
   const allConstraints = [...constraints, ...transientConstraints];
   ensureUniqueConstraintIds(sketchId, allConstraints);
   const solvedEntities = cloneSketchEntities(entities);
+  const changedEntityIds = new Set(options?.changedEntityIds ?? []);
+  applyWarmStartEntities(solvedEntities, options?.warmStartEntities, changedEntityIds);
   const components = buildConstraintComponents(solvedEntities, allConstraints);
   if (allConstraints.length === 0) {
-    return buildSolveReport(solvedEntities, allConstraints, [], components);
+    return buildSolveReport(
+      solvedEntities,
+      allConstraints,
+      [],
+      components,
+      finalizeSolveMeta(execution, "not-run", 0)
+    );
   }
 
   const entityMap = new Map(solvedEntities.map((entity) => [entity.id, entity]));
   const entityById = new Map(solvedEntities.map((entity) => [entity.id, entity]));
   const constraintById = new Map(allConstraints.map((constraint) => [constraint.id, constraint]));
   const assignedConstraintIds = new Set<string>();
+  const activeComponentIds = collectActiveComponentIds(
+    components,
+    options,
+    transientConstraints
+  );
 
   for (const component of components) {
+    if (!activeComponentIds.has(component.componentId)) {
+      execution.skippedComponentIds.push(component.componentId);
+      continue;
+    }
+    if (checkAndRecordSolveStop(execution)) {
+      execution.skippedComponentIds.push(component.componentId);
+      continue;
+    }
     const componentConstraints = component.constraintIds
       .map((constraintId) => constraintById.get(constraintId))
       .filter((constraint): constraint is SketchConstraint => !!constraint);
@@ -216,16 +286,27 @@ export function solveSketchConstraintsDetailed(
     const componentEntities = component.entityIds
       .map((entityId) => entityById.get(entityId))
       .filter((entity): entity is SketchEntity => !!entity);
-    solveSketchConstraintsNumerically(sketchId, componentEntities, entityMap, componentConstraints);
-    polishSketchConstraints(sketchId, entityMap, componentConstraints);
+    solveSketchConstraintsNumerically(
+      sketchId,
+      componentEntities,
+      entityMap,
+      componentConstraints,
+      execution
+    );
+    polishSketchConstraints(sketchId, entityMap, componentConstraints, execution);
+    if (execution.termination) {
+      execution.skippedComponentIds.push(component.componentId);
+      continue;
+    }
+    execution.solvedComponentIds.push(component.componentId);
   }
 
   const unassignedConstraints = allConstraints.filter(
     (constraint) => !assignedConstraintIds.has(constraint.id)
   );
   if (unassignedConstraints.length > 0) {
-    solveSketchConstraintsNumerically(sketchId, [], entityMap, unassignedConstraints);
-    polishSketchConstraints(sketchId, entityMap, unassignedConstraints);
+    solveSketchConstraintsNumerically(sketchId, [], entityMap, unassignedConstraints, execution);
+    polishSketchConstraints(sketchId, entityMap, unassignedConstraints, execution);
   }
 
   const constraintSourceById = new Map<string, SketchConstraintSource>();
@@ -244,14 +325,247 @@ export function solveSketchConstraintsDetailed(
     )
   );
 
-  return buildSolveReport(solvedEntities, allConstraints, constraintStatus, components);
+  const maxResidual = constraintStatus.reduce(
+    (max, entry) => Math.max(max, Number.isFinite(entry.residual) ? entry.residual : max),
+    0
+  );
+  return buildSolveReport(
+    solvedEntities,
+    allConstraints,
+    constraintStatus,
+    components,
+    finalizeSolveMeta(execution, "converged", maxResidual)
+  );
+}
+
+export async function solveSketchConstraintsDetailedAsync(
+  sketchId: string,
+  entities: SketchEntity[],
+  constraints: SketchConstraint[],
+  options?: SketchConstraintSolveOptions
+): Promise<SketchConstraintSolveReport> {
+  if (options?.signal?.aborted) {
+    return solveSketchConstraintsDetailed(sketchId, entities, constraints, options);
+  }
+  await Promise.resolve();
+  return solveSketchConstraintsDetailed(sketchId, entities, constraints, options);
+}
+
+export async function solveSketchConstraintsAsync(
+  sketchId: string,
+  entities: SketchEntity[],
+  constraints: SketchConstraint[],
+  options?: SketchConstraintSolveOptions
+): Promise<SketchEntity[]> {
+  const report = await solveSketchConstraintsDetailedAsync(sketchId, entities, constraints, options);
+  const failingConstraint = report.constraintStatus.find(
+    (entry) => entry.status === "unsatisfied" && entry.source === "authored"
+  );
+  if (failingConstraint) {
+    throw new CompileError(
+      failingConstraint.code ?? "sketch_constraint_unsatisfied",
+      failingConstraint.message ??
+        `Sketch ${sketchId} constraint ${failingConstraint.constraintId} could not be satisfied`
+    );
+  }
+  return report.entities;
+}
+
+export function createSketchConstraintSolveSession(
+  sketchId: string,
+  constraints: SketchConstraint[]
+): SketchConstraintSolveSession {
+  let warmStartEntities: SketchEntity[] | undefined;
+  return {
+    solve: (input) => {
+      const report = solveSketchConstraintsDetailed(sketchId, input.entities, constraints, {
+        transientConstraints: input.transientConstraints,
+        warmStartEntities,
+        changedEntityIds: input.changedEntityIds,
+        changedConstraintIds: input.changedConstraintIds,
+        maxIterations: input.maxIterations,
+        maxTimeMs: input.maxTimeMs,
+        signal: input.signal,
+      });
+      warmStartEntities = report.entities.map((entity) => cloneSketchEntity(entity));
+      return report;
+    },
+    solveAsync: async (input) => {
+      const report = await solveSketchConstraintsDetailedAsync(sketchId, input.entities, constraints, {
+        transientConstraints: input.transientConstraints,
+        warmStartEntities,
+        changedEntityIds: input.changedEntityIds,
+        changedConstraintIds: input.changedConstraintIds,
+        maxIterations: input.maxIterations,
+        maxTimeMs: input.maxTimeMs,
+        signal: input.signal,
+      });
+      warmStartEntities = report.entities.map((entity) => cloneSketchEntity(entity));
+      return report;
+    },
+    reset: () => {
+      warmStartEntities = undefined;
+    },
+  };
+}
+
+function createSketchSolveExecutionState(
+  options?: SketchConstraintSolveOptions
+): SketchSolveExecutionState {
+  const maxTimeMs =
+    options?.maxTimeMs !== undefined && Number.isFinite(options.maxTimeMs)
+      ? Math.max(0, options.maxTimeMs)
+      : null;
+  const maxIterations =
+    options?.maxIterations !== undefined && Number.isFinite(options.maxIterations)
+      ? Math.max(0, Math.floor(options.maxIterations))
+      : Number.POSITIVE_INFINITY;
+  const startMs = Date.now();
+  return {
+    startMs,
+    deadlineMs: maxTimeMs === null ? null : startMs + maxTimeMs,
+    iterationBudget: maxIterations,
+    iterations: 0,
+    signal: options?.signal,
+    termination: null,
+    solvedComponentIds: [],
+    skippedComponentIds: [],
+  };
+}
+
+function finalizeSolveMeta(
+  execution: SketchSolveExecutionState,
+  fallback: SketchConstraintSolveTermination,
+  maxResidual: number
+): SketchConstraintSolveReport["solveMeta"] {
+  const elapsedMs = Date.now() - execution.startMs;
+  const termination = execution.termination ?? fallback;
+  return {
+    termination,
+    iterations: execution.iterations,
+    elapsedMs,
+    maxResidual,
+    solvedComponentIds: execution.solvedComponentIds.slice(),
+    skippedComponentIds: execution.skippedComponentIds.slice(),
+  };
+}
+
+function checkAndRecordSolveStop(execution: SketchSolveExecutionState): boolean {
+  if (execution.termination) return true;
+  if (execution.signal?.aborted) {
+    execution.termination = "aborted";
+    return true;
+  }
+  if (execution.iterations >= execution.iterationBudget) {
+    execution.termination = "max-iterations";
+    return true;
+  }
+  if (execution.deadlineMs !== null && Date.now() >= execution.deadlineMs) {
+    execution.termination = "time-budget";
+    return true;
+  }
+  return false;
+}
+
+function collectActiveComponentIds(
+  components: SketchConstraintComponent[],
+  options: SketchConstraintSolveOptions | undefined,
+  transientConstraints: SketchConstraint[]
+): Set<string> {
+  const hasChangedEntities = options?.changedEntityIds !== undefined;
+  const hasChangedConstraints = options?.changedConstraintIds !== undefined;
+  if (!hasChangedEntities && !hasChangedConstraints) {
+    return new Set(components.map((component) => component.componentId));
+  }
+  const changedEntities = new Set(options?.changedEntityIds ?? []);
+  const changedConstraints = new Set(options?.changedConstraintIds ?? []);
+  for (const constraint of transientConstraints) {
+    changedConstraints.add(constraint.id);
+  }
+  const active = new Set<string>();
+  for (const component of components) {
+    if (component.entityIds.some((entityId) => changedEntities.has(entityId))) {
+      active.add(component.componentId);
+      continue;
+    }
+    if (component.constraintIds.some((constraintId) => changedConstraints.has(constraintId))) {
+      active.add(component.componentId);
+    }
+  }
+  return active;
+}
+
+function applyWarmStartEntities(
+  entities: SketchEntity[],
+  warmStartEntities: SketchEntity[] | undefined,
+  changedEntityIds: Set<string>
+): void {
+  if (!warmStartEntities || warmStartEntities.length === 0) return;
+  const warmMap = new Map(warmStartEntities.map((entity) => [entity.id, entity]));
+  for (const entity of entities) {
+    if (changedEntityIds.has(entity.id)) continue;
+    const warm = warmMap.get(entity.id);
+    if (!warm || warm.kind !== entity.kind) continue;
+    copyWarmStartGeometry(entity, warm);
+  }
+}
+
+function copyWarmStartGeometry(target: SketchEntity, source: SketchEntity): void {
+  switch (target.kind) {
+    case "sketch.line":
+      target.start = [...(source as Extract<SketchEntity, { kind: "sketch.line" }>).start];
+      target.end = [...(source as Extract<SketchEntity, { kind: "sketch.line" }>).end];
+      return;
+    case "sketch.arc":
+      target.start = [...(source as Extract<SketchEntity, { kind: "sketch.arc" }>).start];
+      target.end = [...(source as Extract<SketchEntity, { kind: "sketch.arc" }>).end];
+      target.center = [...(source as Extract<SketchEntity, { kind: "sketch.arc" }>).center];
+      return;
+    case "sketch.circle":
+      target.center = [...(source as Extract<SketchEntity, { kind: "sketch.circle" }>).center];
+      target.radius = (source as Extract<SketchEntity, { kind: "sketch.circle" }>).radius;
+      return;
+    case "sketch.ellipse":
+      target.center = [...(source as Extract<SketchEntity, { kind: "sketch.ellipse" }>).center];
+      return;
+    case "sketch.rectangle":
+      if (target.mode === "center" && source.kind === "sketch.rectangle" && source.mode === "center") {
+        target.center = [...source.center];
+      } else if (
+        target.mode === "corner" &&
+        source.kind === "sketch.rectangle" &&
+        source.mode === "corner"
+      ) {
+        target.corner = [...source.corner];
+      }
+      return;
+    case "sketch.slot":
+      target.center = [...(source as Extract<SketchEntity, { kind: "sketch.slot" }>).center];
+      return;
+    case "sketch.polygon":
+      target.center = [...(source as Extract<SketchEntity, { kind: "sketch.polygon" }>).center];
+      return;
+    case "sketch.point":
+      target.point = [...(source as Extract<SketchEntity, { kind: "sketch.point" }>).point];
+      return;
+    case "sketch.spline":
+      return;
+  }
 }
 
 function buildSolveReport(
   entities: SketchEntity[],
   constraints: SketchConstraint[],
   constraintStatus: SketchConstraintStatus[],
-  components = buildConstraintComponents(entities, constraints)
+  components = buildConstraintComponents(entities, constraints),
+  solveMeta: SketchConstraintSolveReport["solveMeta"] = {
+    termination: "not-run",
+    iterations: 0,
+    elapsedMs: 0,
+    maxResidual: 0,
+    solvedComponentIds: [],
+    skippedComponentIds: [],
+  }
 ): SketchConstraintSolveReport {
   const totalDegreesOfFreedom = entities.reduce(
     (sum, entity) => sum + estimateEntityDegreesOfFreedom(entity),
@@ -343,6 +657,7 @@ function buildSolveReport(
     componentStatus,
     entityStatus: perEntityStatus,
     constraintStatus,
+    solveMeta,
   };
 }
 
@@ -734,15 +1049,18 @@ function solveSketchConstraintsNumerically(
   sketchId: string,
   entities: SketchEntity[],
   entityMap: Map<string, SketchEntity>,
-  constraints: SketchConstraint[]
+  constraints: SketchConstraint[],
+  execution: SketchSolveExecutionState
 ): void {
   const variables = collectDrivenVariables(entities, constraints);
   if (variables.length === 0 || constraints.length === 0) return;
 
   let damping = 1e-3;
-  const maxIterations = Math.max(10, constraints.length * 6);
+  const localMaxIterations = Math.max(10, constraints.length * 6);
 
-  for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+  for (let iteration = 0; iteration < localMaxIterations; iteration += 1) {
+    if (checkAndRecordSolveStop(execution)) return;
+    execution.iterations += 1;
     const residual = buildConstraintResidualVector(sketchId, entityMap, constraints);
     if (maxAbsValue(residual) <= SOLVE_TOLERANCE) return;
 
@@ -802,10 +1120,13 @@ function solveSketchConstraintsNumerically(
 function polishSketchConstraints(
   sketchId: string,
   entityMap: Map<string, SketchEntity>,
-  constraints: SketchConstraint[]
+  constraints: SketchConstraint[],
+  execution: SketchSolveExecutionState
 ): void {
   const maxIterations = Math.max(2, constraints.length);
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+    if (checkAndRecordSolveStop(execution)) return;
+    execution.iterations += 1;
     let maxDelta = 0;
     for (const constraint of constraints) {
       maxDelta = Math.max(maxDelta, applyConstraint(sketchId, entityMap, constraint));
