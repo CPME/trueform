@@ -253,6 +253,42 @@ export const sketchConstraintRadius = (
     radius,
   });
 
+export const sketchConstraintTangent = (
+  id: ID,
+  a: ID,
+  b: ID
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.tangent",
+    a,
+    b,
+  });
+
+export const sketchConstraintConcentric = (
+  id: ID,
+  a: ID,
+  b: ID
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.concentric",
+    a,
+    b,
+  });
+
+export const sketchConstraintPointOnLine = (
+  id: ID,
+  point: SketchConstraintPointRef,
+  line: ID
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.pointOnLine",
+    point,
+    line,
+  });
+
 export const sketchConstraintFixPoint = (
   id: ID,
   point: SketchConstraintPointRef,

@@ -277,6 +277,24 @@ export type SketchConstraint =
     }
   | {
       id: ID;
+      kind: "sketch.constraint.tangent";
+      a: ID;
+      b: ID;
+    }
+  | {
+      id: ID;
+      kind: "sketch.constraint.concentric";
+      a: ID;
+      b: ID;
+    }
+  | {
+      id: ID;
+      kind: "sketch.constraint.pointOnLine";
+      point: SketchConstraintPointRef;
+      line: ID;
+    }
+  | {
+      id: ID;
       kind: "sketch.constraint.fixPoint";
       point: SketchConstraintPointRef;
       x?: Scalar;

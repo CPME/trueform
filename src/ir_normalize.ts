@@ -664,7 +664,14 @@ function normalizeSketchConstraint(
     case "sketch.constraint.parallel":
     case "sketch.constraint.perpendicular":
     case "sketch.constraint.equalLength":
+    case "sketch.constraint.tangent":
+    case "sketch.constraint.concentric":
       return constraint;
+    case "sketch.constraint.pointOnLine":
+      return {
+        ...constraint,
+        point: normalizeSketchConstraintPointRef(constraint.point),
+      };
     case "sketch.constraint.distance":
       return {
         ...constraint,

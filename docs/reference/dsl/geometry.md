@@ -28,6 +28,23 @@ For intent-first imports, prefer:
 - `sketchSpline(id, points, opts?) -> SketchSpline`
 - `sketchPoint(id, point, opts?) -> SketchPoint`
 
+## Geometry: Sketch Constraints
+
+- `sketchPointRef(entity, handle?) -> SketchConstraintPointRef`
+- `sketchConstraintCoincident(id, a, b) -> SketchConstraint`
+- `sketchConstraintHorizontal(id, line) -> SketchConstraint`
+- `sketchConstraintVertical(id, line) -> SketchConstraint`
+- `sketchConstraintParallel(id, a, b) -> SketchConstraint`
+- `sketchConstraintPerpendicular(id, a, b) -> SketchConstraint`
+- `sketchConstraintEqualLength(id, a, b) -> SketchConstraint`
+- `sketchConstraintDistance(id, a, b, distance) -> SketchConstraint`
+- `sketchConstraintAngle(id, a, b, angle) -> SketchConstraint`
+- `sketchConstraintRadius(id, curve, radius) -> SketchConstraint`
+- `sketchConstraintTangent(id, a, b) -> SketchConstraint`
+- `sketchConstraintConcentric(id, a, b) -> SketchConstraint`
+- `sketchConstraintPointOnLine(id, point, line) -> SketchConstraint`
+- `sketchConstraintFixPoint(id, point, opts?) -> SketchConstraint`
+
 Examples:
 - [Sketch primitives](./examples/sketches)
 

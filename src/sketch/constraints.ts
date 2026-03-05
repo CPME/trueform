@@ -883,10 +883,15 @@ function estimateConstraintConsumption(
       case "sketch.constraint.perpendicular":
       case "sketch.constraint.equalLength":
       case "sketch.constraint.angle":
+      case "sketch.constraint.tangent":
+      case "sketch.constraint.concentric":
         consume(constraint.b, 1);
         break;
       case "sketch.constraint.distance":
         consume(constraint.b.entity, 1);
+        break;
+      case "sketch.constraint.pointOnLine":
+        consume(constraint.point.entity, 1);
         break;
       case "sketch.constraint.radius":
         consume(constraint.curve, 1);
@@ -924,7 +929,11 @@ function listConstraintEntityIds(constraint: SketchConstraint): string[] {
     case "sketch.constraint.perpendicular":
     case "sketch.constraint.equalLength":
     case "sketch.constraint.angle":
+    case "sketch.constraint.tangent":
+    case "sketch.constraint.concentric":
       return dedupeEntityIds([constraint.a, constraint.b]);
+    case "sketch.constraint.pointOnLine":
+      return dedupeEntityIds([constraint.point.entity, constraint.line]);
     case "sketch.constraint.distance":
       return dedupeEntityIds([constraint.a.entity, constraint.b.entity]);
     case "sketch.constraint.radius":
@@ -1031,6 +1040,45 @@ function applyConstraint(
       const next = add(currentStart, scale(direction, referenceLength));
       target.writeEnd(next);
       return distance(currentEnd, next);
+    }
+    case "sketch.constraint.tangent": {
+      const referenceLine = tryResolveLine(sketchId, entityMap, constraint.a);
+      const targetLine = tryResolveLine(sketchId, entityMap, constraint.b);
+      const referenceCurve = tryResolveTangentCurve(sketchId, entityMap, constraint.a);
+      const targetCurve = tryResolveTangentCurve(sketchId, entityMap, constraint.b);
+
+      if (referenceLine && targetCurve) {
+        return projectCurveToLineTangency(referenceLine, targetCurve);
+      }
+      if (referenceCurve && targetLine) {
+        return projectLineToCurveTangency(targetLine, referenceCurve);
+      }
+      if (referenceCurve && targetCurve) {
+        return projectCurveToCurveTangency(referenceCurve, targetCurve);
+      }
+      throw new CompileError(
+        "sketch_constraint_kind_mismatch",
+        `Sketch ${sketchId} tangent constraint ${constraint.id} requires line/arc/circle references`
+      );
+    }
+    case "sketch.constraint.concentric": {
+      const reference = resolveConcentricCurve(sketchId, entityMap, constraint.a);
+      const target = resolveConcentricCurve(sketchId, entityMap, constraint.b);
+      const referenceCenter = reference.readCenter();
+      const currentTargetCenter = target.readCenter();
+      target.writeCenter(referenceCenter);
+      return distance(currentTargetCenter, referenceCenter);
+    }
+    case "sketch.constraint.pointOnLine": {
+      const point = resolvePointRef(sketchId, entityMap, constraint.point);
+      const line = resolveLine(sketchId, entityMap, constraint.line);
+      const start = line.readStart();
+      const end = line.readEnd();
+      const axis = lineDirection(start, end, sketchId, constraint.id);
+      const current = point.read();
+      const projected = add(start, scale(axis, dot(subtract(current, start), axis)));
+      point.write(projected);
+      return distance(current, projected);
     }
     case "sketch.constraint.distance": {
       const a = resolvePointRef(sketchId, entityMap, constraint.a);
@@ -1156,6 +1204,62 @@ function constraintResidualComponents(
       const targetLength = distance(b.readStart(), b.readEnd());
       return [refLength - targetLength];
     }
+    case "sketch.constraint.tangent": {
+      const referenceLine = tryResolveLine(sketchId, entityMap, constraint.a);
+      const targetLine = tryResolveLine(sketchId, entityMap, constraint.b);
+      const referenceCurve = tryResolveTangentCurve(sketchId, entityMap, constraint.a);
+      const targetCurve = tryResolveTangentCurve(sketchId, entityMap, constraint.b);
+
+      if (referenceLine && targetCurve) {
+        const lineStart = referenceLine.readStart();
+        const lineEnd = referenceLine.readEnd();
+        const axis = lineDirection(lineStart, lineEnd, sketchId, constraint.id);
+        const normal: NumericVector = [-axis[1], axis[0]];
+        const center = targetCurve.readCenter();
+        const radius = targetCurve.readRadius();
+        const signedDistance = dot(subtract(center, lineStart), normal);
+        return [signedDistance * signedDistance - radius * radius];
+      }
+      if (referenceCurve && targetLine) {
+        const lineStart = targetLine.readStart();
+        const lineEnd = targetLine.readEnd();
+        const axis = lineDirection(lineStart, lineEnd, sketchId, constraint.id);
+        const normal: NumericVector = [-axis[1], axis[0]];
+        const center = referenceCurve.readCenter();
+        const radius = referenceCurve.readRadius();
+        const signedDistance = dot(subtract(center, lineStart), normal);
+        return [signedDistance * signedDistance - radius * radius];
+      }
+      if (referenceCurve && targetCurve) {
+        const centerDistance = distance(referenceCurve.readCenter(), targetCurve.readCenter());
+        const expectedSeparation = preferredCurveSeparation(
+          centerDistance,
+          referenceCurve.readRadius(),
+          targetCurve.readRadius()
+        );
+        return [centerDistance - expectedSeparation];
+      }
+      throw new CompileError(
+        "sketch_constraint_kind_mismatch",
+        `Sketch ${sketchId} tangent constraint ${constraint.id} requires line/arc/circle references`
+      );
+    }
+    case "sketch.constraint.concentric": {
+      const a = resolveConcentricCurve(sketchId, entityMap, constraint.a);
+      const b = resolveConcentricCurve(sketchId, entityMap, constraint.b);
+      const centerA = a.readCenter();
+      const centerB = b.readCenter();
+      return [centerA[0] - centerB[0], centerA[1] - centerB[1]];
+    }
+    case "sketch.constraint.pointOnLine": {
+      const point = resolvePointRef(sketchId, entityMap, constraint.point);
+      const line = resolveLine(sketchId, entityMap, constraint.line);
+      const start = line.readStart();
+      const end = line.readEnd();
+      const axis = lineDirection(start, end, sketchId, constraint.id);
+      const offset = subtract(point.read(), start);
+      return [cross(axis, offset)];
+    }
     case "sketch.constraint.distance": {
       const a = resolvePointRef(sketchId, entityMap, constraint.a);
       const b = resolvePointRef(sketchId, entityMap, constraint.b);
@@ -1233,6 +1337,8 @@ function resolveLine(
 ): {
   readStart: () => NumericPoint;
   readEnd: () => NumericPoint;
+  writeStart: (point: NumericPoint) => void;
+  write: (start: NumericPoint, end: NumericPoint) => void;
   writeEnd: (point: NumericPoint) => void;
 } {
   const entity = entityMap.get(lineId);
@@ -1251,10 +1357,190 @@ function resolveLine(
   return {
     readStart: () => readNumericPoint(entity.start, `Sketch ${sketchId} line ${lineId} start`),
     readEnd: () => readNumericPoint(entity.end, `Sketch ${sketchId} line ${lineId} end`),
+    writeStart: (point) => {
+      entity.start = point;
+    },
+    write: (start, end) => {
+      entity.start = start;
+      entity.end = end;
+    },
     writeEnd: (point) => {
       entity.end = point;
     },
   };
+}
+
+function tryResolveLine(
+  sketchId: string,
+  entityMap: Map<string, SketchEntity>,
+  lineId: string
+): ReturnType<typeof resolveLine> | null {
+  const entity = entityMap.get(lineId);
+  if (!entity) {
+    throw new CompileError(
+      "sketch_constraint_reference_missing",
+      `Sketch ${sketchId} references missing entity ${lineId}`
+    );
+  }
+  if (entity.kind !== "sketch.line") return null;
+  return resolveLine(sketchId, entityMap, lineId);
+}
+
+type CurveCenterAccessor = {
+  readCenter: () => NumericPoint;
+  writeCenter: (center: NumericPoint) => number;
+};
+
+type TangentCurveAccessor = CurveCenterAccessor & {
+  readRadius: () => number;
+};
+
+function resolveConcentricCurve(
+  sketchId: string,
+  entityMap: Map<string, SketchEntity>,
+  curveId: string
+): CurveCenterAccessor {
+  const curve = tryResolveTangentCurve(sketchId, entityMap, curveId);
+  if (curve) return curve;
+  throw new CompileError(
+    "sketch_constraint_kind_mismatch",
+    `Sketch ${sketchId} concentric constraint curve ${curveId} must reference a sketch.circle or sketch.arc`
+  );
+}
+
+function tryResolveTangentCurve(
+  sketchId: string,
+  entityMap: Map<string, SketchEntity>,
+  curveId: string
+): TangentCurveAccessor | null {
+  const entity = entityMap.get(curveId);
+  if (!entity) {
+    throw new CompileError(
+      "sketch_constraint_reference_missing",
+      `Sketch ${sketchId} references missing entity ${curveId}`
+    );
+  }
+
+  if (entity.kind === "sketch.circle") {
+    return {
+      readCenter: () => readNumericPoint(entity.center, `Sketch ${sketchId} circle ${curveId} center`),
+      readRadius: () => readPositiveRadius(entity.radius, `Sketch ${sketchId} circle ${curveId} radius`),
+      writeCenter: (nextCenter) => {
+        const currentCenter = readNumericPoint(
+          entity.center,
+          `Sketch ${sketchId} circle ${curveId} center`
+        );
+        entity.center = nextCenter;
+        return distance(currentCenter, nextCenter);
+      },
+    };
+  }
+
+  if (entity.kind === "sketch.arc") {
+    return {
+      readCenter: () => readNumericPoint(entity.center, `Sketch ${sketchId} arc ${curveId} center`),
+      readRadius: () => {
+        const center = readNumericPoint(entity.center, `Sketch ${sketchId} arc ${curveId} center`);
+        const start = readNumericPoint(entity.start, `Sketch ${sketchId} arc ${curveId} start`);
+        const end = readNumericPoint(entity.end, `Sketch ${sketchId} arc ${curveId} end`);
+        const startRadius = distance(center, start);
+        const endRadius = distance(center, end);
+        if (startRadius <= SOLVE_EPSILON || endRadius <= SOLVE_EPSILON) {
+          throw new CompileError(
+            "sketch_constraint_invalid_reference",
+            `Sketch ${sketchId} arc ${curveId} must have endpoints away from center`
+          );
+        }
+        return (startRadius + endRadius) * 0.5;
+      },
+      writeCenter: (nextCenter) => {
+        const currentCenter = readNumericPoint(entity.center, `Sketch ${sketchId} arc ${curveId} center`);
+        const delta = subtract(nextCenter, currentCenter);
+        const start = readNumericPoint(entity.start, `Sketch ${sketchId} arc ${curveId} start`);
+        const end = readNumericPoint(entity.end, `Sketch ${sketchId} arc ${curveId} end`);
+        entity.center = nextCenter;
+        entity.start = add(start, delta);
+        entity.end = add(end, delta);
+        return distance(currentCenter, nextCenter);
+      },
+    };
+  }
+
+  return null;
+}
+
+function projectCurveToLineTangency(
+  referenceLine: ReturnType<typeof resolveLine>,
+  targetCurve: TangentCurveAccessor
+): number {
+  const lineStart = referenceLine.readStart();
+  const lineEnd = referenceLine.readEnd();
+  const axis = normalize(subtract(lineEnd, lineStart));
+  const normal: NumericVector = [-axis[1], axis[0]];
+  const center = targetCurve.readCenter();
+  const signedDistance = dot(subtract(center, lineStart), normal);
+  const radius = targetCurve.readRadius();
+  const desiredSignedDistance =
+    Math.abs(signedDistance) <= SOLVE_EPSILON
+      ? radius
+      : Math.sign(signedDistance) * radius;
+  const nextCenter = add(center, scale(normal, desiredSignedDistance - signedDistance));
+  return targetCurve.writeCenter(nextCenter);
+}
+
+function projectLineToCurveTangency(
+  targetLine: ReturnType<typeof resolveLine>,
+  referenceCurve: TangentCurveAccessor
+): number {
+  const lineStart = targetLine.readStart();
+  const lineEnd = targetLine.readEnd();
+  const axis = normalize(subtract(lineEnd, lineStart));
+  const normal: NumericVector = [-axis[1], axis[0]];
+  const center = referenceCurve.readCenter();
+  const radius = referenceCurve.readRadius();
+  const signedDistance = dot(subtract(center, lineStart), normal);
+  const desiredSignedDistance =
+    Math.abs(signedDistance) <= SOLVE_EPSILON
+      ? radius
+      : Math.sign(signedDistance) * radius;
+  const shift = scale(normal, signedDistance - desiredSignedDistance);
+  const nextStart = add(lineStart, shift);
+  const nextEnd = add(lineEnd, shift);
+  targetLine.write(nextStart, nextEnd);
+  return distance(lineStart, nextStart);
+}
+
+function projectCurveToCurveTangency(
+  referenceCurve: TangentCurveAccessor,
+  targetCurve: TangentCurveAccessor
+): number {
+  const referenceCenter = referenceCurve.readCenter();
+  const targetCenter = targetCurve.readCenter();
+  const referenceRadius = referenceCurve.readRadius();
+  const targetRadius = targetCurve.readRadius();
+  const centerDelta = subtract(targetCenter, referenceCenter);
+  const centerDistance = vectorLength(centerDelta);
+  const direction: NumericVector =
+    centerDistance <= SOLVE_EPSILON ? [1, 0] : normalize(centerDelta);
+  const expectedSeparation = preferredCurveSeparation(
+    centerDistance,
+    referenceRadius,
+    targetRadius
+  );
+  const nextTargetCenter = add(referenceCenter, scale(direction, expectedSeparation));
+  return targetCurve.writeCenter(nextTargetCenter);
+}
+
+function preferredCurveSeparation(
+  centerDistance: number,
+  firstRadius: number,
+  secondRadius: number
+): number {
+  const external = firstRadius + secondRadius;
+  const internal = Math.abs(firstRadius - secondRadius);
+  return Math.abs(centerDistance - external) <= Math.abs(centerDistance - internal)
+    ? external
+    : internal;
 }
 
 function resolveRadiusTarget(
@@ -1369,6 +1655,7 @@ function collectDrivenVariableHandles(
 ): Set<string> {
   const handles = new Set<string>();
   const addHandle = (entityId: string, handle: string): void => {
+    if (!entityMap.has(entityId)) return;
     handles.add(variableHandleKey(entityId, handle));
   };
   const addPointRef = (ref: SketchConstraintPointRef): void => {
@@ -1376,6 +1663,34 @@ function collectDrivenVariableHandles(
     const handle = entity ? normalizedPointRefHandle(entity, ref.handle) : ref.handle ?? null;
     if (!handle) return;
     handles.add(variableHandleKey(ref.entity, handle));
+  };
+  const addTangentTargetHandles = (entityId: string): void => {
+    const entity = entityMap.get(entityId);
+    if (!entity) return;
+    switch (entity.kind) {
+      case "sketch.line":
+        addHandle(entityId, "start");
+        addHandle(entityId, "end");
+        break;
+      case "sketch.circle":
+        addHandle(entityId, "center");
+        addHandle(entityId, "radius");
+        break;
+      case "sketch.arc":
+        addHandle(entityId, "center");
+        addHandle(entityId, "start");
+        addHandle(entityId, "end");
+        break;
+      default:
+        break;
+    }
+  };
+  const addConcentricTargetHandles = (entityId: string): void => {
+    const entity = entityMap.get(entityId);
+    if (!entity) return;
+    if (entity.kind === "sketch.circle" || entity.kind === "sketch.arc") {
+      addHandle(entityId, "center");
+    }
   };
 
   for (const constraint of constraints) {
@@ -1385,6 +1700,9 @@ function collectDrivenVariableHandles(
         break;
       case "sketch.constraint.distance":
         addPointRef(constraint.b);
+        break;
+      case "sketch.constraint.pointOnLine":
+        addPointRef(constraint.point);
         break;
       case "sketch.constraint.radius": {
         const entity = entityMap.get(constraint.curve);
@@ -1398,6 +1716,12 @@ function collectDrivenVariableHandles(
       }
       case "sketch.constraint.fixPoint":
         addPointRef(constraint.point);
+        break;
+      case "sketch.constraint.tangent":
+        addTangentTargetHandles(constraint.b);
+        break;
+      case "sketch.constraint.concentric":
+        addConcentricTargetHandles(constraint.b);
         break;
       case "sketch.constraint.horizontal":
       case "sketch.constraint.vertical":

@@ -2567,15 +2567,25 @@ function validateSketchConstraint(constraint: SketchConstraint): void {
     case "sketch.constraint.parallel":
     case "sketch.constraint.perpendicular":
     case "sketch.constraint.equalLength":
+    case "sketch.constraint.tangent":
+    case "sketch.constraint.concentric":
       ensureNonEmptyString(
         constraint.a,
         "validation_sketch_constraint_line",
-        "Sketch line-line constraint requires line a"
+        "Sketch two-entity constraint requires entity a"
       );
       ensureNonEmptyString(
         constraint.b,
         "validation_sketch_constraint_line",
-        "Sketch line-line constraint requires line b"
+        "Sketch two-entity constraint requires entity b"
+      );
+      return;
+    case "sketch.constraint.pointOnLine":
+      validateSketchConstraintPointRef(constraint.point, "Sketch pointOnLine point");
+      ensureNonEmptyString(
+        constraint.line,
+        "validation_sketch_constraint_line",
+        "Sketch pointOnLine constraint requires line id"
       );
       return;
     case "sketch.constraint.distance":

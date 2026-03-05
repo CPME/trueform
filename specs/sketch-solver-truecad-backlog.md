@@ -31,6 +31,9 @@ Implemented and committed:
 - `equalLength`
 - `angle`
 - `radius`
+- `tangent`
+- `concentric`
+- `pointOnLine`
 - Commits: `0e01a64`, `9b9a791`, plus 2026-03-04 follow-up additions
 
 3. Shared solver API
@@ -181,13 +184,13 @@ Minimum deliverable:
 ### P3: Mainstream CAD Constraint Families
 
 8. `tangent`
-Status: pending
+Status: completed on 2026-03-05
 
 9. `concentric`
-Status: pending
+Status: completed on 2026-03-05
 
 10. `point-on-line`
-Status: pending
+Status: completed on 2026-03-05
 
 11. `collinear`
 Status: pending
@@ -267,9 +270,16 @@ Why:
   (`component-constrained`) from globally grounded `fully-constrained`
   components, while keeping `entity.status` safe for direct CAD UI use:
   only grounded entities can report `fully-constrained`.
+- 2026-03-05: Generalized numerical driven-variable selection with
+  shape-aware target handle coverage (including scalar radius DOFs on circle
+  targets for new constraint families) while preserving deterministic
+  compatibility behavior for legacy line/point constraints.
+- 2026-03-05: Added `sketch.constraint.tangent`,
+  `sketch.constraint.concentric`, and `sketch.constraint.pointOnLine` with DSL,
+  IR/validation/normalization coverage, solver behavior, and targeted tests.
 
 ### Next Recommended Task
 
-Generalize the numerical solve parameterization beyond point-handle variables,
-especially for coupled arc/circle radius constraints and other shape-specific
-DOFs that still use compatibility-era write semantics.
+Connected-component solve partitioning so local edits only re-solve impacted
+subgraphs/components while preserving deterministic status reporting and UI-safe
+entity statuses.
