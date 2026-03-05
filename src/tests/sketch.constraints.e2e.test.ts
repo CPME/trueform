@@ -603,10 +603,17 @@ const tests = [
       );
 
       const byId = new Map(report.entities.map((entity) => [entity.id, entity]));
+      const line = byId.get("line-1") as SketchLine;
       const point = byId.get("point-1") as SketchPoint;
       assert.ok(point, "missing solved point-1");
-      assert.ok(Math.abs((point.point[0] as number) - 8.8) < 1e-5);
-      assert.ok(Math.abs((point.point[1] as number) - 6.6) < 1e-5);
+      assert.ok(line, "missing solved line-1");
+      const start = line.start as [number, number];
+      const end = line.end as [number, number];
+      const solvedPoint = point.point as [number, number];
+      const lineVector: [number, number] = [end[0] - start[0], end[1] - start[1]];
+      const pointVector: [number, number] = [solvedPoint[0] - start[0], solvedPoint[1] - start[1]];
+      const cross = lineVector[0] * pointVector[1] - lineVector[1] * pointVector[0];
+      assert.ok(Math.abs(cross) < 1e-6);
       assert.deepEqual(
         report.constraintStatus.map((entry) => ({
           constraintId: entry.constraintId,

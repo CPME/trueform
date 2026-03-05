@@ -297,6 +297,8 @@ Why:
   component targeting (`changedEntityIds` / `changedConstraintIds`), abort/time
   budget controls, solve termination metadata, and drag-trace replay
   determinism coverage.
+- 2026-03-05: Added solver column scaling in the numerical least-squares step
+  to improve stability across variable magnitude differences.
 
 ### Next Recommended Task
 
@@ -320,6 +322,8 @@ Last updated: 2026-03-05
 3. [ ] Numerical robustness upgrades
 - Add better trust-region/LM safeguards for near-singular systems.
 - Add variable scaling/normalization to improve stability across units/sizes.
+- Progress: numerical column scaling landed; trust-region/LM safeguards still
+  pending.
 
 4. [ ] Nullspace/DOF-aware drag behavior
 - Expose admissible free-motion directions for underconstrained states.
@@ -342,3 +346,5 @@ Last updated: 2026-03-05
 8. [ ] TrueCAD integration contract
 - Define/implement interaction loop contract (preview cadence vs authoritative solve points).
 - Validate same pattern for sketch + assembly drag workflows.
+- Progress: draft contract documented in `specs/sketch-webapp-runtime-contract.md`;
+  runtime wiring in TrueCAD is still pending.

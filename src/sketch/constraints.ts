@@ -1066,9 +1066,11 @@ function solveSketchConstraintsNumerically(
 
     const jacobian = buildConstraintJacobian(sketchId, entityMap, constraints, variables, residual);
     if (jacobian.length === 0) return;
+    const variableScales = estimateVariableScales(variables);
+    const scaledJacobian = scaleJacobianColumns(jacobian, variableScales);
 
-    const normalMatrix = buildNormalMatrix(jacobian);
-    const gradient = buildNormalGradient(jacobian, residual);
+    const normalMatrix = buildNormalMatrix(scaledJacobian);
+    const gradient = buildNormalGradient(scaledJacobian, residual);
     if (vectorNorm(gradient) <= SOLVE_TOLERANCE * Math.max(1, vectorNorm(residual))) {
       return;
     }
@@ -1079,14 +1081,15 @@ function solveSketchConstraintsNumerically(
     let trialDamping = damping;
 
     for (let attempt = 0; attempt < 8 && !accepted; attempt += 1) {
-      const step = solveLinearSystem(
+      const scaledStep = solveLinearSystem(
         addDampedDiagonal(normalMatrix, trialDamping),
         gradient.map((value) => -value)
       );
-      if (!step) {
+      if (!scaledStep) {
         trialDamping *= 10;
         continue;
       }
+      const step = unscaleVariableStep(scaledStep, variableScales);
       if (vectorNorm(step) <= SOLVE_TOLERANCE * 0.1) {
         restoreVariableValues(variables, baseValues);
         return;
@@ -1175,6 +1178,24 @@ function addDampedDiagonal(matrix: number[][], damping: number): number[][] {
   return matrix.map((row, rowIndex) =>
     row.map((value, colIndex) => value + (rowIndex === colIndex ? damping : 0))
   );
+}
+
+function estimateVariableScales(variables: ScalarVariable[]): number[] {
+  return variables.map((variable) => {
+    const value = Math.abs(variable.read());
+    if (variable.kind === "scalar") return Math.max(1, value);
+    return Math.max(1, value);
+  });
+}
+
+function scaleJacobianColumns(jacobian: number[][], scales: number[]): number[][] {
+  return jacobian.map((row) =>
+    row.map((value, columnIndex) => value * (scales[columnIndex] ?? 1))
+  );
+}
+
+function unscaleVariableStep(step: number[], scales: number[]): number[] {
+  return step.map((value, index) => value * (scales[index] ?? 1));
 }
 
 function solveLinearSystem(matrix: number[][], rhs: number[]): number[] | null {
