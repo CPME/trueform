@@ -2569,6 +2569,7 @@ function validateSketchConstraint(constraint: SketchConstraint): void {
     case "sketch.constraint.equalLength":
     case "sketch.constraint.tangent":
     case "sketch.constraint.concentric":
+    case "sketch.constraint.collinear":
       ensureNonEmptyString(
         constraint.a,
         "validation_sketch_constraint_line",
@@ -2586,6 +2587,23 @@ function validateSketchConstraint(constraint: SketchConstraint): void {
         constraint.line,
         "validation_sketch_constraint_line",
         "Sketch pointOnLine constraint requires line id"
+      );
+      return;
+    case "sketch.constraint.midpoint":
+      validateSketchConstraintPointRef(constraint.point, "Sketch midpoint point");
+      ensureNonEmptyString(
+        constraint.line,
+        "validation_sketch_constraint_line",
+        "Sketch midpoint constraint requires line id"
+      );
+      return;
+    case "sketch.constraint.symmetry":
+      validateSketchConstraintPointRef(constraint.a, "Sketch symmetry point a");
+      validateSketchConstraintPointRef(constraint.b, "Sketch symmetry point b");
+      ensureNonEmptyString(
+        constraint.axis,
+        "validation_sketch_constraint_line",
+        "Sketch symmetry constraint requires axis line id"
       );
       return;
     case "sketch.constraint.distance":

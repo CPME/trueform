@@ -289,6 +289,44 @@ export const sketchConstraintPointOnLine = (
     line,
   });
 
+export const sketchConstraintCollinear = (
+  id: ID,
+  a: ID,
+  b: ID
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.collinear",
+    a,
+    b,
+  });
+
+export const sketchConstraintMidpoint = (
+  id: ID,
+  point: SketchConstraintPointRef,
+  line: ID
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.midpoint",
+    point,
+    line,
+  });
+
+export const sketchConstraintSymmetry = (
+  id: ID,
+  a: SketchConstraintPointRef,
+  b: SketchConstraintPointRef,
+  axis: ID
+): SketchConstraint =>
+  compact({
+    id,
+    kind: "sketch.constraint.symmetry",
+    a,
+    b,
+    axis,
+  });
+
 export const sketchConstraintFixPoint = (
   id: ID,
   point: SketchConstraintPointRef,

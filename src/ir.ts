@@ -295,6 +295,25 @@ export type SketchConstraint =
     }
   | {
       id: ID;
+      kind: "sketch.constraint.collinear";
+      a: ID;
+      b: ID;
+    }
+  | {
+      id: ID;
+      kind: "sketch.constraint.midpoint";
+      point: SketchConstraintPointRef;
+      line: ID;
+    }
+  | {
+      id: ID;
+      kind: "sketch.constraint.symmetry";
+      a: SketchConstraintPointRef;
+      b: SketchConstraintPointRef;
+      axis: ID;
+    }
+  | {
+      id: ID;
       kind: "sketch.constraint.fixPoint";
       point: SketchConstraintPointRef;
       x?: Scalar;

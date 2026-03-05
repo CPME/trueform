@@ -1,7 +1,7 @@
 # Sketch Solver TrueCAD Backlog
 
 Status: active tracker
-Updated: 2026-03-04
+Updated: 2026-03-05
 
 ## Purpose
 
@@ -34,6 +34,9 @@ Implemented and committed:
 - `tangent`
 - `concentric`
 - `pointOnLine`
+- `collinear`
+- `midpoint`
+- `symmetry`
 - Commits: `0e01a64`, `9b9a791`, plus 2026-03-04 follow-up additions
 
 3. Shared solver API
@@ -193,13 +196,13 @@ Status: completed on 2026-03-05
 Status: completed on 2026-03-05
 
 11. `collinear`
-Status: pending
+Status: completed on 2026-03-05
 
 12. `midpoint`
-Status: pending
+Status: completed on 2026-03-05
 
 13. `symmetry`
-Status: pending
+Status: completed on 2026-03-05
 
 Why this group:
 - These are core to general-purpose sketching, but they are not required for the
@@ -280,6 +283,9 @@ Why:
 - 2026-03-05: Partitioned numerical solve/polish execution by connected
   constraint components so independent subgraphs solve in isolation with
   deterministic component ordering.
+- 2026-03-05: Added `sketch.constraint.collinear`,
+  `sketch.constraint.midpoint`, and `sketch.constraint.symmetry` with DSL,
+  IR/validation/normalization coverage, solver behavior, and targeted tests.
 
 ### Next Recommended Task
 

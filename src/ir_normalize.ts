@@ -666,11 +666,19 @@ function normalizeSketchConstraint(
     case "sketch.constraint.equalLength":
     case "sketch.constraint.tangent":
     case "sketch.constraint.concentric":
+    case "sketch.constraint.collinear":
       return constraint;
     case "sketch.constraint.pointOnLine":
+    case "sketch.constraint.midpoint":
       return {
         ...constraint,
         point: normalizeSketchConstraintPointRef(constraint.point),
+      };
+    case "sketch.constraint.symmetry":
+      return {
+        ...constraint,
+        a: normalizeSketchConstraintPointRef(constraint.a),
+        b: normalizeSketchConstraintPointRef(constraint.b),
       };
     case "sketch.constraint.distance":
       return {

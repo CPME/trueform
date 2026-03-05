@@ -43,6 +43,9 @@ For intent-first imports, prefer:
 - `sketchConstraintTangent(id, a, b) -> SketchConstraint`
 - `sketchConstraintConcentric(id, a, b) -> SketchConstraint`
 - `sketchConstraintPointOnLine(id, point, line) -> SketchConstraint`
+- `sketchConstraintCollinear(id, a, b) -> SketchConstraint`
+- `sketchConstraintMidpoint(id, point, line) -> SketchConstraint`
+- `sketchConstraintSymmetry(id, a, b, axis) -> SketchConstraint`
 - `sketchConstraintFixPoint(id, point, opts?) -> SketchConstraint`
 
 Examples:

@@ -912,11 +912,20 @@ function estimateConstraintConsumption(
       case "sketch.constraint.concentric":
         consume(constraint.b, 1);
         break;
+      case "sketch.constraint.collinear":
+        consume(constraint.b, 2);
+        break;
       case "sketch.constraint.distance":
         consume(constraint.b.entity, 1);
         break;
       case "sketch.constraint.pointOnLine":
         consume(constraint.point.entity, 1);
+        break;
+      case "sketch.constraint.midpoint":
+        consume(constraint.point.entity, 2);
+        break;
+      case "sketch.constraint.symmetry":
+        consume(constraint.b.entity, 2);
         break;
       case "sketch.constraint.radius":
         consume(constraint.curve, 1);
@@ -956,9 +965,13 @@ function listConstraintEntityIds(constraint: SketchConstraint): string[] {
     case "sketch.constraint.angle":
     case "sketch.constraint.tangent":
     case "sketch.constraint.concentric":
+    case "sketch.constraint.collinear":
       return dedupeEntityIds([constraint.a, constraint.b]);
     case "sketch.constraint.pointOnLine":
+    case "sketch.constraint.midpoint":
       return dedupeEntityIds([constraint.point.entity, constraint.line]);
+    case "sketch.constraint.symmetry":
+      return dedupeEntityIds([constraint.a.entity, constraint.b.entity, constraint.axis]);
     case "sketch.constraint.distance":
       return dedupeEntityIds([constraint.a.entity, constraint.b.entity]);
     case "sketch.constraint.radius":
@@ -1065,6 +1078,58 @@ function applyConstraint(
       const next = add(currentStart, scale(direction, referenceLength));
       target.writeEnd(next);
       return distance(currentEnd, next);
+    }
+    case "sketch.constraint.collinear": {
+      const reference = resolveLine(sketchId, entityMap, constraint.a);
+      const target = resolveLine(sketchId, entityMap, constraint.b);
+      const referenceStart = reference.readStart();
+      const referenceEnd = reference.readEnd();
+      const axis = lineDirection(referenceStart, referenceEnd, sketchId, constraint.id);
+      const currentStart = target.readStart();
+      const currentEnd = target.readEnd();
+      const targetLength = targetLineLength(
+        currentStart,
+        currentEnd,
+        distance(referenceStart, referenceEnd)
+      );
+      const projectedStart = add(
+        referenceStart,
+        scale(axis, dot(subtract(currentStart, referenceStart), axis))
+      );
+      const direction = chooseAlignedDirection(axis, subtract(currentEnd, currentStart));
+      const projectedEnd = add(projectedStart, scale(direction, targetLength));
+      target.write(projectedStart, projectedEnd);
+      return Math.max(distance(currentStart, projectedStart), distance(currentEnd, projectedEnd));
+    }
+    case "sketch.constraint.midpoint": {
+      const point = resolvePointRef(sketchId, entityMap, constraint.point);
+      const line = resolveLine(sketchId, entityMap, constraint.line);
+      const start = line.readStart();
+      const end = line.readEnd();
+      const midpoint: NumericPoint = [(start[0] + end[0]) * 0.5, (start[1] + end[1]) * 0.5];
+      const current = point.read();
+      point.write(midpoint);
+      return distance(current, midpoint);
+    }
+    case "sketch.constraint.symmetry": {
+      const a = resolvePointRef(sketchId, entityMap, constraint.a);
+      const b = resolvePointRef(sketchId, entityMap, constraint.b);
+      const axis = resolveLine(sketchId, entityMap, constraint.axis);
+      const axisStart = axis.readStart();
+      const axisEnd = axis.readEnd();
+      const axisDirection = lineDirection(axisStart, axisEnd, sketchId, constraint.id);
+      const source = a.read();
+      const current = b.read();
+      const projection = add(
+        axisStart,
+        scale(axisDirection, dot(subtract(source, axisStart), axisDirection))
+      );
+      const mirrored: NumericPoint = [
+        2 * projection[0] - source[0],
+        2 * projection[1] - source[1],
+      ];
+      b.write(mirrored);
+      return distance(current, mirrored);
     }
     case "sketch.constraint.tangent": {
       const referenceLine = tryResolveLine(sketchId, entityMap, constraint.a);
@@ -1228,6 +1293,47 @@ function constraintResidualComponents(
       const refLength = distance(a.readStart(), a.readEnd());
       const targetLength = distance(b.readStart(), b.readEnd());
       return [refLength - targetLength];
+    }
+    case "sketch.constraint.collinear": {
+      const a = resolveLine(sketchId, entityMap, constraint.a);
+      const b = resolveLine(sketchId, entityMap, constraint.b);
+      const refStart = a.readStart();
+      const refEnd = a.readEnd();
+      const targetStart = b.readStart();
+      const targetEnd = b.readEnd();
+      const refDir = lineDirection(refStart, refEnd, sketchId, constraint.id);
+      const targetDir = lineDirection(targetStart, targetEnd, sketchId, constraint.id);
+      return [
+        cross(refDir, targetDir),
+        cross(refDir, subtract(targetStart, refStart)),
+      ];
+    }
+    case "sketch.constraint.midpoint": {
+      const point = resolvePointRef(sketchId, entityMap, constraint.point);
+      const line = resolveLine(sketchId, entityMap, constraint.line);
+      const start = line.readStart();
+      const end = line.readEnd();
+      const targetMidpoint: NumericPoint = [(start[0] + end[0]) * 0.5, (start[1] + end[1]) * 0.5];
+      const current = point.read();
+      return [current[0] - targetMidpoint[0], current[1] - targetMidpoint[1]];
+    }
+    case "sketch.constraint.symmetry": {
+      const a = resolvePointRef(sketchId, entityMap, constraint.a);
+      const b = resolvePointRef(sketchId, entityMap, constraint.b);
+      const axis = resolveLine(sketchId, entityMap, constraint.axis);
+      const axisStart = axis.readStart();
+      const axisEnd = axis.readEnd();
+      const axisDir = lineDirection(axisStart, axisEnd, sketchId, constraint.id);
+      const pointA = a.read();
+      const pointB = b.read();
+      const midpoint: NumericPoint = [
+        (pointA[0] + pointB[0]) * 0.5,
+        (pointA[1] + pointB[1]) * 0.5,
+      ];
+      return [
+        cross(axisDir, subtract(midpoint, axisStart)),
+        dot(subtract(pointB, pointA), axisDir),
+      ];
     }
     case "sketch.constraint.tangent": {
       const referenceLine = tryResolveLine(sketchId, entityMap, constraint.a);
@@ -1729,6 +1835,9 @@ function collectDrivenVariableHandles(
       case "sketch.constraint.pointOnLine":
         addPointRef(constraint.point);
         break;
+      case "sketch.constraint.midpoint":
+        addPointRef(constraint.point);
+        break;
       case "sketch.constraint.radius": {
         const entity = entityMap.get(constraint.curve);
         if (entity?.kind === "sketch.circle") {
@@ -1748,12 +1857,16 @@ function collectDrivenVariableHandles(
       case "sketch.constraint.concentric":
         addConcentricTargetHandles(constraint.b);
         break;
+      case "sketch.constraint.symmetry":
+        addPointRef(constraint.b);
+        break;
       case "sketch.constraint.horizontal":
       case "sketch.constraint.vertical":
       case "sketch.constraint.parallel":
       case "sketch.constraint.perpendicular":
       case "sketch.constraint.equalLength":
       case "sketch.constraint.angle":
+      case "sketch.constraint.collinear":
         break;
     }
   }
