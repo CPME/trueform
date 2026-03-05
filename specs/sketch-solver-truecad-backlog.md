@@ -221,7 +221,7 @@ Why:
 - Important for responsive editing as sketches grow.
 
 15. Temporary/session-only constraints
-Status: pending
+Status: completed on 2026-03-05
 
 Needed outcome:
 - Support drag-time and inference-time temporary constraints without polluting
@@ -286,8 +286,13 @@ Why:
 - 2026-03-05: Added `sketch.constraint.collinear`,
   `sketch.constraint.midpoint`, and `sketch.constraint.symmetry` with DSL,
   IR/validation/normalization coverage, solver behavior, and targeted tests.
+- 2026-03-05: Added transient/session-only constraint overlays to
+  `solveSketchConstraintsDetailed(...)` via `options.transientConstraints`,
+  with source-tagged diagnostics (`authored` vs `transient`) and duplicate id
+  guardrails across merged constraint sets.
 
 ### Next Recommended Task
 
-Temporary/session-only constraints to support drag/inference behavior without
-polluting authored sketch constraint state.
+Profiling + targeted tuning of drag-time solve cadence in the webapp loop
+(especially event coalescing and frame-budgeted solve scheduling) now that
+transient/session constraints are available in core.

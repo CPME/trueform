@@ -568,6 +568,72 @@ const tests = [
       );
     },
   },
+  {
+    name: "sketch constraints: transient constraints influence solve without polluting authored constraints",
+    fn: async () => {
+      const authoredConstraints = [
+        dsl.sketchConstraintFixPoint("c-fix-origin", dsl.sketchPointRef("line-1", "start"), {
+          x: 0,
+          y: 0,
+        }),
+      ];
+      const transientConstraints = [
+        dsl.sketchConstraintPointOnLine(
+          "tc-point-on-line",
+          dsl.sketchPointRef("point-1"),
+          "line-1"
+        ),
+      ];
+      const authoredSnapshot = authoredConstraints.map((constraint) => constraint.id);
+      const transientSnapshot = transientConstraints.map((constraint) => constraint.id);
+
+      const report = solveSketchConstraintsDetailed(
+        "sketch-transient-overlay",
+        [
+          dsl.sketchLine("line-1", [0, 0], [4, 3]),
+          dsl.sketchPoint("point-1", [7, 9]),
+        ],
+        authoredConstraints,
+        { transientConstraints }
+      );
+
+      const byId = new Map(report.entities.map((entity) => [entity.id, entity]));
+      const point = byId.get("point-1") as SketchPoint;
+      assert.ok(point, "missing solved point-1");
+      assert.ok(Math.abs((point.point[0] as number) - 8.8) < 1e-5);
+      assert.ok(Math.abs((point.point[1] as number) - 6.6) < 1e-5);
+      assert.deepEqual(
+        report.constraintStatus.map((entry) => ({
+          constraintId: entry.constraintId,
+          source: entry.source,
+          status: entry.status,
+        })),
+        [
+          { constraintId: "c-fix-origin", source: "authored", status: "satisfied" },
+          { constraintId: "tc-point-on-line", source: "transient", status: "satisfied" },
+        ]
+      );
+      assert.deepEqual(authoredConstraints.map((constraint) => constraint.id), authoredSnapshot);
+      assert.deepEqual(transientConstraints.map((constraint) => constraint.id), transientSnapshot);
+    },
+  },
+  {
+    name: "sketch constraints: duplicate ids across authored and transient constraints are rejected",
+    fn: async () => {
+      assert.throws(
+        () =>
+          solveSketchConstraintsDetailed(
+            "sketch-transient-duplicate",
+            [dsl.sketchLine("line-1", [0, 0], [4, 3])],
+            [dsl.sketchConstraintHorizontal("c-dup", "line-1")],
+            {
+              transientConstraints: [dsl.sketchConstraintVertical("c-dup", "line-1")],
+            }
+          ),
+        /duplicate constraint id/i
+      );
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

@@ -15,8 +15,10 @@ export type {
   SketchConstraintComponentStatus,
   SketchConstraintDiagnosticStatus,
   SketchConstraintEntityStatus,
+  SketchConstraintSolveOptions,
   SketchConstraintSolveReport,
   SketchConstraintSolveStatus,
+  SketchConstraintSource,
   SketchConstraintStatus,
 } from "./sketch/constraints.js";
 export {

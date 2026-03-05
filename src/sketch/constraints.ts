@@ -26,10 +26,16 @@ export type SketchConstraintComponentSolveStatus =
   | "component-constrained";
 
 export type SketchConstraintDiagnosticStatus = "satisfied" | "unsatisfied";
+export type SketchConstraintSource = "authored" | "transient";
+
+export type SketchConstraintSolveOptions = {
+  transientConstraints?: SketchConstraint[];
+};
 
 export type SketchConstraintStatus = {
   constraintId: string;
   kind: SketchConstraint["kind"];
+  source: SketchConstraintSource;
   status: SketchConstraintDiagnosticStatus;
   residual: number;
   entityIds: string[];
@@ -182,17 +188,21 @@ export function solveSketchConstraints(
 export function solveSketchConstraintsDetailed(
   sketchId: string,
   entities: SketchEntity[],
-  constraints: SketchConstraint[]
+  constraints: SketchConstraint[],
+  options?: SketchConstraintSolveOptions
 ): SketchConstraintSolveReport {
+  const transientConstraints = options?.transientConstraints ?? [];
+  const allConstraints = [...constraints, ...transientConstraints];
+  ensureUniqueConstraintIds(sketchId, allConstraints);
   const solvedEntities = cloneSketchEntities(entities);
-  const components = buildConstraintComponents(solvedEntities, constraints);
-  if (constraints.length === 0) {
-    return buildSolveReport(solvedEntities, constraints, [], components);
+  const components = buildConstraintComponents(solvedEntities, allConstraints);
+  if (allConstraints.length === 0) {
+    return buildSolveReport(solvedEntities, allConstraints, [], components);
   }
 
   const entityMap = new Map(solvedEntities.map((entity) => [entity.id, entity]));
   const entityById = new Map(solvedEntities.map((entity) => [entity.id, entity]));
-  const constraintById = new Map(constraints.map((constraint) => [constraint.id, constraint]));
+  const constraintById = new Map(allConstraints.map((constraint) => [constraint.id, constraint]));
   const assignedConstraintIds = new Set<string>();
 
   for (const component of components) {
@@ -210,7 +220,7 @@ export function solveSketchConstraintsDetailed(
     polishSketchConstraints(sketchId, entityMap, componentConstraints);
   }
 
-  const unassignedConstraints = constraints.filter(
+  const unassignedConstraints = allConstraints.filter(
     (constraint) => !assignedConstraintIds.has(constraint.id)
   );
   if (unassignedConstraints.length > 0) {
@@ -218,11 +228,23 @@ export function solveSketchConstraintsDetailed(
     polishSketchConstraints(sketchId, entityMap, unassignedConstraints);
   }
 
-  const constraintStatus = constraints.map((constraint) =>
-    buildConstraintStatus(sketchId, entityMap, constraint)
+  const constraintSourceById = new Map<string, SketchConstraintSource>();
+  for (const constraint of constraints) {
+    constraintSourceById.set(constraint.id, "authored");
+  }
+  for (const constraint of transientConstraints) {
+    constraintSourceById.set(constraint.id, "transient");
+  }
+  const constraintStatus = allConstraints.map((constraint) =>
+    buildConstraintStatus(
+      sketchId,
+      entityMap,
+      constraint,
+      constraintSourceById.get(constraint.id) ?? "authored"
+    )
   );
 
-  return buildSolveReport(solvedEntities, constraints, constraintStatus, components);
+  return buildSolveReport(solvedEntities, allConstraints, constraintStatus, components);
 }
 
 function buildSolveReport(
@@ -327,7 +349,8 @@ function buildSolveReport(
 function buildConstraintStatus(
   sketchId: string,
   entityMap: Map<string, SketchEntity>,
-  constraint: SketchConstraint
+  constraint: SketchConstraint,
+  source: SketchConstraintSource
 ): SketchConstraintStatus {
   const entityIds = listConstraintEntityIds(constraint);
   try {
@@ -336,6 +359,7 @@ function buildConstraintStatus(
       return {
         constraintId: constraint.id,
         kind: constraint.kind,
+        source,
         status: "satisfied",
         residual,
         entityIds,
@@ -344,6 +368,7 @@ function buildConstraintStatus(
     return {
       constraintId: constraint.id,
       kind: constraint.kind,
+      source,
       status: "unsatisfied",
       residual,
       entityIds,
@@ -355,6 +380,7 @@ function buildConstraintStatus(
       return {
         constraintId: constraint.id,
         kind: constraint.kind,
+        source,
         status: "unsatisfied",
         residual: Number.POSITIVE_INFINITY,
         entityIds,
@@ -363,6 +389,22 @@ function buildConstraintStatus(
       };
     }
     throw err;
+  }
+}
+
+function ensureUniqueConstraintIds(
+  sketchId: string,
+  constraints: SketchConstraint[]
+): void {
+  const seen = new Set<string>();
+  for (const constraint of constraints) {
+    if (seen.has(constraint.id)) {
+      throw new CompileError(
+        "sketch_constraint_duplicate_id",
+        `Sketch ${sketchId} has duplicate constraint id ${constraint.id}`
+      );
+    }
+    seen.add(constraint.id);
   }
 }
 
