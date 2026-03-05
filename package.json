@@ -1,8 +1,14 @@
 {
   "name": "trueform",
   "version": "0.0.1",
-  "private": true,
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "AGENTS.md"
+  ],
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -43,6 +49,9 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepare": "npm run build -- --pretty false",
+    "prepack": "npm run build -- --pretty false",
+    "verify:package": "node tools/ci/verify-package.mjs",
     "guardrails": "npm run guardrails:docs && npm run guardrails:boundaries",
     "guardrails:docs": "node tools/ci/check-docs-drift.mjs",
     "guardrails:boundaries": "node tools/ci/check-boundaries.mjs",

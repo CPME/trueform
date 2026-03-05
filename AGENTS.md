@@ -11,6 +11,17 @@ To create the open sourced CAD tools and standards that enables the world of har
 ## General Instructions
 - Commit changes as you go (only the changes you made, unless otherwise noted)
 
+## Package Consumer Workflow
+- Consumers must import from published package exports only (`trueform`, `trueform/dsl/geometry`, etc). Do not import from `trueform/src/...`.
+- Required public sketch APIs:
+  - `import { solveSketchConstraintsDetailed } from "trueform"`
+  - `import { sketchConstraintCoincident } from "trueform/dsl/geometry"` (and other sketch constraint builders from this subpath)
+- Local dual-repo development (`trueform` + consumer like `truecad`):
+  - In `trueform`, run `npm run verify:package` to build, pack, validate `dist/*`, and run consumer-style import probes from the packaged artifact.
+  - Install from the local package artifact in the consumer repo (for example, `npm install ../trueform/temp/package-verify/artifacts/trueform-<version>.tgz`) or install directly from local path (`npm install file:../trueform`).
+  - After trueform changes, reinstall in the consumer repo. Never manually copy `dist` into consumer `node_modules`.
+- Before downstream integration work, run `npm run verify:package` in `trueform` and use that tarball/local install flow.
+
 ## Performance
 Make sure this is practical for use in a webapp (can it compile to opencascade.js, and then wasm, without footguns). Avoid choices that block complex assemblies or responsive rotation later.
 
