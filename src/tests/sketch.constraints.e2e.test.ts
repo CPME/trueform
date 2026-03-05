@@ -9,6 +9,27 @@ import { dsl, Sketch2D, SketchLine, SketchPoint } from "../dsl.js";
 import { normalizePart } from "../compiler.js";
 import { runTests } from "./occt_test_utils.js";
 
+function createSeededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let value = Math.imul(state ^ (state >>> 15), 1 | state);
+    value ^= value + Math.imul(value ^ (value >>> 7), 61 | value);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function randomInRange(random: () => number, min: number, max: number): number {
+  return min + (max - min) * random();
+}
+
+function parseNumberEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : fallback;
+}
+
 const tests = [
   {
     name: "sketch constraints: solve fixed-point line constraints during normalization",
@@ -807,6 +828,167 @@ const tests = [
       assert.deepEqual(asyncLine.start, syncLine.start);
       assert.deepEqual(asyncLine.end, syncLine.end);
       assert.equal(asyncReport.constraintStatus[0]?.status, syncReport.constraintStatus[0]?.status);
+    },
+  },
+  {
+    name: "sketch constraints: async detailed solve yields to macrotask before resolving",
+    fn: async () => {
+      const promise = solveSketchConstraintsDetailedAsync(
+        "sketch-async-yield",
+        [dsl.sketchLine("line-1", [0, 0], [4, 9])],
+        [dsl.sketchConstraintHorizontal("c-h", "line-1")]
+      );
+      let settled = false;
+      void promise.then(() => {
+        settled = true;
+      });
+      await Promise.resolve();
+      assert.equal(settled, false);
+      const report = await promise;
+      assert.equal(report.solveMeta.termination, "converged");
+    },
+  },
+  {
+    name: "sketch constraints: aborted session solve does not overwrite warm-start state",
+    fn: async () => {
+      const session = createSketchConstraintSolveSession("sketch-aborted-warmstart", [
+        dsl.sketchConstraintFixPoint("c-fix", dsl.sketchPointRef("line-1", "start"), {
+          x: 0,
+          y: 0,
+        }),
+        dsl.sketchConstraintHorizontal("c-h", "line-1"),
+        dsl.sketchConstraintDistance(
+          "c-d",
+          dsl.sketchPointRef("line-1", "start"),
+          dsl.sketchPointRef("line-1", "end"),
+          8
+        ),
+      ]);
+
+      const first = session.solve({
+        entities: [dsl.sketchLine("line-1", [0, 0], [12, 7])],
+      });
+      assert.equal(first.solveMeta.termination, "converged");
+
+      const controller = new AbortController();
+      controller.abort();
+      const aborted = session.solve({
+        entities: [dsl.sketchLine("line-1", [0, 0], [123, 45])],
+        signal: controller.signal,
+      });
+      assert.equal(aborted.solveMeta.termination, "aborted");
+
+      const third = session.solve({
+        entities: [dsl.sketchLine("line-1", [0, 0], [7, 7])],
+        maxIterations: 0,
+      });
+      const line = third.entities[0] as SketchLine;
+      assert.deepEqual(line.start, [0, 0]);
+      assert.deepEqual(line.end, [8, 0]);
+    },
+  },
+  {
+    name: "sketch constraints: property fuzz cases remain deterministic and satisfy constraints",
+    fn: async () => {
+      for (let seed = 1; seed <= 24; seed += 1) {
+        const random = createSeededRandom(seed);
+        const fixedX = randomInRange(random, -1_000, 1_000);
+        const fixedY = randomInRange(random, -1_000, 1_000);
+        const targetLength = Math.pow(10, randomInRange(random, -2, 5));
+        const start: [number, number] = [
+          fixedX + randomInRange(random, -50, 50),
+          fixedY + randomInRange(random, -50, 50),
+        ];
+        const end: [number, number] = [
+          start[0] + randomInRange(random, -50, 50),
+          start[1] + randomInRange(random, -50, 50),
+        ];
+
+        const solveOnce = (): SketchLine => {
+          const report = solveSketchConstraintsDetailed(
+            `sketch-property-${seed}`,
+            [dsl.sketchLine("line-1", start, end)],
+            [
+              dsl.sketchConstraintFixPoint("c-fix", dsl.sketchPointRef("line-1", "start"), {
+                x: fixedX,
+                y: fixedY,
+              }),
+              dsl.sketchConstraintHorizontal("c-h", "line-1"),
+              dsl.sketchConstraintDistance(
+                "c-d",
+                dsl.sketchPointRef("line-1", "start"),
+                dsl.sketchPointRef("line-1", "end"),
+                targetLength
+              ),
+            ]
+          );
+          assert.equal(report.solveMeta.termination, "converged");
+          assert.equal(
+            report.constraintStatus.every((entry) => entry.status === "satisfied"),
+            true
+          );
+          return report.entities[0] as SketchLine;
+        };
+
+        const first = solveOnce();
+        const second = solveOnce();
+        assert.ok(Number.isFinite(first.start[0] as number));
+        assert.ok(Number.isFinite(first.start[1] as number));
+        assert.ok(Number.isFinite(first.end[0] as number));
+        assert.ok(Number.isFinite(first.end[1] as number));
+        assert.ok(Math.abs((first.start[0] as number) - fixedX) < 1e-6);
+        assert.ok(Math.abs((first.start[1] as number) - fixedY) < 1e-6);
+        assert.ok(Math.abs((first.end[1] as number) - fixedY) < 1e-4);
+        const lengthTolerance = Math.max(1e-2, Math.abs(targetLength) * 1e-6);
+        assert.ok(
+          Math.abs(
+            Math.abs((first.end[0] as number) - (first.start[0] as number)) - targetLength
+          ) < lengthTolerance
+        );
+        assert.ok(Math.abs((second.end[0] as number) - (first.end[0] as number)) < 1e-9);
+        assert.ok(Math.abs((second.end[1] as number) - (first.end[1] as number)) < 1e-9);
+      }
+    },
+  },
+  {
+    name: "sketch constraints: preview session solve remains within frame-latency SLO guardrail",
+    fn: async () => {
+      const session = createSketchConstraintSolveSession("sketch-preview-slo", [
+        dsl.sketchConstraintFixPoint("c-fix", dsl.sketchPointRef("line-1", "start"), {
+          x: 0,
+          y: 0,
+        }),
+        dsl.sketchConstraintHorizontal("c-h", "line-1"),
+        dsl.sketchConstraintDistance(
+          "c-d",
+          dsl.sketchPointRef("line-1", "start"),
+          dsl.sketchPointRef("line-1", "end"),
+          10
+        ),
+      ]);
+      const elapsedSamples: number[] = [];
+      for (let frame = 0; frame < 64; frame += 1) {
+        const offset = (frame % 9) - 4;
+        const report = session.solve({
+          entities: [dsl.sketchLine("line-1", [0, 0], [10 + offset, offset])],
+          changedEntityIds: ["line-1"],
+          maxTimeMs: 4,
+          maxIterations: 48,
+        });
+        assert.ok(
+          report.solveMeta.termination === "converged" ||
+            report.solveMeta.termination === "time-budget"
+        );
+        elapsedSamples.push(report.solveMeta.elapsedMs);
+      }
+      const sorted = elapsedSamples.slice().sort((left, right) => left - right);
+      const p95Index = Math.floor((sorted.length - 1) * 0.95);
+      const p95 = sorted[p95Index] ?? 0;
+      const max = sorted[sorted.length - 1] ?? 0;
+      const p95BudgetMs = parseNumberEnv("TF_SKETCH_PREVIEW_P95_BUDGET_MS", 20);
+      const maxBudgetMs = parseNumberEnv("TF_SKETCH_PREVIEW_MAX_BUDGET_MS", 40);
+      assert.ok(p95 <= p95BudgetMs, `preview p95 ${p95}ms exceeded budget ${p95BudgetMs}ms`);
+      assert.ok(max <= maxBudgetMs, `preview max ${max}ms exceeded budget ${maxBudgetMs}ms`);
     },
   },
   {

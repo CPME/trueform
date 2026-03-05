@@ -347,7 +347,10 @@ export async function solveSketchConstraintsDetailedAsync(
   if (options?.signal?.aborted) {
     return solveSketchConstraintsDetailed(sketchId, entities, constraints, options);
   }
-  await Promise.resolve();
+  await yieldToMacrotask();
+  if (options?.signal?.aborted) {
+    return solveSketchConstraintsDetailed(sketchId, entities, constraints, options);
+  }
   return solveSketchConstraintsDetailed(sketchId, entities, constraints, options);
 }
 
@@ -376,8 +379,10 @@ export function createSketchConstraintSolveSession(
   constraints: SketchConstraint[]
 ): SketchConstraintSolveSession {
   let warmStartEntities: SketchEntity[] | undefined;
+  let solveVersion = 0;
   return {
     solve: (input) => {
+      const currentVersion = ++solveVersion;
       const report = solveSketchConstraintsDetailed(sketchId, input.entities, constraints, {
         transientConstraints: input.transientConstraints,
         warmStartEntities,
@@ -387,10 +392,13 @@ export function createSketchConstraintSolveSession(
         maxTimeMs: input.maxTimeMs,
         signal: input.signal,
       });
-      warmStartEntities = report.entities.map((entity) => cloneSketchEntity(entity));
+      if (currentVersion === solveVersion && report.solveMeta.termination !== "aborted") {
+        warmStartEntities = report.entities.map((entity) => cloneSketchEntity(entity));
+      }
       return report;
     },
     solveAsync: async (input) => {
+      const currentVersion = ++solveVersion;
       const report = await solveSketchConstraintsDetailedAsync(sketchId, input.entities, constraints, {
         transientConstraints: input.transientConstraints,
         warmStartEntities,
@@ -400,13 +408,19 @@ export function createSketchConstraintSolveSession(
         maxTimeMs: input.maxTimeMs,
         signal: input.signal,
       });
-      warmStartEntities = report.entities.map((entity) => cloneSketchEntity(entity));
+      if (currentVersion === solveVersion && report.solveMeta.termination !== "aborted") {
+        warmStartEntities = report.entities.map((entity) => cloneSketchEntity(entity));
+      }
       return report;
     },
     reset: () => {
       warmStartEntities = undefined;
     },
   };
+}
+
+function yieldToMacrotask(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function createSketchSolveExecutionState(
