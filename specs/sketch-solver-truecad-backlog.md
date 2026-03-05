@@ -348,3 +348,6 @@ Last updated: 2026-03-05
 - Validate same pattern for sketch + assembly drag workflows.
 - Progress: draft contract documented in `specs/sketch-webapp-runtime-contract.md`;
   runtime wiring in TrueCAD is still pending.
+- SME direction captured: prioritize responsiveness over preview fidelity,
+  target 60 Hz when feasible, and commit last solvable state on pointer-up
+  conflicts with diagnostics.

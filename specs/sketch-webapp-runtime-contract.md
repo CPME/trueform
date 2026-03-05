@@ -52,6 +52,22 @@ Rule: Preview is advisory; canonical state comes from TrueForm solve outputs.
   - `maxTimeMs: undefined`
   - `maxIterations: undefined`
 
+## SME Decisions (2026-03-05)
+
+1. Preview policy
+- Prioritize responsiveness over preview fidelity under load.
+- Degrade solve quality first; avoid UI lag/stutter.
+
+2. Frame target guidance
+- Target 60 Hz interaction when possible (16.7 ms frame budget).
+- Practical solver budget target for preview: 3-6 ms per frame.
+- Keep headroom for input processing, scene updates, and rendering.
+
+3. Pointer-up conflict policy
+- Preferred default: commit last solvable state.
+- Show diagnostics for unsatisfied/conflicting constraints.
+- Rationale: persisted model state should remain canonical and solvable.
+
 ## Session API Usage Pattern
 
 1. On drag start
@@ -76,17 +92,7 @@ Rule: Preview is advisory; canonical state comes from TrueForm solve outputs.
 
 ## Required Product Decisions (SME Input Needed)
 
-1. Target preview FPS floor under heavy sketches:
-- Proposed default: 30 FPS minimum.
-
-2. Preferred preview quality vs responsiveness policy:
-- Option A: strict frame budget, accept approximate preview.
-- Option B: best-fit preview even if occasional frame drops.
-
-3. Pointer-up commit policy for conflicts:
-- Proposed default: keep latest solvable state and show actionable diagnostics.
-
-4. Drag behavior in underconstrained DOF:
+1. Drag behavior in underconstrained DOF:
 - Proposed default: allow motion in available DOF, constrain only where equations apply.
 
 ## Assembly Follow-On
