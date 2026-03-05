@@ -170,7 +170,7 @@ Minimum deliverable:
 - Introduce a Jacobian/rank-based analysis pass for the detailed report.
 
 7. Replace projection-style solving with a general numerical solver
-Status: pending
+Status: completed on 2026-03-05 (with ongoing tuning)
 
 Needed outcome:
 - Move from the current deterministic projection pass to a robust numerical
@@ -299,12 +299,14 @@ Why:
   determinism coverage.
 - 2026-03-05: Added solver column scaling in the numerical least-squares step
   to improve stability across variable magnitude differences.
+- 2026-03-05: Added trust-region/LM safeguards to the numerical solve loop
+  (regularized normal equations, trust-radius clamping, gain-ratio damping
+  adaptation, and gradient fallback) plus mixed-scale regression coverage.
 
 ### Next Recommended Task
 
-Numerical robustness upgrades (stronger trust-region/LM safeguards and variable
-scaling/normalization), then nullspace/DOF-aware drag motion guidance for
-underconstrained sketches.
+Nullspace/DOF-aware drag motion guidance for underconstrained sketches, then
+UX-grade conflict/redundancy diagnostics for editor feedback.
 
 ## Webapp Hardening Plan (Tracked Checklist)
 
@@ -319,11 +321,9 @@ Last updated: 2026-03-05
 - Worker-safe async solve API with cancellation/abort.
 - Return best-so-far solution + residual/diagnostics under frame budgets.
 
-3. [ ] Numerical robustness upgrades
+3. [x] Numerical robustness upgrades
 - Add better trust-region/LM safeguards for near-singular systems.
 - Add variable scaling/normalization to improve stability across units/sizes.
-- Progress: numerical column scaling landed; trust-region/LM safeguards still
-  pending.
 
 4. [ ] Nullspace/DOF-aware drag behavior
 - Expose admissible free-motion directions for underconstrained states.

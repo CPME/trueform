@@ -555,6 +555,56 @@ const tests = [
     },
   },
   {
+    name: "sketch constraints: numerical solve remains stable across large scale disparities",
+    fn: async () => {
+      const report = solveSketchConstraintsDetailed(
+        "sketch-scale-disparity",
+        [
+          dsl.sketchLine("line-1", [0, 0], [8, 3]),
+          dsl.sketchLine("line-2", [1_000_000, 1_000_000], [1_000_004, 1_000_003]),
+        ],
+        [
+          dsl.sketchConstraintFixPoint("c-fix", dsl.sketchPointRef("line-1", "start"), {
+            x: 0,
+            y: 0,
+          }),
+          dsl.sketchConstraintHorizontal("c-horizontal", "line-1"),
+          dsl.sketchConstraintDistance(
+            "c-width",
+            dsl.sketchPointRef("line-1", "start"),
+            dsl.sketchPointRef("line-1", "end"),
+            1_000_000
+          ),
+          dsl.sketchConstraintCoincident(
+            "c-join",
+            dsl.sketchPointRef("line-1", "end"),
+            dsl.sketchPointRef("line-2", "start")
+          ),
+          dsl.sketchConstraintAngle("c-angle", "line-1", "line-2", 90),
+          dsl.sketchConstraintDistance(
+            "c-height",
+            dsl.sketchPointRef("line-2", "start"),
+            dsl.sketchPointRef("line-2", "end"),
+            0.5
+          ),
+        ]
+      );
+
+      const byId = new Map(report.entities.map((entity) => [entity.id, entity]));
+      const line1 = byId.get("line-1") as SketchLine;
+      const line2 = byId.get("line-2") as SketchLine;
+      assert.deepEqual(line1.start, [0, 0]);
+      assert.ok(Math.abs((line1.end[0] as number) - 1_000_000) < 1e-3);
+      assert.ok(Math.abs((line1.end[1] as number) - 0) < 1e-3);
+      assert.ok(Math.abs((line2.start[0] as number) - 1_000_000) < 1e-3);
+      assert.ok(Math.abs((line2.start[1] as number) - 0) < 1e-3);
+      assert.ok(Math.abs((line2.end[0] as number) - 1_000_000) < 1e-3);
+      assert.ok(Math.abs((line2.end[1] as number) - 0.5) < 1e-3);
+      assert.equal(report.constraintStatus.every((entry) => entry.status === "satisfied"), true);
+      assert.equal(report.solveMeta.termination, "converged");
+    },
+  },
+  {
     name: "sketch constraints: reject constraints without sketch entities",
     fn: async () => {
       const part = dsl.part("sketch-constraints-invalid", [

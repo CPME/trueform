@@ -1056,6 +1056,7 @@ function solveSketchConstraintsNumerically(
   if (variables.length === 0 || constraints.length === 0) return;
 
   let damping = 1e-3;
+  let trustRadius = Math.max(1, Math.sqrt(variables.length));
   const localMaxIterations = Math.max(10, constraints.length * 6);
 
   for (let iteration = 0; iteration < localMaxIterations; iteration += 1) {
@@ -1063,6 +1064,8 @@ function solveSketchConstraintsNumerically(
     execution.iterations += 1;
     const residual = buildConstraintResidualVector(sketchId, entityMap, constraints);
     if (maxAbsValue(residual) <= SOLVE_TOLERANCE) return;
+    const currentNorm = vectorNorm(residual);
+    const currentObjective = 0.5 * currentNorm * currentNorm;
 
     const jacobian = buildConstraintJacobian(sketchId, entityMap, constraints, variables, residual);
     if (jacobian.length === 0) return;
@@ -1076,31 +1079,55 @@ function solveSketchConstraintsNumerically(
     }
 
     const baseValues = variables.map((variable) => variable.read());
-    const currentNorm = vectorNorm(residual);
     let accepted = false;
     let trialDamping = damping;
 
     for (let attempt = 0; attempt < 8 && !accepted; attempt += 1) {
-      const scaledStep = solveLinearSystem(
-        addDampedDiagonal(normalMatrix, trialDamping),
+      const regularizedNormal = addLevenbergRegularization(normalMatrix, trialDamping);
+      let scaledStep = solveLinearSystem(
+        regularizedNormal,
         gradient.map((value) => -value)
       );
       if (!scaledStep) {
-        trialDamping *= 10;
+        scaledStep = fallbackGradientStep(gradient, normalMatrix, trialDamping);
+      }
+      if (!scaledStep) {
+        trialDamping *= 6;
+        trustRadius = Math.max(0.1, trustRadius * 0.5);
         continue;
       }
-      const step = unscaleVariableStep(scaledStep, variableScales);
+      const clamped = clampVectorToTrustRadius(scaledStep, trustRadius);
+      const step = unscaleVariableStep(clamped.step, variableScales);
       if (vectorNorm(step) <= SOLVE_TOLERANCE * 0.1) {
         restoreVariableValues(variables, baseValues);
         return;
       }
 
       let stepScale = 1;
+      let acceptedRatio = -Infinity;
+      let acceptedUsedTrustBoundary = clamped.clamped;
       for (let lineSearch = 0; lineSearch < 6; lineSearch += 1) {
-        applyVariableStep(variables, baseValues, step, stepScale);
+        const scaledTrialStep = scaleVector(clamped.step, stepScale);
+        const trialStep = unscaleVariableStep(scaledTrialStep, variableScales);
+        applyVariableStep(variables, baseValues, trialStep, 1);
         const nextResidual = buildConstraintResidualVector(sketchId, entityMap, constraints);
-        if (vectorNorm(nextResidual) + 1e-12 < currentNorm) {
-          damping = Math.max(1e-6, trialDamping * 0.5);
+        const nextNorm = vectorNorm(nextResidual);
+        const nextObjective = 0.5 * nextNorm * nextNorm;
+        const actualReduction = currentObjective - nextObjective;
+        const predictedReduction = computeQuadraticModelReduction(
+          gradient,
+          normalMatrix,
+          scaledTrialStep
+        );
+        const ratio =
+          predictedReduction <= SOLVE_EPSILON
+            ? -Infinity
+            : actualReduction / predictedReduction;
+        if (actualReduction > 0 && ratio > 1e-4) {
+          acceptedRatio = ratio;
+          acceptedUsedTrustBoundary =
+            acceptedUsedTrustBoundary ||
+            (Math.abs(vectorNorm(scaledTrialStep) - trustRadius) <= 1e-9);
           accepted = true;
           break;
         }
@@ -1109,7 +1136,18 @@ function solveSketchConstraintsNumerically(
       }
 
       if (!accepted) {
-        trialDamping *= 10;
+        trialDamping *= 4;
+        trustRadius = Math.max(0.1, trustRadius * 0.6);
+      } else {
+        if (acceptedRatio < 0.25) {
+          damping = Math.min(1e6, trialDamping * 2);
+          trustRadius = Math.max(0.1, trustRadius * 0.7);
+        } else if (acceptedRatio > 0.75 && acceptedUsedTrustBoundary) {
+          damping = Math.max(1e-8, trialDamping * 0.5);
+          trustRadius = Math.min(1e6, trustRadius * 1.5);
+        } else {
+          damping = Math.max(1e-8, trialDamping * 0.9);
+        }
       }
     }
 
@@ -1174,9 +1212,19 @@ function buildNormalGradient(jacobian: number[][], residual: number[]): number[]
   return out;
 }
 
-function addDampedDiagonal(matrix: number[][], damping: number): number[][] {
+function addLevenbergRegularization(matrix: number[][], damping: number): number[][] {
+  const maxDiagonal = matrix.reduce(
+    (max, row, rowIndex) => Math.max(max, Math.abs(row[rowIndex] ?? 0)),
+    0
+  );
+  const diagonalFloor = Math.max(1e-10, maxDiagonal * 1e-12);
   return matrix.map((row, rowIndex) =>
-    row.map((value, colIndex) => value + (rowIndex === colIndex ? damping : 0))
+    row.map((value, colIndex) =>
+      value +
+      (rowIndex === colIndex
+        ? damping * Math.max(diagonalFloor, Math.abs(row[rowIndex] ?? 0))
+        : 0)
+    )
   );
 }
 
@@ -1196,6 +1244,68 @@ function scaleJacobianColumns(jacobian: number[][], scales: number[]): number[][
 
 function unscaleVariableStep(step: number[], scales: number[]): number[] {
   return step.map((value, index) => value * (scales[index] ?? 1));
+}
+
+function fallbackGradientStep(
+  gradient: number[],
+  normalMatrix: number[][],
+  damping: number
+): number[] | null {
+  const step = gradient.map((value, index) => {
+    const diagonal = Math.abs(normalMatrix[index]?.[index] ?? 0);
+    const regularized = Math.max(1e-8, diagonal + damping);
+    return -value / regularized;
+  });
+  return vectorNorm(step) <= SOLVE_EPSILON ? null : step;
+}
+
+function clampVectorToTrustRadius(
+  step: number[],
+  trustRadius: number
+): { step: number[]; clamped: boolean } {
+  const norm = vectorNorm(step);
+  if (norm <= trustRadius || trustRadius <= SOLVE_EPSILON) {
+    return { step, clamped: false };
+  }
+  const scale = trustRadius / norm;
+  return { step: step.map((value) => value * scale), clamped: true };
+}
+
+function computeQuadraticModelReduction(
+  gradient: number[],
+  normalMatrix: number[][],
+  step: number[]
+): number {
+  const linear = -vectorDot(gradient, step);
+  const quadratic = 0.5 * quadraticForm(normalMatrix, step);
+  return linear - quadratic;
+}
+
+function vectorDot(left: number[], right: number[]): number {
+  const size = Math.max(left.length, right.length);
+  let sum = 0;
+  for (let index = 0; index < size; index += 1) {
+    sum += (left[index] ?? 0) * (right[index] ?? 0);
+  }
+  return sum;
+}
+
+function quadraticForm(matrix: number[][], vector: number[]): number {
+  let sum = 0;
+  for (let row = 0; row < matrix.length; row += 1) {
+    const rowData = matrix[row];
+    if (!rowData) continue;
+    let rowDot = 0;
+    for (let col = 0; col < rowData.length; col += 1) {
+      rowDot += (rowData[col] ?? 0) * (vector[col] ?? 0);
+    }
+    sum += (vector[row] ?? 0) * rowDot;
+  }
+  return sum;
+}
+
+function scaleVector(values: number[], scalar: number): number[] {
+  return values.map((value) => value * scalar);
 }
 
 function solveLinearSystem(matrix: number[][], rhs: number[]): number[] | null {
