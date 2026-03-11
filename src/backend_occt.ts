@@ -31,6 +31,7 @@ import {
   selectionTieBreakerFingerprint as occtSelectionTieBreakerFingerprint,
   type SelectionFingerprintFns,
 } from "./occt/selection_ids.js";
+import { collectSelections as collectOcctSelections } from "./occt/selection_collection.js";
 import {
   normalizeSelectionToken as normalizeOcctSelectionToken,
   numberFingerprint as occtNumberFingerprint,
@@ -5192,112 +5193,49 @@ export class OcctBackend implements Backend {
     featureTags?: string[],
     opts?: SelectionCollectionOptions
   ): KernelSelection[] {
-    const selections: KernelSelection[] = [];
-    const tags =
-      Array.isArray(featureTags) && featureTags.length > 0
-        ? featureTags.slice()
-        : undefined;
-
-    const rootKind = opts?.rootKind ?? "solid";
-    if (rootKind === "solid") {
-      const solidEntry: CollectedSubshape = {
-        shape,
-        meta: {
-          shape,
-          owner: shape,
-          ownerKey,
-          createdBy: featureId,
-          role: "body",
-          center: this.shapeCenter(shape),
-          featureTags: tags,
-        },
-      };
-      this.applySelectionLedgerHint(solidEntry, {
-        slot: "body",
-        role: "body",
-        lineage: { kind: "created" },
-      });
-      if (opts?.ledgerPlan?.solid) {
-        this.applySelectionLedgerHint(solidEntry, opts.ledgerPlan.solid);
-      }
-      const assignment = this.assignStableSelectionIds("solid", [solidEntry])[0];
-      if (assignment) {
-        selections.push({
-          id: assignment.id,
-          kind: "solid",
-          meta: solidEntry.meta,
-          record: assignment.record,
-        });
-      }
-    }
-
-    const faceEntries = this.collectUniqueSubshapes(
+    return collectOcctSelections({
       shape,
-      (this.occt as any).TopAbs_ShapeEnum.TopAbs_FACE,
-      (face) => this.faceMetadata(face, shape, featureId, ownerKey, tags)
-    );
-    if (opts?.ledgerPlan?.faces) {
-      opts.ledgerPlan.faces(faceEntries);
-    }
-    if (rootKind === "face" && faceEntries.length === 1) {
-      const onlyFace = faceEntries[0];
-      if (onlyFace && !onlyFace.ledger?.slot) {
-        this.applySelectionLedgerHint(onlyFace, {
-          slot: "seed",
-          role: "face",
-          lineage: { kind: "created" },
-        });
-      }
-    }
-    const faceAssignments = this.assignStableSelectionIds("face", faceEntries);
-    const faceBindings: FaceSelectionBinding[] = [];
-    for (let i = 0; i < faceEntries.length; i += 1) {
-      const entry = faceEntries[i];
-      const assignment = faceAssignments[i];
-      if (!entry || !assignment) continue;
-      faceBindings.push({
-        shape: entry.shape,
-        id: assignment.id,
-        slot: assignment.record.slot,
-        role: assignment.record.role,
-      });
-      selections.push({
-        id: assignment.id,
-        kind: "face",
-        meta: entry.meta,
-        record: assignment.record,
-      });
-    }
-
-    const edgeEntries = this.collectUniqueSubshapes(
-      shape,
-      (this.occt as any).TopAbs_ShapeEnum.TopAbs_EDGE,
-      (edge) => this.edgeMetadata(edge, shape, featureId, ownerKey, tags)
-    );
-    for (const entry of edgeEntries) {
-      if (!entry || !Array.isArray(entry.occurrenceIndices) || entry.occurrenceIndices.length === 0) {
-        continue;
-      }
-      entry.meta["backendEdgeIndices"] = entry.occurrenceIndices.slice();
-    }
-    this.annotateEdgeAdjacencyMetadata(shape, edgeEntries, faceBindings);
-    if (opts?.ledgerPlan?.edges) {
-      opts.ledgerPlan.edges(edgeEntries);
-    }
-    const edgeAssignments = this.assignStableSelectionIds("edge", edgeEntries);
-    for (let i = 0; i < edgeEntries.length; i += 1) {
-      const entry = edgeEntries[i];
-      const assignment = edgeAssignments[i];
-      if (!entry || !assignment) continue;
-      selections.push({
-        id: assignment.id,
-        kind: "edge",
-        meta: entry.meta,
-        record: assignment.record,
-      });
-    }
-
-    return selections;
+      featureId,
+      ownerKey,
+      featureTags,
+      opts: opts as any,
+      deps: {
+        occt: this.occt as any,
+        shapeCenter: (target: any) => this.shapeCenter(target),
+        applySelectionLedgerHint: (entry: any, hint: any) =>
+          this.applySelectionLedgerHint(entry, hint),
+        collectUniqueSubshapes: (
+          target: any,
+          shapeKind: any,
+          metaFactory: (subshape: any) => Record<string, unknown>
+        ) =>
+          this.collectUniqueSubshapes(target, shapeKind, metaFactory),
+        assignStableSelectionIds: (kind: KernelSelection["kind"], entries: any) =>
+          this.assignStableSelectionIds(kind, entries),
+        faceMetadata: (
+          face: any,
+          owner: any,
+          createdBy: string,
+          key: string,
+          tags?: string[]
+        ) =>
+          this.faceMetadata(face, owner, createdBy, key, tags),
+        edgeMetadata: (
+          edge: any,
+          owner: any,
+          createdBy: string,
+          key: string,
+          tags?: string[]
+        ) =>
+          this.edgeMetadata(edge, owner, createdBy, key, tags),
+        annotateEdgeAdjacencyMetadata: (
+          target: any,
+          edgeEntries: any[],
+          faceBindings: FaceSelectionBinding[]
+        ) =>
+          this.annotateEdgeAdjacencyMetadata(target, edgeEntries, faceBindings),
+      },
+    } as any);
   }
 
   private applySelectionLedgerHint(
