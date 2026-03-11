@@ -34,7 +34,7 @@ Purpose: track the remaining maintainability-heavy refactor work after the first
 
 6. Reduced duplicate 204/CORS response code paths.
 - Reused `writeNoContent` helper in runtime server.
-- Pending commit (current working tree).
+- Commit: `31c05d5`
 
 ## Remaining Maintainability Work (Prioritized)
 
@@ -48,8 +48,9 @@ Execution slices:
 3. [x] Extract unique subshape collection utility (`src/occt/shape_collection.ts`).
 4. [x] Extract stable selection id + ledger record helper group.
 5. [x] Extract selection collection orchestration (`collectSelections`) with dependency injection.
-6. [ ] Extract mesh/export helper cluster.
-   - Progress: STEP/STL export orchestration moved to `src/occt/export_ops.ts`; mesh path still pending.
+6. [x] Extract mesh/export helper cluster.
+   - Progress: STEP/STL export orchestration moved to `src/occt/export_ops.ts`; mesh path moved to `src/occt/mesh_ops.ts`.
+   - Commits: `2d515d1`, `161963e`
 7. [ ] Extract profile/sketch/plane resolution helper cluster.
 8. [ ] Convert `backend_occt.ts` into orchestration-focused class with module imports.
 
