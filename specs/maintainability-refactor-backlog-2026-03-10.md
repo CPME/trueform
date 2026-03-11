@@ -56,7 +56,8 @@ Execution slices:
    - Progress: plane/sketch basis resolution moved to `src/occt/plane_basis.ts`.
    - Progress: pure sketch 2D geometry helpers moved to `src/occt/sketch_geometry.ts`.
    - Progress: sketch wire-loop helpers moved to `src/occt/wire_ops.ts`.
-   - Commits: `3e7cfec`, `7052684`, `171dc14`, `9c86866`
+   - Progress: spline edge builders moved to `src/occt/spline_edges.ts`.
+   - Commits: `3e7cfec`, `7052684`, `171dc14`, `9c86866`, `f6b0277`
 8. [ ] Convert `backend_occt.ts` into orchestration-focused class with module imports.
 
 Per-slice safety checks:
