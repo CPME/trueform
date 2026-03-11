@@ -23,6 +23,13 @@ import {
 import { OcctBackend } from "../../dist/backends.js";
 import { backendToAsync } from "../../dist/backend-spi.js";
 import { buildAssembly, InMemoryJobQueue } from "../../dist/experimental.js";
+import {
+  streamMeshAssetChunks as writeMeshAssetChunks,
+  writeBytes,
+  writeJson,
+  writeSse,
+  writeText,
+} from "./http_response.mjs";
 
 const DEFAULT_PORT = Number(process.env.TF_RUNTIME_PORT || process.env.PORT || 8080);
 const DEFAULT_JOB_TIMEOUT_MS = Number(process.env.TF_RUNTIME_JOB_TIMEOUT_MS || 30000);
@@ -141,109 +148,19 @@ export function createTfServiceServer(options = {}) {
   }
 
   function json(res, status, payload) {
-    const body = JSON.stringify(payload, null, 2);
-    res.writeHead(status, {
-      "content-type": "application/json",
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-      "access-control-allow-headers": `content-type,${TENANT_HEADER}`,
-    });
-    res.end(body);
+    writeJson(res, status, payload, TENANT_HEADER);
   }
 
   function text(res, status, payload) {
-    res.writeHead(status, {
-      "content-type": "text/plain",
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-      "access-control-allow-headers": `content-type,${TENANT_HEADER}`,
-    });
-    res.end(payload);
+    writeText(res, status, payload, TENANT_HEADER);
   }
 
   function bytes(res, status, payload, contentType) {
-    res.writeHead(status, {
-      "content-type": contentType,
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-      "access-control-allow-headers": `content-type,${TENANT_HEADER}`,
-    });
-    res.end(payload);
-  }
-
-  function writeNdjson(res, payload) {
-    res.write(`${JSON.stringify(payload)}\n`);
+    writeBytes(res, status, payload, contentType, TENANT_HEADER);
   }
 
   function streamMeshAssetChunks(res, asset, chunkSize = 12000) {
-    const resolvedChunkSize = Number.isFinite(chunkSize)
-      ? Math.max(256, Math.floor(chunkSize))
-      : 12000;
-    const sourceText = Buffer.isBuffer(asset.data) ? asset.data.toString("utf8") : String(asset.data);
-    const mesh = JSON.parse(sourceText);
-    const arrayKeys = [
-      "positions",
-      "normals",
-      "indices",
-      "edgePositions",
-      "edgeIndices",
-      "edgeSelectionIndices",
-      "faceIds",
-    ];
-    const meta = {};
-    for (const [key, value] of Object.entries(mesh)) {
-      if (arrayKeys.includes(key)) continue;
-      meta[key] = value;
-    }
-
-    res.writeHead(200, {
-      "content-type": "application/x-ndjson; charset=utf-8",
-      "cache-control": "no-cache",
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-      "access-control-allow-headers": `content-type,${TENANT_HEADER}`,
-    });
-
-    writeNdjson(res, {
-      type: "meta",
-      payload: meta,
-      arrays: Object.fromEntries(
-        arrayKeys.map((key) => [key, Array.isArray(mesh[key]) ? mesh[key].length : 0])
-      ),
-    });
-
-    for (const key of arrayKeys) {
-      const values = mesh[key];
-      if (!Array.isArray(values) || values.length === 0) continue;
-      const totalChunks = Math.ceil(values.length / resolvedChunkSize);
-      for (let i = 0; i < values.length; i += resolvedChunkSize) {
-        const chunkIndex = Math.floor(i / resolvedChunkSize);
-        writeNdjson(res, {
-          type: "arrayChunk",
-          key,
-          chunkIndex,
-          totalChunks,
-          data: values.slice(i, i + resolvedChunkSize),
-        });
-      }
-    }
-
-    if (Array.isArray(mesh.selections) && mesh.selections.length > 0) {
-      const selectionChunkSize = 128;
-      const totalChunks = Math.ceil(mesh.selections.length / selectionChunkSize);
-      for (let i = 0; i < mesh.selections.length; i += selectionChunkSize) {
-        const chunkIndex = Math.floor(i / selectionChunkSize);
-        writeNdjson(res, {
-          type: "selectionChunk",
-          chunkIndex,
-          totalChunks,
-          data: mesh.selections.slice(i, i + selectionChunkSize),
-        });
-      }
-    }
-
-    writeNdjson(res, { type: "done" });
-    res.end();
+    writeMeshAssetChunks(res, asset, TENANT_HEADER, chunkSize);
   }
 
   async function readJson(req) {
@@ -1964,11 +1881,6 @@ export function createTfServiceServer(options = {}) {
       jobId: job.jobId,
       state: job.state,
     };
-  }
-
-  function writeSse(res, event, payload) {
-    res.write(`event: ${event}\n`);
-    res.write(`data: ${JSON.stringify(payload)}\n\n`);
   }
 
   const server = http.createServer(async (req, res) => {
