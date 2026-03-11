@@ -85,6 +85,7 @@ import {
   makeSketchSplineEdge as makeOcctSketchSplineEdge,
 } from "./occt/spline_edges.js";
 import { executeHoleFeature as executeOcctHoleFeature } from "./occt/hole_ops.js";
+import { execPattern as execOcctPattern } from "./occt/pattern_ops.js";
 import { buildThreadSolid as buildOcctThreadSolid } from "./occt/thread_ops.js";
 import {
   resolveOwnerKey as resolveSelectionOwnerKey,
@@ -4593,138 +4594,23 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     resolve: ExecuteInput["resolve"]
   ): KernelResult {
-    const originSel = resolve(feature.origin, upstream);
-    if (originSel.kind !== "face") {
-      throw new Error("OCCT backend: pattern origin must resolve to a face");
-    }
-    const face = originSel.meta["shape"];
-    if (!face) {
-      throw new Error("OCCT backend: pattern origin face missing shape");
-    }
-    const basis = this.planeBasisFromFace(face);
-    const origin = this.faceCenter(face);
-    const outputs = new Map<string, KernelObject>();
-
-    const source = (feature as { source?: Selector }).source;
-    const sourceResult = (feature as { result?: string }).result;
-    const isFeaturePattern = source !== undefined;
-    let sourceShape: any | null = null;
-    if (isFeaturePattern) {
-      const sourceSelection = resolve(source as Selector, upstream);
-      if (sourceSelection.kind !== "solid") {
-        throw new Error("OCCT backend: pattern source must resolve to a solid");
-      }
-      sourceShape = this.resolveOwnerShape(sourceSelection, upstream);
-      if (!sourceShape) {
-        throw new Error("OCCT backend: pattern source missing owner shape");
-      }
-      if (!sourceResult) {
-        throw new Error("OCCT backend: pattern result is required when source is set");
-      }
-    }
-
-    if (feature.kind === "pattern.linear") {
-      const spacing: [number, number] = [
-        expectNumber(feature.spacing[0], "pattern spacing X"),
-        expectNumber(feature.spacing[1], "pattern spacing Y"),
-      ];
-      const count: [number, number] = [
-        Math.max(1, Math.round(expectNumber(feature.count[0], "pattern count X"))),
-        Math.max(1, Math.round(expectNumber(feature.count[1], "pattern count Y"))),
-      ];
-      outputs.set(this.patternKey(feature.id), {
-        id: `${feature.id}:pattern`,
-        kind: "pattern" as const,
-        meta: {
-          type: "pattern.linear",
-          origin,
-          xDir: basis.xDir,
-          yDir: basis.yDir,
-          normal: basis.normal,
-          spacing,
-          count,
-        },
-      });
-      if (isFeaturePattern && sourceShape && sourceResult) {
-        const instances: any[] = [];
-        for (let i = 0; i < count[0]; i += 1) {
-          for (let j = 0; j < count[1]; j += 1) {
-            if (i === 0 && j === 0) {
-              instances.push(sourceShape);
-              continue;
-            }
-            const delta: [number, number, number] = [
-              basis.xDir[0] * spacing[0] * i + basis.yDir[0] * spacing[1] * j,
-              basis.xDir[1] * spacing[0] * i + basis.yDir[1] * spacing[1] * j,
-              basis.xDir[2] * spacing[0] * i + basis.yDir[2] * spacing[1] * j,
-            ];
-            instances.push(this.transformShapeTranslate(sourceShape, delta));
-          }
-        }
-        const merged = this.unionShapesBalanced(instances);
-        if (!merged) {
-          throw new Error("OCCT backend: pattern generated no instances");
-        }
-        outputs.set(sourceResult, {
-          id: `${feature.id}:solid`,
-          kind: "solid",
-          meta: { shape: merged },
-        });
-        const selections = this.collectSelections(
-          merged,
-          feature.id,
-          sourceResult,
-          feature.tags
-        );
-        return { outputs, selections };
-      }
-      return { outputs, selections: [] };
-    }
-
-    const count = Math.max(1, Math.round(expectNumber(feature.count, "pattern count")));
-    const axisDir = axisVector(feature.axis);
-    const axis = normalizeVector(axisDir);
-    outputs.set(this.patternKey(feature.id), {
-      id: `${feature.id}:pattern`,
-      kind: "pattern" as const,
-      meta: {
-        type: "pattern.circular",
-        origin,
-        xDir: basis.xDir,
-        yDir: basis.yDir,
-        normal: basis.normal,
-        axis,
-        count,
+    return execOcctPattern({
+      feature,
+      upstream,
+      resolve,
+      deps: {
+        planeBasisFromFace: (face) => this.planeBasisFromFace(face),
+        faceCenter: (face) => this.faceCenter(face),
+        patternKey: (id) => this.patternKey(id),
+        resolveOwnerShape: (selection, context) => this.resolveOwnerShape(selection, context),
+        transformShapeTranslate: (shape, delta) => this.transformShapeTranslate(shape, delta),
+        transformShapeRotate: (shape, origin, axis, angle) =>
+          this.transformShapeRotate(shape, origin, axis, angle),
+        unionShapesBalanced: (shapes) => this.unionShapesBalanced(shapes),
+        collectSelections: (shape, featureId, ownerKey, featureTags) =>
+          this.collectSelections(shape, featureId, ownerKey, featureTags),
       },
     });
-    if (isFeaturePattern && sourceShape && sourceResult) {
-      const instances: any[] = [];
-      for (let i = 0; i < count; i += 1) {
-        if (i === 0) {
-          instances.push(sourceShape);
-          continue;
-        }
-        const angle = (Math.PI * 2 * i) / count;
-        instances.push(this.transformShapeRotate(sourceShape, origin, axis, angle));
-      }
-      const merged = this.unionShapesBalanced(instances);
-      if (!merged) {
-        throw new Error("OCCT backend: pattern generated no instances");
-      }
-      outputs.set(sourceResult, {
-        id: `${feature.id}:solid`,
-        kind: "solid",
-        meta: { shape: merged },
-      });
-      const selections = this.collectSelections(
-        merged,
-        feature.id,
-        sourceResult,
-        feature.tags
-      );
-      return { outputs, selections };
-    }
-    return { outputs, selections: [] };
   }
 
   private unionShapesBalanced(shapes: any[]): any | null {
