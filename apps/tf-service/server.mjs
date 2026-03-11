@@ -27,6 +27,7 @@ import {
   streamMeshAssetChunks as writeMeshAssetChunks,
   writeBytes,
   writeJson,
+  writeNoContent,
   writeSse,
   writeText,
 } from "./http_response.mjs";
@@ -1863,12 +1864,7 @@ export function createTfServiceServer(options = {}) {
     }
 
     if (req.method === "OPTIONS") {
-      res.writeHead(204, {
-        "access-control-allow-origin": "*",
-        "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-        "access-control-allow-headers": `content-type,${TENANT_HEADER}`,
-      });
-      res.end();
+      writeNoContent(res, TENANT_HEADER);
       return;
     }
 
@@ -2025,12 +2021,7 @@ export function createTfServiceServer(options = {}) {
           json(res, 404, { error: { code: "build_session_not_found", message: "Build session not found" } });
           return;
         }
-        res.writeHead(204, {
-          "access-control-allow-origin": "*",
-          "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-          "access-control-allow-headers": `content-type,${TENANT_HEADER}`,
-        });
-        res.end();
+        writeNoContent(res, TENANT_HEADER);
         return;
       }
 
