@@ -75,9 +75,13 @@ Execution slices:
    - Progress: `execPattern` moved to `src/occt/pattern_ops.ts`.
    - Regression coverage: `occt.pattern.e2e` + selector conformance re-run on extracted path.
    - Commit: `05f211b`
+13. [x] Extract unwrap execution helper cluster.
+   - Progress: `execUnwrap` and unwrap patch/layout helpers moved to `src/occt/unwrap_ops.ts`.
+   - Regression coverage: build + `occt.unwrap.e2e` + `selector_conformance_occt.e2e` + `occt.trim_extend_knit.failure_modes.e2e`.
+   - Commit: `b815d75`
 
 Next queued slices (by current method size in `backend_occt.ts`):
-1. `unwrapFacePatch` + `extractSheetPatchesFromSolid` (~386 LOC combined) -> `src/occt/unwrap_patches.ts`
+1. Face-edit execution cluster (`execDeleteFace`/`execReplaceFace`/`execMoveFace`/`execMoveBody`/`execSplitBody`/`execSplitFace`) -> `src/occt/face_edit_ops.ts`
 
 Per-slice safety checks:
 - `npm run build -- --pretty false`
