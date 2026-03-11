@@ -47,7 +47,7 @@ Execution slices:
 2. [x] Extract selector owner/context/single-selection utilities (`src/occt/selection_resolution.ts`).
 3. [x] Extract unique subshape collection utility (`src/occt/shape_collection.ts`).
 4. [x] Extract stable selection id + ledger record helper group.
-5. [ ] Extract selection collection orchestration (`collectSelections`) with dependency injection.
+5. [x] Extract selection collection orchestration (`collectSelections`) with dependency injection.
 6. [ ] Extract mesh/export helper cluster.
 7. [ ] Extract profile/sketch/plane resolution helper cluster.
 8. [ ] Convert `backend_occt.ts` into orchestration-focused class with module imports.
