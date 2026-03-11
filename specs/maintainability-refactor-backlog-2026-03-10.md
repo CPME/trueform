@@ -79,9 +79,13 @@ Execution slices:
    - Progress: `execUnwrap` and unwrap patch/layout helpers moved to `src/occt/unwrap_ops.ts`.
    - Regression coverage: build + `occt.unwrap.e2e` + `selector_conformance_occt.e2e` + `occt.trim_extend_knit.failure_modes.e2e`.
    - Commit: `b815d75`
+14. [x] Extract face-edit execution helper cluster.
+   - Progress: `execDeleteFace`/`execReplaceFace`/`execMoveFace`/`execMoveBody`/`execSplitBody`/`execSplitFace` moved to `src/occt/face_edit_ops.ts`.
+   - Regression coverage: build + delete/replace failure modes + move face/body probes + split failure/probe/lineage/stability suites.
+   - Commit: `082873b`
 
 Next queued slices (by current method size in `backend_occt.ts`):
-1. Face-edit execution cluster (`execDeleteFace`/`execReplaceFace`/`execMoveFace`/`execMoveBody`/`execSplitBody`/`execSplitFace`) -> `src/occt/face_edit_ops.ts`
+1. Surface-edit execution cluster (`execTrimSurface`/`execExtendSurface`/`execKnit`/`execCurveIntersect`) -> `src/occt/surface_edit_ops.ts`
 
 Per-slice safety checks:
 - `npm run build -- --pretty false`
