@@ -26,6 +26,13 @@ import {
   type EdgeModifierDeps,
 } from "./occt/edge_modifiers.js";
 import {
+  resolveOwnerKey as resolveSelectionOwnerKey,
+  resolveOwnerShape as resolveSelectionOwnerShape,
+  resolveSingleSelection as resolveOcctSingleSelection,
+  toOcctResolutionContext,
+} from "./occt/selection_resolution.js";
+import { collectUniqueSubshapes as collectOcctUniqueSubshapes } from "./occt/shape_collection.js";
+import {
   axisDirectionFromVector,
   axisVector,
   clamp,
@@ -5332,36 +5339,14 @@ export class OcctBackend implements Backend {
     shapeKind: any,
     metaFactory: (subshape: any) => Record<string, unknown>
   ): CollectedSubshape[] {
-    const occt = this.occt as any;
-    const collected: CollectedSubshape[] = [];
-    const seen = new Map<number, CollectedSubshape[]>();
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(shape, shapeKind, occt.TopAbs_ShapeEnum.TopAbs_SHAPE);
-    let occurrenceIndex = 0;
-    for (; explorer.More(); explorer.Next(), occurrenceIndex += 1) {
-      const current = explorer.Current();
-      const hash = this.shapeHash(current);
-      const bucket = seen.get(hash);
-      const existing =
-        bucket?.find((candidate) => this.shapesSame(candidate.shape, current)) ?? null;
-      if (existing) {
-        if (Array.isArray(existing.occurrenceIndices)) {
-          existing.occurrenceIndices.push(occurrenceIndex);
-        } else {
-          existing.occurrenceIndices = [occurrenceIndex];
-        }
-        continue;
-      }
-      const entry: CollectedSubshape = {
-        shape: current,
-        meta: metaFactory(current),
-        occurrenceIndices: [occurrenceIndex],
-      };
-      if (bucket) bucket.push(entry);
-      else seen.set(hash, [entry]);
-      collected.push(entry);
-    }
-    return collected;
+    return collectOcctUniqueSubshapes({
+      occt: this.occt,
+      shape,
+      shapeKind,
+      metaFactory,
+      shapeHash: (subshape) => this.shapeHash(subshape),
+      shapesSame: (a, b) => this.shapesSame(a, b),
+    }) as CollectedSubshape[];
   }
 
   private assignStableSelectionIds(
@@ -7268,49 +7253,15 @@ export class OcctBackend implements Backend {
   }
 
   private resolveOwnerKey(selection: KernelSelection, upstream: KernelResult): string {
-    const ownerKey = selection.meta["ownerKey"];
-    if (typeof ownerKey === "string") return ownerKey;
-    for (const [key, output] of upstream.outputs) {
-      if (output.kind === "solid") return key;
-    }
-    return "body:main";
+    return resolveSelectionOwnerKey(selection, upstream);
   }
 
   private resolveOwnerShape(selection: KernelSelection, upstream: KernelResult): any | null {
-    const owner = selection.meta["owner"];
-    if (owner) return owner;
-    if (selection.kind === "solid") {
-      const shape = selection.meta["shape"];
-      if (shape) return shape;
-    }
-    const key = this.resolveOwnerKey(selection, upstream);
-    const output = upstream.outputs.get(key);
-    return output?.meta["shape"] ?? null;
+    return resolveSelectionOwnerShape(selection, upstream);
   }
 
   private toResolutionContext(upstream: KernelResult) {
-    const named = new Map<string, KernelSelection>();
-    for (const [key, obj] of upstream.outputs) {
-      if (
-        obj.kind === "face" ||
-        obj.kind === "edge" ||
-        obj.kind === "solid" ||
-        obj.kind === "surface"
-      ) {
-        named.set(key, {
-          id: obj.id,
-          kind: obj.kind,
-          meta: {
-            ...obj.meta,
-            ownerKey:
-              typeof obj.meta["ownerKey"] === "string" && obj.meta["ownerKey"].trim().length > 0
-                ? obj.meta["ownerKey"]
-                : key,
-          },
-        });
-      }
-    }
-    return { selections: upstream.selections, named };
+    return toOcctResolutionContext(upstream);
   }
 
   private resolveSingleSelection(
@@ -7318,18 +7269,7 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     label: string
   ): KernelSelection {
-    const matches = resolveSelectorSet(selector, this.toResolutionContext(upstream));
-    if (matches.length === 0) {
-      throw new Error(`OCCT backend: ${label} selector matched 0 entities`);
-    }
-    if (matches.length !== 1) {
-      throw new Error(`OCCT backend: ${label} selector must resolve to exactly 1 entity`);
-    }
-    const [match] = matches;
-    if (!match) {
-      throw new Error(`OCCT backend: ${label} selector matched no entity`);
-    }
-    return match as KernelSelection;
+    return resolveOcctSingleSelection(selector, upstream, label);
   }
 
   private faceSelectionsForTarget(
