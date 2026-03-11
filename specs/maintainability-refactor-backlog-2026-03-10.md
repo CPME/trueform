@@ -83,9 +83,13 @@ Execution slices:
    - Progress: `execDeleteFace`/`execReplaceFace`/`execMoveFace`/`execMoveBody`/`execSplitBody`/`execSplitFace` moved to `src/occt/face_edit_ops.ts`.
    - Regression coverage: build + delete/replace failure modes + move face/body probes + split failure/probe/lineage/stability suites.
    - Commit: `082873b`
+15. [x] Extract surface-edit execution helper cluster.
+   - Progress: `execTrimSurface`/`execExtendSurface`/`execKnit`/`execCurveIntersect` moved to `src/occt/surface_edit_ops.ts`.
+   - Regression coverage: build + trim/extend/knit failure/probe suites + `occt.curve_intersect.e2e` + `occt.surface.e2e`.
+   - Commit: `cd64523`
 
 Next queued slices (by current method size in `backend_occt.ts`):
-1. Surface-edit execution cluster (`execTrimSurface`/`execExtendSurface`/`execKnit`/`execCurveIntersect`) -> `src/occt/surface_edit_ops.ts`
+1. Selection-ledger annotation cluster (`make*SelectionLedgerPlan` + `annotate*Selections` helpers) -> `src/occt/selection_ledger_ops.ts`
 
 Per-slice safety checks:
 - `npm run build -- --pretty false`
