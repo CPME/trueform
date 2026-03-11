@@ -87,9 +87,17 @@ Execution slices:
    - Progress: `execTrimSurface`/`execExtendSurface`/`execKnit`/`execCurveIntersect` moved to `src/occt/surface_edit_ops.ts`.
    - Regression coverage: build + trim/extend/knit failure/probe suites + `occt.curve_intersect.e2e` + `occt.surface.e2e`.
    - Commit: `cd64523`
+16. [x] Extract selection-ledger annotation engine.
+   - Progress: boolean/split/fillet/chamfer/draft/hole/prism/revolve ledger-plan + annotation helpers moved to `src/occt/selection_ledger_ops.ts`.
+   - Regression coverage: build + selector conformance + boolean lineage/split lineage + split stability/failure + hole/draft/fillet/chamfer + trim/extend/knit probes.
+   - Commit: `8cef3f5`
+17. [x] Extract geometry metadata + thread execution wrappers.
+   - Progress: face/edge metadata + face/cylinder property helpers moved to `src/occt/metadata_ops.ts`; `execThread` orchestration moved to `execThreadFeature` in `src/occt/thread_ops.ts`.
+   - Regression coverage: build + extrude/revolve + thread e2e/failure coverage + broad downstream ledger-dependent suites.
+   - Commit: `8cef3f5`
 
 Next queued slices (by current method size in `backend_occt.ts`):
-1. Selection-ledger annotation cluster (`make*SelectionLedgerPlan` + `annotate*Selections` helpers) -> `src/occt/selection_ledger_ops.ts`
+1. Profile/sweep feature cluster (`execThinProfileFeature`/`execPipeSweep`/`execHexTubeSweep` and related path helpers) -> `src/occt/sweep_feature_ops.ts`
 
 Per-slice safety checks:
 - `npm run build -- --pretty false`
