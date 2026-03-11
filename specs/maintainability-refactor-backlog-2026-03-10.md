@@ -38,6 +38,25 @@ Purpose: track the remaining maintainability-heavy refactor work after the first
 
 ## Remaining Maintainability Work (Prioritized)
 
+## Active Detailed Plan: `src/backend_occt.ts` Decomposition
+
+Target: break `src/backend_occt.ts` into focused OCCT helper modules while preserving behavior.
+
+Execution slices:
+1. [x] Extract vector/scalar math helpers (`src/occt/vector_math.ts`).
+2. [x] Extract selector owner/context/single-selection utilities (`src/occt/selection_resolution.ts`).
+3. [x] Extract unique subshape collection utility (`src/occt/shape_collection.ts`).
+4. [ ] Extract stable selection id + ledger record helper group.
+5. [ ] Extract selection collection orchestration (`collectSelections`) with dependency injection.
+6. [ ] Extract mesh/export helper cluster.
+7. [ ] Extract profile/sketch/plane resolution helper cluster.
+8. [ ] Convert `backend_occt.ts` into orchestration-focused class with module imports.
+
+Per-slice safety checks:
+- `npm run build -- --pretty false`
+- impacted OCCT tests (selectors, extrude/hole/thread, mesh/step as needed)
+- commit each slice independently
+
 ## P0: Decompose `backend_occt.ts` Into Cohesive Modules
 
 Goal: reduce `src/backend_occt.ts` from monolith to orchestrator + modules while preserving behavior.
