@@ -70,6 +70,13 @@ import {
   rotateTranslate2 as occtRotateTranslate2,
 } from "./occt/sketch_geometry.js";
 import {
+  addWireEdge as addOcctWireEdge,
+  checkLoopContinuity as checkOcctLoopContinuity,
+  makeFaceFromWire as makeOcctFaceFromWire,
+  pointsClose as occtPointsClose,
+  readFace as readOcctFace,
+} from "./occt/wire_ops.js";
+import {
   resolveOwnerKey as resolveSelectionOwnerKey,
   resolveOwnerShape as resolveSelectionOwnerShape,
   resolveSingleSelection as resolveOcctSingleSelection,
@@ -9433,63 +9440,30 @@ export class OcctBackend implements Backend {
   }
 
   private makeFaceFromWire(wire: any) {
-    try {
-      return this.newOcct("BRepBuilderAPI_MakeFace", wire, true);
-    } catch {
-      return this.newOcct("BRepBuilderAPI_MakeFace", wire);
-    }
+    return makeOcctFaceFromWire({
+      wire,
+      newOcct: (name, ...args) => this.newOcct(name, ...args),
+    });
   }
 
   private readFace(builder: any) {
-    if (builder.Face) return builder.Face();
-    if (builder.face) return builder.face();
-    return this.readShape(builder);
+    return readOcctFace({
+      builder,
+      readShape: (target) => this.readShape(target),
+    });
   }
 
   private addWireEdge(builder: any, edge: any): boolean {
-    const edgeHandle = this.toEdge(edge);
-    const candidates = ["Add", "Add_1", "Add_2", "add"];
-    for (const name of candidates) {
-      const fn = builder?.[name];
-      if (typeof fn !== "function") continue;
-      try {
-        fn.call(builder, edgeHandle);
-        return true;
-      } catch {
-        continue;
-      }
-    }
-    return false;
+    return addOcctWireEdge({ builder, edge: this.toEdge(edge) });
   }
 
   private checkLoopContinuity(
     segments: EdgeSegment[],
     allowOpen: boolean
   ): boolean {
-    if (segments.length === 0) {
-      throw new Error("OCCT backend: sketch loop must have at least one segment");
-    }
-    if (segments.length === 1 && segments[0]?.closed) {
-      return true;
-    }
-    if (segments.some((segment) => segment.closed)) {
-      throw new Error("OCCT backend: closed sketch segment must be alone in loop");
-    }
-    for (let i = 0; i < segments.length - 1; i += 1) {
-      const current = segments[i];
-      const next = segments[i + 1];
-      if (!current || !next) continue;
-      if (!this.pointsClose(current.end, next.start)) {
-        throw new Error("OCCT backend: sketch loop is not contiguous");
-      }
-    }
-    const first = segments[0];
-    const last = segments[segments.length - 1];
-    const closed = !!first && !!last && this.pointsClose(last.end, first.start);
-    if (!allowOpen && !closed) {
-      throw new Error("OCCT backend: sketch loop is not closed");
-    }
-    return closed;
+    return checkOcctLoopContinuity(segments, allowOpen, {
+      pointsClose: (a, b, tol) => this.pointsClose(a, b, tol),
+    });
   }
 
   private pointsClose(
@@ -9497,11 +9471,7 @@ export class OcctBackend implements Backend {
     b: [number, number, number],
     tol = 1e-6
   ): boolean {
-    return (
-      Math.abs(a[0] - b[0]) <= tol &&
-      Math.abs(a[1] - b[1]) <= tol &&
-      Math.abs(a[2] - b[2]) <= tol
-    );
+    return occtPointsClose(a, b, tol);
   }
 
   private dist2(a: Point2D, b: Point2D): number {
