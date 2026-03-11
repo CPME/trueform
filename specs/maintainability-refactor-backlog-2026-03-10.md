@@ -60,6 +60,13 @@ Execution slices:
    - Commits: `3e7cfec`, `7052684`, `171dc14`, `9c86866`, `f6b0277`
 8. [ ] Convert `backend_occt.ts` into orchestration-focused class with module imports.
 
+Next queued slices (by current method size in `backend_occt.ts`):
+1. `execThread` (~251 LOC) + shared thread profile constants/helpers -> `src/occt/thread_ops.ts`
+2. `execHole` (~185 LOC) + hole depth/end-condition helpers -> `src/occt/hole_ops.ts`
+3. `unwrapFacePatch` + `extractSheetPatchesFromSolid` (~386 LOC combined) -> `src/occt/unwrap_patches.ts`
+4. `sketchEntityToSegments` + `slotSegments` (~230 LOC combined) -> `src/occt/sketch_segments.ts`
+5. `execPattern` (~139 LOC) -> `src/occt/pattern_ops.ts`
+
 Per-slice safety checks:
 - `npm run build -- --pretty false`
 - impacted OCCT tests (selectors, extrude/hole/thread, mesh/step as needed)
