@@ -71,10 +71,13 @@ Execution slices:
    - Progress: `sketchEntityToSegments`/slot expansion moved to `src/occt/sketch_segments.ts`.
    - Regression coverage: added `sketch.slot` extrusion coverage in `src/tests/occt.sketch_profile_extrude.e2e.test.ts`.
    - Commit: `002c08b`
+12. [x] Extract pattern execution helper cluster.
+   - Progress: `execPattern` moved to `src/occt/pattern_ops.ts`.
+   - Regression coverage: `occt.pattern.e2e` + selector conformance re-run on extracted path.
+   - Commit: `05f211b`
 
 Next queued slices (by current method size in `backend_occt.ts`):
 1. `unwrapFacePatch` + `extractSheetPatchesFromSolid` (~386 LOC combined) -> `src/occt/unwrap_patches.ts`
-2. `execPattern` (~139 LOC) -> `src/occt/pattern_ops.ts`
 
 Per-slice safety checks:
 - `npm run build -- --pretty false`
