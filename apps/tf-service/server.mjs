@@ -30,6 +30,11 @@ import {
   writeSse,
   writeText,
 } from "./http_response.mjs";
+import {
+  countTenantInStore,
+  getTenantId,
+  tenantScopedKey,
+} from "./tenant.mjs";
 
 const DEFAULT_PORT = Number(process.env.TF_RUNTIME_PORT || process.env.PORT || 8080);
 const DEFAULT_JOB_TIMEOUT_MS = Number(process.env.TF_RUNTIME_JOB_TIMEOUT_MS || 30000);
@@ -172,38 +177,6 @@ export function createTfServiceServer(options = {}) {
     } catch {
       throw new HttpError(400, "invalid_json", "Request body is not valid JSON");
     }
-  }
-
-  function tenantScopedKey(tenantId, id) {
-    return `${tenantId}::${id}`;
-  }
-
-  function normalizeTenantId(value) {
-    if (typeof value !== "string" || value.trim().length === 0) return DEFAULT_TENANT;
-    const trimmed = value.trim();
-    if (!/^[A-Za-z0-9._:-]{1,64}$/.test(trimmed)) {
-      throw new HttpError(
-        400,
-        "invalid_tenant_id",
-        "Tenant id must match [A-Za-z0-9._:-]{1,64}"
-      );
-    }
-    return trimmed;
-  }
-
-  function getTenantId(req, url) {
-    const headerValue = req.headers[TENANT_HEADER];
-    const headerTenant = Array.isArray(headerValue) ? headerValue[0] : headerValue;
-    const queryTenant = url.searchParams.get("tenantId");
-    return normalizeTenantId(headerTenant ?? queryTenant ?? DEFAULT_TENANT);
-  }
-
-  function countTenantInStore(store, tenantId) {
-    let count = 0;
-    for (const value of store.values()) {
-      if (value?.tenantId === tenantId) count += 1;
-    }
-    return count;
   }
 
   function isTerminalJobState(state) {
@@ -1901,7 +1874,11 @@ export function createTfServiceServer(options = {}) {
 
     const url = new URL(req.url, `http://${req.headers.host}`);
     const { pathname } = url;
-    const tenantId = getTenantId(req, url);
+    const tenantId = getTenantId(req, url, {
+      tenantHeader: TENANT_HEADER,
+      defaultTenant: DEFAULT_TENANT,
+      makeError: (status, code, message) => new HttpError(status, code, message),
+    });
     pruneExpiredBuildSessions();
     pruneBuildStore();
     pruneAssetStores();
