@@ -63,12 +63,15 @@ Execution slices:
    - Progress: `execThread` geometry/build path moved to `src/occt/thread_ops.ts`.
    - Regression coverage: added left-vs-right handedness topology consistency check in `src/tests/occt.thread.e2e.test.ts`.
    - Commit: `89ad968`
+10. [x] Extract hole execution helper cluster.
+   - Progress: `execHole` geometry/cut orchestration moved to `src/occt/hole_ops.ts`.
+   - Regression coverage: hole e2e suites + hole wizard depth parity probe re-run on extracted path.
+   - Commit: `f02131a`
 
 Next queued slices (by current method size in `backend_occt.ts`):
-1. `execHole` (~185 LOC) + hole depth/end-condition helpers -> `src/occt/hole_ops.ts`
-2. `unwrapFacePatch` + `extractSheetPatchesFromSolid` (~386 LOC combined) -> `src/occt/unwrap_patches.ts`
-3. `sketchEntityToSegments` + `slotSegments` (~230 LOC combined) -> `src/occt/sketch_segments.ts`
-4. `execPattern` (~139 LOC) -> `src/occt/pattern_ops.ts`
+1. `unwrapFacePatch` + `extractSheetPatchesFromSolid` (~386 LOC combined) -> `src/occt/unwrap_patches.ts`
+2. `sketchEntityToSegments` + `slotSegments` (~230 LOC combined) -> `src/occt/sketch_segments.ts`
+3. `execPattern` (~139 LOC) -> `src/occt/pattern_ops.ts`
 
 Per-slice safety checks:
 - `npm run build -- --pretty false`
