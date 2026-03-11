@@ -67,11 +67,14 @@ Execution slices:
    - Progress: `execHole` geometry/cut orchestration moved to `src/occt/hole_ops.ts`.
    - Regression coverage: hole e2e suites + hole wizard depth parity probe re-run on extracted path.
    - Commit: `f02131a`
+11. [x] Extract sketch entity segment expansion cluster.
+   - Progress: `sketchEntityToSegments`/slot expansion moved to `src/occt/sketch_segments.ts`.
+   - Regression coverage: added `sketch.slot` extrusion coverage in `src/tests/occt.sketch_profile_extrude.e2e.test.ts`.
+   - Commit: `002c08b`
 
 Next queued slices (by current method size in `backend_occt.ts`):
 1. `unwrapFacePatch` + `extractSheetPatchesFromSolid` (~386 LOC combined) -> `src/occt/unwrap_patches.ts`
-2. `sketchEntityToSegments` + `slotSegments` (~230 LOC combined) -> `src/occt/sketch_segments.ts`
-3. `execPattern` (~139 LOC) -> `src/occt/pattern_ops.ts`
+2. `execPattern` (~139 LOC) -> `src/occt/pattern_ops.ts`
 
 Per-slice safety checks:
 - `npm run build -- --pretty false`
