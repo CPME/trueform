@@ -4,6 +4,7 @@ import { buildPart } from "../executor.js";
 import {
   assertPositiveVolume,
   assertValidShape,
+  countFaces,
   countEdges,
   countSolids,
   getBackendContext,
@@ -67,6 +68,48 @@ const tests = [
       assertValidShape(occt, shape, "docs-scale thread shape");
       assert.ok(countSolids(occt, shape) >= 1, "expected docs-scale thread solid");
       assertPositiveVolume(occt, shape, "docs-scale thread shape");
+    },
+  },
+  {
+    name: "occt e2e: left-handed thread remains valid and topology-consistent",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const commonOpts = { minorDiameter: 6.5, segmentsPerTurn: 6 };
+      const rightPart = dsl.part("thread-right", [
+        dsl.thread("thread-1", "+Z", 10, 8, 2, "body:main", undefined, {
+          ...commonOpts,
+          handedness: "right",
+        }),
+      ]);
+      const leftPart = dsl.part("thread-left", [
+        dsl.thread("thread-1", "+Z", 10, 8, 2, "body:main", undefined, {
+          ...commonOpts,
+          handedness: "left",
+        }),
+      ]);
+
+      const right = buildPart(rightPart, backend).final.outputs.get("body:main");
+      const left = buildPart(leftPart, backend).final.outputs.get("body:main");
+      assert.ok(right && left, "missing thread output(s)");
+      const rightShape = right.meta["shape"] as any;
+      const leftShape = left.meta["shape"] as any;
+      assert.ok(rightShape && leftShape, "missing shape metadata");
+
+      assertValidShape(occt, rightShape, "right-handed thread");
+      assertValidShape(occt, leftShape, "left-handed thread");
+      assertPositiveVolume(occt, rightShape, "right-handed thread");
+      assertPositiveVolume(occt, leftShape, "left-handed thread");
+
+      assert.equal(
+        countFaces(occt, rightShape),
+        countFaces(occt, leftShape),
+        "expected handedness flip to preserve face count"
+      );
+      assert.equal(
+        countEdges(occt, rightShape),
+        countEdges(occt, leftShape),
+        "expected handedness flip to preserve edge count"
+      );
     },
   },
 ];

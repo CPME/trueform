@@ -80,6 +80,7 @@ import {
   makePathSplineEdge as makeOcctPathSplineEdge,
   makeSketchSplineEdge as makeOcctSketchSplineEdge,
 } from "./occt/spline_edges.js";
+import { buildThreadSolid as buildOcctThreadSolid } from "./occt/thread_ops.js";
 import {
   resolveOwnerKey as resolveSelectionOwnerKey,
   resolveOwnerShape as resolveSelectionOwnerShape,
@@ -4020,222 +4021,31 @@ export class OcctBackend implements Backend {
   }
 
   private execThread(feature: Thread, upstream: KernelResult): KernelResult {
-    const axisDir = this.resolveAxisSpec(feature.axis, upstream, "thread axis");
-    const axis = normalizeVector(axisDir);
-    if (!isFiniteVec(axis)) {
-      throw new Error("OCCT backend: thread axis is degenerate");
-    }
-    const origin = feature.origin ?? [0, 0, 0];
-    const originVec: [number, number, number] = [
-      expectNumber(origin[0], "thread origin[0]"),
-      expectNumber(origin[1], "thread origin[1]"),
-      expectNumber(origin[2], "thread origin[2]"),
-    ];
-    const length = expectNumber(feature.length, "thread length");
-    if (length <= 0) {
-      throw new Error("OCCT backend: thread length must be positive");
-    }
-    const pitch = expectNumber(feature.pitch, "thread pitch");
-    if (pitch <= 0) {
-      throw new Error("OCCT backend: thread pitch must be positive");
-    }
-    const majorDiameter = expectNumber(feature.majorDiameter, "thread major diameter");
-    if (majorDiameter <= 0) {
-      throw new Error("OCCT backend: thread major diameter must be positive");
-    }
-    const defaultMinor = majorDiameter - pitch * 1.22687;
-    const minorDiameter =
-      feature.minorDiameter === undefined
-        ? defaultMinor
-        : expectNumber(feature.minorDiameter, "thread minor diameter");
-    if (minorDiameter <= 0 || minorDiameter >= majorDiameter) {
-      throw new Error("OCCT backend: thread minor diameter must be smaller than major diameter");
-    }
-
-    const majorRadius = majorDiameter / 2;
-    const minorRadius = minorDiameter / 2;
-    const depth = majorRadius - minorRadius;
-    const halfDepth = depth / 2;
-    const pitchRadius = (majorRadius + minorRadius) / 2;
-    const radialCutOverlap = Math.max(depth * 0.005, 5e-5);
-    const axialCutOverlap = Math.max(depth * 0.1, pitch * 0.05, 1e-3);
-    const cutOriginVec = this.subVec(originVec, this.scaleVec(axis, axialCutOverlap));
-    const cutLength = length + axialCutOverlap * 2;
-    const handedness = feature.handedness ?? "right";
-    const direction = handedness === "left" ? -1 : 1;
-
-    const basePlane = this.planeBasisFromNormal(cutOriginVec, axis);
-    const angle =
-      feature.profileAngle === undefined
-        ? Math.PI / 3
-        : expectNumber(feature.profileAngle, "thread profile angle");
-    if (!(angle > 0 && angle < Math.PI)) {
-      throw new Error("OCCT backend: thread profile angle must be between 0 and PI");
-    }
-
-    const sharpHeight = pitch / (2 * Math.tan(angle / 2));
-    const truncation = Math.max(0, sharpHeight - depth);
-    const crestTrunc = truncation / 3;
-    const rootTrunc = (truncation * 2) / 3;
-    let crestFlat =
-      feature.crestFlat === undefined
-        ? 2 * crestTrunc * Math.tan(angle / 2)
-        : Math.max(0, expectNumber(feature.crestFlat, "thread crest flat"));
-    let rootFlat =
-      feature.rootFlat === undefined
-        ? 2 * rootTrunc * Math.tan(angle / 2)
-        : Math.max(0, expectNumber(feature.rootFlat, "thread root flat"));
-    if (feature.crestFlat !== undefined && feature.rootFlat === undefined) {
-      const crestHalf = crestFlat / 2;
-      rootFlat = Math.max(0, (crestHalf + depth * Math.tan(angle / 2)) * 2);
-    } else if (feature.rootFlat !== undefined && feature.crestFlat === undefined) {
-      const rootHalf = rootFlat / 2;
-      crestFlat = Math.max(0, (rootHalf - depth * Math.tan(angle / 2)) * 2);
-    }
-    if (crestFlat <= 1e-6 && rootFlat <= 1e-6) {
-      const candidate = 2 * depth * Math.tan(angle / 2);
-      rootFlat = Math.max(1e-6, Math.min(pitch * 0.9, candidate));
-    }
-
-    const turns = cutLength / pitch;
-    const angleSpan = direction * Math.PI * 2 * turns;
-
-    const crestHalf = crestFlat / 2;
-    const rootHalf = rootFlat / 2;
-    const innerCutOverlap = Math.max(depth * 0.03, 1e-4);
-    const crestOffset = halfDepth + radialCutOverlap;
-    const rootOffset = -(halfDepth + innerCutOverlap);
-    let segmentsPerTurn =
-      feature.segmentsPerTurn === undefined
-        ? 24
-        : Math.round(
-            Math.max(
-              8,
-              expectNumber(feature.segmentsPerTurn, "thread segments per turn")
-            )
-          );
-    const maxSpineSegments = 640;
-    const rawSpineSegments = Math.ceil(turns * segmentsPerTurn);
-    if (rawSpineSegments > maxSpineSegments) {
-      segmentsPerTurn = Math.max(
-        8,
-        Math.floor(maxSpineSegments / Math.max(turns, 1))
-      );
-    }
-    const segments = Math.max(24, Math.ceil(turns * segmentsPerTurn));
-    const startAngleOffset = Math.PI * 0.5;
-    const startCos = Math.cos(startAngleOffset);
-    const startSin = Math.sin(startAngleOffset);
-    let startRadialDir = normalizeVector(
-      this.addVec(
-        this.scaleVec(basePlane.xDir, startCos),
-        this.scaleVec(basePlane.yDir, startSin)
-      )
-    );
-    if (!isFiniteVec(startRadialDir)) {
-      startRadialDir = basePlane.xDir;
-    }
-    const startCenter = this.addVec(
-      cutOriginVec,
-      this.scaleVec(startRadialDir, pitchRadius)
-    );
-    let profileX = normalizeVector(startRadialDir);
-    const axisProj = dot(profileX, axis);
-    if (Math.abs(axisProj) > 1e-6) {
-      profileX = normalizeVector(
-        this.subVec(profileX, this.scaleVec(axis, axisProj))
-      );
-    }
-    if (!isFiniteVec(profileX)) {
-      profileX = basePlane.xDir;
-    }
-    let profileY = axis;
-    if (!isFiniteVec(profileY)) {
-      profileY = basePlane.yDir;
-    }
-    const profilePoints: [number, number, number][] = [];
-    if (crestHalf > 1e-6) {
-      profilePoints.push(
-        this.addVec(
-          this.addVec(startCenter, this.scaleVec(profileY, -crestHalf)),
-          this.scaleVec(profileX, crestOffset)
-        )
-      );
-      profilePoints.push(
-        this.addVec(
-          this.addVec(startCenter, this.scaleVec(profileY, crestHalf)),
-          this.scaleVec(profileX, crestOffset)
-        )
-      );
-    } else {
-      profilePoints.push(
-        this.addVec(startCenter, this.scaleVec(profileX, crestOffset))
-      );
-    }
-    if (rootHalf > 1e-6) {
-      profilePoints.push(
-        this.addVec(
-          this.addVec(startCenter, this.scaleVec(profileY, rootHalf)),
-          this.scaleVec(profileX, rootOffset)
-        )
-      );
-      profilePoints.push(
-        this.addVec(
-          this.addVec(startCenter, this.scaleVec(profileY, -rootHalf)),
-          this.scaleVec(profileX, rootOffset)
-        )
-      );
-    } else {
-      profilePoints.push(
-        this.addVec(startCenter, this.scaleVec(profileX, rootOffset))
-      );
-    }
-    const profileWire = this.makePolygonWire(profilePoints);
-
-    const helixPoints: [number, number, number][] = [];
-    for (let i = 0; i <= segments; i += 1) {
-      const t = i / segments;
-      const angle = startAngleOffset + angleSpan * t;
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle);
-      const radialVec = this.addVec(
-        this.scaleVec(basePlane.xDir, pitchRadius * cos),
-        this.scaleVec(basePlane.yDir, pitchRadius * sin)
-      );
-      const along = this.scaleVec(axis, cutLength * t);
-      helixPoints.push(this.addVec(cutOriginVec, this.addVec(radialVec, along)));
-    }
-    const helixEdge = this.makeSplineEdge3D({
-      kind: "path.spline",
-      points: helixPoints,
-    }).edge;
-    const spine = this.makeWireFromEdges([helixEdge]);
-    let ridge = this.makeSweepSolid(spine, profileWire, {
-      makeSolid: true,
-      frenet: true,
-      allowFallback: false,
+    const { solid, ridge, blank } = buildOcctThreadSolid({
+      feature,
+      upstream,
+      deps: {
+        resolveAxisSpec: (axis, context, label) => this.resolveAxisSpec(axis, context, label),
+        subVec: (a, b) => this.subVec(a, b),
+        scaleVec: (v, s) => this.scaleVec(v, s),
+        addVec: (a, b) => this.addVec(a, b),
+        planeBasisFromNormal: (origin, normal) => this.planeBasisFromNormal(origin, normal),
+        makePolygonWire: (points) => this.makePolygonWire(points),
+        makeSplineEdge3D: (path) => this.makeSplineEdge3D(path),
+        makeWireFromEdges: (edges) => this.makeWireFromEdges(edges),
+        makeSweepSolid: (spine, profile, opts) => this.makeSweepSolid(spine, profile, opts),
+        normalizeSolid: (shape) => this.normalizeSolid(shape),
+        shapeHasSolid: (shape) => this.shapeHasSolid(shape),
+        makeSolidFromShells: (shape) => this.makeSolidFromShells(shape),
+        readShape: (shape) => this.readShape(shape),
+        makeCylinder: (radius, height, axis, center) => this.makeCylinder(radius, height, axis, center),
+        makeBoolean: (op, left, right) => this.makeBoolean(op, left, right),
+        unifySameDomain: (shape) => this.unifySameDomain(shape),
+        isValidShape: (shape) => this.isValidShape(shape),
+        solidVolume: (shape) => this.solidVolume(shape),
+        reverseShape: (shape) => this.reverseShape(shape),
+      },
     });
-    ridge = this.normalizeSolid(ridge);
-    if (!this.shapeHasSolid(ridge)) {
-      const stitched = this.makeSolidFromShells(ridge);
-      if (stitched) {
-        ridge = this.normalizeSolid(stitched);
-      }
-    }
-    const blank = this.readShape(
-      this.makeCylinder(majorRadius, length, axis, originVec)
-    );
-    const cut = this.makeBoolean("cut", blank, ridge);
-    let solid = this.readShape(cut);
-    solid = this.unifySameDomain(solid);
-    solid = this.normalizeSolid(solid);
-    if (!this.shapeHasSolid(solid) || !this.isValidShape(solid)) {
-      throw new Error("OCCT backend: thread cut produced an invalid solid");
-    }
-    const solidVolume = this.solidVolume(solid);
-    if (Number.isFinite(solidVolume) && solidVolume < 0) {
-      solid = this.reverseShape(solid);
-    }
 
     const outputs = new Map([
       [
