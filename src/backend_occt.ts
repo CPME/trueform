@@ -45,6 +45,13 @@ import {
 } from "./occt/export_ops.js";
 import { mesh as buildOcctMesh } from "./occt/mesh_ops.js";
 import {
+  buildProfileFace as buildOcctProfileFace,
+  buildProfileWire as buildOcctProfileWire,
+  type ProfileBuildDeps,
+  resolveProfile as resolveOcctProfile,
+  type ResolvedProfile,
+} from "./occt/profile_resolution.js";
+import {
   resolveOwnerKey as resolveSelectionOwnerKey,
   resolveOwnerShape as resolveSelectionOwnerShape,
   resolveSingleSelection as resolveOcctSingleSelection,
@@ -125,15 +132,6 @@ export type OcctModule = {
 
 export type OcctBackendOptions = {
   occt: OcctModule;
-};
-
-type ResolvedProfile = {
-  profile: Profile;
-  face?: any;
-  wire?: any;
-  wireClosed?: boolean;
-  planeNormal?: [number, number, number];
-  wireSegmentSlots?: string[];
 };
 
 type PlaneBasis = {
@@ -8099,120 +8097,28 @@ export class OcctBackend implements Backend {
     profileRef: ProfileRef,
     upstream: KernelResult
   ): ResolvedProfile {
-    if (profileRef.kind !== "profile.ref") {
-      return { profile: profileRef };
-    }
-    const output = upstream.outputs.get(profileRef.name);
-    if (!output) {
-      throw new Error(`OCCT backend: missing profile output ${profileRef.name}`);
-    }
-    if (output.kind !== "profile") {
-      throw new Error(
-        `OCCT backend: output ${profileRef.name} is not a profile (got ${output.kind})`
-      );
-    }
-    const profile = output.meta["profile"] as Profile | undefined;
-    if (!profile) {
-      throw new Error(`OCCT backend: profile output ${profileRef.name} missing data`);
-    }
-    const face = output.meta["face"];
-    const wire = output.meta["wire"];
-    const wireClosed = output.meta["wireClosed"];
-    const planeNormal = output.meta["planeNormal"];
-    const wireSegmentSlots = output.meta["wireSegmentSlots"];
-    return {
-      profile,
-      face,
-      wire,
-      wireClosed: typeof wireClosed === "boolean" ? wireClosed : undefined,
-      planeNormal:
-        Array.isArray(planeNormal) && planeNormal.length === 3
-          ? (planeNormal as [number, number, number])
-          : undefined,
-      wireSegmentSlots: Array.isArray(wireSegmentSlots)
-        ? wireSegmentSlots.filter(
-            (entry): entry is string => typeof entry === "string" && entry.trim().length > 0
-          )
-        : undefined,
-    };
+    return resolveOcctProfile(profileRef, upstream);
   }
 
   private buildProfileFace(profile: ResolvedProfile) {
-    if (profile.face) return profile.face;
-    switch (profile.profile.kind) {
-      case "profile.rectangle":
-        return this.makeRectangleFace(
-          expectNumber(profile.profile.width, "profile.width"),
-          expectNumber(profile.profile.height, "profile.height"),
-          profile.profile.center
-        );
-      case "profile.circle":
-        return this.makeCircleFace(
-          expectNumber(profile.profile.radius, "profile.radius"),
-          profile.profile.center
-        );
-      case "profile.poly":
-        return this.makeRegularPolygonFace(
-          expectNumber(profile.profile.sides, "profile.sides"),
-          expectNumber(profile.profile.radius, "profile.radius"),
-          profile.profile.center,
-          profile.profile.rotation === undefined
-            ? undefined
-            : expectNumber(profile.profile.rotation, "profile.rotation")
-        );
-      case "profile.sketch":
-        throw new Error("OCCT backend: sketch profile missing prebuilt face");
-      default:
-        throw new Error(
-          `OCCT backend: unsupported profile ${(profile.profile as Profile).kind}`
-        );
-    }
+    return buildOcctProfileFace(profile, this.profileBuildDeps());
   }
 
   private buildProfileWire(profile: ResolvedProfile): { wire: any; closed: boolean } {
-    if (profile.wire) {
-      return {
-        wire: profile.wire,
-        closed: profile.wireClosed !== undefined ? profile.wireClosed : true,
-      };
-    }
-    switch (profile.profile.kind) {
-      case "profile.rectangle":
-        return {
-          wire: this.makeRectangleWire(
-            expectNumber(profile.profile.width, "profile.width"),
-            expectNumber(profile.profile.height, "profile.height"),
-            profile.profile.center
-          ),
-          closed: true,
-        };
-      case "profile.circle":
-        return {
-          wire: this.makeCircleWire(
-            expectNumber(profile.profile.radius, "profile.radius"),
-            profile.profile.center
-          ),
-          closed: true,
-        };
-      case "profile.poly":
-        return {
-          wire: this.makeRegularPolygonWire(
-            expectNumber(profile.profile.sides, "profile.sides"),
-            expectNumber(profile.profile.radius, "profile.radius"),
-            profile.profile.center,
-            profile.profile.rotation === undefined
-              ? undefined
-              : expectNumber(profile.profile.rotation, "profile.rotation")
-          ),
-          closed: true,
-        };
-      case "profile.sketch":
-        throw new Error("OCCT backend: sketch profile missing prebuilt wire");
-      default:
-        throw new Error(
-          `OCCT backend: unsupported profile ${(profile.profile as Profile).kind}`
-        );
-    }
+    return buildOcctProfileWire(profile, this.profileBuildDeps());
+  }
+
+  private profileBuildDeps(): ProfileBuildDeps {
+    return {
+      makeRectangleFace: (width, height, center) => this.makeRectangleFace(width, height, center),
+      makeCircleFace: (radius, center) => this.makeCircleFace(radius, center),
+      makeRegularPolygonFace: (sides, radius, center, rotation) =>
+        this.makeRegularPolygonFace(sides, radius, center, rotation),
+      makeRectangleWire: (width, height, center) => this.makeRectangleWire(width, height, center),
+      makeCircleWire: (radius, center) => this.makeCircleWire(radius, center),
+      makeRegularPolygonWire: (sides, radius, center, rotation) =>
+        this.makeRegularPolygonWire(sides, radius, center, rotation),
+    };
   }
 
   private resolveSketchPlane(
