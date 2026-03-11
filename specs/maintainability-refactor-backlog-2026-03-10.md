@@ -52,6 +52,8 @@ Execution slices:
    - Progress: STEP/STL export orchestration moved to `src/occt/export_ops.ts`; mesh path moved to `src/occt/mesh_ops.ts`.
    - Commits: `2d515d1`, `161963e`
 7. [ ] Extract profile/sketch/plane resolution helper cluster.
+   - Progress: profile reference + primitive profile face/wire helpers moved to `src/occt/profile_resolution.ts`.
+   - Commit: `3e7cfec`
 8. [ ] Convert `backend_occt.ts` into orchestration-focused class with module imports.
 
 Per-slice safety checks:
