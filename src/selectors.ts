@@ -7,6 +7,7 @@ import {
   Predicate,
 } from "./ir.js";
 import { CompileError } from "./errors.js";
+import { parseSplitBranchSlot, semanticBaseSlot } from "./selection_slots.js";
 
 export type Selection = {
   id: ID;
@@ -379,8 +380,8 @@ function buildBooleanEdgeSelectionSignature(
     parsedSlot.relation,
     parsedSlot.root,
     parsedSlot.target,
-    semanticBaseSelectionSlot(parsedSlot.root),
-    semanticBaseSelectionSlot(parsedSlot.target),
+    semanticBaseSlot(parsedSlot.root),
+    semanticBaseSlot(parsedSlot.target),
   ].join("|");
 }
 
@@ -468,21 +469,6 @@ function selectionLineageSourceSlot(selection: Selection): string | null {
   if (typeof from !== "string" || from.trim().length === 0) return null;
   const parsed = parseStableSelectionRef(from);
   return parsed?.slot ?? null;
-}
-
-function parseSplitBranchSlot(
-  slot: string
-): { sourceSlot: string; branch: string } | null {
-  const match = slot.trim().match(/^split\.(.+)\.branch\.(\d+)$/);
-  if (!match) return null;
-  const sourceSlot = match[1]?.trim() ?? "";
-  const branch = match[2]?.trim() ?? "";
-  if (!sourceSlot || !branch) return null;
-  return { sourceSlot, branch };
-}
-
-function semanticBaseSelectionSlot(slot: string): string {
-  return parseSplitBranchSlot(slot)?.sourceSlot ?? slot.trim();
 }
 
 function parseLegacyDuplicateSlot(
