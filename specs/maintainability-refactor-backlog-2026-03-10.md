@@ -54,7 +54,8 @@ Execution slices:
 7. [ ] Extract profile/sketch/plane resolution helper cluster.
    - Progress: profile reference + primitive profile face/wire helpers moved to `src/occt/profile_resolution.ts`.
    - Progress: plane/sketch basis resolution moved to `src/occt/plane_basis.ts`.
-   - Commits: `3e7cfec`, `7052684`
+   - Progress: pure sketch 2D geometry helpers moved to `src/occt/sketch_geometry.ts`.
+   - Commits: `3e7cfec`, `7052684`, `171dc14`
 8. [ ] Convert `backend_occt.ts` into orchestration-focused class with module imports.
 
 Per-slice safety checks:
