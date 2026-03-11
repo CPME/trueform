@@ -252,3 +252,57 @@ export function buildThreadSolid(params: {
 
   return { solid, ridge, blank };
 }
+
+export function execThreadFeature(ctx: any, feature: Thread, upstream: KernelResult): KernelResult {
+  const { solid, ridge, blank } = buildThreadSolid({
+    feature,
+    upstream,
+    deps: {
+      resolveAxisSpec: (axis, context, label) => ctx.resolveAxisSpec(axis, context, label),
+      subVec: (a, b) => ctx.subVec(a, b),
+      scaleVec: (v, s) => ctx.scaleVec(v, s),
+      addVec: (a, b) => ctx.addVec(a, b),
+      planeBasisFromNormal: (origin, normal) => ctx.planeBasisFromNormal(origin, normal),
+      makePolygonWire: (points) => ctx.makePolygonWire(points),
+      makeSplineEdge3D: (path) => ctx.makeSplineEdge3D(path),
+      makeWireFromEdges: (edges) => ctx.makeWireFromEdges(edges),
+      makeSweepSolid: (spine, profile, opts) => ctx.makeSweepSolid(spine, profile, opts),
+      normalizeSolid: (shape) => ctx.normalizeSolid(shape),
+      shapeHasSolid: (shape) => ctx.shapeHasSolid(shape),
+      makeSolidFromShells: (shape) => ctx.makeSolidFromShells(shape),
+      readShape: (shape) => ctx.readShape(shape),
+      makeCylinder: (radius, height, axis, center) => ctx.makeCylinder(radius, height, axis, center),
+      makeBoolean: (op, left, right) => ctx.makeBoolean(op, left, right),
+      unifySameDomain: (shape) => ctx.unifySameDomain(shape),
+      isValidShape: (shape) => ctx.isValidShape(shape),
+      solidVolume: (shape) => ctx.solidVolume(shape),
+      reverseShape: (shape) => ctx.reverseShape(shape),
+    },
+  });
+
+  const outputs = new Map([
+    [
+      feature.result,
+      {
+        id: `${feature.id}:solid`,
+        kind: "solid" as const,
+        meta: { shape: solid },
+      },
+    ],
+  ]);
+  const debugThread = typeof process !== "undefined" && process?.env?.TF_THREAD_DEBUG === "1";
+  if (debugThread) {
+    outputs.set(`debug:${feature.id}:ridge`, {
+      id: `${feature.id}:ridge`,
+      kind: "solid" as const,
+      meta: { shape: ridge },
+    });
+    outputs.set(`debug:${feature.id}:blank`, {
+      id: `${feature.id}:blank`,
+      kind: "solid" as const,
+      meta: { shape: blank },
+    });
+  }
+  const selections = ctx.collectSelections(solid, feature.id, feature.result, feature.tags);
+  return { outputs, selections };
+}
