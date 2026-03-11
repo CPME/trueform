@@ -77,6 +77,10 @@ import {
   readFace as readOcctFace,
 } from "./occt/wire_ops.js";
 import {
+  makePathSplineEdge as makeOcctPathSplineEdge,
+  makeSketchSplineEdge as makeOcctSketchSplineEdge,
+} from "./occt/spline_edges.js";
+import {
   resolveOwnerKey as resolveSelectionOwnerKey,
   resolveOwnerShape as resolveSelectionOwnerShape,
   resolveSingleSelection as resolveOcctSingleSelection,
@@ -9324,60 +9328,11 @@ export class OcctBackend implements Backend {
     entity: Extract<SketchEntity, { kind: "sketch.spline" }>,
     plane: PlaneBasis
   ): { edge: any; start: [number, number, number]; end: [number, number, number]; closed: boolean } {
-    const rawPoints = entity.points;
-    if (rawPoints.length < 2) {
-      throw new Error("OCCT backend: sketch spline must have at least 2 points");
-    }
-    const points = rawPoints.slice();
-    const first = points[0];
-    const last = points[points.length - 1];
-    if (!first || !last) {
-      throw new Error("OCCT backend: sketch spline points missing");
-    }
-    const start2 = this.point2Numbers(first, "sketch spline start");
-    const end2 = this.point2Numbers(last, "sketch spline end");
-    const start = this.point2To3([start2[0], start2[1]], plane);
-    const end = this.point2To3([end2[0], end2[1]], plane);
-    const isClosed =
-      entity.closed === true || this.pointsClose(start, end);
-    if (isClosed && points.length > 2) {
-      const dx = Math.abs(start2[0] - end2[0]);
-      const dy = Math.abs(start2[1] - end2[1]);
-      if (dx > 1e-6 || dy > 1e-6) {
-        points.push(first);
-      }
-    }
-    const arr = this.newOcct("TColgp_Array1OfPnt", 1, points.length);
-    for (let i = 0; i < points.length; i += 1) {
-      const point = points[i];
-      if (!point) {
-        throw new Error("OCCT backend: sketch spline point missing");
-      }
-      const p2 = this.point2Numbers(point, "sketch spline point");
-      const p3 = this.point2To3([p2[0], p2[1]], plane);
-      arr.SetValue(i + 1, this.makePnt(p3[0], p3[1], p3[2]));
-    }
-    const degree =
-      entity.degree === undefined
-        ? 3
-        : Math.round(expectNumber(entity.degree, "sketch spline degree"));
-    const deg = Math.max(1, Math.min(8, degree));
-    const continuity = (this.occt as any).GeomAbs_Shape?.GeomAbs_C2;
-    const tol = 1e-6;
-    const bspline = this.newOcct(
-      "GeomAPI_PointsToBSpline",
-      arr,
-      deg,
-      deg,
-      continuity ?? 0,
-      tol
-    );
-    const curveHandle = this.call(bspline, "Curve");
-    const curve = curveHandle?.get ? curveHandle.get() : curveHandle;
-    const curveBase = this.newOcct("Handle_Geom_Curve", curve);
-    const edgeBuilder = this.newOcct("BRepBuilderAPI_MakeEdge", curveBase);
-    const edge = this.readShape(edgeBuilder);
-    return { edge, start, end, closed: isClosed };
+    return makeOcctSketchSplineEdge({
+      entity,
+      plane,
+      deps: this.splineEdgeDeps(),
+    });
   }
 
   private makeSplineEdge3D(path: Extract<Path3D, { kind: "path.spline" }>): {
@@ -9386,57 +9341,25 @@ export class OcctBackend implements Backend {
     end: [number, number, number];
     closed: boolean;
   } {
-    const rawPoints = path.points;
-    if (rawPoints.length < 2) {
-      throw new Error("OCCT backend: path spline must have at least 2 points");
-    }
-    const points = rawPoints.slice();
-    const first = points[0];
-    const last = points[points.length - 1];
-    if (!first || !last) {
-      throw new Error("OCCT backend: path spline points missing");
-    }
-    const start = this.point3Numbers(first, "path spline start");
-    const end = this.point3Numbers(last, "path spline end");
-    const isClosed = path.closed === true || this.pointsClose(start, end);
-    if (isClosed && points.length > 2) {
-      const dx = Math.abs(start[0] - end[0]);
-      const dy = Math.abs(start[1] - end[1]);
-      const dz = Math.abs(start[2] - end[2]);
-      if (dx > 1e-6 || dy > 1e-6 || dz > 1e-6) {
-        points.push(first);
-      }
-    }
-    const arr = this.newOcct("TColgp_Array1OfPnt", 1, points.length);
-    for (let i = 0; i < points.length; i += 1) {
-      const point = points[i];
-      if (!point) {
-        throw new Error("OCCT backend: path spline point missing");
-      }
-      const p3 = this.point3Numbers(point, "path spline point");
-      arr.SetValue(i + 1, this.makePnt(p3[0], p3[1], p3[2]));
-    }
-    const degree =
-      path.degree === undefined
-        ? 3
-        : Math.round(expectNumber(path.degree, "path spline degree"));
-    const deg = Math.max(1, Math.min(8, degree));
-    const continuity = (this.occt as any).GeomAbs_Shape?.GeomAbs_C2;
-    const tol = 1e-6;
-    const bspline = this.newOcct(
-      "GeomAPI_PointsToBSpline",
-      arr,
-      deg,
-      deg,
-      continuity ?? 0,
-      tol
-    );
-    const curveHandle = this.call(bspline, "Curve");
-    const curve = curveHandle?.get ? curveHandle.get() : curveHandle;
-    const curveBase = this.newOcct("Handle_Geom_Curve", curve);
-    const edgeBuilder = this.newOcct("BRepBuilderAPI_MakeEdge", curveBase);
-    const edge = this.readShape(edgeBuilder);
-    return { edge, start, end, closed: isClosed };
+    return makeOcctPathSplineEdge({
+      path,
+      deps: this.splineEdgeDeps(),
+    });
+  }
+
+  private splineEdgeDeps() {
+    return {
+      newOcct: (name: string, ...args: any[]) => this.newOcct(name, ...args),
+      call: (target: any, method: string, ...args: any[]) => this.call(target, method, ...args),
+      makePnt: (x: number, y: number, z: number) => this.makePnt(x, y, z),
+      readShape: (builder: any) => this.readShape(builder),
+      point2Numbers: (point: Point2D, label: string) => this.point2Numbers(point, label),
+      point2To3: (point: Point2D, plane: PlaneBasis) => this.point2To3(point, plane),
+      point3Numbers: (point: Point3D, label: string) => this.point3Numbers(point, label),
+      pointsClose: (a: [number, number, number], b: [number, number, number], tol?: number) =>
+        this.pointsClose(a, b, tol),
+      continuityC2: (this.occt as any).GeomAbs_Shape?.GeomAbs_C2,
+    };
   }
 
   private makeFaceFromWire(wire: any) {
