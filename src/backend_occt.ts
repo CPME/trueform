@@ -43,6 +43,7 @@ import {
   exportStep as exportOcctStep,
   exportStl as exportOcctStl,
 } from "./occt/export_ops.js";
+import { mesh as buildOcctMesh } from "./occt/mesh_ops.js";
 import {
   resolveOwnerKey as resolveSelectionOwnerKey,
   resolveOwnerShape as resolveSelectionOwnerShape,
@@ -492,81 +493,23 @@ export class OcctBackend implements Backend {
   }
 
   mesh(target: KernelObject, opts: MeshOptions = {}): MeshData {
-    const shape = target.meta["shape"] as any;
-    if (!shape) {
-      throw new Error("OCCT backend: mesh target missing shape metadata");
-    }
-    this.ensureTriangulation(shape, opts);
-
-    const occt = this.occt as any;
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_FACE,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-
-    const positions: number[] = [];
-    const indices: number[] = [];
-    const faceIds: number[] = [];
-    let vertexOffset = 0;
-    let faceIndex = 0;
-
-    for (; explorer.More(); explorer.Next()) {
-      const face = explorer.Current();
-      const { triangulation, loc } = this.getTriangulation(face);
-      if (!triangulation) {
-        faceIndex += 1;
-        continue;
-      }
-      const orientation = this.faceOrientationValue(face);
-      const reversed =
-        orientation !== null &&
-        orientation === occt.TopAbs_Orientation?.TopAbs_REVERSED?.value;
-
-      const nbNodes = this.callNumber(triangulation, "NbNodes");
-      for (let i = 1; i <= nbNodes; i += 1) {
-        const pnt = this.call(triangulation, "Node", i);
-        const transformed = this.applyLocation(pnt, loc);
-        const coords = this.pointToArray(transformed);
-        positions.push(coords[0], coords[1], coords[2]);
-      }
-
-      const nbTriangles = this.callNumber(triangulation, "NbTriangles");
-      for (let i = 1; i <= nbTriangles; i += 1) {
-        const tri = this.call(triangulation, "Triangle", i);
-        const [n1, n2, n3] = this.triangleNodes(tri);
-        if (reversed) {
-          indices.push(
-            vertexOffset + n1 - 1,
-            vertexOffset + n3 - 1,
-            vertexOffset + n2 - 1
-          );
-        } else {
-          indices.push(
-            vertexOffset + n1 - 1,
-            vertexOffset + n2 - 1,
-            vertexOffset + n3 - 1
-          );
-        }
-        faceIds.push(faceIndex);
-      }
-
-      vertexOffset += nbNodes;
-      faceIndex += 1;
-    }
-
-    const normals = this.computeNormals(positions, indices);
-    const edgeData =
-      opts.includeEdges === false ? null : this.buildEdgeLines(shape, opts);
-    return {
-      positions,
-      indices,
-      normals,
-      faceIds,
-      edgePositions: edgeData?.positions,
-      edgeIndices: edgeData?.edgeIndices,
-    };
+    return buildOcctMesh({
+      target,
+      opts,
+      occt: this.occt as any,
+      deps: {
+        ensureTriangulation: (shape, options) => this.ensureTriangulation(shape, options),
+        getTriangulation: (face) => this.getTriangulation(face),
+        faceOrientationValue: (face) => this.faceOrientationValue(face),
+        callNumber: (targetObj, method) => this.callNumber(targetObj, method),
+        call: (targetObj, method, ...args) => this.call(targetObj, method, ...args),
+        applyLocation: (point, location) => this.applyLocation(point, location),
+        pointToArray: (point) => this.pointToArray(point),
+        triangleNodes: (triangle) => this.triangleNodes(triangle),
+        computeNormals: (positions, indices) => this.computeNormals(positions, indices),
+        buildEdgeLines: (shape, options) => this.buildEdgeLines(shape, options),
+      },
+    });
   }
 
   exportStep(target: KernelObject, opts: StepExportOptions = {}): Uint8Array {
