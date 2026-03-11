@@ -59,13 +59,16 @@ Execution slices:
    - Progress: spline edge builders moved to `src/occt/spline_edges.ts`.
    - Commits: `3e7cfec`, `7052684`, `171dc14`, `9c86866`, `f6b0277`
 8. [ ] Convert `backend_occt.ts` into orchestration-focused class with module imports.
+9. [x] Extract thread execution helper cluster.
+   - Progress: `execThread` geometry/build path moved to `src/occt/thread_ops.ts`.
+   - Regression coverage: added left-vs-right handedness topology consistency check in `src/tests/occt.thread.e2e.test.ts`.
+   - Commit: `89ad968`
 
 Next queued slices (by current method size in `backend_occt.ts`):
-1. `execThread` (~251 LOC) + shared thread profile constants/helpers -> `src/occt/thread_ops.ts`
-2. `execHole` (~185 LOC) + hole depth/end-condition helpers -> `src/occt/hole_ops.ts`
-3. `unwrapFacePatch` + `extractSheetPatchesFromSolid` (~386 LOC combined) -> `src/occt/unwrap_patches.ts`
-4. `sketchEntityToSegments` + `slotSegments` (~230 LOC combined) -> `src/occt/sketch_segments.ts`
-5. `execPattern` (~139 LOC) -> `src/occt/pattern_ops.ts`
+1. `execHole` (~185 LOC) + hole depth/end-condition helpers -> `src/occt/hole_ops.ts`
+2. `unwrapFacePatch` + `extractSheetPatchesFromSolid` (~386 LOC combined) -> `src/occt/unwrap_patches.ts`
+3. `sketchEntityToSegments` + `slotSegments` (~230 LOC combined) -> `src/occt/sketch_segments.ts`
+4. `execPattern` (~139 LOC) -> `src/occt/pattern_ops.ts`
 
 Per-slice safety checks:
 - `npm run build -- --pretty false`
