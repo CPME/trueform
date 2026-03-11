@@ -49,6 +49,7 @@ Execution slices:
 4. [x] Extract stable selection id + ledger record helper group.
 5. [x] Extract selection collection orchestration (`collectSelections`) with dependency injection.
 6. [ ] Extract mesh/export helper cluster.
+   - Progress: STEP/STL export orchestration moved to `src/occt/export_ops.ts`; mesh path still pending.
 7. [ ] Extract profile/sketch/plane resolution helper cluster.
 8. [ ] Convert `backend_occt.ts` into orchestration-focused class with module imports.
 
