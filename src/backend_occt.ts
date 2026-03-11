@@ -40,6 +40,10 @@ import {
   vectorFingerprint as occtVectorFingerprint,
 } from "./occt/selection_fingerprint.js";
 import {
+  exportStep as exportOcctStep,
+  exportStl as exportOcctStl,
+} from "./occt/export_ops.js";
+import {
   resolveOwnerKey as resolveSelectionOwnerKey,
   resolveOwnerShape as resolveSelectionOwnerShape,
   resolveSingleSelection as resolveOcctSingleSelection,
@@ -566,106 +570,47 @@ export class OcctBackend implements Backend {
   }
 
   exportStep(target: KernelObject, opts: StepExportOptions = {}): Uint8Array {
-    const shape = target.meta["shape"] as any;
-    if (!shape) {
-      throw new Error("OCCT backend: step export target missing shape metadata");
-    }
-
-    const occt = this.occt as any;
-    const fs = occt?.FS;
-    if (!fs || typeof fs.readFile !== "function" || typeof fs.unlink !== "function") {
-      throw new Error("OCCT backend: occt.FS not available for STEP export");
-    }
-
-    this.configureStepExport(occt, opts);
-
-    const writer = this.newOcct("STEPControl_Writer");
-    const modelType = this.resolveStepModelType(occt, target.kind);
-    const progress = this.makeProgressRange();
-    if (!progress) {
-      throw new Error("OCCT backend: progress range unavailable for STEP export");
-    }
-    const transferStatus = this.callWithFallback(
-      writer,
-      ["Transfer", "Transfer_1", "Transfer_2"],
-      [
-        [shape, modelType, true, progress],
-        [shape, modelType, false, progress],
-      ]
-    );
-    this.assertStepStatus(occt, transferStatus, "STEP transfer");
-
-    const tmpPath = this.makeStepPath(fs);
-    const writeStatus = this.callWithFallback(
-      writer,
-      ["Write", "Write_1", "Write_2"],
-      [[tmpPath, this.makeProgressRange()], [tmpPath]]
-    );
-    this.assertStepStatus(occt, writeStatus, "STEP write");
-
-    const data = fs.readFile(tmpPath);
-    try {
-      fs.unlink(tmpPath);
-    } catch {
-      // ignore cleanup errors
-    }
-    if (data instanceof Uint8Array) return data;
-    if (Array.isArray(data)) return Uint8Array.from(data);
-    if (typeof data === "string") return new TextEncoder().encode(data);
-    return new Uint8Array(data);
+    return exportOcctStep({
+      target,
+      opts,
+      occt: this.occt as any,
+      deps: this.exportOpsDeps(),
+    });
   }
 
   exportStl(target: KernelObject, opts: StlExportOptions = {}): Uint8Array {
-    const shape = target.meta["shape"] as any;
-    if (!shape) {
-      throw new Error("OCCT backend: STL export target missing shape metadata");
-    }
-
-    const occt = this.occt as any;
-    const fs = occt?.FS;
-    if (!fs || typeof fs.readFile !== "function" || typeof fs.unlink !== "function") {
-      throw new Error("OCCT backend: occt.FS not available for STL export");
-    }
-
-    this.ensureTriangulation(shape, {
-      linearDeflection: opts.linearDeflection,
-      angularDeflection: opts.angularDeflection,
-      relative: opts.relative,
-      includeEdges: false,
+    return exportOcctStl({
+      target,
+      opts,
+      occt: this.occt as any,
+      deps: this.exportOpsDeps(),
     });
+  }
 
-    const writer = this.newOcct("StlAPI_Writer");
-    if (opts.format === "ascii") {
-      try {
-        this.callWithFallback(writer, ["SetASCIIMode", "SetASCIIMode_1"], [[true], [1]]);
-      } catch {
-        // ignore if ASCII mode toggle is unavailable
-      }
-    } else if (opts.format === "binary") {
-      try {
-        this.callWithFallback(writer, ["SetASCIIMode", "SetASCIIMode_1"], [[false], [0]]);
-      } catch {
-        // ignore if binary mode toggle is unavailable
-      }
-    }
-
-    const tmpPath = this.makeStlPath(fs);
-    this.callWithFallback(
-      writer,
-      ["Write", "Write_1", "Write_2"],
-      [[shape, tmpPath, this.makeProgressRange()], [shape, tmpPath]]
-    );
-
-    const data = fs.readFile(tmpPath);
-    try {
-      fs.unlink(tmpPath);
-    } catch {
-      // ignore cleanup errors
-    }
-    if (data instanceof Uint8Array) return data;
-    if (Array.isArray(data)) return Uint8Array.from(data);
-    if (typeof data === "string") return new TextEncoder().encode(data);
-    return new Uint8Array(data);
+  private exportOpsDeps() {
+    return {
+      configureStepExport: (module: any, options: StepExportOptions) =>
+        this.configureStepExport(module, options),
+      newOcct: (name: string, ...args: any[]) => this.newOcct(name, ...args),
+      resolveStepModelType: (module: any, kind: KernelObject["kind"]) =>
+        this.resolveStepModelType(module, kind),
+      makeProgressRange: () => this.makeProgressRange(),
+      callWithFallback: (targetObj: any, names: string[], argSets: any[][]) =>
+        this.callWithFallback(targetObj, names, argSets),
+      assertStepStatus: (module: any, status: any, context: string) =>
+        this.assertStepStatus(module, status, context),
+      makeStepPath: (fs: any) => this.makeStepPath(fs),
+      makeStlPath: (fs: any) => this.makeStlPath(fs),
+      ensureTriangulation: (
+        shape: any,
+        options: {
+          linearDeflection?: number;
+          angularDeflection?: number;
+          relative?: boolean;
+          includeEdges?: boolean;
+        }
+      ) => this.ensureTriangulation(shape, options),
+    };
   }
 
   private execExtrude(feature: Extrude, upstream: KernelResult): KernelResult {
