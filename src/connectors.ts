@@ -1,6 +1,7 @@
 import { AxisDirection, ID, MateConnector } from "./ir.js";
 import { KernelResult } from "./backend.js";
 import { resolveSelector, type Selection } from "./selectors.js";
+import { kernelResultToResolutionContext } from "./resolution_context.js";
 
 export type ConnectorFrame = {
   id: ID;
@@ -18,7 +19,7 @@ export function resolveConnectors(
   const resolved = new Map<ID, ConnectorFrame>();
   if (!connectors || connectors.length === 0) return resolved;
 
-  const ctx = toResolutionContext(upstream);
+  const ctx = kernelResultToResolutionContext(upstream);
   for (const connector of connectors) {
     const selection = resolveSelector(connector.origin, ctx);
     const origin = selectionCenter(selection);
@@ -38,21 +39,6 @@ export function resolveConnectors(
     });
   }
   return resolved;
-}
-
-function toResolutionContext(upstream: KernelResult) {
-  const named = new Map<string, Selection>();
-  for (const [key, obj] of upstream.outputs) {
-    if (
-      obj.kind === "face" ||
-      obj.kind === "edge" ||
-      obj.kind === "solid" ||
-      obj.kind === "surface"
-    ) {
-      named.set(key, { id: obj.id, kind: obj.kind, meta: obj.meta });
-    }
-  }
-  return { selections: upstream.selections, named };
 }
 
 function selectionCenter(selection: Selection): [number, number, number] {

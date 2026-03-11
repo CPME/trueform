@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { dsl } from "../dsl.js";
-import type { Backend, KernelResult, KernelSelection } from "../backend.js";
+import type { Backend } from "../backend.js";
 import { buildPart } from "../executor.js";
 import { CompileError } from "../errors.js";
 import { resolveSelector } from "../selectors.js";
+import { kernelResultToResolutionContext } from "../resolution_context.js";
 import type { TestCase } from "./occt_test_utils.js";
 
 export type SelectorConformanceTarget = {
@@ -34,7 +35,7 @@ export function selectorConformanceTests(
       fn: async () => {
         const result = buildPart(part, target.backend);
         const selector = dsl.selectorFace([dsl.predNormal("+Z")]);
-        const face = resolveSelector(selector, toResolutionContext(result.final));
+        const face = resolveSelector(selector, kernelResultToResolutionContext(result.final));
         assert.equal(face.kind, "face");
         assert.equal(face.meta["normal"], "+Z");
       },
@@ -47,7 +48,7 @@ export function selectorConformanceTests(
           [dsl.predCreatedBy("base-extrude")],
           [dsl.rankMaxZ()]
         );
-        const face = resolveSelector(selector, toResolutionContext(result.final));
+        const face = resolveSelector(selector, kernelResultToResolutionContext(result.final));
         assert.equal(face.kind, "face");
         assert.equal(face.meta["createdBy"], "base-extrude");
       },
@@ -57,7 +58,7 @@ export function selectorConformanceTests(
       fn: async () => {
         const result = buildPart(part, target.backend);
         const selector = dsl.selectorNamed("body:main");
-        const selection = resolveSelector(selector, toResolutionContext(result.final));
+        const selection = resolveSelector(selector, kernelResultToResolutionContext(result.final));
         assert.equal(selection.kind, "solid");
       },
     },
@@ -73,7 +74,7 @@ export function selectorConformanceTests(
         );
         assert.ok(topFace, "missing stable top face selection");
         const selector = dsl.selectorNamed(String(topFace?.id ?? ""));
-        const selection = resolveSelector(selector, toResolutionContext(result.final));
+        const selection = resolveSelector(selector, kernelResultToResolutionContext(result.final));
         assert.equal(selection.id, topFace?.id);
       },
     },
@@ -94,7 +95,7 @@ export function selectorConformanceTests(
           : [];
         assert.ok(aliases.length > 0, "missing stable selection alias");
         const selector = dsl.selectorNamed(String(aliases[0] ?? ""));
-        const selection = resolveSelector(selector, toResolutionContext(result.final));
+        const selection = resolveSelector(selector, kernelResultToResolutionContext(result.final));
         assert.equal(selection.id, topFace?.id);
       },
     },
@@ -103,7 +104,11 @@ export function selectorConformanceTests(
       fn: async () => {
         const result = buildPart(part, target.backend);
         assert.throws(
-          () => resolveSelector(dsl.selectorNamed("face:1"), toResolutionContext(result.final)),
+          () =>
+            resolveSelector(
+              dsl.selectorNamed("face:1"),
+              kernelResultToResolutionContext(result.final)
+            ),
           (err) =>
             err instanceof CompileError &&
             err.code === "selector_legacy_numeric_unsupported" &&
@@ -112,19 +117,4 @@ export function selectorConformanceTests(
       },
     },
   ];
-}
-
-function toResolutionContext(upstream: KernelResult) {
-  const named = new Map<string, KernelSelection>();
-  for (const [key, obj] of upstream.outputs) {
-    if (
-      obj.kind === "face" ||
-      obj.kind === "edge" ||
-      obj.kind === "solid" ||
-      obj.kind === "surface"
-    ) {
-      named.set(key, { id: obj.id, kind: obj.kind, meta: obj.meta });
-    }
-  }
-  return { selections: upstream.selections, named };
 }

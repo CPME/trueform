@@ -13,6 +13,7 @@ import type {
 import type { KernelResult, KernelSelection } from "./backend.js";
 import { buildParamContext, normalizeScalar, type ParamOverrides } from "./params.js";
 import { resolveSelector } from "./selectors.js";
+import { kernelResultToResolutionContext } from "./resolution_context.js";
 
 export type DimensionStatus = "ok" | "fail" | "unsupported";
 
@@ -44,7 +45,7 @@ export function evaluatePartDimensions(
 
   const ctx = buildParamContext(part.params, options.overrides, options.units ?? "mm");
   const epsilon = options.epsilon ?? 1e-9;
-  const resolution = toResolutionContext(result);
+  const resolution = kernelResultToResolutionContext(result);
   const out: DimensionResult[] = [];
 
   for (const dimension of dimensions) {
@@ -193,24 +194,9 @@ function isDimensionConstraint(
   return value.kind === "dimension.distance" || value.kind === "dimension.angle";
 }
 
-function toResolutionContext(upstream: KernelResult) {
-  const named = new Map<string, KernelSelection>();
-  for (const [key, obj] of upstream.outputs) {
-    if (
-      obj.kind === "face" ||
-      obj.kind === "edge" ||
-      obj.kind === "solid" ||
-      obj.kind === "surface"
-    ) {
-      named.set(key, { id: obj.id, kind: obj.kind, meta: obj.meta });
-    }
-  }
-  return { selections: upstream.selections, named };
-}
-
 function resolveGeometryRef(
   ref: GeometryRef,
-  ctx: ReturnType<typeof toResolutionContext>
+  ctx: ReturnType<typeof kernelResultToResolutionContext>
 ): KernelSelection {
   if (ref.kind === "ref.point") {
     return resolvePointRef(ref, ctx);
@@ -220,7 +206,7 @@ function resolveGeometryRef(
 
 function resolvePointRef(
   ref: RefPoint,
-  ctx: ReturnType<typeof toResolutionContext>
+  ctx: ReturnType<typeof kernelResultToResolutionContext>
 ): KernelSelection {
   const pointTarget = resolvePointTarget(ref, ctx);
   const base = pointTarget.base;
@@ -241,7 +227,7 @@ function resolvePointRef(
 
 function resolvePointTarget(
   ref: RefPoint,
-  ctx: ReturnType<typeof toResolutionContext>
+  ctx: ReturnType<typeof kernelResultToResolutionContext>
 ): {
   base: KernelSelection;
   locator: ResolvedPointLocator;
@@ -264,7 +250,7 @@ function resolvePointTarget(
 
 function namedPointAnchorTarget(
   selector: RefPoint["selector"],
-  ctx: ReturnType<typeof toResolutionContext>
+  ctx: ReturnType<typeof kernelResultToResolutionContext>
 ): {
   base: KernelSelection;
   locator: ResolvedPointLocator;
@@ -290,7 +276,7 @@ function namedPointAnchorTarget(
 
 function hasDirectSelectionReference(
   target: string,
-  ctx: ReturnType<typeof toResolutionContext>
+  ctx: ReturnType<typeof kernelResultToResolutionContext>
 ): boolean {
   if (ctx.named.has(target)) return true;
   return ctx.selections.some((selection) => {

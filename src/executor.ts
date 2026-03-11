@@ -3,7 +3,6 @@ import {
   BackendAsync,
   type BackendCapabilities,
   KernelResult,
-  KernelSelection,
 } from "./backend.js";
 import { compileNormalizedPart } from "./compiler.js";
 import { normalizePart } from "./ir_normalize.js";
@@ -14,6 +13,7 @@ import { ParamOverrides } from "./params.js";
 import { resolveSelector } from "./selectors.js";
 import { type ValidationOptions } from "./validate.js";
 import { BackendError } from "./errors.js";
+import { kernelResultToResolutionContext } from "./resolution_context.js";
 
 export type FeatureStep = {
   featureId: string;
@@ -80,7 +80,7 @@ export function buildPart(
         feature,
         upstream: current,
         resolve: (selector: Selector, upstream: KernelResult) =>
-          resolveSelector(selector, toResolutionContext(upstream)),
+          resolveSelector(selector, kernelResultToResolutionContext(upstream)),
       });
     } catch (err) {
       failedFeatureId = id;
@@ -121,7 +121,7 @@ export async function buildPartAsync(
         feature,
         upstream: current,
         resolve: (selector: Selector, upstream: KernelResult) =>
-          resolveSelector(selector, toResolutionContext(upstream)),
+          resolveSelector(selector, kernelResultToResolutionContext(upstream)),
       });
     } catch (err) {
       failedFeatureId = id;
@@ -356,19 +356,4 @@ function ensureBackendSupports(caps: BackendCapabilities | undefined, featureKin
     "backend_unsupported_feature",
     `Backend${name} does not support feature ${featureKind}`
   );
-}
-
-function toResolutionContext(upstream: KernelResult) {
-  const named = new Map<string, KernelSelection>();
-  for (const [key, obj] of upstream.outputs) {
-    if (
-      obj.kind === "face" ||
-      obj.kind === "edge" ||
-      obj.kind === "solid" ||
-      obj.kind === "surface"
-    ) {
-      named.set(key, { id: obj.id, kind: obj.kind, meta: obj.meta });
-    }
-  }
-  return { selections: upstream.selections, named };
 }

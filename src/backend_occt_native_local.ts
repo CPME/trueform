@@ -18,6 +18,7 @@ import type {
   NativeStlExportRequest,
   NativeShapeHandle,
 } from "./backend_occt_native.js";
+import { kernelResultToResolutionContext } from "./resolution_context.js";
 
 export type LocalOcctTransportOptions = {
   occt: OcctModule;
@@ -121,7 +122,7 @@ export class LocalOcctTransport implements NativeOcctTransport {
       feature: request.feature,
       upstream,
       resolve: (selector, current) =>
-        resolveSelector(selector, toResolutionContext(current)),
+        resolveSelector(selector, kernelResultToResolutionContext(current)),
     });
     const deflated = deflateKernelResult(result, { registry: this.registry });
     this.registry.prune(this.shapeRegistryMaxEntries, this.shapeRegistryIdleMs);
@@ -278,19 +279,4 @@ function deflateMeta(
     delete next["wire"];
   }
   return next;
-}
-
-function toResolutionContext(upstream: KernelResult) {
-  const named = new Map<string, KernelSelection>();
-  for (const [key, obj] of upstream.outputs) {
-    if (
-      obj.kind === "face" ||
-      obj.kind === "edge" ||
-      obj.kind === "solid" ||
-      obj.kind === "surface"
-    ) {
-      named.set(key, { id: obj.id, kind: obj.kind, meta: obj.meta });
-    }
-  }
-  return { selections: upstream.selections, named };
 }

@@ -1,7 +1,8 @@
-import type { Backend, KernelResult, KernelSelection, KernelObject, MeshOptions } from "./backend.js";
+import type { Backend, KernelResult, KernelObject, MeshOptions } from "./backend.js";
 import type { IntentAssertion, IntentPart, Units, ID } from "./ir.js";
 import { buildParamContext, normalizeScalar, ParamOverrides } from "./params.js";
 import { resolveSelector } from "./selectors.js";
+import { kernelResultToResolutionContext } from "./resolution_context.js";
 
 export type AssertionStatus = "ok" | "fail" | "unsupported";
 
@@ -104,7 +105,7 @@ function resolveAssertionTarget(
   result: KernelResult
 ): KernelObject | null {
   if (assertion.target) {
-    const selection = resolveSelector(assertion.target, toResolutionContext(result));
+    const selection = resolveSelector(assertion.target, kernelResultToResolutionContext(result));
     const ownerKey = selection.meta["ownerKey"];
     if (typeof ownerKey === "string") {
       return result.outputs.get(ownerKey) ?? null;
@@ -112,21 +113,6 @@ function resolveAssertionTarget(
     return null;
   }
   return result.outputs.get("body:main") ?? firstOutput(result);
-}
-
-function toResolutionContext(upstream: KernelResult) {
-  const named = new Map<string, KernelSelection>();
-  for (const [key, obj] of upstream.outputs) {
-    if (
-      obj.kind === "face" ||
-      obj.kind === "edge" ||
-      obj.kind === "solid" ||
-      obj.kind === "surface"
-    ) {
-      named.set(key, { id: obj.id, kind: obj.kind, meta: obj.meta });
-    }
-  }
-  return { selections: upstream.selections, named };
 }
 
 function firstOutput(result: KernelResult): KernelObject | null {
