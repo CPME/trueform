@@ -46,7 +46,7 @@ Execution slices:
 1. [x] Extract vector/scalar math helpers (`src/occt/vector_math.ts`).
 2. [x] Extract selector owner/context/single-selection utilities (`src/occt/selection_resolution.ts`).
 3. [x] Extract unique subshape collection utility (`src/occt/shape_collection.ts`).
-4. [ ] Extract stable selection id + ledger record helper group.
+4. [x] Extract stable selection id + ledger record helper group.
 5. [ ] Extract selection collection orchestration (`collectSelections`) with dependency injection.
 6. [ ] Extract mesh/export helper cluster.
 7. [ ] Extract profile/sketch/plane resolution helper cluster.
