@@ -77,6 +77,10 @@ import {
   readFace as readOcctFace,
 } from "./occt/wire_ops.js";
 import {
+  sketchEntityToSegments as buildOcctSketchEntitySegments,
+  type SketchEdgeSegment,
+} from "./occt/sketch_segments.js";
+import {
   makePathSplineEdge as makeOcctPathSplineEdge,
   makeSketchSplineEdge as makeOcctSketchSplineEdge,
 } from "./occt/spline_edges.js";
@@ -8750,205 +8754,54 @@ export class OcctBackend implements Backend {
   }
 
   private sketchEntityToSegments(entity: SketchEntity, plane: PlaneBasis): EdgeSegment[] {
-    switch (entity.kind) {
-      case "sketch.line": {
-        const start = this.point2To3(entity.start, plane);
-        const end = this.point2To3(entity.end, plane);
-        return this.withEntitySegmentSlots(entity.id, [
-          {
-            edge: this.makeLineEdge(start, end),
-            start,
-            end,
-          },
-        ]);
-      }
-      case "sketch.arc": {
-        const start2 = entity.start;
-        const end2 = entity.end;
-        const center2 = entity.center;
-        const start = this.point2To3(start2, plane);
-        const end = this.point2To3(end2, plane);
-        const radiusStart = this.dist2(start2, center2);
-        const radiusEnd = this.dist2(end2, center2);
-        if (Math.abs(radiusStart - radiusEnd) > 1e-6) {
-          throw new Error("OCCT backend: sketch arc radius mismatch");
-        }
-        const mid2 = this.arcMidpoint(start2, end2, center2, entity.direction);
-        const mid = this.point2To3(mid2, plane);
-        return this.withEntitySegmentSlots(entity.id, [
-          {
-            edge: this.makeArcEdge(start, mid, end),
-            start,
-            end,
-          },
-        ]);
-      }
-      case "sketch.circle": {
-        const center = this.point2To3(entity.center, plane);
-        const radius = expectNumber(entity.radius, "sketch circle radius");
-        return this.withEntitySegmentSlots(entity.id, [
-          {
-            edge: this.makeCircleEdge(center, radius, plane.normal),
-            start: center,
-            end: center,
-            closed: true,
-          },
-        ]);
-      }
-      case "sketch.ellipse": {
-        const center2 = this.point2Numbers(entity.center, "sketch ellipse center");
-        const center = this.point2To3([center2[0], center2[1]], plane);
-        const radiusX = expectNumber(entity.radiusX, "sketch ellipse radiusX");
-        const radiusY = expectNumber(entity.radiusY, "sketch ellipse radiusY");
-        const rotation =
-          entity.rotation === undefined
-            ? 0
-            : expectNumber(entity.rotation, "sketch ellipse rotation");
-        const { major, minor, xDir } = this.ellipseAxes(
-          plane,
-          radiusX,
-          radiusY,
-          rotation
-        );
-        return this.withEntitySegmentSlots(entity.id, [
-          {
-            edge: this.makeEllipseEdge(center, xDir, plane.normal, major, minor),
-            start: center,
-            end: center,
-            closed: true,
-          },
-        ]);
-      }
-      case "sketch.rectangle": {
-        const points = this.rectanglePoints(entity);
-        const segments: EdgeSegment[] = [];
-        for (let i = 0; i < points.length; i += 1) {
-          const a = points[i];
-          const b = points[(i + 1) % points.length];
-          if (!a || !b) continue;
-          const start = this.point2To3(a, plane);
-          const end = this.point2To3(b, plane);
-          segments.push({
-            edge: this.makeLineEdge(start, end),
-            start,
-            end,
-          });
-        }
-        return this.withEntitySegmentSlots(entity.id, segments);
-      }
-      case "sketch.slot": {
-        return this.withEntitySegmentSlots(entity.id, this.slotSegments(entity, plane));
-      }
-      case "sketch.polygon": {
-        const points = this.polygonPoints(entity);
-        const segments: EdgeSegment[] = [];
-        for (let i = 0; i < points.length; i += 1) {
-          const a = points[i];
-          const b = points[(i + 1) % points.length];
-          if (!a || !b) continue;
-          const start = this.point2To3(a, plane);
-          const end = this.point2To3(b, plane);
-          segments.push({
-            edge: this.makeLineEdge(start, end),
-            start,
-            end,
-          });
-        }
-        return this.withEntitySegmentSlots(entity.id, segments);
-      }
-      case "sketch.spline": {
-        const { edge, start, end, closed } = this.makeSplineEdge(entity, plane);
-        return this.withEntitySegmentSlots(entity.id, [
-          {
-            edge,
-            start,
-            end,
-            closed,
-          },
-        ]);
-      }
-      default:
-        throw new Error(`OCCT backend: unsupported sketch entity ${entity.kind}`);
-    }
+    return buildOcctSketchEntitySegments({
+      entity,
+      plane,
+      deps: this.sketchSegmentDeps(),
+    }) as EdgeSegment[];
   }
 
-  private slotSegments(entity: Extract<SketchEntity, { kind: "sketch.slot" }>, plane: PlaneBasis) {
-    const length = expectNumber(entity.length, "sketch slot length");
-    const width = expectNumber(entity.width, "sketch slot width");
-    const radius = width / 2;
-    if (radius <= 0 || length <= 0) {
-      throw new Error("OCCT backend: sketch slot dimensions must be positive");
-    }
-    if (entity.endStyle === "straight") {
-      const points = this.rectanglePoints({
-        ...entity,
-        kind: "sketch.rectangle",
-        mode: "center",
-        center: entity.center,
-        width: length,
-        height: width,
-      });
-      const segments: EdgeSegment[] = [];
-      for (let i = 0; i < points.length; i += 1) {
-        const a = points[i];
-        const b = points[(i + 1) % points.length];
-        if (!a || !b) continue;
-        const start = this.point2To3(a, plane);
-        const end = this.point2To3(b, plane);
-        segments.push({ edge: this.makeLineEdge(start, end), start, end });
-      }
-      return segments;
-    }
-    const straightHalf = Math.max(0, length / 2 - radius);
-    if (straightHalf === 0) {
-      const center = this.point2To3(entity.center, plane);
-      return [
-        {
-          edge: this.makeCircleEdge(center, radius, plane.normal),
-          start: center,
-          end: center,
-          closed: true,
-        },
-      ];
-    }
-    const rot =
-      entity.rotation === undefined
-        ? 0
-        : expectNumber(entity.rotation, "sketch slot rotation");
-    const center2 = entity.center;
-    const topRight: Point2D = [straightHalf, radius];
-    const topLeft: Point2D = [-straightHalf, radius];
-    const bottomRight: Point2D = [straightHalf, -radius];
-    const bottomLeft: Point2D = [-straightHalf, -radius];
-    const pts = [topRight, bottomRight, bottomLeft, topLeft].map((p) =>
-      this.rotateTranslate2(p, center2, rot)
-    );
-    const [tr, br, bl, tl] = pts;
-    if (!tr || !br || !bl || !tl) {
-      throw new Error("OCCT backend: failed to build sketch slot points");
-    }
-    const segments: EdgeSegment[] = [];
-    const tr3 = this.point2To3(tr, plane);
-    const br3 = this.point2To3(br, plane);
-    const bl3 = this.point2To3(bl, plane);
-    const tl3 = this.point2To3(tl, plane);
-    const leftMid2 = this.rotateTranslate2(
-      [-straightHalf - radius, 0],
-      center2,
-      rot
-    );
-    const rightMid2 = this.rotateTranslate2(
-      [straightHalf + radius, 0],
-      center2,
-      rot
-    );
-    const leftMid3 = this.point2To3(leftMid2, plane);
-    const rightMid3 = this.point2To3(rightMid2, plane);
-    segments.push({ edge: this.makeLineEdge(tr3, tl3), start: tr3, end: tl3 });
-    segments.push({ edge: this.makeArcEdge(tl3, leftMid3, bl3), start: tl3, end: bl3 });
-    segments.push({ edge: this.makeLineEdge(bl3, br3), start: bl3, end: br3 });
-    segments.push({ edge: this.makeArcEdge(br3, rightMid3, tr3), start: br3, end: tr3 });
-    return segments;
+  private sketchSegmentDeps() {
+    return {
+      withEntitySegmentSlots: (entityId: string, segments: SketchEdgeSegment[]) =>
+        this.withEntitySegmentSlots(entityId, segments as EdgeSegment[]) as SketchEdgeSegment[],
+      point2To3: (point: Point2D, sketchPlane: PlaneBasis) => this.point2To3(point, sketchPlane),
+      point2Numbers: (point: Point2D, label: string) => this.point2Numbers(point, label),
+      dist2: (a: Point2D, b: Point2D) => this.dist2(a, b),
+      arcMidpoint: (start: Point2D, end: Point2D, center: Point2D, direction: "cw" | "ccw") =>
+        this.arcMidpoint(start, end, center, direction),
+      ellipseAxes: (sketchPlane: PlaneBasis, radiusX: number, radiusY: number, rotation: number) =>
+        this.ellipseAxes(sketchPlane, radiusX, radiusY, rotation),
+      rectanglePoints: (entity: Extract<SketchEntity, { kind: "sketch.rectangle" }>) =>
+        this.rectanglePoints(entity),
+      polygonPoints: (entity: Extract<SketchEntity, { kind: "sketch.polygon" }>) =>
+        this.polygonPoints(entity),
+      rotateTranslate2: (point: Point2D, origin: Point2D, angle: number) =>
+        this.rotateTranslate2(point, origin, angle),
+      makeLineEdge: (start: [number, number, number], end: [number, number, number]) =>
+        this.makeLineEdge(start, end),
+      makeArcEdge: (
+        start: [number, number, number],
+        mid: [number, number, number],
+        end: [number, number, number]
+      ) => this.makeArcEdge(start, mid, end),
+      makeCircleEdge: (
+        center: [number, number, number],
+        radius: number,
+        normal: [number, number, number]
+      ) => this.makeCircleEdge(center, radius, normal),
+      makeEllipseEdge: (
+        center: [number, number, number],
+        xDir: [number, number, number],
+        normal: [number, number, number],
+        major: number,
+        minor: number
+      ) => this.makeEllipseEdge(center, xDir, normal, major, minor),
+      makeSplineEdge: (
+        entity: Extract<SketchEntity, { kind: "sketch.spline" }>,
+        sketchPlane: PlaneBasis
+      ) => this.makeSplineEdge(entity, sketchPlane),
+    };
   }
 
   private polygonPoints(entity: Extract<SketchEntity, { kind: "sketch.polygon" }>): Point2D[] {

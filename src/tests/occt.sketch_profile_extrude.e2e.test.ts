@@ -103,6 +103,43 @@ const tests = [
       assert.ok(threw, "expected open sketch loop to throw");
     },
   },
+  {
+    name: "occt e2e: extrude sketch slot loop",
+    fn: async () => {
+      const { occt, backend } = await getBackendContext();
+      const part = dsl.part("sketch-slot-loop", [
+        dsl.sketch2d(
+          "sketch-slot",
+          [{ name: "profile:slot", profile: dsl.profileSketchLoop(["slot-1"]) }],
+          {
+            entities: [
+              dsl.sketchSlot("slot-1", [0, 0], 36, 10, {
+                rotation: Math.PI / 10,
+                endStyle: "straight",
+              }),
+            ],
+          }
+        ),
+        dsl.extrude(
+          "slot-extrude",
+          dsl.profileRef("profile:slot"),
+          12,
+          "body:main",
+          ["sketch-slot"]
+        ),
+      ]);
+
+      const result = buildPart(part, backend);
+      const body = result.final.outputs.get("body:main");
+      assert.ok(body, "missing body:main output");
+      const shape = body.meta["shape"] as any;
+      assert.ok(shape, "missing shape metadata");
+
+      assertValidShape(occt, shape, "slot loop extrude solid");
+      assertPositiveVolume(occt, shape, "slot loop extrude solid");
+      assert.ok(countFaces(occt, shape) >= 6, "expected slot extrude to produce a solid body");
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {
