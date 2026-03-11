@@ -80,6 +80,7 @@ import {
   makePathSplineEdge as makeOcctPathSplineEdge,
   makeSketchSplineEdge as makeOcctSketchSplineEdge,
 } from "./occt/spline_edges.js";
+import { executeHoleFeature as executeOcctHoleFeature } from "./occt/hole_ops.js";
 import { buildThreadSolid as buildOcctThreadSolid } from "./occt/thread_ops.js";
 import {
   resolveOwnerKey as resolveSelectionOwnerKey,
@@ -4101,137 +4102,43 @@ export class OcctBackend implements Backend {
       throw new Error("OCCT backend: hole target missing owner solid");
     }
 
-    const diameter = expectNumber(feature.diameter, "feature.diameter");
-    const radius = diameter / 2;
-    if (radius <= 0) {
-      throw new Error("OCCT backend: hole diameter must be positive");
-    }
-
-    const faceCenter = this.faceCenter(face);
-    const plane = this.planeBasisFromFace(face);
-    const position2 = feature.position ?? [0, 0];
-    const positionOffset = this.offsetFromPlane(position2, plane.xDir, plane.yDir);
-    let axisDir = axisVector(feature.axis);
-    const faceNormal = target.meta["normal"];
-    if (typeof faceNormal === "string") {
-      const normalDir = axisVector(faceNormal as AxisDirection);
-      if (dot(axisDir, normalDir) > 0.9) {
-        axisDir = [-normalDir[0], -normalDir[1], -normalDir[2]];
-      }
-    }
-    if (feature.counterbore && feature.countersink) {
-      throw new Error("OCCT backend: hole cannot define both counterbore and countersink");
-    }
-    const wizardEndCondition = this.resolveHoleEndCondition(feature);
-    if (feature.wizard?.threaded === true) {
-      throw new Error(
-        "OCCT backend: hole wizard threaded profiles are not yet supported; use feature.thread"
-      );
-    }
-    let counterboreRadius: number | null = null;
-    let counterboreDepth = 0;
-    if (feature.counterbore) {
-      const cbDiameter = expectNumber(
-        feature.counterbore.diameter,
-        "feature.counterbore.diameter"
-      );
-      const cbDepth = expectNumber(
-        feature.counterbore.depth,
-        "feature.counterbore.depth"
-      );
-      counterboreRadius = cbDiameter / 2;
-      counterboreDepth = cbDepth;
-      if (counterboreRadius <= radius) {
-        throw new Error(
-          "OCCT backend: counterbore diameter must be larger than hole diameter"
-        );
-      }
-      if (counterboreDepth <= 0) {
-        throw new Error("OCCT backend: counterbore depth must be positive");
-      }
-    }
-    let countersinkRadius: number | null = null;
-    let countersinkDepth = 0;
-    if (feature.countersink) {
-      const csDiameter = expectNumber(
-        feature.countersink.diameter,
-        "feature.countersink.diameter"
-      );
-      const csAngle = expectNumber(
-        feature.countersink.angle,
-        "feature.countersink.angle"
-      );
-      countersinkRadius = csDiameter / 2;
-      if (countersinkRadius <= radius) {
-        throw new Error(
-          "OCCT backend: countersink diameter must be larger than hole diameter"
-        );
-      }
-      if (csAngle <= 0 || csAngle >= Math.PI) {
-        throw new Error("OCCT backend: countersink angle must be between 0 and PI");
-      }
-      const tanHalf = Math.tan(csAngle / 2);
-      if (tanHalf <= 0) {
-        throw new Error("OCCT backend: countersink angle is too small");
-      }
-      countersinkDepth = (countersinkRadius - radius) / tanHalf;
-      if (!Number.isFinite(countersinkDepth) || countersinkDepth <= 0) {
-        throw new Error("OCCT backend: countersink depth must be positive");
-      }
-    }
-    const centers = feature.pattern
-      ? this.patternCenters(feature.pattern.ref, position2, plane, upstream)
-      : [this.addVec(faceCenter, positionOffset)];
-
-    let solid = owner;
-    const applyCut = (current: any, tool: any) => {
-      const base = current;
-      const cut = this.makeBoolean("cut", base, tool);
-      let next = this.readShape(cut);
-      next = this.splitByTools(next, [base, tool]);
-      return this.normalizeSolid(next);
-    };
-    for (const origin of centers) {
-      const length = this.resolveHoleDepth(
-        feature,
+    const {
+      solid,
+      outputKey,
+      centers,
+      axisDir,
+      radius,
+      counterboreRadius,
+      countersink,
+    } = executeOcctHoleFeature({
+      feature,
+      upstream,
+      context: {
+        target: target as KernelSelection,
+        face,
         owner,
-        axisDir,
-        origin,
-        radius,
-        wizardEndCondition
-      );
-      if (!(length > 0)) {
-        throw new Error("OCCT backend: hole depth must be positive");
-      }
-      if (counterboreDepth > 0 && counterboreDepth > length) {
-        throw new Error("OCCT backend: counterbore depth exceeds hole depth");
-      }
-      if (countersinkDepth > 0 && countersinkDepth > length) {
-        throw new Error("OCCT backend: countersink depth exceeds hole depth");
-      }
-      const tools = [
-        this.readShape(this.makeCylinder(radius, length, axisDir, origin)),
-      ];
-      if (counterboreRadius !== null) {
-        tools.push(
-          this.readShape(
-            this.makeCylinder(counterboreRadius, counterboreDepth, axisDir, origin)
-          )
-        );
-      }
-      if (countersinkRadius !== null) {
-        tools.push(
-          this.readShape(
-            this.makeCone(countersinkRadius, radius, countersinkDepth, axisDir, origin)
-          )
-        );
-      }
-      for (const tool of tools) {
-        solid = applyCut(solid, tool);
-      }
-    }
-
-    const outputKey = feature.result ?? ownerKey;
+        ownerKey,
+      },
+      deps: {
+        faceCenter: (shape) => this.faceCenter(shape),
+        planeBasisFromFace: (shape) => this.planeBasisFromFace(shape),
+        offsetFromPlane: (offset, xDir, yDir) => this.offsetFromPlane(offset, xDir, yDir),
+        patternCenters: (patternRef, position, holePlane, context) =>
+          this.patternCenters(patternRef as ID, position, holePlane, context),
+        addVec: (a, b) => this.addVec(a, b),
+        resolveHoleEndCondition: (holeFeature) => this.resolveHoleEndCondition(holeFeature),
+        resolveHoleDepth: (holeFeature, ownerShape, holeAxis, origin, holeRadius, endCondition) =>
+          this.resolveHoleDepth(holeFeature, ownerShape, holeAxis, origin, holeRadius, endCondition),
+        readShape: (shape) => this.readShape(shape),
+        makeCylinder: (rad, height, holeAxis, origin) =>
+          this.makeCylinder(rad, height, holeAxis, origin),
+        makeCone: (r1, r2, height, holeAxis, origin) =>
+          this.makeCone(r1, r2, height, holeAxis, origin),
+        makeBoolean: (op, left, right) => this.makeBoolean(op, left, right),
+        splitByTools: (result, tools) => this.splitByTools(result, tools),
+        normalizeSolid: (shape) => this.normalizeSolid(shape),
+      },
+    });
     const outputs = new Map([
       [
         outputKey,
@@ -4257,7 +4164,7 @@ export class OcctBackend implements Backend {
           {
             radius,
             counterboreRadius,
-            countersink: countersinkRadius !== null,
+            countersink,
           }
         ),
       }
