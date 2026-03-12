@@ -36,6 +36,24 @@ Purpose: track the remaining maintainability-heavy refactor work after the first
 - Reused `writeNoContent` helper in runtime server.
 - Commit: `31c05d5`
 
+7. Replaced fake OCCT helper boundaries with typed operation contexts.
+- Added: `src/occt/operation_contexts.ts`
+- Rewired extracted OCCT modules to consume explicit context contracts instead of `ctx: any` / backend-instance leakage.
+- Split the selection ledger into focused submodules and added direct module tests for ledger/pattern/face-edit boundaries.
+- Commits: `5a5235b`, `f94f736`, `992d9bf`
+
+8. Extracted shell execution behind a typed feature boundary.
+- Added: `src/occt/shell_ops.ts`
+- Added direct coverage: `src/tests/occt.shell.module.test.ts`
+- Regression coverage: build + `occt.shell.e2e` + `occt.modifier_lineage.e2e`
+- Commit: `b33f4b8`
+
+9. Extracted sweep feature execution for pipe/hex tube variants.
+- Added: `src/occt/sweep_feature_ops.ts`
+- Added direct coverage: `src/tests/occt.sweep_feature.module.test.ts`
+- Regression coverage: build + `occt.pipe_sweep.e2e` + `occt.hex_tube_sweep.e2e` + `feature_staging.e2e`
+- Commit: `0492f71`
+
 ## Remaining Maintainability Work (Prioritized)
 
 ## Active Detailed Plan: `src/backend_occt.ts` Decomposition
@@ -59,6 +77,8 @@ Execution slices:
    - Progress: spline edge builders moved to `src/occt/spline_edges.ts`.
    - Commits: `3e7cfec`, `7052684`, `171dc14`, `9c86866`, `f6b0277`
 8. [ ] Convert `backend_occt.ts` into orchestration-focused class with module imports.
+   - Progress: typed operation contexts now gate extracted modules instead of backend-instance passthrough.
+   - Progress: shell and sweep feature executors moved behind explicit module boundaries.
 9. [x] Extract thread execution helper cluster.
    - Progress: `execThread` geometry/build path moved to `src/occt/thread_ops.ts`.
    - Regression coverage: added left-vs-right handedness topology consistency check in `src/tests/occt.thread.e2e.test.ts`.
@@ -96,8 +116,11 @@ Execution slices:
    - Regression coverage: build + extrude/revolve + thread e2e/failure coverage + broad downstream ledger-dependent suites.
    - Commit: `8cef3f5`
 
-Next queued slices (by current method size in `backend_occt.ts`):
-1. Profile/sweep feature cluster (`execThinProfileFeature`/`execPipeSweep`/`execHexTubeSweep` and related path helpers) -> `src/occt/sweep_feature_ops.ts`
+Next queued slices (by current maintainability value in `backend_occt.ts`):
+1. Thin-profile feature cluster (`execThinProfileFeature` / `execRib` / `execWeb`) with a typed planning/execution boundary.
+2. Boolean executor boundary (`execBoolean`) so ledger planning and boolean primitive execution stop living inline in the backend.
+3. Remaining generic sweep/profile execution (`execSweep`) once the thin-profile and path-sweep contexts stabilize.
+4. Sketch/profile authoring decomposition (`execSketch` and adjacent profile output assembly) after the 3D consumers stop depending on backend-local helpers.
 
 Per-slice safety checks:
 - `npm run build -- --pretty false`
