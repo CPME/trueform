@@ -1,7 +1,8 @@
 import type { KernelResult, KernelSelection, KernelSelectionLineage } from "../backend.js";
-import type { AxisDirection, MoveBody, MoveFace, Path3D } from "../ir.js";
+import type { AxisDirection, ExtrudeAxis, MoveBody, MoveFace, Path3D, ProfileRef } from "../ir.js";
 import type { ResolutionContext } from "../selectors.js";
 import type { PlaneBasis } from "./plane_basis.js";
+import type { ResolvedProfile } from "./profile_resolution.js";
 
 export type SelectionLedgerHint = {
   slot?: string;
@@ -465,4 +466,44 @@ export type BooleanContext = {
   resolve: (selector: unknown, upstream: KernelResult) => KernelSelection;
   resolveOwnerShape: (selection: KernelSelection, upstream: KernelResult) => unknown | null;
   splitByTools: (shape: unknown, tools: unknown[]) => unknown;
+};
+
+export type ThinProfileContext = {
+  addVec: (a: [number, number, number], b: [number, number, number]) => [number, number, number];
+  buildProfileWire: (profile: ResolvedProfile) => { wire: unknown; closed: boolean };
+  collectEdgesFromShape: (shape: unknown) => unknown[];
+  collectSelections: (
+    shape: unknown,
+    featureId: string,
+    ownerKey: string,
+    featureTags?: string[],
+    opts?: SelectionCollectionOptions
+  ) => KernelSelection[];
+  edgeEndpoints: (
+    edge: unknown
+  ) => { start: [number, number, number]; end: [number, number, number] } | null;
+  isValidShape: (shape: unknown) => boolean;
+  makeFaceFromWire: (wire: unknown) => unknown;
+  makePolygonWire: (points: [number, number, number][]) => unknown;
+  makePrism: (face: unknown, vec: unknown) => unknown;
+  makeSolidFromShells: (shape: unknown) => unknown | null;
+  makeVec: (x: number, y: number, z: number) => unknown;
+  normalizeSolid: (shape: unknown) => unknown;
+  readShape: (shape: unknown) => unknown;
+  resolveExtrudeAxis: (
+    axis: ExtrudeAxis | undefined,
+    profile: ResolvedProfile,
+    upstream: KernelResult
+  ) => [number, number, number];
+  resolveProfile: (profileRef: ProfileRef, upstream: KernelResult) => ResolvedProfile;
+  resolveThinFeatureAxisSpan: (
+    axis: [number, number, number],
+    origin: [number, number, number],
+    requestedDepth: number,
+    upstream: KernelResult
+  ) => { low: number; high: number } | null;
+  scaleVec: (v: [number, number, number], s: number) => [number, number, number];
+  shapeHasSolid: (shape: unknown) => boolean;
+  subVec: (a: [number, number, number], b: [number, number, number]) => [number, number, number];
+  transformShapeTranslate: (shape: unknown, delta: [number, number, number]) => unknown;
 };
