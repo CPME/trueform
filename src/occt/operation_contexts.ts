@@ -360,3 +360,34 @@ export type VariableEdgeModifierContext = {
     opts?: SelectionCollectionOptions
   ) => KernelSelection[];
 };
+
+export type ShellContext = {
+  collectSelections: (
+    shape: unknown,
+    featureId: string,
+    ownerKey: string,
+    featureTags?: string[],
+    opts?: SelectionCollectionOptions
+  ) => KernelSelection[];
+  isValidShape: (shape: unknown) => boolean;
+  makeFaceMutationSelectionLedgerPlan: (
+    upstream: KernelResult,
+    ownerShape: unknown,
+    replacements: Array<{ from: KernelSelection; to: unknown }>
+  ) => SelectionLedgerPlan;
+  makeSolidFromShells: (shape: unknown) => unknown | null;
+  makeThickSolid: (
+    shape: unknown,
+    removeFaces: unknown[],
+    offset: number,
+    tolerance: number,
+    opts?: {
+      intersection?: boolean;
+      selfIntersection?: boolean;
+      removeInternalEdges?: boolean;
+    }
+  ) => unknown;
+  normalizeSolid: (shape: unknown) => unknown;
+  resolve: (selector: unknown, upstream: KernelResult) => KernelSelection;
+  shapeHasSolid: (shape: unknown) => boolean;
+};

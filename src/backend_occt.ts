@@ -93,6 +93,7 @@ import { execPattern as execOcctPattern } from "./occt/pattern_ops.js";
 import { execThreadFeature as execOcctThreadFeature } from "./occt/thread_ops.js";
 import { execUnwrap as execOcctUnwrap } from "./occt/unwrap_ops.js";
 import { execThicken as execOcctThicken } from "./occt/thicken_ops.js";
+import { execShell as execOcctShell } from "./occt/shell_ops.js";
 import {
   execDeleteFace as execOcctDeleteFace,
   execMoveBody as execOcctMoveBody,
@@ -138,6 +139,7 @@ import type {
   ThickenContext,
   UnwrapContext,
   VariableEdgeModifierContext,
+  ShellContext,
 } from "./occt/operation_contexts.js";
 import {
   resolveOwnerKey as resolveSelectionOwnerKey,
@@ -1749,6 +1751,22 @@ export class OcctBackend implements Backend {
     };
   }
 
+  private shellContext(resolve: ExecuteInput["resolve"]): ShellContext {
+    return {
+      collectSelections: (shape, featureId, ownerKey, featureTags, opts) =>
+        this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
+      isValidShape: (shape) => this.isValidShape(shape),
+      makeFaceMutationSelectionLedgerPlan: (upstream, ownerShape, replacements) =>
+        this.makeFaceMutationSelectionLedgerPlan(upstream, ownerShape, replacements as any),
+      makeSolidFromShells: (shape) => this.makeSolidFromShells(shape),
+      makeThickSolid: (shape, removeFaces, offset, tolerance, opts) =>
+        this.makeThickSolid(shape, removeFaces as any[], offset, tolerance, opts),
+      normalizeSolid: (shape) => this.normalizeSolid(shape),
+      resolve: (selector, upstream) => resolve(selector as Selector, upstream),
+      shapeHasSolid: (shape) => this.shapeHasSolid(shape),
+    };
+  }
+
   private execDeleteFace(
     feature: DeleteFace,
     upstream: KernelResult
@@ -1971,79 +1989,7 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     resolve: ExecuteInput["resolve"]
   ): KernelResult {
-    const target = resolve(feature.source, upstream);
-    if (target.kind !== "solid") {
-      throw new Error("OCCT backend: shell source must resolve to a solid");
-    }
-    const shape = target.meta["shape"];
-    if (!shape) {
-      throw new Error("OCCT backend: shell source missing shape");
-    }
-    const thickness = expectNumber(feature.thickness, "feature.thickness");
-    if (thickness <= 0) {
-      throw new Error("OCCT backend: shell thickness must be positive");
-    }
-    const direction = feature.direction ?? "inside";
-    const sign = direction === "outside" ? 1 : -1;
-    const openFaces = feature.openFaces ?? [];
-    const removeFaces: any[] = [];
-    for (const selector of openFaces) {
-      const faceTarget = resolve(selector, upstream);
-      if (faceTarget.kind !== "face") {
-        throw new Error("OCCT backend: shell open face must resolve to a face");
-      }
-      const faceShape = faceTarget.meta["shape"];
-      if (!faceShape) {
-        throw new Error("OCCT backend: shell open face missing shape");
-      }
-      removeFaces.push(faceShape);
-    }
-    const finalizeSolid = (shape: any) => {
-      let solidShape = this.normalizeSolid(shape);
-      if (!this.shapeHasSolid(solidShape)) {
-        const stitched = this.makeSolidFromShells(solidShape);
-        if (stitched) {
-          solidShape = this.normalizeSolid(stitched);
-        }
-      }
-      return solidShape;
-    };
-
-    let solid = finalizeSolid(
-      this.makeThickSolid(shape, removeFaces, thickness * sign, 1e-6)
-    );
-    if (!this.isValidShape(solid)) {
-      const retry = finalizeSolid(
-        this.makeThickSolid(shape, removeFaces, thickness * sign, 1e-6, {
-          intersection: true,
-          selfIntersection: true,
-          removeInternalEdges: true,
-        })
-      );
-      if (this.isValidShape(retry)) {
-        solid = retry;
-      }
-    }
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:solid`,
-          kind: "solid" as const,
-          meta: { shape: solid },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      solid,
-      feature.id,
-      feature.result,
-      feature.tags,
-      {
-        ledgerPlan: this.makeFaceMutationSelectionLedgerPlan(upstream, shape, []),
-      }
-    );
-    return { outputs, selections };
+    return execOcctShell(this.shellContext(resolve), feature, upstream);
   }
 
   private execThread(feature: Thread, upstream: KernelResult): KernelResult {
