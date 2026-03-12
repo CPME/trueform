@@ -3,6 +3,7 @@ import type { AxisDirection, ExtrudeAxis, MoveBody, MoveFace, Path3D, ProfileRef
 import type { ResolutionContext } from "../selectors.js";
 import type { PlaneBasis } from "./plane_basis.js";
 import type { ResolvedProfile } from "./profile_resolution.js";
+import type { Selector } from "../ir.js";
 
 export type SelectionLedgerHint = {
   slot?: string;
@@ -506,4 +507,29 @@ export type ThinProfileContext = {
   shapeHasSolid: (shape: unknown) => boolean;
   subVec: (a: [number, number, number], b: [number, number, number]) => [number, number, number];
   transformShapeTranslate: (shape: unknown, delta: [number, number, number]) => unknown;
+};
+
+export type SweepContext = {
+  buildPathWire: (path: Path3D) => unknown;
+  buildProfileFace: (profile: ResolvedProfile) => unknown;
+  buildProfileWire: (profile: ResolvedProfile) => { wire: unknown; closed: boolean };
+  collectSelections: (
+    shape: unknown,
+    featureId: string,
+    ownerKey: string,
+    featureTags?: string[],
+    opts?: SelectionCollectionOptions
+  ) => KernelSelection[];
+  makePipeSolid: (
+    spine: unknown,
+    profile: unknown,
+    frameOrOpts?: PlaneBasis | { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean },
+    maybeOpts?: { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean }
+  ) => unknown;
+  resolvePlaneBasis: (
+    planeRef: unknown,
+    upstream: KernelResult,
+    resolve: (selector: Selector, upstream: KernelResult) => KernelSelection
+  ) => PlaneBasis;
+  resolveProfile: (profileRef: ProfileRef, upstream: KernelResult) => ResolvedProfile;
 };

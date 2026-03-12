@@ -96,6 +96,7 @@ import { execThicken as execOcctThicken } from "./occt/thicken_ops.js";
 import { execShell as execOcctShell } from "./occt/shell_ops.js";
 import { execBoolean as execOcctBoolean } from "./occt/boolean_ops.js";
 import { execRib as execOcctRib, execWeb as execOcctWeb } from "./occt/thin_profile_ops.js";
+import { execSweep as execOcctSweep } from "./occt/sweep_ops.js";
 import {
   execHexTubeSweep as execOcctHexTubeSweep,
   execPipeSweep as execOcctPipeSweep,
@@ -148,6 +149,7 @@ import type {
   VariableEdgeModifierContext,
   ShellContext,
   SweepFeatureContext,
+  SweepContext,
   ThinProfileContext,
 } from "./occt/operation_contexts.js";
 import {
@@ -912,59 +914,7 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     resolve: ExecuteInput["resolve"]
   ): KernelResult {
-    const profile = this.resolveProfile(feature.profile, upstream);
-    const { wire, closed } = this.buildProfileWire(profile);
-    const spine = this.buildPathWire(feature.path);
-    const frame = feature.frame
-      ? this.resolvePlaneBasis(feature.frame, upstream, resolve)
-      : undefined;
-    const frenet = feature.orientation === "frenet" ? true : undefined;
-
-    const mode = feature.mode;
-    const makeSolid = mode === "solid" ? true : mode === "surface" ? false : closed;
-    if (makeSolid && !closed) {
-      throw new Error("OCCT backend: sweep solid requires a closed profile");
-    }
-
-    let shape: any;
-    let outputKind: "solid" | "surface";
-    if (makeSolid) {
-      const face = this.buildProfileFace(profile);
-      shape = frame
-        ? this.makePipeSolid(spine, face, frame, {
-            makeSolid: true,
-            frenet,
-          })
-        : this.makePipeSolid(spine, face, { makeSolid: true, frenet });
-      outputKind = "solid";
-    } else {
-      shape = frame
-        ? this.makePipeSolid(spine, wire, frame, {
-            makeSolid: false,
-            frenet,
-          })
-        : this.makePipeSolid(spine, wire, { makeSolid: false, frenet });
-      outputKind = "surface";
-    }
-
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:${outputKind}`,
-          kind: outputKind,
-          meta: { shape },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      shape,
-      feature.id,
-      feature.result,
-      feature.tags,
-      { rootKind: outputKind === "solid" ? "solid" : "face" }
-    );
-    return { outputs, selections };
+    return execOcctSweep(this.sweepContext(resolve), feature, upstream, resolve);
   }
 
   private execRib(feature: Rib, upstream: KernelResult): KernelResult {
@@ -1519,6 +1469,37 @@ export class OcctBackend implements Backend {
       shapeHasSolid: (shape) => this.shapeHasSolid(shape),
       subVec: (a, b) => this.subVec(a, b),
       transformShapeTranslate: (shape, delta) => this.transformShapeTranslate(shape, delta),
+    };
+  }
+
+  private sweepContext(resolve: ExecuteInput["resolve"]): SweepContext {
+    return {
+      buildPathWire: (path) => this.buildPathWire(path),
+      buildProfileFace: (profile) => this.buildProfileFace(profile),
+      buildProfileWire: (profile) => this.buildProfileWire(profile),
+      collectSelections: (shape, featureId, ownerKey, featureTags, opts) =>
+        this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
+      makePipeSolid: (spine, profile, frameOrOpts, maybeOpts) => {
+        if (maybeOpts !== undefined) {
+          return this.makePipeSolid(spine, profile, frameOrOpts as PlaneBasis, maybeOpts);
+        }
+        if (
+          frameOrOpts &&
+          typeof frameOrOpts === "object" &&
+          "origin" in frameOrOpts &&
+          "normal" in frameOrOpts
+        ) {
+          return this.makePipeSolid(spine, profile, frameOrOpts as PlaneBasis);
+        }
+        return this.makePipeSolid(
+          spine,
+          profile,
+          frameOrOpts as { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean } | undefined
+        );
+      },
+      resolvePlaneBasis: (planeRef, upstream, resolver) =>
+        this.resolvePlaneBasis(planeRef as PlaneRef, upstream, resolver as ExecuteInput["resolve"]),
+      resolveProfile: (profileRef, upstream) => this.resolveProfile(profileRef, upstream),
     };
   }
 
