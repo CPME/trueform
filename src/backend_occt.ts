@@ -25,6 +25,11 @@ import {
   type EdgeModifierDeps,
 } from "./occt/edge_modifiers.js";
 import {
+  executeVariableEdgeModifier,
+  variableChamferEntries,
+  variableFilletEntries,
+} from "./occt/variable_edge_modifiers.js";
+import {
   applySelectionLedgerHint as applyOcctSelectionLedgerHint,
   assignStableSelectionIds as assignOcctStableSelectionIds,
   selectionTieBreakerFingerprint as occtSelectionTieBreakerFingerprint,
@@ -132,6 +137,7 @@ import type {
   SurfaceEditContext,
   ThickenContext,
   UnwrapContext,
+  VariableEdgeModifierContext,
 } from "./occt/operation_contexts.js";
 import {
   resolveOwnerKey as resolveSelectionOwnerKey,
@@ -1729,6 +1735,20 @@ export class OcctBackend implements Backend {
     };
   }
 
+  private variableEdgeModifierContext(): VariableEdgeModifierContext {
+    return {
+      toResolutionContext: (state) => this.toResolutionContext(state),
+      resolveOwnerKey: (selection, state) => this.resolveOwnerKey(selection, state),
+      resolveOwnerShape: (selection, state) => this.resolveOwnerShape(selection, state),
+      toEdge: (edge) => this.toEdge(edge),
+      containsShape: (shapes, candidate) => this.containsShape(shapes as any[], candidate),
+      tryBuild: (builder) => this.tryBuild(builder),
+      readShape: (builder) => this.readShape(builder),
+      collectSelections: (shape, featureId, ownerKey, tags, opts) =>
+        this.collectSelections(shape, featureId, ownerKey, tags, opts),
+    };
+  }
+
   private execDeleteFace(
     feature: DeleteFace,
     upstream: KernelResult
@@ -2342,166 +2362,39 @@ export class OcctBackend implements Backend {
     feature: VariableFillet,
     upstream: KernelResult
   ): KernelResult {
-    const source = resolveSelectorSet(
-      feature.source,
-      this.toResolutionContext(upstream)
-    );
-    if (source.length !== 1 || source[0]?.kind !== "solid") {
-      throw new Error(
-        "OCCT backend: variable fillet source selector must resolve to one solid"
-      );
-    }
-    const sourceSelection = source[0] as KernelSelection;
-    const ownerKey = this.resolveOwnerKey(sourceSelection, upstream);
-    const ownerShape = this.resolveOwnerShape(sourceSelection, upstream);
-    if (!ownerShape) {
-      throw new Error("OCCT backend: variable fillet source missing owner solid");
-    }
-    const builder = this.makeFilletBuilder(ownerShape);
-    const addedEdges: any[] = [];
-    let addedAny = false;
-    for (const [index, entry] of feature.entries.entries()) {
-      const radius = expectNumber(entry.radius, `variable fillet radius[${index}]`);
-      if (!(radius > 0)) {
-        throw new Error("OCCT backend: variable fillet radius must be positive");
-      }
-      const targets = resolveSelectorSet(
-        entry.edge,
-        this.toResolutionContext(upstream)
-      );
-      if (targets.length === 0) {
-        throw new Error(`OCCT backend: variable fillet entry ${index} matched 0 edges`);
-      }
-      for (const target of targets) {
-        if (target.kind !== "edge") {
-          throw new Error("OCCT backend: variable fillet entries must resolve to edges");
-        }
-        const targetOwner = this.resolveOwnerKey(target as KernelSelection, upstream);
-        if (targetOwner !== ownerKey) {
-          throw new Error(
-            "OCCT backend: variable fillet edges must belong to source solid"
-          );
-        }
-        const edge = this.toEdge(target.meta["shape"]);
-        if (this.containsShape(addedEdges, edge)) continue;
-        const added = tryDynamicMethod(builder, [
+    return executeVariableEdgeModifier({
+      label: "variable fillet",
+      feature,
+      upstream,
+      ctx: this.variableEdgeModifierContext(),
+      makeBuilder: (owner) => this.makeFilletBuilder(owner),
+      entries: variableFilletEntries(feature),
+      addEdge: (builder, edge, radius) =>
+        tryDynamicMethod(builder, [
           { name: "Add_2", args: [edge, radius] },
           { name: "Add_2", args: [radius, edge] },
           { name: "Add_1", args: [edge] },
-        ]);
-        if (!added) {
-          throw new Error("OCCT backend: failed to add variable fillet edge");
-        }
-        addedEdges.push(edge);
-        addedAny = true;
-      }
-    }
-    if (!addedAny) {
-      throw new Error("OCCT backend: variable fillet resolved no unique edges");
-    }
-    this.tryBuild(builder);
-    const solid = this.readShape(builder);
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:solid`,
-          kind: "solid" as const,
-          meta: { shape: solid },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      solid,
-      feature.id,
-      feature.result,
-      feature.tags
-    );
-    return { outputs, selections };
+        ]),
+    });
   }
 
   private execVariableChamfer(
     feature: VariableChamfer,
     upstream: KernelResult
   ): KernelResult {
-    const source = resolveSelectorSet(
-      feature.source,
-      this.toResolutionContext(upstream)
-    );
-    if (source.length !== 1 || source[0]?.kind !== "solid") {
-      throw new Error(
-        "OCCT backend: variable chamfer source selector must resolve to one solid"
-      );
-    }
-    const sourceSelection = source[0] as KernelSelection;
-    const ownerKey = this.resolveOwnerKey(sourceSelection, upstream);
-    const ownerShape = this.resolveOwnerShape(sourceSelection, upstream);
-    if (!ownerShape) {
-      throw new Error("OCCT backend: variable chamfer source missing owner solid");
-    }
-    const builder = this.makeChamferBuilder(ownerShape);
-    const addedEdges: any[] = [];
-    let addedAny = false;
-    for (const [index, entry] of feature.entries.entries()) {
-      const distance = expectNumber(
-        entry.distance,
-        `variable chamfer distance[${index}]`
-      );
-      if (!(distance > 0)) {
-        throw new Error("OCCT backend: variable chamfer distance must be positive");
-      }
-      const targets = resolveSelectorSet(
-        entry.edge,
-        this.toResolutionContext(upstream)
-      );
-      if (targets.length === 0) {
-        throw new Error(`OCCT backend: variable chamfer entry ${index} matched 0 edges`);
-      }
-      for (const target of targets) {
-        if (target.kind !== "edge") {
-          throw new Error("OCCT backend: variable chamfer entries must resolve to edges");
-        }
-        const targetOwner = this.resolveOwnerKey(target as KernelSelection, upstream);
-        if (targetOwner !== ownerKey) {
-          throw new Error(
-            "OCCT backend: variable chamfer edges must belong to source solid"
-          );
-        }
-        const edge = this.toEdge(target.meta["shape"]);
-        if (this.containsShape(addedEdges, edge)) continue;
-        const added = tryDynamicMethod(builder, [
+    return executeVariableEdgeModifier({
+      label: "variable chamfer",
+      feature,
+      upstream,
+      ctx: this.variableEdgeModifierContext(),
+      makeBuilder: (owner) => this.makeChamferBuilder(owner),
+      entries: variableChamferEntries(feature),
+      addEdge: (builder, edge, distance) =>
+        tryDynamicMethod(builder, [
           { name: "Add_2", args: [distance, edge] },
           { name: "Add_1", args: [edge] },
-        ]);
-        if (!added) {
-          throw new Error("OCCT backend: failed to add variable chamfer edge");
-        }
-        addedEdges.push(edge);
-        addedAny = true;
-      }
-    }
-    if (!addedAny) {
-      throw new Error("OCCT backend: variable chamfer resolved no unique edges");
-    }
-    this.tryBuild(builder);
-    const solid = this.readShape(builder);
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:solid`,
-          kind: "solid" as const,
-          meta: { shape: solid },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      solid,
-      feature.id,
-      feature.result,
-      feature.tags
-    );
-    return { outputs, selections };
+        ]),
+    });
   }
 
   private edgeModifierDeps(): EdgeModifierDeps {

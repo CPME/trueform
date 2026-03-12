@@ -343,3 +343,20 @@ export type ThickenContext = {
   shapeHasSolid: (shape: unknown) => boolean;
   addVec: (a: [number, number, number], b: [number, number, number]) => [number, number, number];
 };
+
+export type VariableEdgeModifierContext = {
+  toResolutionContext: (upstream: KernelResult) => ResolutionContext;
+  resolveOwnerKey: (selection: KernelSelection, upstream: KernelResult) => string;
+  resolveOwnerShape: (selection: KernelSelection, upstream: KernelResult) => unknown | null;
+  toEdge: (edge: unknown) => unknown;
+  containsShape: (shapes: unknown[], candidate: unknown) => boolean;
+  tryBuild: (builder: unknown) => void;
+  readShape: (builder: unknown) => unknown;
+  collectSelections: (
+    shape: unknown,
+    featureId: string,
+    ownerKey: string,
+    tags?: string[],
+    opts?: SelectionCollectionOptions
+  ) => KernelSelection[];
+};
