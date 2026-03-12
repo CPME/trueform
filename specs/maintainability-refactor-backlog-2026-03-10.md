@@ -54,6 +54,18 @@ Purpose: track the remaining maintainability-heavy refactor work after the first
 - Regression coverage: build + `occt.pipe_sweep.e2e` + `occt.hex_tube_sweep.e2e` + `feature_staging.e2e`
 - Commit: `0492f71`
 
+10. Extracted boolean execution behind a typed feature boundary.
+- Added: `src/occt/boolean_ops.ts`
+- Added direct coverage: `src/tests/occt.boolean.module.test.ts`
+- Regression coverage: build + `occt.boolean.e2e` + `occt.boolean.lineage.e2e` + `occt.boolean.split_lineage.e2e`
+- Commit: `28f8555`
+
+11. Extracted thin-profile execution for rib/web features.
+- Added: `src/occt/thin_profile_ops.ts`
+- Added direct coverage: `src/tests/occt.thin_profile.module.test.ts`
+- Regression coverage: build + `occt.rib_web.e2e.probe` + `occt.rib_web.failure_modes.e2e`
+- Commit: `b81da82`
+
 ## Remaining Maintainability Work (Prioritized)
 
 ## Active Detailed Plan: `src/backend_occt.ts` Decomposition
@@ -117,10 +129,10 @@ Execution slices:
    - Commit: `8cef3f5`
 
 Next queued slices (by current maintainability value in `backend_occt.ts`):
-1. Thin-profile feature cluster (`execThinProfileFeature` / `execRib` / `execWeb`) with a typed planning/execution boundary.
-2. Boolean executor boundary (`execBoolean`) so ledger planning and boolean primitive execution stop living inline in the backend.
-3. Remaining generic sweep/profile execution (`execSweep`) once the thin-profile and path-sweep contexts stabilize.
-4. Sketch/profile authoring decomposition (`execSketch` and adjacent profile output assembly) after the 3D consumers stop depending on backend-local helpers.
+1. Remaining generic sweep/profile execution (`execSweep`) once the thin-profile and path-sweep contexts stabilize.
+2. Sketch/profile authoring decomposition (`execSketch` and adjacent profile output assembly) after the 3D consumers stop depending on backend-local helpers.
+3. Shared feature planning primitives for profile/path execution so `sweep`, `rib`, and `web` stop recomputing section setup independently.
+4. Primitive-adapter cleanup for path/profile construction helpers so backend methods stop selecting OCCT builder variants directly.
 
 Per-slice safety checks:
 - `npm run build -- --pretty false`
