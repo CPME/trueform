@@ -95,6 +95,10 @@ import { execUnwrap as execOcctUnwrap } from "./occt/unwrap_ops.js";
 import { execThicken as execOcctThicken } from "./occt/thicken_ops.js";
 import { execShell as execOcctShell } from "./occt/shell_ops.js";
 import {
+  execHexTubeSweep as execOcctHexTubeSweep,
+  execPipeSweep as execOcctPipeSweep,
+} from "./occt/sweep_feature_ops.js";
+import {
   execDeleteFace as execOcctDeleteFace,
   execMoveBody as execOcctMoveBody,
   execMoveFace as execOcctMoveFace,
@@ -140,6 +144,7 @@ import type {
   UnwrapContext,
   VariableEdgeModifierContext,
   ShellContext,
+  SweepFeatureContext,
 } from "./occt/operation_contexts.js";
 import {
   resolveOwnerKey as resolveSelectionOwnerKey,
@@ -1270,227 +1275,11 @@ export class OcctBackend implements Backend {
   }
 
   private execPipeSweep(feature: PipeSweep, _upstream: KernelResult): KernelResult {
-    const outerDia = expectNumber(feature.outerDiameter, "pipe sweep outerDiameter");
-    const innerDia =
-      feature.innerDiameter === undefined
-        ? 0
-        : expectNumber(feature.innerDiameter, "pipe sweep innerDiameter");
-    const outerRadius = outerDia / 2;
-    const innerRadius = innerDia / 2;
-    if (outerRadius <= 0) {
-      throw new Error("OCCT backend: pipe sweep outer diameter must be positive");
-    }
-    if (innerRadius < 0) {
-      throw new Error("OCCT backend: pipe sweep inner diameter must be non-negative");
-    }
-    if (innerRadius > 0 && innerRadius >= outerRadius) {
-      throw new Error(
-        "OCCT backend: pipe sweep inner diameter must be smaller than outer diameter"
-      );
-    }
-
-    const spine = this.buildPathWire(feature.path);
-    const { start, tangent } = this.pathStartTangent(feature.path);
-    const axis = normalizeVector(tangent);
-    if (!isFiniteVec(axis)) {
-      throw new Error("OCCT backend: pipe sweep path tangent is degenerate");
-    }
-    const plane = this.planeBasisFromNormal(start, axis);
-    const mode = feature.mode ?? "solid";
-    if (mode === "surface") {
-      const outerEdge = this.makeCircleEdge(plane.origin, outerRadius, plane.normal);
-      const outerWire = this.makeWireFromEdges([outerEdge]);
-      const shape = this.makePipeSolid(spine, outerWire, plane, {
-        makeSolid: false,
-        allowFallback: false,
-      });
-      const outputs = new Map([
-        [
-          feature.result,
-          {
-            id: `${feature.id}:surface`,
-            kind: "surface" as const,
-            meta: { shape },
-          },
-        ],
-      ]);
-      const selections = this.collectSelections(
-        shape,
-        feature.id,
-        feature.result,
-        feature.tags,
-        { rootKind: "face" }
-      );
-      return { outputs, selections };
-    }
-
-    let solid: any;
-    try {
-      const outerFace = this.makeRingFace(
-        plane.origin,
-        plane.normal,
-        outerRadius,
-        0
-      );
-      const outerShape = this.makePipeSolid(spine, outerFace, plane, {
-        makeSolid: true,
-      });
-      if (innerRadius > 0) {
-        const innerFace = this.makeRingFace(
-          plane.origin,
-          plane.normal,
-          innerRadius,
-          0
-        );
-        const innerShape = this.makePipeSolid(spine, innerFace, plane, {
-          makeSolid: true,
-        });
-        const cut = this.makeBoolean("cut", outerShape, innerShape);
-        solid = this.readShape(cut);
-        solid = this.splitByTools(solid, [outerShape, innerShape]);
-      } else {
-        solid = outerShape;
-      }
-    } catch {
-      throw new Error(
-        "OCCT backend: pipe sweep failed to create solid; increase bend radius or reduce diameter"
-      );
-    }
-    const solidCount = this.countSolids(solid);
-    if (solidCount !== 1) {
-      throw new Error(
-        `OCCT backend: pipe sweep must produce exactly one solid; got ${solidCount}`
-      );
-    }
-    solid = this.normalizeSolid(solid);
-    if (!this.isValidShape(solid)) {
-      throw new Error(
-        "OCCT backend: pipe sweep failed to create solid; increase bend radius or reduce diameter"
-      );
-    }
-
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:solid`,
-          kind: "solid" as const,
-          meta: { shape: solid },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      solid,
-      feature.id,
-      feature.result,
-      feature.tags
-    );
-    return { outputs, selections };
+    return execOcctPipeSweep(this.sweepFeatureContext(), feature);
   }
 
   private execHexTubeSweep(feature: HexTubeSweep, _upstream: KernelResult): KernelResult {
-    const outerAcross = expectNumber(
-      feature.outerAcrossFlats,
-      "hex tube sweep outerAcrossFlats"
-    );
-    const innerAcross =
-      feature.innerAcrossFlats === undefined
-        ? 0
-        : expectNumber(feature.innerAcrossFlats, "hex tube sweep innerAcrossFlats");
-    if (outerAcross <= 0) {
-      throw new Error("OCCT backend: hex tube sweep outerAcrossFlats must be positive");
-    }
-    if (innerAcross < 0) {
-      throw new Error("OCCT backend: hex tube sweep innerAcrossFlats must be non-negative");
-    }
-    if (innerAcross > 0 && innerAcross >= outerAcross) {
-      throw new Error(
-        "OCCT backend: hex tube sweep innerAcrossFlats must be smaller than outerAcrossFlats"
-      );
-    }
-
-    const spine = this.buildPathWire(feature.path);
-    const { start, tangent } = this.pathStartTangent(feature.path);
-    const axis = normalizeVector(tangent);
-    if (!isFiniteVec(axis)) {
-      throw new Error("OCCT backend: hex tube sweep path tangent is degenerate");
-    }
-    const plane = this.planeBasisFromNormal(start, axis);
-
-    const outerRadius = outerAcross / Math.sqrt(3);
-    const innerRadius = innerAcross / Math.sqrt(3);
-    const outerPoints = this.regularPolygonPoints(
-      plane.origin,
-      plane.xDir,
-      plane.yDir,
-      outerRadius,
-      6
-    );
-    const mode = feature.mode ?? "solid";
-    if (mode === "surface") {
-      const outerWire = this.makePolygonWire(outerPoints);
-      const shape = this.makePipeSolid(spine, outerWire, plane, {
-        makeSolid: false,
-        allowFallback: false,
-      });
-      const outputs = new Map([
-        [
-          feature.result,
-          {
-            id: `${feature.id}:surface`,
-            kind: "surface" as const,
-            meta: { shape },
-          },
-        ],
-      ]);
-      const selections = this.collectSelections(
-        shape,
-        feature.id,
-        feature.result,
-        feature.tags,
-        { rootKind: "face" }
-      );
-      return { outputs, selections };
-    }
-
-    const outerWire = this.makePolygonWire(outerPoints);
-    const faceBuilder = this.makeFaceFromWire(outerWire);
-    if (innerRadius > 0) {
-      const innerPoints = this
-        .regularPolygonPoints(
-          plane.origin,
-          plane.xDir,
-          plane.yDir,
-          innerRadius,
-          6
-        )
-        .reverse();
-      const innerWire = this.makePolygonWire(innerPoints);
-      if (typeof faceBuilder.Add === "function") {
-        faceBuilder.Add(innerWire);
-      } else if (typeof faceBuilder.add === "function") {
-        faceBuilder.add(innerWire);
-      } else {
-        throw new Error("OCCT backend: face builder missing Add()");
-      }
-    }
-    const face = this.readFace(faceBuilder);
-
-    let solid = this.makePipeSolid(spine, face, plane, { makeSolid: true });
-    solid = this.normalizeSolid(solid);
-
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:solid`,
-          kind: "solid" as const,
-          meta: { shape: solid },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(solid, feature.id, feature.result, feature.tags);
-    return { outputs, selections };
+    return execOcctHexTubeSweep(this.sweepFeatureContext(), feature);
   }
 
   private execMirror(
@@ -1764,6 +1553,49 @@ export class OcctBackend implements Backend {
       normalizeSolid: (shape) => this.normalizeSolid(shape),
       resolve: (selector, upstream) => resolve(selector as Selector, upstream),
       shapeHasSolid: (shape) => this.shapeHasSolid(shape),
+    };
+  }
+
+  private sweepFeatureContext(): SweepFeatureContext {
+    return {
+      buildPathWire: (path) => this.buildPathWire(path),
+      collectSelections: (shape, featureId, ownerKey, featureTags, opts) =>
+        this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
+      countSolids: (shape) => this.countSolids(shape),
+      isValidShape: (shape) => this.isValidShape(shape),
+      makeBoolean: (op, left, right) => this.makeBoolean(op, left, right),
+      makeCircleEdge: (center, radius, normal) => this.makeCircleEdge(center, radius, normal),
+      makeFaceFromWire: (wire) => this.makeFaceFromWire(wire),
+      makePipeSolid: (spine, profile, frameOrOpts, maybeOpts) => {
+        if (maybeOpts !== undefined) {
+          return this.makePipeSolid(spine, profile, frameOrOpts as PlaneBasis, maybeOpts);
+        }
+        if (
+          frameOrOpts &&
+          typeof frameOrOpts === "object" &&
+          "origin" in frameOrOpts &&
+          "normal" in frameOrOpts
+        ) {
+          return this.makePipeSolid(spine, profile, frameOrOpts as PlaneBasis);
+        }
+        return this.makePipeSolid(
+          spine,
+          profile,
+          frameOrOpts as { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean } | undefined
+        );
+      },
+      makePolygonWire: (points) => this.makePolygonWire(points),
+      makeRingFace: (center, normal, outerRadius, innerRadius) =>
+        this.makeRingFace(center, normal, outerRadius, innerRadius),
+      makeWireFromEdges: (edges) => this.makeWireFromEdges(edges as any[]),
+      normalizeSolid: (shape) => this.normalizeSolid(shape),
+      pathStartTangent: (path) => this.pathStartTangent(path),
+      planeBasisFromNormal: (origin, normal) => this.planeBasisFromNormal(origin, normal),
+      readFace: (shape) => this.readFace(shape),
+      readShape: (shape) => this.readShape(shape),
+      regularPolygonPoints: (center, xDir, yDir, radius, sides) =>
+        this.regularPolygonPoints(center, xDir, yDir, radius, sides),
+      splitByTools: (shape, tools) => this.splitByTools(shape, tools as any[]),
     };
   }
 

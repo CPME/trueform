@@ -1,5 +1,5 @@
 import type { KernelResult, KernelSelection, KernelSelectionLineage } from "../backend.js";
-import type { AxisDirection, MoveBody, MoveFace } from "../ir.js";
+import type { AxisDirection, MoveBody, MoveFace, Path3D } from "../ir.js";
 import type { ResolutionContext } from "../selectors.js";
 import type { PlaneBasis } from "./plane_basis.js";
 
@@ -390,4 +390,56 @@ export type ShellContext = {
   normalizeSolid: (shape: unknown) => unknown;
   resolve: (selector: unknown, upstream: KernelResult) => KernelSelection;
   shapeHasSolid: (shape: unknown) => boolean;
+};
+
+export type SweepFeatureContext = {
+  buildPathWire: (path: Path3D) => unknown;
+  collectSelections: (
+    shape: unknown,
+    featureId: string,
+    ownerKey: string,
+    featureTags?: string[],
+    opts?: SelectionCollectionOptions
+  ) => KernelSelection[];
+  countSolids: (shape: unknown) => number;
+  isValidShape: (shape: unknown) => boolean;
+  makeBoolean: (op: "cut" | "intersect", left: unknown, right: unknown) => unknown;
+  makeCircleEdge: (
+    center: [number, number, number],
+    radius: number,
+    normal: [number, number, number]
+  ) => unknown;
+  makeFaceFromWire: (wire: unknown) => unknown;
+  makePipeSolid: (
+    spine: unknown,
+    profile: unknown,
+    frameOrOpts?: PlaneBasis | { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean },
+    maybeOpts?: { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean }
+  ) => unknown;
+  makePolygonWire: (points: [number, number, number][]) => unknown;
+  makeRingFace: (
+    center: [number, number, number],
+    normal: [number, number, number],
+    outerRadius: number,
+    innerRadius: number
+  ) => unknown;
+  makeWireFromEdges: (edges: unknown[]) => unknown;
+  normalizeSolid: (shape: unknown) => unknown;
+  pathStartTangent: (
+    path: Path3D
+  ) => { start: [number, number, number]; tangent: [number, number, number] };
+  planeBasisFromNormal: (
+    origin: [number, number, number],
+    normal: [number, number, number]
+  ) => PlaneBasis;
+  readFace: (shape: unknown) => unknown;
+  readShape: (shape: unknown) => unknown;
+  regularPolygonPoints: (
+    center: [number, number, number],
+    xDir: [number, number, number],
+    yDir: [number, number, number],
+    radius: number,
+    sides: number
+  ) => [number, number, number][];
+  splitByTools: (shape: unknown, tools: unknown[]) => unknown;
 };
