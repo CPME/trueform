@@ -11,7 +11,6 @@ import {
   StepExportOptions,
   StlExportOptions,
 } from "./backend.js";
-import { resolveSelectorSet } from "./selectors.js";
 import { BackendError } from "./errors.js";
 import { TF_STAGED_FEATURES } from "./feature_staging.js";
 import { hashValue } from "./hash.js";
@@ -98,6 +97,8 @@ import { execBoolean as execOcctBoolean } from "./occt/boolean_ops.js";
 import { execRib as execOcctRib, execWeb as execOcctWeb } from "./occt/thin_profile_ops.js";
 import { execSweep as execOcctSweep } from "./occt/sweep_ops.js";
 import { execSketch as execOcctSketch } from "./occt/sketch_ops.js";
+import { execDraft as execOcctDraft } from "./occt/draft_ops.js";
+import { execMirror as execOcctMirror } from "./occt/mirror_ops.js";
 import {
   execHexTubeSweep as execOcctHexTubeSweep,
   execPipeSweep as execOcctPipeSweep,
@@ -153,6 +154,8 @@ import type {
   SweepContext,
   ThinProfileContext,
   SketchContext,
+  DraftContext,
+  MirrorContext,
 } from "./occt/operation_contexts.js";
 import {
   resolveOwnerKey as resolveSelectionOwnerKey,
@@ -1119,52 +1122,7 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     resolve: ExecuteInput["resolve"]
   ): KernelResult {
-    const target = resolve(feature.source, upstream);
-    if (target.kind !== "solid" && target.kind !== "face" && target.kind !== "surface") {
-      throw new Error(
-        "OCCT backend: mirror source must resolve to a solid, surface, or face"
-      );
-    }
-    const shape = target.meta["shape"];
-    if (!shape) {
-      throw new Error("OCCT backend: mirror source missing shape metadata");
-    }
-
-    const plane = this.resolvePlaneBasis(feature.plane, upstream, resolve);
-    const origin = this.makePnt(plane.origin[0], plane.origin[1], plane.origin[2]);
-    const normal = this.makeDir(plane.normal[0], plane.normal[1], plane.normal[2]);
-    const xDir = this.makeDir(plane.xDir[0], plane.xDir[1], plane.xDir[2]);
-    const ax2 = this.makeAx2WithXDir(origin, normal, xDir);
-    const trsf = this.newOcct("gp_Trsf");
-    this.callWithFallback(
-      trsf,
-      ["SetMirror", "SetMirror_1", "SetMirror_2", "SetMirror_3"],
-      [[ax2]]
-    );
-
-    const builder = this.newOcct("BRepBuilderAPI_Transform", shape, trsf, true);
-    this.tryBuild(builder);
-    const mirrored = this.readShape(builder);
-    const outputKind: "solid" | "face" | "surface" =
-      target.kind === "solid" ? "solid" : target.kind === "surface" ? "surface" : "face";
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:${outputKind}`,
-          kind: outputKind,
-          meta: { shape: mirrored },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      mirrored,
-      feature.id,
-      feature.result,
-      feature.tags,
-      { rootKind: outputKind === "solid" ? "solid" : "face" }
-    );
-    return { outputs, selections };
+    return execOcctMirror(this.mirrorContext(resolve), feature, upstream, resolve);
   }
 
   private selectionLedgerContext(): SelectionLedgerContext {
@@ -1487,6 +1445,44 @@ export class OcctBackend implements Backend {
     };
   }
 
+  private mirrorContext(resolve: ExecuteInput["resolve"]): MirrorContext {
+    return {
+      collectSelections: (shape, featureId, ownerKey, featureTags, opts) =>
+        this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
+      callWithFallback: (target, methods, argSets) => this.callWithFallback(target, methods, argSets as any),
+      makeAx2WithXDir: (origin, normal, xDir) => this.makeAx2WithXDir(origin, normal, xDir),
+      makeDir: (x, y, z) => this.makeDir(x, y, z),
+      makePnt: (x, y, z) => this.makePnt(x, y, z),
+      newOcct: (name, ...args) => this.newOcct(name, ...args),
+      readShape: (shape) => this.readShape(shape),
+      resolvePlaneBasis: (planeRef, upstream, resolver) =>
+        this.resolvePlaneBasis(planeRef as PlaneRef, upstream, resolver as ExecuteInput["resolve"]),
+      tryBuild: (builder) => this.tryBuild(builder),
+    };
+  }
+
+  private draftContext(): DraftContext {
+    return {
+      callWithFallback: (target, methods, argSets) => this.callWithFallback(target, methods, argSets as any),
+      collectSelections: (shape, featureId, ownerKey, featureTags, opts) =>
+        this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
+      makeDir: (x, y, z) => this.makeDir(x, y, z),
+      makeDraftBuilder: (owner) => this.makeDraftBuilder(owner),
+      makeDraftSelectionLedgerPlan: (upstream, ownerShape, faceTargets, builder) =>
+        this.makeDraftSelectionLedgerPlan(upstream, ownerShape, faceTargets, builder),
+      makePln: (origin, normal) => this.makePln(origin, normal),
+      readShape: (shape) => this.readShape(shape),
+      resolveAxisSpec: (axis, upstream, label) => this.resolveAxisSpec(axis, upstream, label),
+      resolveOwnerKey: (selection, upstream) => this.resolveOwnerKey(selection, upstream),
+      resolveOwnerShape: (selection, upstream) => this.resolveOwnerShape(selection, upstream),
+      resolvePlaneBasis: (planeRef, upstream, resolve) =>
+        this.resolvePlaneBasis(planeRef as PlaneRef, upstream, resolve),
+      toFace: (shape) => this.toFace(shape),
+      toResolutionContext: (upstream) => this.toResolutionContext(upstream),
+      tryBuild: (builder) => this.tryBuild(builder),
+    };
+  }
+
   private invokePipeSolid(
     spine: unknown,
     profile: unknown,
@@ -1620,112 +1616,7 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     resolve: ExecuteInput["resolve"]
   ): KernelResult {
-    const source = resolve(feature.source, upstream);
-    if (source.kind !== "solid") {
-      throw new Error("OCCT backend: draft source must resolve to a solid");
-    }
-    const ownerKey = this.resolveOwnerKey(source, upstream);
-    const owner = this.resolveOwnerShape(source, upstream);
-    if (!owner) {
-      throw new Error("OCCT backend: draft source missing owner solid");
-    }
-
-    const faceTargets = resolveSelectorSet(
-      feature.faces,
-      this.toResolutionContext(upstream)
-    );
-    if (faceTargets.length === 0) {
-      throw new Error("OCCT backend: draft selector matched 0 faces");
-    }
-    for (const target of faceTargets) {
-      if (target.kind !== "face") {
-        throw new Error("OCCT backend: draft selector must resolve to faces");
-      }
-      const faceOwnerKey =
-        typeof target.meta["ownerKey"] === "string"
-          ? (target.meta["ownerKey"] as string)
-          : undefined;
-      if (faceOwnerKey && faceOwnerKey !== ownerKey) {
-        throw new Error(
-          "OCCT backend: draft faces must belong to the same source solid"
-        );
-      }
-    }
-
-    const angle = expectNumber(feature.angle, "feature.angle");
-    if (Math.abs(angle) < 1e-8 || Math.abs(angle) >= Math.PI / 2) {
-      throw new Error(
-        "OCCT backend: draft angle must be non-zero and less than PI/2 in magnitude"
-      );
-    }
-    const pullDirection = this.resolveAxisSpec(
-      feature.pullDirection,
-      upstream,
-      "draft pull direction"
-    );
-    const neutralBasis = this.resolvePlaneBasis(
-      feature.neutralPlane,
-      upstream,
-      resolve
-    );
-    const neutralPlane = this.makePln(neutralBasis.origin, neutralBasis.normal);
-    const pullDir = this.makeDir(
-      pullDirection[0],
-      pullDirection[1],
-      pullDirection[2]
-    );
-    const draft = this.makeDraftBuilder(owner);
-
-    for (const target of faceTargets) {
-      const face = this.toFace(target.meta["shape"]);
-      const added = (() => {
-        try {
-          this.callWithFallback(
-            draft,
-            ["Add", "Add_1"],
-            [
-              [face, pullDir, angle, neutralPlane, true],
-              [face, pullDir, angle, neutralPlane, false],
-              [face, pullDir, angle, neutralPlane],
-            ]
-          );
-          return true;
-        } catch {
-          return false;
-        }
-      })();
-      if (!added) {
-        throw new Error("OCCT backend: failed to add draft face");
-      }
-    }
-
-    this.tryBuild(draft);
-    const solid = this.readShape(draft);
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:solid`,
-          kind: "solid" as const,
-          meta: { shape: solid },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      solid,
-      feature.id,
-      feature.result,
-      feature.tags,
-      {
-        ledgerPlan: this.makeDraftSelectionLedgerPlan(
-          upstream,
-          owner,
-          faceTargets as KernelSelection[],
-          draft
-        ),
-      }
-    );
-    return { outputs, selections };
+    return execOcctDraft(this.draftContext(), feature, upstream, resolve);
   }
 
   private execShell(

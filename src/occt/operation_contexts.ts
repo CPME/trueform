@@ -1,6 +1,7 @@
 import type { KernelResult, KernelSelection, KernelSelectionLineage } from "../backend.js";
 import type {
   AxisDirection,
+  AxisSpec,
   ExtrudeAxis,
   ID,
   MoveBody,
@@ -567,4 +568,62 @@ export type SketchContext = {
     entityMap: Map<ID, SketchEntity>,
     plane: PlaneBasis
   ) => string[];
+};
+
+export type MirrorContext = {
+  collectSelections: (
+    shape: unknown,
+    featureId: string,
+    ownerKey: string,
+    featureTags?: string[],
+    opts?: SelectionCollectionOptions
+  ) => KernelSelection[];
+  callWithFallback: (target: unknown, methods: string[], argSets: unknown[][]) => unknown;
+  makeAx2WithXDir: (origin: unknown, normal: unknown, xDir: unknown) => unknown;
+  makeDir: (x: number, y: number, z: number) => unknown;
+  makePnt: (x: number, y: number, z: number) => unknown;
+  newOcct: (name: string, ...args: unknown[]) => unknown;
+  readShape: (shape: unknown) => unknown;
+  resolvePlaneBasis: (
+    planeRef: unknown,
+    upstream: KernelResult,
+    resolve: (selector: Selector, upstream: KernelResult) => KernelSelection
+  ) => PlaneBasis;
+  tryBuild: (builder: unknown) => void;
+};
+
+export type DraftContext = {
+  callWithFallback: (target: unknown, methods: string[], argSets: unknown[][]) => unknown;
+  collectSelections: (
+    shape: unknown,
+    featureId: string,
+    ownerKey: string,
+    featureTags?: string[],
+    opts?: SelectionCollectionOptions
+  ) => KernelSelection[];
+  makeDir: (x: number, y: number, z: number) => unknown;
+  makeDraftBuilder: (owner: unknown) => unknown;
+  makeDraftSelectionLedgerPlan: (
+    upstream: KernelResult,
+    ownerShape: unknown,
+    faceTargets: KernelSelection[],
+    builder: unknown
+  ) => SelectionLedgerPlan;
+  makePln: (origin: [number, number, number], normal: [number, number, number]) => unknown;
+  readShape: (shape: unknown) => unknown;
+  resolveAxisSpec: (
+    axis: AxisSpec,
+    upstream: KernelResult,
+    label: string
+  ) => [number, number, number];
+  resolveOwnerKey: (selection: KernelSelection, upstream: KernelResult) => string;
+  resolveOwnerShape: (selection: KernelSelection, upstream: KernelResult) => unknown | null;
+  resolvePlaneBasis: (
+    planeRef: unknown,
+    upstream: KernelResult,
+    resolve: (selector: Selector, upstream: KernelResult) => KernelSelection
+  ) => PlaneBasis;
+  toFace: (shape: unknown) => unknown;
+  toResolutionContext: (upstream: KernelResult) => ResolutionContext;
+  tryBuild: (builder: unknown) => void;
 };

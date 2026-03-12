@@ -83,6 +83,20 @@ Purpose: track the remaining maintainability-heavy refactor work after the first
 - Added: `src/occt/shape_result.ts`
 - Consolidated shared sweep result publishing and the duplicated `makePipeSolid` context adapter into single implementations.
 - Regression coverage: build + sweep module suites + `occt.surface.e2e`
+- Commit: `7e3504a`
+
+15. Extracted mirror execution behind a typed feature boundary.
+- Added: `src/occt/mirror_ops.ts`
+- Added direct coverage: `src/tests/occt.mirror.module.test.ts`
+- Regression coverage: build + `occt.mirror.e2e`
+- Commit: pending in current worktree
+
+16. Extracted draft execution behind a typed feature boundary and standardized feature-scoped backend errors.
+- Added: `src/occt/draft_ops.ts`
+- Added: `src/occt/feature_errors.ts`
+- Extended: `src/errors.ts` `BackendError` now carries optional `details`
+- Added direct coverage: `src/tests/occt.draft.module.test.ts`
+- Regression coverage: build + `occt.draft.e2e` + `occt.modifier_lineage.e2e` + `occt.selector_stability.e2e`
 - Commit: pending in current worktree
 
 ## Remaining Maintainability Work (Prioritized)
@@ -149,10 +163,14 @@ Execution slices:
 
 Current status of the OCCT backend decomposition queue:
 1. The targeted executor extraction queue for `shell`, `sweep` variants, `boolean`, `rib/web`, and `sketch` output assembly is complete.
-2. The remaining work is no longer “finish the obvious fake decomposition”; it is now optional deeper architecture work:
-   - primitive-adapter extraction beyond the sweep/path family
-   - tighter error-model standardization
-   - additional direct module coverage for remaining inline feature families such as `draft` and `mirror`
+2. The first optional hardening pass is also complete:
+   - `draft` and `mirror` are extracted
+   - feature-scoped backend errors are standardized for those new module paths
+   - direct module coverage exists for the remaining feature families touched in this campaign
+3. The remaining work is now deeper architecture work rather than boundary cleanup:
+   - broader primitive-adapter extraction beyond the sweep/path family
+   - wider migration of inline `Error` throws to structured backend errors
+   - direct module coverage for other backend-local helpers if they are extracted later
 
 Per-slice safety checks:
 - `npm run build -- --pretty false`
