@@ -1,31 +1,8 @@
 import type { KernelResult } from "../backend.js";
 import type { HexTubeSweep, PipeSweep } from "../ir.js";
 import type { SweepFeatureContext } from "./operation_contexts.js";
+import { publishShapeResult } from "./shape_result.js";
 import { expectNumber, isFiniteVec, normalizeVector } from "./vector_math.js";
-
-type SweepResultKind = "solid" | "surface";
-
-function publishSweepResult(
-  ctx: SweepFeatureContext,
-  feature: PipeSweep | HexTubeSweep,
-  shape: unknown,
-  outputKind: SweepResultKind
-): KernelResult {
-  const outputs = new Map([
-    [
-      feature.result,
-      {
-        id: `${feature.id}:${outputKind}`,
-        kind: outputKind,
-        meta: { shape },
-      },
-    ],
-  ]);
-  const selections = ctx.collectSelections(shape, feature.id, feature.result, feature.tags, {
-    rootKind: outputKind === "solid" ? "solid" : "face",
-  });
-  return { outputs, selections };
-}
 
 function resolveSweepPlane(
   ctx: SweepFeatureContext,
@@ -73,7 +50,16 @@ export function execPipeSweep(
       makeSolid: false,
       allowFallback: false,
     });
-    return publishSweepResult(ctx, feature, shape, "surface");
+    return publishShapeResult({
+      shape,
+      featureId: feature.id,
+      ownerKey: feature.result,
+      resultKey: feature.result,
+      outputKind: "surface",
+      tags: feature.tags,
+      opts: { rootKind: "face" },
+      collectSelections: ctx.collectSelections,
+    });
   }
 
   let solid: unknown;
@@ -106,7 +92,16 @@ export function execPipeSweep(
       "OCCT backend: pipe sweep failed to create solid; increase bend radius or reduce diameter"
     );
   }
-  return publishSweepResult(ctx, feature, solid, "solid");
+  return publishShapeResult({
+    shape: solid,
+    featureId: feature.id,
+    ownerKey: feature.result,
+    resultKey: feature.result,
+    outputKind: "solid",
+    tags: feature.tags,
+    opts: { rootKind: "solid" },
+    collectSelections: ctx.collectSelections,
+  });
 }
 
 export function execHexTubeSweep(
@@ -150,7 +145,16 @@ export function execHexTubeSweep(
       makeSolid: false,
       allowFallback: false,
     });
-    return publishSweepResult(ctx, feature, shape, "surface");
+    return publishShapeResult({
+      shape,
+      featureId: feature.id,
+      ownerKey: feature.result,
+      resultKey: feature.result,
+      outputKind: "surface",
+      tags: feature.tags,
+      opts: { rootKind: "face" },
+      collectSelections: ctx.collectSelections,
+    });
   }
 
   const outerWire = ctx.makePolygonWire(outerPoints);
@@ -174,5 +178,14 @@ export function execHexTubeSweep(
   const face = ctx.readFace(faceBuilder);
   let solid = ctx.makePipeSolid(spine, face, plane, { makeSolid: true });
   solid = ctx.normalizeSolid(solid);
-  return publishSweepResult(ctx, feature, solid, "solid");
+  return publishShapeResult({
+    shape: solid,
+    featureId: feature.id,
+    ownerKey: feature.result,
+    resultKey: feature.result,
+    outputKind: "solid",
+    tags: feature.tags,
+    opts: { rootKind: "solid" },
+    collectSelections: ctx.collectSelections,
+  });
 }

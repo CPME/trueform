@@ -1,6 +1,7 @@
 import type { KernelResult, KernelSelection } from "../backend.js";
 import type { Selector, Sweep } from "../ir.js";
 import type { SweepContext } from "./operation_contexts.js";
+import { publishShapeResult } from "./shape_result.js";
 
 export function execSweep(
   ctx: SweepContext,
@@ -40,18 +41,14 @@ export function execSweep(
     outputKind = "surface";
   }
 
-  const outputs = new Map([
-    [
-      feature.result,
-      {
-        id: `${feature.id}:${outputKind}`,
-        kind: outputKind,
-        meta: { shape },
-      },
-    ],
-  ]);
-  const selections = ctx.collectSelections(shape, feature.id, feature.result, feature.tags, {
-    rootKind: outputKind === "solid" ? "solid" : "face",
+  return publishShapeResult({
+    shape,
+    featureId: feature.id,
+    ownerKey: feature.result,
+    resultKey: feature.result,
+    outputKind,
+    tags: feature.tags,
+    opts: { rootKind: outputKind === "solid" ? "solid" : "face" },
+    collectSelections: ctx.collectSelections,
   });
-  return { outputs, selections };
 }

@@ -1398,24 +1398,8 @@ export class OcctBackend implements Backend {
       makeBoolean: (op, left, right) => this.makeBoolean(op, left, right),
       makeCircleEdge: (center, radius, normal) => this.makeCircleEdge(center, radius, normal),
       makeFaceFromWire: (wire) => this.makeFaceFromWire(wire),
-      makePipeSolid: (spine, profile, frameOrOpts, maybeOpts) => {
-        if (maybeOpts !== undefined) {
-          return this.makePipeSolid(spine, profile, frameOrOpts as PlaneBasis, maybeOpts);
-        }
-        if (
-          frameOrOpts &&
-          typeof frameOrOpts === "object" &&
-          "origin" in frameOrOpts &&
-          "normal" in frameOrOpts
-        ) {
-          return this.makePipeSolid(spine, profile, frameOrOpts as PlaneBasis);
-        }
-        return this.makePipeSolid(
-          spine,
-          profile,
-          frameOrOpts as { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean } | undefined
-        );
-      },
+      makePipeSolid: (spine, profile, frameOrOpts, maybeOpts) =>
+        this.invokePipeSolid(spine, profile, frameOrOpts, maybeOpts),
       makePolygonWire: (points) => this.makePolygonWire(points),
       makeRingFace: (center, normal, outerRadius, innerRadius) =>
         this.makeRingFace(center, normal, outerRadius, innerRadius),
@@ -1481,24 +1465,8 @@ export class OcctBackend implements Backend {
       buildProfileWire: (profile) => this.buildProfileWire(profile),
       collectSelections: (shape, featureId, ownerKey, featureTags, opts) =>
         this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
-      makePipeSolid: (spine, profile, frameOrOpts, maybeOpts) => {
-        if (maybeOpts !== undefined) {
-          return this.makePipeSolid(spine, profile, frameOrOpts as PlaneBasis, maybeOpts);
-        }
-        if (
-          frameOrOpts &&
-          typeof frameOrOpts === "object" &&
-          "origin" in frameOrOpts &&
-          "normal" in frameOrOpts
-        ) {
-          return this.makePipeSolid(spine, profile, frameOrOpts as PlaneBasis);
-        }
-        return this.makePipeSolid(
-          spine,
-          profile,
-          frameOrOpts as { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean } | undefined
-        );
-      },
+      makePipeSolid: (spine, profile, frameOrOpts, maybeOpts) =>
+        this.invokePipeSolid(spine, profile, frameOrOpts, maybeOpts),
       resolvePlaneBasis: (planeRef, upstream, resolver) =>
         this.resolvePlaneBasis(planeRef as PlaneRef, upstream, resolver as ExecuteInput["resolve"]),
       resolveProfile: (profileRef, upstream) => this.resolveProfile(profileRef, upstream),
@@ -1517,6 +1485,30 @@ export class OcctBackend implements Backend {
       segmentSlotsForLoop: (loop, entityMap, plane) =>
         this.segmentSlotsForLoop(loop, entityMap, plane),
     };
+  }
+
+  private invokePipeSolid(
+    spine: unknown,
+    profile: unknown,
+    frameOrOpts?: PlaneBasis | { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean },
+    maybeOpts?: { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean }
+  ): unknown {
+    if (maybeOpts !== undefined) {
+      return this.makePipeSolid(spine, profile, frameOrOpts as PlaneBasis, maybeOpts);
+    }
+    if (
+      frameOrOpts &&
+      typeof frameOrOpts === "object" &&
+      "origin" in frameOrOpts &&
+      "normal" in frameOrOpts
+    ) {
+      return this.makePipeSolid(spine, profile, frameOrOpts as PlaneBasis);
+    }
+    return this.makePipeSolid(
+      spine,
+      profile,
+      frameOrOpts as { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean } | undefined
+    );
   }
 
   private execDeleteFace(

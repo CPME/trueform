@@ -66,6 +66,25 @@ Purpose: track the remaining maintainability-heavy refactor work after the first
 - Regression coverage: build + `occt.rib_web.e2e.probe` + `occt.rib_web.failure_modes.e2e`
 - Commit: `b81da82`
 
+12. Extracted generic sweep execution behind a typed feature boundary.
+- Added: `src/occt/sweep_ops.ts`
+- Added direct coverage: `src/tests/occt.sweep.module.test.ts`
+- Added dedicated e2e coverage: `src/tests/occt.sweep.e2e.test.ts`
+- Regression coverage: build + `occt.sweep.e2e` + `occt.surface.e2e`
+- Commit: `7b479eb`
+
+13. Extracted sketch/profile output assembly behind a typed feature boundary.
+- Added: `src/occt/sketch_ops.ts`
+- Added direct coverage: `src/tests/occt.sketch.module.test.ts`
+- Regression coverage: build + `occt.sketch.e2e` + `occt.sketch_profile_extrude.e2e` + `occt.surface.e2e` + `occt.rib_web.e2e.probe` + `occt.loft.e2e`
+- Commit: `439c54c`
+
+14. Deleted duplicated path/profile glue in the backend.
+- Added: `src/occt/shape_result.ts`
+- Consolidated shared sweep result publishing and the duplicated `makePipeSolid` context adapter into single implementations.
+- Regression coverage: build + sweep module suites + `occt.surface.e2e`
+- Commit: pending in current worktree
+
 ## Remaining Maintainability Work (Prioritized)
 
 ## Active Detailed Plan: `src/backend_occt.ts` Decomposition
@@ -128,11 +147,12 @@ Execution slices:
    - Regression coverage: build + extrude/revolve + thread e2e/failure coverage + broad downstream ledger-dependent suites.
    - Commit: `8cef3f5`
 
-Next queued slices (by current maintainability value in `backend_occt.ts`):
-1. Remaining generic sweep/profile execution (`execSweep`) once the thin-profile and path-sweep contexts stabilize.
-2. Sketch/profile authoring decomposition (`execSketch` and adjacent profile output assembly) after the 3D consumers stop depending on backend-local helpers.
-3. Shared feature planning primitives for profile/path execution so `sweep`, `rib`, and `web` stop recomputing section setup independently.
-4. Primitive-adapter cleanup for path/profile construction helpers so backend methods stop selecting OCCT builder variants directly.
+Current status of the OCCT backend decomposition queue:
+1. The targeted executor extraction queue for `shell`, `sweep` variants, `boolean`, `rib/web`, and `sketch` output assembly is complete.
+2. The remaining work is no longer “finish the obvious fake decomposition”; it is now optional deeper architecture work:
+   - primitive-adapter extraction beyond the sweep/path family
+   - tighter error-model standardization
+   - additional direct module coverage for remaining inline feature families such as `draft` and `mirror`
 
 Per-slice safety checks:
 - `npm run build -- --pretty false`
