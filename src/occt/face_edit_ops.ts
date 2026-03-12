@@ -9,8 +9,9 @@ import type {
   SplitFace,
 } from "../ir.js";
 import { expectNumber } from "./vector_math.js";
+import type { FaceEditContext } from "./operation_contexts.js";
 
-function uniqueSelectionShapes(ctx: any, selections: KernelSelection[]): any[] {
+function uniqueSelectionShapes(ctx: FaceEditContext, selections: KernelSelection[]): any[] {
   const shapes: any[] = [];
   const seen = new Set<number>();
   for (const selection of selections) {
@@ -24,7 +25,7 @@ function uniqueSelectionShapes(ctx: any, selections: KernelSelection[]): any[] {
   return shapes;
 }
 
-export function execDeleteFace(ctx: any, feature: DeleteFace, upstream: KernelResult): KernelResult {
+export function execDeleteFace(ctx: FaceEditContext, feature: DeleteFace, upstream: KernelResult): KernelResult {
   const source = resolveSelectorSet(feature.source, ctx.toResolutionContext(upstream));
   if (source.length === 0) {
     throw new Error("OCCT backend: delete face source selector matched 0 entities");
@@ -97,7 +98,7 @@ export function execDeleteFace(ctx: any, feature: DeleteFace, upstream: KernelRe
   return { outputs, selections };
 }
 
-export function execReplaceFace(ctx: any, feature: ReplaceFace, upstream: KernelResult): KernelResult {
+export function execReplaceFace(ctx: FaceEditContext, feature: ReplaceFace, upstream: KernelResult): KernelResult {
   const source = resolveSelectorSet(feature.source, ctx.toResolutionContext(upstream));
   if (source.length === 0) {
     throw new Error("OCCT backend: replace face source selector matched 0 entities");
@@ -200,7 +201,7 @@ export function execReplaceFace(ctx: any, feature: ReplaceFace, upstream: Kernel
   return { outputs, selections };
 }
 
-export function execMoveFace(ctx: any, feature: MoveFace, upstream: KernelResult): KernelResult {
+export function execMoveFace(ctx: FaceEditContext, feature: MoveFace, upstream: KernelResult): KernelResult {
   const source = resolveSelectorSet(feature.source, ctx.toResolutionContext(upstream));
   if (source.length === 0) {
     throw new Error("OCCT backend: move face source selector matched 0 entities");
@@ -328,7 +329,7 @@ export function execMoveFace(ctx: any, feature: MoveFace, upstream: KernelResult
   return { outputs, selections };
 }
 
-export function execMoveBody(ctx: any, feature: MoveBody, upstream: KernelResult): KernelResult {
+export function execMoveBody(ctx: FaceEditContext, feature: MoveBody, upstream: KernelResult): KernelResult {
   const sourceSel = resolveSelectorSet(feature.source, ctx.toResolutionContext(upstream));
   if (sourceSel.length === 0) {
     throw new Error("OCCT backend: move body source selector matched 0 entities");
@@ -361,11 +362,13 @@ export function execMoveBody(ctx: any, feature: MoveBody, upstream: KernelResult
     ] as [number, number, number];
   })();
 
-  let moved = ownerShape;
-  const faceReplacements = ctx.ownerFaceSelectionsForShape(upstream, ownerShape).map((selection: any) => ({
-    from: selection,
-    to: selection.meta["shape"],
-  }));
+  let moved: any = ownerShape;
+  const faceReplacements: Array<{ from: KernelSelection; to: any }> = ctx
+    .ownerFaceSelectionsForShape(upstream, ownerShape)
+    .map((selection: any) => ({
+      from: selection,
+      to: selection.meta["shape"],
+    }));
 
   if (feature.scale !== undefined) {
     const scale = expectNumber(feature.scale, "move body scale");
@@ -436,7 +439,7 @@ export function execMoveBody(ctx: any, feature: MoveBody, upstream: KernelResult
   return { outputs, selections };
 }
 
-export function execSplitBody(ctx: any, feature: SplitBody, upstream: KernelResult): KernelResult {
+export function execSplitBody(ctx: FaceEditContext, feature: SplitBody, upstream: KernelResult): KernelResult {
   const sourceSel = resolveSelectorSet(feature.source, ctx.toResolutionContext(upstream));
   if (sourceSel.length === 0) {
     throw new Error("OCCT backend: split body source selector matched 0 entities");
@@ -498,7 +501,7 @@ export function execSplitBody(ctx: any, feature: SplitBody, upstream: KernelResu
   return { outputs, selections };
 }
 
-export function execSplitFace(ctx: any, feature: SplitFace, upstream: KernelResult): KernelResult {
+export function execSplitFace(ctx: FaceEditContext, feature: SplitFace, upstream: KernelResult): KernelResult {
   const faceSelections = resolveSelectorSet(feature.faces, ctx.toResolutionContext(upstream));
   if (faceSelections.length === 0) {
     throw new Error("OCCT backend: split face selector matched 0 entities");

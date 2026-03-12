@@ -10,6 +10,7 @@ import {
   rotateAroundAxis,
   vecLength,
 } from "./vector_math.js";
+import type { UnwrapContext } from "./operation_contexts.js";
 
 type UnwrapPointProjector = (
   point: [number, number, number]
@@ -36,7 +37,7 @@ type Unwrap2DTransform = {
 };
 
 export function execUnwrap(
-  ctx: any,
+  ctx: UnwrapContext,
   feature: Unwrap,
   upstream: KernelResult,
   _resolve: ExecuteInput["resolve"]
@@ -156,7 +157,7 @@ export function execUnwrap(
   return { outputs, selections };
 }
 
-function unwrapFacePatch(ctx: any, face: any): UnwrapPatch {
+function unwrapFacePatch(ctx: UnwrapContext, face: any): UnwrapPatch {
   const properties = ctx.faceProperties(face);
   if (properties.planar) {
     const basis = ctx.planeBasisFromFace(face);
@@ -307,7 +308,7 @@ function unwrapFacePatch(ctx: any, face: any): UnwrapPatch {
 }
 
 function extractSheetPatchesFromSolid(
-  ctx: any,
+  ctx: UnwrapContext,
   solid: any,
   mode: "strict" | "experimental" = "strict"
 ): UnwrapPatch[] {
@@ -526,7 +527,7 @@ function extractSheetPatchesFromSolid(
   );
 }
 
-function extractSolidCylinderNetFromSolid(ctx: any, solid: any, faces?: any[]): UnwrapPatch | null {
+function extractSolidCylinderNetFromSolid(ctx: UnwrapContext, solid: any, faces?: any[]): UnwrapPatch | null {
   const sourceFaces = faces ?? ctx.listFaces(solid);
   const cylindricalFaces: any[] = [];
   const planarFaces: Array<{
@@ -630,7 +631,7 @@ function extractSolidCylinderNetFromSolid(ctx: any, solid: any, faces?: any[]): 
   };
 }
 
-function extractAxisAlignedBoxNetFromSolid(ctx: any, solid: any, faces?: any[]): UnwrapPatch | null {
+function extractAxisAlignedBoxNetFromSolid(ctx: UnwrapContext, solid: any, faces?: any[]): UnwrapPatch | null {
   const sourceFaces = faces ?? ctx.listFaces(solid);
   if (sourceFaces.length !== 6) return null;
 
@@ -720,7 +721,7 @@ function extractAxisAlignedBoxNetFromSolid(ctx: any, solid: any, faces?: any[]):
 }
 
 function extractPlanarPolyhedralPatchesFromSolid(
-  ctx: any,
+  ctx: UnwrapContext,
   solid: any,
   faces?: any[]
 ): UnwrapPatch[] | null {
@@ -742,7 +743,7 @@ function extractPlanarPolyhedralPatchesFromSolid(
   return patches;
 }
 
-function layoutConnectedUnwrapFacePatches(ctx: any, patches: UnwrapPatch[]): any[] {
+function layoutConnectedUnwrapFacePatches(ctx: UnwrapContext, patches: UnwrapPatch[]): any[] {
   if (patches.length <= 1) return patches.map((patch) => patch.shape);
   const edges = buildUnwrapAdjacencyEdges(ctx, patches);
   if (edges.length === 0) return patches.map((patch) => patch.shape);
@@ -848,7 +849,7 @@ function layoutConnectedUnwrapFacePatches(ctx: any, patches: UnwrapPatch[]): any
     .filter((shape): shape is any => shape !== null);
 }
 
-function buildUnwrapAdjacencyEdges(ctx: any, patches: UnwrapPatch[]): UnwrapAdjacencyEdge[] {
+function buildUnwrapAdjacencyEdges(ctx: UnwrapContext, patches: UnwrapPatch[]): UnwrapAdjacencyEdge[] {
   const entries: Array<{ index: number; face: any }> = [];
   for (let i = 0; i < patches.length; i += 1) {
     const patch = patches[i];
@@ -962,7 +963,7 @@ function fitUnwrapEdgeTransform2D(
   return best;
 }
 
-function transformShapeInUnwrapPlane(ctx: any, shape: any, transform: Unwrap2DTransform): any {
+function transformShapeInUnwrapPlane(ctx: UnwrapContext, shape: any, transform: Unwrap2DTransform): any {
   let out = shape;
   if (Math.abs(transform.angle) > 1e-12) {
     out = ctx.transformShapeRotate(out, [0, 0, 0], [0, 0, 1], transform.angle);
@@ -973,7 +974,7 @@ function transformShapeInUnwrapPlane(ctx: any, shape: any, transform: Unwrap2DTr
   return out;
 }
 
-function unwrapPlacementOverlaps(ctx: any, shape: any, existing: any[]): boolean {
+function unwrapPlacementOverlaps(ctx: UnwrapContext, shape: any, existing: any[]): boolean {
   if (existing.length === 0) return false;
   const bounds = ctx.shapeBounds(shape);
   const tol = 1e-5;
@@ -988,7 +989,7 @@ function unwrapPlacementOverlaps(ctx: any, shape: any, existing: any[]): boolean
   return false;
 }
 
-function finalizeUnwrapComponentShapes(ctx: any, shapes: any[]): any {
+function finalizeUnwrapComponentShapes(ctx: UnwrapContext, shapes: any[]): any {
   const compound = ctx.makeCompoundFromShapes(shapes);
   if (!unwrapShapesCoplanarXY(ctx, shapes)) return compound;
   const sewed = ctx.sewShapeFaces(compound, 1e-6);
@@ -998,7 +999,7 @@ function finalizeUnwrapComponentShapes(ctx: any, shapes: any[]): any {
   return sewed;
 }
 
-function unwrapShapesCoplanarXY(ctx: any, shapes: any[]): boolean {
+function unwrapShapesCoplanarXY(ctx: UnwrapContext, shapes: any[]): boolean {
   if (shapes.length <= 1) return true;
   let minZ = Infinity;
   let maxZ = -Infinity;
@@ -1011,7 +1012,7 @@ function unwrapShapesCoplanarXY(ctx: any, shapes: any[]): boolean {
   return Math.abs(maxZ - minZ) <= 1e-5;
 }
 
-function unwrapPatchSortKey(ctx: any, patch: UnwrapPatch): [number, number, number, number] {
+function unwrapPatchSortKey(ctx: UnwrapContext, patch: UnwrapPatch): [number, number, number, number] {
   if (patch.sourceFace) {
     const props = ctx.faceProperties(patch.sourceFace);
     return [props.center[0], props.center[1], props.center[2], props.area];
@@ -1058,7 +1059,7 @@ function closestPeriodicParameter(value: number, min: number, max: number): numb
   return shifted;
 }
 
-function packUnwrapPatches(ctx: any, shapes: any[]): any[] {
+function packUnwrapPatches(ctx: UnwrapContext, shapes: any[]): any[] {
   if (shapes.length <= 1) return shapes;
   const packed: any[] = [];
   let cursorX = 0;

@@ -1,11 +1,5 @@
 import type { KernelSelection, KernelSelectionRecord } from "../backend.js";
-
-type CollectedSubshape = {
-  shape: unknown;
-  meta: Record<string, unknown>;
-  ledger?: unknown;
-  occurrenceIndices?: number[];
-};
+import type { CollectedSubshape, SelectionCollectionOptions } from "./operation_contexts.js";
 
 type FaceSelectionBinding = {
   shape: unknown;
@@ -18,15 +12,6 @@ type SelectionIdAssignment = {
   id: string;
   aliases?: string[];
   record: KernelSelectionRecord;
-};
-
-type SelectionCollectionOptions = {
-  rootKind?: "solid" | "face";
-  ledgerPlan?: {
-    solid?: unknown;
-    faces?: (entries: CollectedSubshape[]) => void;
-    edges?: (entries: CollectedSubshape[]) => void;
-  };
 };
 
 type SelectionCollectionDeps = {

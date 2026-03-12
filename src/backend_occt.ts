@@ -5,7 +5,6 @@ import {
   KernelResult,
   KernelObject,
   KernelSelection,
-  KernelSelectionLineage,
   KernelSelectionRecord,
   MeshData,
   MeshOptions,
@@ -121,6 +120,17 @@ import {
   faceMetadata as resolveOcctFaceMetadata,
   faceProperties as resolveOcctFaceProperties,
 } from "./occt/metadata_ops.js";
+import type {
+  CollectedSubshape,
+  FaceEditContext,
+  MetadataContext,
+  SelectionCollectionOptions,
+  SelectionLedgerContext,
+  SelectionLedgerHint,
+  SelectionLedgerPlan,
+  SurfaceEditContext,
+  UnwrapContext,
+} from "./occt/operation_contexts.js";
 import {
   resolveOwnerKey as resolveSelectionOwnerKey,
   resolveOwnerShape as resolveSelectionOwnerShape,
@@ -227,33 +237,6 @@ type FaceSurfaceClass =
   | "unknown";
 
 type FaceSurfaceMap = Map<number, Array<{ face: any; surface: FaceSurfaceClass }>>;
-
-type CollectedSubshape = {
-  shape: any;
-  meta: Record<string, unknown>;
-  ledger?: SelectionLedgerHint;
-  occurrenceIndices?: number[];
-};
-
-type SelectionLedgerHint = {
-  slot?: string;
-  role?: string;
-  lineage?: KernelSelectionLineage;
-  aliases?: string[];
-  signature?: string;
-  provenance?: Record<string, unknown>;
-};
-
-type SelectionLedgerPlan = {
-  solid?: SelectionLedgerHint;
-  faces?: (entries: CollectedSubshape[]) => void;
-  edges?: (entries: CollectedSubshape[]) => void;
-};
-
-type SelectionCollectionOptions = {
-  rootKind?: "solid" | "face";
-  ledgerPlan?: SelectionLedgerPlan;
-};
 
 type SelectionIdAssignment = {
   id: string;
@@ -1553,67 +1536,230 @@ export class OcctBackend implements Backend {
     return { outputs, selections };
   }
 
+  private selectionLedgerContext(): SelectionLedgerContext {
+    return {
+      occt: this.occt,
+      applySelectionLedgerHint: (entry, hint) =>
+        this.applySelectionLedgerHint(entry as CollectedSubshape, hint),
+      basisFromNormal: (normal, xHint, origin) => this.basisFromNormal(normal, xHint, origin),
+      callWithFallback: (target, methods, argSets) => this.callWithFallback(target, methods, argSets),
+      collectEdgesFromShape: (shape) => this.collectEdgesFromShape(shape),
+      collectFacesFromShape: (shape) => this.collectFacesFromShape(shape),
+      defaultAxisForNormal: (normal) => this.defaultAxisForNormal(normal),
+      numberFingerprint: (value) => this.numberFingerprint(value),
+      scaleVec: (v, s) => this.scaleVec(v, s),
+      selectionTieBreakerFingerprint: (kind, meta) =>
+        this.selectionTieBreakerFingerprint(kind, meta),
+      shapeHash: (shape) => this.shapeHash(shape),
+      shapesSame: (left, right) => this.shapesSame(left, right),
+      subVec: (a, b) => this.subVec(a, b),
+      toWire: (shape) => this.toWire(shape),
+      uniqueKernelSelectionIds: (selections) => this.uniqueKernelSelectionIds(selections),
+      uniqueShapeList: (shapes) => this.uniqueShapeList(shapes as any[]),
+      vectorFingerprint: (value) => this.vectorFingerprint(value),
+    };
+  }
+
+  private metadataContext(): MetadataContext {
+    return {
+      occt: this.occt,
+      adjacentFaces: (adjacency, edge) => this.adjacentFaces(adjacency as any, edge),
+      buildEdgeAdjacency: (owner) => this.buildEdgeAdjacency(owner),
+      call: (target, method, ...args) => this.call(target, method, ...args),
+      callNumber: (target, method) => this.callNumber(target, method),
+      callWithFallback: (target, methods, argSets) => this.callWithFallback(target, methods, argSets),
+      dirToArray: (dir) => this.dirToArray(dir),
+      edgeEndpoints: (edge) => this.edgeEndpoints(edge),
+      newOcct: (name, ...args) => this.newOcct(name, ...args),
+      planeBasisFromFace: (face) => this.planeBasisFromFace(face),
+      pointToArray: (point) => this.pointToArray(point),
+      shapeBounds: (shape) => this.shapeBounds(shape),
+      shapeHash: (shape) => this.shapeHash(shape),
+      shapesSame: (left, right) => this.shapesSame(left, right),
+      toEdge: (shape) => this.toEdge(shape),
+      toFace: (shape) => this.toFace(shape),
+    };
+  }
+
+  private faceEditContext(): FaceEditContext {
+    return {
+      collectSelections: (shape, featureId, ownerKey, featureTags, opts) =>
+        this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
+      collectToolFaces: (tools) => this.collectToolFaces(tools),
+      deleteFacesBySewing: (shape, removeFaces) => this.deleteFacesBySewing(shape, removeFaces as any[]),
+      deleteFacesWithDefeaturing: (shape, removeFaces) =>
+        this.deleteFacesWithDefeaturing(shape, removeFaces as any[]),
+      isValidShape: (shape) => this.isValidShape(shape),
+      makeFaceMutationSelectionLedgerPlan: (upstream, ownerShape, replacements) =>
+        this.makeFaceMutationSelectionLedgerPlan(upstream, ownerShape, replacements as any),
+      makeSolidFromShells: (shape) => this.makeSolidFromShells(shape),
+      makeSplitFaceSelectionLedgerPlan: (upstream, ownerShape, faceTargets) =>
+        this.makeSplitFaceSelectionLedgerPlan(upstream, ownerShape, faceTargets),
+      normalizeSolid: (shape) => this.normalizeSolid(shape),
+      ownerFaceSelectionsForShape: (upstream, ownerShape) =>
+        this.ownerFaceSelectionsForShape(upstream, ownerShape),
+      replaceFacesBySewing: (shape, removeFaces, replacements) =>
+        this.replaceFacesBySewing(shape, removeFaces as any[], replacements as any[]),
+      replaceFacesWithReshape: (shape, replacements) =>
+        this.replaceFacesWithReshape(shape, replacements as any),
+      resolveAxisSpec: (axis, upstream, label) =>
+        this.resolveAxisSpec(axis as AxisSpec, upstream, label),
+      resolveOwnerKey: (selection, upstream) => this.resolveOwnerKey(selection, upstream),
+      resolveOwnerShape: (selection, upstream) => this.resolveOwnerShape(selection, upstream),
+      shapeHasSolid: (shape) => this.shapeHasSolid(shape),
+      shapeHash: (shape) => this.shapeHash(shape),
+      splitByTools: (shape, tools) => this.splitByTools(shape, tools as any[]),
+      toResolutionContext: (upstream) => this.toResolutionContext(upstream),
+      transformShapeRotate: (shape, origin, axis, angleRad) =>
+        this.transformShapeRotate(shape, origin, axis, angleRad),
+      transformShapeScale: (shape, origin, scale) => this.transformShapeScale(shape, origin, scale),
+      transformShapeTranslate: (shape, delta) => this.transformShapeTranslate(shape, delta),
+      unifySameDomain: (shape) => this.unifySameDomain(shape),
+      uniqueFaceShapes: (selections) => this.uniqueFaceShapes(selections),
+    };
+  }
+
+  private surfaceEditContext(): SurfaceEditContext {
+    return {
+      applySelectionLedgerHint: (entry, hint) =>
+        this.applySelectionLedgerHint(entry as CollectedSubshape, hint),
+      collectEdgesFromShape: (shape) => this.collectEdgesFromShape(shape),
+      collectSelections: (shape, featureId, ownerKey, featureTags, opts) =>
+        this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
+      containsShape: (shapes, candidate) => this.containsShape(shapes as any[], candidate),
+      countFaces: (shape) => this.countFaces(shape),
+      edgeDirection: (edge, label) => this.edgeDirection(edge, label),
+      faceSelectionsForTarget: (target, upstream) => this.faceSelectionsForTarget(target, upstream),
+      isValidShape: (shape, kindHint) => this.isValidShape(shape, kindHint),
+      makeBoolean: (op, left, right) => this.makeBoolean(op, left, right),
+      makeCompoundFromShapes: (shapes) => this.makeCompoundFromShapes(shapes as any[]),
+      makeFaceMutationSelectionLedgerPlan: (upstream, ownerShape, replacements) =>
+        this.makeFaceMutationSelectionLedgerPlan(upstream, ownerShape, replacements as any),
+      makeKnitSelectionLedgerPlan: (sourceFaces) => this.makeKnitSelectionLedgerPlan(sourceFaces),
+      makePlanarRectFace: (origin, xDir, yDir, extents) =>
+        this.makePlanarRectFace(origin, xDir, yDir, extents),
+      makeSection: (first, second) => this.makeSection(first, second),
+      makeSolidFromShells: (shape) => this.makeSolidFromShells(shape),
+      makeSplitFaceSelectionLedgerPlan: (upstream, ownerShape, faceTargets) =>
+        this.makeSplitFaceSelectionLedgerPlan(upstream, ownerShape, faceTargets),
+      normalizeSolid: (shape) => this.normalizeSolid(shape),
+      planeBasisFromFace: (face) => this.planeBasisFromFace(face),
+      projectBoundsOnBasis: (points, origin, xDir, yDir) =>
+        this.projectBoundsOnBasis(points, origin, xDir, yDir),
+      readShape: (shape) => this.readShape(shape),
+      resolveSingleSelection: (selector, upstream, label) =>
+        this.resolveSingleSelection(selector as Selector, upstream, label),
+      sampleEdgePoints: (edge, opts) => this.sampleEdgePoints(edge, opts),
+      selectionTieBreakerFingerprint: (kind, meta) =>
+        this.selectionTieBreakerFingerprint(kind, meta),
+      sewShapeFaces: (shape, tolerance) => this.sewShapeFaces(shape, tolerance),
+      shapeBoundsOverlap: (left, right) => this.shapeBoundsOverlap(left, right),
+      shapeHasSolid: (shape) => this.shapeHasSolid(shape),
+      shapeHash: (shape) => this.shapeHash(shape),
+      splitByTools: (shape, tools) => this.splitByTools(shape, tools as any[]),
+      toFace: (shape) => this.toFace(shape),
+      toResolutionContext: (upstream) => this.toResolutionContext(upstream),
+      uniqueKernelSelectionsById: (selections) => this.uniqueKernelSelectionsById(selections),
+      uniqueShapeList: (shapes) => this.uniqueShapeList(shapes as any[]),
+    };
+  }
+
+  private unwrapContext(): UnwrapContext {
+    return {
+      buildEdgeAdjacency: (owner) => this.buildEdgeAdjacency(owner),
+      collectSelections: (shape, featureId, ownerKey, featureTags, opts) =>
+        this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
+      countFaces: (shape) => this.countFaces(shape),
+      cylinderFromFace: (face) => this.cylinderFromFace(face),
+      cylinderReferenceXDirection: (cylinder) => this.cylinderReferenceXDirection(cylinder),
+      edgeEndpoints: (edge) => this.edgeEndpoints(edge),
+      faceProperties: (face) => this.faceProperties(face),
+      firstFace: (shape) => this.firstFace(shape),
+      isValidShape: (shape, kindHint) => this.isValidShape(shape, kindHint),
+      listFaces: (shape) => this.listFaces(shape),
+      makeCircleFace: (radius, center) => this.makeCircleFace(radius, center),
+      makeCompoundFromShapes: (shapes) => this.makeCompoundFromShapes(shapes as any[]),
+      makeFaceFromWire: (wire) => this.makeFaceFromWire(wire),
+      makePolygonWire: (points) => this.makePolygonWire(points),
+      planeBasisFromFace: (face) => this.planeBasisFromFace(face),
+      readShape: (shape) => this.readShape(shape),
+      scaleVec: (v, s) => this.scaleVec(v, s),
+      sewShapeFaces: (shape, tolerance) => this.sewShapeFaces(shape, tolerance),
+      shapeBounds: (shape) => this.shapeBounds(shape),
+      shapeHasSolid: (shape) => this.shapeHasSolid(shape),
+      shapeHash: (shape) => this.shapeHash(shape),
+      shapesSame: (left, right) => this.shapesSame(left, right),
+      subVec: (a, b) => this.subVec(a, b),
+      surfaceUvExtents: (face) => this.surfaceUvExtents(face),
+      toFace: (shape) => this.toFace(shape),
+      toResolutionContext: (upstream) => this.toResolutionContext(upstream),
+      transformShapeRotate: (shape, origin, axis, angleRad) =>
+        this.transformShapeRotate(shape, origin, axis, angleRad),
+      transformShapeTranslate: (shape, delta) => this.transformShapeTranslate(shape, delta),
+    };
+  }
+
   private execDeleteFace(
     feature: DeleteFace,
     upstream: KernelResult
   ): KernelResult {
-    return execOcctDeleteFace(this, feature, upstream);
+    return execOcctDeleteFace(this.faceEditContext(), feature, upstream);
   }
 
   private execReplaceFace(
     feature: ReplaceFace,
     upstream: KernelResult
   ): KernelResult {
-    return execOcctReplaceFace(this, feature, upstream);
+    return execOcctReplaceFace(this.faceEditContext(), feature, upstream);
   }
 
   private execMoveFace(
     feature: MoveFace,
     upstream: KernelResult
   ): KernelResult {
-    return execOcctMoveFace(this, feature, upstream);
+    return execOcctMoveFace(this.faceEditContext(), feature, upstream);
   }
 
   private execMoveBody(
     feature: MoveBody,
     upstream: KernelResult
   ): KernelResult {
-    return execOcctMoveBody(this, feature, upstream);
+    return execOcctMoveBody(this.faceEditContext(), feature, upstream);
   }
 
   private execSplitBody(
     feature: SplitBody,
     upstream: KernelResult
   ): KernelResult {
-    return execOcctSplitBody(this, feature, upstream);
+    return execOcctSplitBody(this.faceEditContext(), feature, upstream);
   }
 
   private execSplitFace(
     feature: SplitFace,
     upstream: KernelResult
   ): KernelResult {
-    return execOcctSplitFace(this, feature, upstream);
+    return execOcctSplitFace(this.faceEditContext(), feature, upstream);
   }
 
   private execTrimSurface(
     feature: TrimSurface,
     upstream: KernelResult
   ): KernelResult {
-    return execOcctTrimSurface(this, feature, upstream);
+    return execOcctTrimSurface(this.surfaceEditContext(), feature, upstream);
   }
 
   private execExtendSurface(
     feature: ExtendSurface,
     upstream: KernelResult
   ): KernelResult {
-    return execOcctExtendSurface(this, feature, upstream);
+    return execOcctExtendSurface(this.surfaceEditContext(), feature, upstream);
   }
 
   private execKnit(
     feature: Knit,
     upstream: KernelResult
   ): KernelResult {
-    return execOcctKnit(this, feature, upstream);
+    return execOcctKnit(this.surfaceEditContext(), feature, upstream);
   }
 
   private execCurveIntersect(
@@ -1621,7 +1767,7 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     resolve: ExecuteInput["resolve"]
   ): KernelResult {
-    return execOcctCurveIntersect(this, feature, upstream, resolve);
+    return execOcctCurveIntersect(this.surfaceEditContext(), feature, upstream, resolve);
   }
 
   private execThicken(
@@ -1738,7 +1884,7 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     resolve: ExecuteInput["resolve"]
   ): KernelResult {
-    return execOcctUnwrap(this, feature, upstream, resolve);
+    return execOcctUnwrap(this.unwrapContext(), feature, upstream, resolve);
   }
 
   private edgeEndpoints(
@@ -2676,7 +2822,7 @@ export class OcctBackend implements Backend {
       wireSegmentSlots?: string[];
     }
   ): SelectionLedgerPlan {
-    return makeOcctPrismSelectionLedgerPlan(this, axis, opts);
+    return makeOcctPrismSelectionLedgerPlan(this.selectionLedgerContext(), axis, opts);
   }
 
   private makeRevolveSelectionLedgerPlan(
@@ -2687,7 +2833,7 @@ export class OcctBackend implements Backend {
       wireSegmentSlots: string[];
     }
   ): SelectionLedgerPlan {
-    return makeOcctRevolveSelectionLedgerPlan(this, angleRad, opts);
+    return makeOcctRevolveSelectionLedgerPlan(this.selectionLedgerContext(), angleRad, opts);
   }
 
   private makeFaceMutationSelectionLedgerPlan(
@@ -2695,7 +2841,12 @@ export class OcctBackend implements Backend {
     ownerShape: any,
     replacements: Array<{ from: KernelSelection; to: any }>
   ): SelectionLedgerPlan {
-    return makeOcctFaceMutationSelectionLedgerPlan(this, upstream, ownerShape, replacements);
+    return makeOcctFaceMutationSelectionLedgerPlan(
+      this.selectionLedgerContext(),
+      upstream,
+      ownerShape,
+      replacements
+    );
   }
 
   private makeHoleSelectionLedgerPlan(
@@ -2711,7 +2862,7 @@ export class OcctBackend implements Backend {
     }
   ): SelectionLedgerPlan {
     return makeOcctHoleSelectionLedgerPlan(
-      this,
+      this.selectionLedgerContext(),
       upstream,
       ownerShape,
       target,
@@ -2727,7 +2878,13 @@ export class OcctBackend implements Backend {
     faceTargets: KernelSelection[],
     builder: any
   ): SelectionLedgerPlan {
-    return makeOcctDraftSelectionLedgerPlan(this, upstream, ownerShape, faceTargets, builder);
+    return makeOcctDraftSelectionLedgerPlan(
+      this.selectionLedgerContext(),
+      upstream,
+      ownerShape,
+      faceTargets,
+      builder
+    );
   }
 
   private makeEdgeModifierSelectionLedgerPlan(
@@ -2738,7 +2895,7 @@ export class OcctBackend implements Backend {
     builder: any
   ): SelectionLedgerPlan {
     return makeOcctEdgeModifierSelectionLedgerPlan(
-      this,
+      this.selectionLedgerContext(),
       label,
       upstream,
       ownerShape,
@@ -2752,11 +2909,16 @@ export class OcctBackend implements Backend {
     ownerShape: any,
     faceTargets: KernelSelection[]
   ): SelectionLedgerPlan {
-    return makeOcctSplitFaceSelectionLedgerPlan(this, upstream, ownerShape, faceTargets);
+    return makeOcctSplitFaceSelectionLedgerPlan(
+      this.selectionLedgerContext(),
+      upstream,
+      ownerShape,
+      faceTargets
+    );
   }
 
   private makeKnitSelectionLedgerPlan(sourceFaces: KernelSelection[]): SelectionLedgerPlan {
-    return makeOcctKnitSelectionLedgerPlan(this, sourceFaces);
+    return makeOcctKnitSelectionLedgerPlan(this.selectionLedgerContext(), sourceFaces);
   }
 
   private makeBooleanSelectionLedgerPlan(
@@ -2766,7 +2928,14 @@ export class OcctBackend implements Backend {
     rightShape: any,
     builder: any
   ): SelectionLedgerPlan {
-    return makeOcctBooleanSelectionLedgerPlan(this, op, upstream, leftShape, rightShape, builder);
+    return makeOcctBooleanSelectionLedgerPlan(
+      this.selectionLedgerContext(),
+      op,
+      upstream,
+      leftShape,
+      rightShape,
+      builder
+    );
   }
 
   private ownerFaceSelectionsForShape(upstream: KernelResult, ownerShape: any): KernelSelection[] {
@@ -2808,7 +2977,14 @@ export class OcctBackend implements Backend {
     ownerKey: string,
     featureTags?: string[]
   ): Record<string, unknown> {
-    return resolveOcctFaceMetadata(this, face, owner, featureId, ownerKey, featureTags);
+    return resolveOcctFaceMetadata(
+      this.metadataContext(),
+      face,
+      owner,
+      featureId,
+      ownerKey,
+      featureTags
+    );
   }
 
   private edgeMetadata(
@@ -2818,7 +2994,14 @@ export class OcctBackend implements Backend {
     ownerKey: string,
     featureTags?: string[]
   ): Record<string, unknown> {
-    return resolveOcctEdgeMetadata(this, edge, owner, featureId, ownerKey, featureTags);
+    return resolveOcctEdgeMetadata(
+      this.metadataContext(),
+      edge,
+      owner,
+      featureId,
+      ownerKey,
+      featureTags
+    );
   }
 
   private faceProperties(face: any): {
@@ -2829,11 +3012,11 @@ export class OcctBackend implements Backend {
     normalVec?: [number, number, number];
     surfaceType?: string;
   } {
-    return resolveOcctFaceProperties(this, face);
+    return resolveOcctFaceProperties(this.metadataContext(), face);
   }
 
   private faceCenter(face: any): [number, number, number] {
-    return resolveOcctFaceCenter(this, face);
+    return resolveOcctFaceCenter(this.metadataContext(), face);
   }
 
   private resolveOwnerKey(selection: KernelSelection, upstream: KernelResult): string {
@@ -3105,7 +3288,7 @@ export class OcctBackend implements Backend {
     yDir?: [number, number, number];
     radius: number;
   } | null {
-    return resolveOcctCylinderFromFace(this, face);
+    return resolveOcctCylinderFromFace(this.metadataContext(), face);
   }
 
   private cylinderReferenceXDirection(cylinder: {
@@ -3873,7 +4056,7 @@ export class OcctBackend implements Backend {
     edgeEntries: CollectedSubshape[],
     faceBindings: FaceSelectionBinding[]
   ): void {
-    annotateOcctEdgeAdjacencyMetadata(this, shape, edgeEntries, faceBindings);
+    annotateOcctEdgeAdjacencyMetadata(this.metadataContext(), shape, edgeEntries, faceBindings);
   }
 
   private collectEdgesFromShape(shape: any): any[] {

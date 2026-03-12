@@ -3,8 +3,9 @@ import { hashValue } from "../hash.js";
 import { resolveSelectorSet } from "../selectors.js";
 import type { CurveIntersect, ExtendSurface, Knit, TrimSurface } from "../ir.js";
 import { cross, expectNumber, isFiniteVec, normalizeVector } from "./vector_math.js";
+import type { SurfaceEditContext } from "./operation_contexts.js";
 
-export function execTrimSurface(ctx: any, feature: TrimSurface, upstream: KernelResult): KernelResult {
+export function execTrimSurface(ctx: SurfaceEditContext, feature: TrimSurface, upstream: KernelResult): KernelResult {
   const sourceTarget = ctx.resolveSingleSelection(feature.source, upstream, "trim surface source");
   if (sourceTarget.kind !== "face" && sourceTarget.kind !== "surface") {
     throw new Error("OCCT backend: trim surface source must resolve to face/surface");
@@ -79,7 +80,7 @@ export function execTrimSurface(ctx: any, feature: TrimSurface, upstream: Kernel
   return { outputs, selections };
 }
 
-export function execExtendSurface(ctx: any, feature: ExtendSurface, upstream: KernelResult): KernelResult {
+export function execExtendSurface(ctx: SurfaceEditContext, feature: ExtendSurface, upstream: KernelResult): KernelResult {
   const sourceTarget = ctx.resolveSingleSelection(feature.source, upstream, "extend surface source");
   if (sourceTarget.kind !== "face" && sourceTarget.kind !== "surface") {
     throw new Error("OCCT backend: extend surface source must resolve to face/surface");
@@ -160,7 +161,7 @@ export function execExtendSurface(ctx: any, feature: ExtendSurface, upstream: Ke
   return { outputs, selections };
 }
 
-export function execKnit(ctx: any, feature: Knit, upstream: KernelResult): KernelResult {
+export function execKnit(ctx: SurfaceEditContext, feature: Knit, upstream: KernelResult): KernelResult {
   const sourceTargets = feature.sources.flatMap((source) =>
     resolveSelectorSet(source, ctx.toResolutionContext(upstream))
   );
@@ -231,7 +232,7 @@ export function execKnit(ctx: any, feature: Knit, upstream: KernelResult): Kerne
 }
 
 export function execCurveIntersect(
-  ctx: any,
+  ctx: SurfaceEditContext,
   feature: CurveIntersect,
   upstream: KernelResult,
   resolve: ExecuteInput["resolve"]

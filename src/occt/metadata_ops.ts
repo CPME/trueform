@@ -1,8 +1,9 @@
 import { axisDirectionFromVector, normalizeVector } from "./vector_math.js";
 import type { AxisDirection } from "../ir.js";
+import type { MetadataContext } from "./operation_contexts.js";
 
 export function faceMetadata(
-  ctx: any,
+  ctx: MetadataContext,
   face: any,
   owner: any,
   featureId: string,
@@ -51,7 +52,7 @@ export function faceMetadata(
 }
 
 export function edgeMetadata(
-  ctx: any,
+  ctx: MetadataContext,
   edge: any,
   owner: any,
   featureId: string,
@@ -152,7 +153,7 @@ export function edgeMetadata(
   return meta;
 }
 
-export function faceProperties(ctx: any, face: any): {
+export function faceProperties(ctx: MetadataContext, face: any): {
   area: number;
   center: [number, number, number];
   planar: boolean;
@@ -236,12 +237,12 @@ export function faceProperties(ctx: any, face: any): {
   return { area, center, planar, normal, normalVec, surfaceType };
 }
 
-export function faceCenter(ctx: any, face: any): [number, number, number] {
+export function faceCenter(ctx: MetadataContext, face: any): [number, number, number] {
   return faceProperties(ctx, face).center;
 }
 
 export function cylinderFromFace(
-  ctx: any,
+  ctx: MetadataContext,
   face: any
 ): {
   origin: [number, number, number];
@@ -287,7 +288,7 @@ export function cylinderFromFace(
 }
 
 export function annotateEdgeAdjacencyMetadata(
-  ctx: any,
+  ctx: MetadataContext,
   shape: any,
   edgeEntries: any[],
   faceBindings: any[]
