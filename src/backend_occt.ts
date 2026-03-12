@@ -97,6 +97,7 @@ import { execShell as execOcctShell } from "./occt/shell_ops.js";
 import { execBoolean as execOcctBoolean } from "./occt/boolean_ops.js";
 import { execRib as execOcctRib, execWeb as execOcctWeb } from "./occt/thin_profile_ops.js";
 import { execSweep as execOcctSweep } from "./occt/sweep_ops.js";
+import { execSketch as execOcctSketch } from "./occt/sketch_ops.js";
 import {
   execHexTubeSweep as execOcctHexTubeSweep,
   execPipeSweep as execOcctPipeSweep,
@@ -151,6 +152,7 @@ import type {
   SweepFeatureContext,
   SweepContext,
   ThinProfileContext,
+  SketchContext,
 } from "./occt/operation_contexts.js";
 import {
   resolveOwnerKey as resolveSelectionOwnerKey,
@@ -1503,6 +1505,20 @@ export class OcctBackend implements Backend {
     };
   }
 
+  private sketchContext(): SketchContext {
+    return {
+      buildSketchProfileFaceFromWires: (outer, holes) =>
+        this.buildSketchProfileFaceFromWires(outer, holes as any[]),
+      buildSketchWire: (loop, entityMap, plane) => this.buildSketchWire(loop, entityMap, plane),
+      buildSketchWireWithStatus: (loop, entityMap, plane, allowOpen) =>
+        this.buildSketchWireWithStatus(loop, entityMap, plane, allowOpen),
+      resolveSketchPlane: (feature, upstream, resolve) =>
+        this.resolveSketchPlane(feature, upstream, resolve),
+      segmentSlotsForLoop: (loop, entityMap, plane) =>
+        this.segmentSlotsForLoop(loop, entityMap, plane),
+    };
+  }
+
   private execDeleteFace(
     feature: DeleteFace,
     upstream: KernelResult
@@ -2124,66 +2140,7 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     resolve: ExecuteInput["resolve"]
   ): KernelResult {
-    const outputs = new Map<
-      string,
-      { id: string; kind: "profile"; meta: Record<string, unknown> }
-    >();
-    const entityMap = new Map<ID, SketchEntity>();
-    for (const entity of feature.entities ?? []) {
-      entityMap.set(entity.id, entity);
-    }
-    const needsPlane = feature.profiles.some(
-      (entry) => entry.profile.kind === "profile.sketch"
-    );
-    const plane = needsPlane
-      ? this.resolveSketchPlane(feature, upstream, resolve)
-      : null;
-    for (const entry of feature.profiles) {
-      if (entry.profile.kind === "profile.sketch") {
-        if (!plane) {
-          throw new Error("OCCT backend: missing sketch plane for profile.sketch");
-        }
-        const allowOpen = entry.profile.open === true;
-        const { wire, closed } = this.buildSketchWireWithStatus(
-          entry.profile.loop,
-          entityMap,
-          plane,
-          allowOpen
-        );
-        const wireSegmentSlots = this.segmentSlotsForLoop(
-          entry.profile.loop,
-          entityMap,
-          plane
-        );
-        const holes = allowOpen
-          ? []
-          : (entry.profile.holes ?? []).map((hole) =>
-              this.buildSketchWire(hole, entityMap, plane)
-            );
-        const face = allowOpen
-          ? undefined
-          : this.buildSketchProfileFaceFromWires(wire, holes);
-        outputs.set(entry.name, {
-          id: `${feature.id}:${entry.name}`,
-          kind: "profile",
-          meta: {
-            profile: entry.profile,
-            face,
-            wire,
-            wireClosed: closed,
-            planeNormal: plane.normal,
-            wireSegmentSlots,
-          },
-        });
-        continue;
-      }
-      outputs.set(entry.name, {
-        id: `${feature.id}:${entry.name}`,
-        kind: "profile",
-        meta: { profile: entry.profile },
-      });
-    }
-    return { outputs, selections: [] };
+    return execOcctSketch(this.sketchContext(), feature, upstream, resolve);
   }
 
   private collectSelections(

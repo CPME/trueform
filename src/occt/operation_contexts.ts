@@ -1,5 +1,15 @@
 import type { KernelResult, KernelSelection, KernelSelectionLineage } from "../backend.js";
-import type { AxisDirection, ExtrudeAxis, MoveBody, MoveFace, Path3D, ProfileRef } from "../ir.js";
+import type {
+  AxisDirection,
+  ExtrudeAxis,
+  ID,
+  MoveBody,
+  MoveFace,
+  Path3D,
+  ProfileRef,
+  Sketch2D,
+  SketchEntity,
+} from "../ir.js";
 import type { ResolutionContext } from "../selectors.js";
 import type { PlaneBasis } from "./plane_basis.js";
 import type { ResolvedProfile } from "./profile_resolution.js";
@@ -532,4 +542,29 @@ export type SweepContext = {
     resolve: (selector: Selector, upstream: KernelResult) => KernelSelection
   ) => PlaneBasis;
   resolveProfile: (profileRef: ProfileRef, upstream: KernelResult) => ResolvedProfile;
+};
+
+export type SketchContext = {
+  buildSketchProfileFaceFromWires: (outer: unknown, holes: unknown[]) => unknown;
+  buildSketchWire: (
+    loop: ID[],
+    entityMap: Map<ID, SketchEntity>,
+    plane: PlaneBasis
+  ) => unknown;
+  buildSketchWireWithStatus: (
+    loop: ID[],
+    entityMap: Map<ID, SketchEntity>,
+    plane: PlaneBasis,
+    allowOpen: boolean
+  ) => { wire: unknown; closed: boolean };
+  resolveSketchPlane: (
+    feature: Sketch2D,
+    upstream: KernelResult,
+    resolve: (selector: Selector, upstream: KernelResult) => KernelSelection
+  ) => PlaneBasis;
+  segmentSlotsForLoop: (
+    loop: ID[],
+    entityMap: Map<ID, SketchEntity>,
+    plane: PlaneBasis
+  ) => string[];
 };
