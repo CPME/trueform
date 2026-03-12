@@ -443,3 +443,26 @@ export type SweepFeatureContext = {
   ) => [number, number, number][];
   splitByTools: (shape: unknown, tools: unknown[]) => unknown;
 };
+
+export type BooleanContext = {
+  collectSelections: (
+    shape: unknown,
+    featureId: string,
+    ownerKey: string,
+    featureTags?: string[],
+    opts?: SelectionCollectionOptions
+  ) => KernelSelection[];
+  makeBoolean: (op: "union" | "subtract" | "intersect", left: unknown, right: unknown) => unknown;
+  makeBooleanSelectionLedgerPlan: (
+    op: "union" | "subtract" | "intersect",
+    upstream: KernelResult,
+    left: unknown,
+    right: unknown,
+    builder: unknown
+  ) => SelectionLedgerPlan;
+  normalizeSolid: (shape: unknown) => unknown;
+  readShape: (shape: unknown) => unknown;
+  resolve: (selector: unknown, upstream: KernelResult) => KernelSelection;
+  resolveOwnerShape: (selection: KernelSelection, upstream: KernelResult) => unknown | null;
+  splitByTools: (shape: unknown, tools: unknown[]) => unknown;
+};

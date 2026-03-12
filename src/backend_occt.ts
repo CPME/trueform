@@ -94,6 +94,7 @@ import { execThreadFeature as execOcctThreadFeature } from "./occt/thread_ops.js
 import { execUnwrap as execOcctUnwrap } from "./occt/unwrap_ops.js";
 import { execThicken as execOcctThicken } from "./occt/thicken_ops.js";
 import { execShell as execOcctShell } from "./occt/shell_ops.js";
+import { execBoolean as execOcctBoolean } from "./occt/boolean_ops.js";
 import {
   execHexTubeSweep as execOcctHexTubeSweep,
   execPipeSweep as execOcctPipeSweep,
@@ -135,6 +136,7 @@ import type {
   CollectedSubshape,
   FaceEditContext,
   MetadataContext,
+  BooleanContext,
   SelectionCollectionOptions,
   SelectionLedgerContext,
   SelectionLedgerHint,
@@ -1599,6 +1601,21 @@ export class OcctBackend implements Backend {
     };
   }
 
+  private booleanContext(resolve: ExecuteInput["resolve"]): BooleanContext {
+    return {
+      collectSelections: (shape, featureId, ownerKey, featureTags, opts) =>
+        this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
+      makeBoolean: (op, left, right) => this.makeBoolean(op, left, right),
+      makeBooleanSelectionLedgerPlan: (op, upstream, left, right, builder) =>
+        this.makeBooleanSelectionLedgerPlan(op, upstream, left, right, builder),
+      normalizeSolid: (shape) => this.normalizeSolid(shape),
+      readShape: (shape) => this.readShape(shape),
+      resolve: (selector, upstream) => resolve(selector as Selector, upstream),
+      resolveOwnerShape: (selection, upstream) => this.resolveOwnerShape(selection, upstream),
+      splitByTools: (shape, tools) => this.splitByTools(shape, tools as any[]),
+    };
+  }
+
   private execDeleteFace(
     feature: DeleteFace,
     upstream: KernelResult
@@ -2052,41 +2069,7 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     resolve: ExecuteInput["resolve"]
   ): KernelResult {
-    const leftSel = resolve(feature.left, upstream);
-    const rightSel = resolve(feature.right, upstream);
-    const left = this.resolveOwnerShape(leftSel, upstream);
-    const right = this.resolveOwnerShape(rightSel, upstream);
-    if (!left || !right) {
-      throw new Error("OCCT backend: boolean inputs must resolve to solids");
-    }
-
-    const op = feature.op;
-    const builder = this.makeBoolean(op, left, right);
-    let solid = this.readShape(builder);
-    if (op === "subtract") {
-      solid = this.splitByTools(solid, [left, right]);
-    }
-    solid = this.normalizeSolid(solid);
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:solid`,
-          kind: "solid" as const,
-          meta: { shape: solid },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      solid,
-      feature.id,
-      feature.result,
-      feature.tags,
-      {
-        ledgerPlan: this.makeBooleanSelectionLedgerPlan(op, upstream, left, right, builder),
-      }
-    );
-    return { outputs, selections };
+    return execOcctBoolean(this.booleanContext(resolve), feature, upstream);
   }
 
   private execFillet(
