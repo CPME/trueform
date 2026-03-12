@@ -87,6 +87,7 @@ import { executeHoleFeature as executeOcctHoleFeature } from "./occt/hole_ops.js
 import { execPattern as execOcctPattern } from "./occt/pattern_ops.js";
 import { execThreadFeature as execOcctThreadFeature } from "./occt/thread_ops.js";
 import { execUnwrap as execOcctUnwrap } from "./occt/unwrap_ops.js";
+import { execThicken as execOcctThicken } from "./occt/thicken_ops.js";
 import {
   execDeleteFace as execOcctDeleteFace,
   execMoveBody as execOcctMoveBody,
@@ -129,6 +130,7 @@ import type {
   SelectionLedgerHint,
   SelectionLedgerPlan,
   SurfaceEditContext,
+  ThickenContext,
   UnwrapContext,
 } from "./occt/operation_contexts.js";
 import {
@@ -1699,6 +1701,34 @@ export class OcctBackend implements Backend {
     };
   }
 
+  private thickenContext(resolve: ExecuteInput["resolve"]): ThickenContext {
+    return {
+      collectSelections: (shape, featureId, ownerKey, featureTags, opts) =>
+        this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
+      cylinderFromFace: (face) => this.cylinderFromFace(face),
+      cylinderVExtents: (face, cylinder) => this.cylinderVExtents(face, cylinder),
+      faceProperties: (face) => this.faceProperties(face),
+      firstFace: (shape) => this.firstFace(shape),
+      isValidShape: (shape) => this.isValidShape(shape),
+      makeBoolean: (op, left, right) => this.makeBoolean(op, left, right),
+      makeCylinder: (radius, height, axis, center) =>
+        this.makeCylinder(radius, height, axis, center),
+      makePrism: (face, vec) => this.makePrism(face, vec),
+      makeSolidFromShells: (shape) => this.makeSolidFromShells(shape),
+      makeThickSolid: (shape, removeFaces, offset, tolerance, opts) =>
+        this.makeThickSolid(shape, removeFaces as any[], offset, tolerance, opts),
+      makeVec: (x, y, z) => this.makeVec(x, y, z),
+      normalizeSolid: (shape) => this.normalizeSolid(shape),
+      planeBasisFromFace: (face) => this.planeBasisFromFace(face),
+      readShape: (shape) => this.readShape(shape),
+      resolve: (selector, upstream) => resolve(selector as Selector, upstream),
+      scaleVec: (v, s) => this.scaleVec(v, s),
+      sewShapeFaces: (shape, tolerance) => this.sewShapeFaces(shape, tolerance),
+      shapeHasSolid: (shape) => this.shapeHasSolid(shape),
+      addVec: (a, b) => this.addVec(a, b),
+    };
+  }
+
   private execDeleteFace(
     feature: DeleteFace,
     upstream: KernelResult
@@ -1775,108 +1805,7 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     resolve: ExecuteInput["resolve"]
   ): KernelResult {
-    const target = resolve(feature.surface, upstream);
-    if (target.kind !== "face" && target.kind !== "surface") {
-      throw new Error(
-        "OCCT backend: thicken target must resolve to a face or surface"
-      );
-    }
-    const shape = target.meta["shape"];
-    if (!shape) {
-      throw new Error("OCCT backend: thicken target missing shape");
-    }
-    const thickness = expectNumber(feature.thickness, "feature.thickness");
-    if (thickness <= 0) {
-      throw new Error("OCCT backend: thicken thickness must be positive");
-    }
-    const direction = feature.direction ?? "normal";
-    const sign = direction === "reverse" ? -1 : 1;
-
-    const planar =
-      target.kind === "surface"
-        ? false
-        : typeof target.meta["planar"] === "boolean"
-          ? (target.meta["planar"] as boolean)
-          : this.faceProperties(shape).planar;
-    const finalizeSolid = (shape: any) => {
-      let solidShape = this.normalizeSolid(shape);
-      if (!this.shapeHasSolid(solidShape)) {
-        const stitched = this.makeSolidFromShells(solidShape);
-        if (stitched) {
-          solidShape = this.normalizeSolid(stitched);
-        }
-      }
-      return solidShape;
-    };
-
-    let solid: any;
-    const offset = thickness * sign;
-    if (planar) {
-      let normalVec = target.meta["normalVec"] as [number, number, number] | undefined;
-      if (!normalVec) {
-        try {
-        normalVec = this.planeBasisFromFace(shape).normal;
-        } catch {
-          normalVec = undefined;
-        }
-      }
-      if (!normalVec) {
-        throw new Error("OCCT backend: thicken requires a planar face");
-      }
-      const vec = this.makeVec(
-        normalVec[0] * offset,
-        normalVec[1] * offset,
-        normalVec[2] * offset
-      );
-      const prism = this.makePrism(shape, vec);
-      solid = this.readShape(prism);
-    } else {
-      let analytic: any | null = null;
-      const face = target.kind === "face" ? shape : this.firstFace(shape);
-      if (face) {
-        analytic = this.tryThickenCylindricalFace(face, offset);
-      }
-      solid = analytic ?? this.makeThickSolid(shape, [], offset, 1e-6);
-    }
-    solid = finalizeSolid(solid);
-    if (!this.isValidShape(solid)) {
-      const retry = finalizeSolid(
-        this.makeThickSolid(shape, [], thickness * sign, 1e-6, {
-          intersection: true,
-          selfIntersection: true,
-          removeInternalEdges: true,
-        })
-      );
-      if (this.isValidShape(retry)) {
-        solid = retry;
-      }
-    }
-    if (!this.isValidShape(solid)) {
-      const sewed = this.sewShapeFaces(solid);
-      if (sewed) {
-        const stitched = this.makeSolidFromShells(sewed);
-        if (stitched && this.isValidShape(stitched)) {
-          solid = this.normalizeSolid(stitched);
-        }
-      }
-    }
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:solid`,
-          kind: "solid" as const,
-          meta: { shape: solid },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      solid,
-      feature.id,
-      feature.result,
-      feature.tags
-    );
-    return { outputs, selections };
+    return execOcctThicken(this.thickenContext(resolve), feature, upstream, resolve);
   }
 
   private execUnwrap(
@@ -3358,36 +3287,6 @@ export class OcctBackend implements Backend {
     } catch {
       return null;
     }
-  }
-
-  private tryThickenCylindricalFace(face: any, offset: number): any | null {
-    if (!Number.isFinite(offset) || offset === 0) return null;
-    const cylinder = this.cylinderFromFace(face);
-    if (!cylinder) return null;
-    const axis = normalizeVector(cylinder.axis);
-    if (!isFiniteVec(axis)) return null;
-    const extents = this.cylinderVExtents(face, cylinder);
-    if (!extents) return null;
-    const min = Math.min(extents.min, extents.max);
-    const max = Math.max(extents.min, extents.max);
-    const height = max - min;
-    if (!(height > 1e-6)) return null;
-    const baseProj = dot(cylinder.origin, axis);
-    const base = this.addVec(cylinder.origin, this.scaleVec(axis, min - baseProj));
-    const r0 = cylinder.radius;
-    const r1 = r0 + offset;
-    const outer = Math.max(r0, r1);
-    const inner = Math.min(r0, r1);
-    if (!(outer > 0)) return null;
-    const outerShape = this.readShape(this.makeCylinder(outer, height, axis, base));
-    if (!(inner > 0)) {
-      return outerShape;
-    }
-    const innerShape = this.readShape(this.makeCylinder(inner, height, axis, base));
-    const cut = this.makeBoolean("cut", outerShape, innerShape);
-    const result = this.readShape(cut);
-    if (!this.isValidShape(result)) return null;
-    return result;
   }
 
   private shapeCenter(shape: any): [number, number, number] {

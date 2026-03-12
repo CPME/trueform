@@ -1,17 +1,14 @@
 import type { KernelResult, KernelSelection } from "../backend.js";
 import type { Selector } from "../ir.js";
+import type { ResolutionContext } from "../selectors.js";
 import { resolveSelectorSet } from "../selectors.js";
+import type { SelectionCollectionOptions } from "./operation_contexts.js";
 
 export type EdgeModifierFeature = {
   id: string;
   edges: Selector;
   result?: string;
   tags?: string[];
-};
-
-type ResolutionContext = {
-  selections: KernelSelection[];
-  named: Map<string, KernelSelection>;
 };
 
 export type EdgeModifierDeps = {
@@ -29,7 +26,7 @@ export type EdgeModifierDeps = {
     featureId: string,
     ownerKey: string,
     tags?: string[],
-    opts?: unknown
+    opts?: SelectionCollectionOptions
   ) => KernelSelection[];
   makeSelectionCollectionOptions?: (
     label: "fillet" | "chamfer",
@@ -37,7 +34,7 @@ export type EdgeModifierDeps = {
     owner: unknown,
     targets: KernelSelection[],
     builder: unknown
-  ) => unknown;
+  ) => SelectionCollectionOptions;
 };
 
 export function executeEdgeModifier(

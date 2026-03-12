@@ -275,3 +275,71 @@ export type UnwrapContext = {
   ) => unknown;
   transformShapeTranslate: (shape: unknown, delta: [number, number, number]) => unknown;
 };
+
+export type ThickenContext = {
+  collectSelections: (
+    shape: unknown,
+    featureId: string,
+    ownerKey: string,
+    featureTags?: string[],
+    opts?: SelectionCollectionOptions
+  ) => KernelSelection[];
+  cylinderFromFace: (
+    face: unknown
+  ) => {
+    origin: [number, number, number];
+    axis: [number, number, number];
+    xDir?: [number, number, number];
+    yDir?: [number, number, number];
+    radius: number;
+  } | null;
+  cylinderVExtents: (
+    face: unknown,
+    cylinder: {
+      origin: [number, number, number];
+      axis: [number, number, number];
+      xDir?: [number, number, number];
+      yDir?: [number, number, number];
+      radius: number;
+    }
+  ) => { min: number; max: number } | null;
+  faceProperties: (face: unknown) => {
+    area: number;
+    center: [number, number, number];
+    planar: boolean;
+    normal?: AxisDirection;
+    normalVec?: [number, number, number];
+    surfaceType?: string;
+  };
+  firstFace: (shape: unknown) => unknown | null;
+  isValidShape: (shape: unknown) => boolean;
+  makeBoolean: (op: "cut", left: unknown, right: unknown) => unknown;
+  makeCylinder: (
+    radius: number,
+    height: number,
+    axis: [number, number, number],
+    center: [number, number, number]
+  ) => unknown;
+  makePrism: (face: unknown, vec: unknown) => unknown;
+  makeSolidFromShells: (shape: unknown) => unknown | null;
+  makeThickSolid: (
+    shape: unknown,
+    removeFaces: unknown[],
+    offset: number,
+    tolerance: number,
+    opts?: {
+      intersection?: boolean;
+      selfIntersection?: boolean;
+      removeInternalEdges?: boolean;
+    }
+  ) => unknown;
+  makeVec: (x: number, y: number, z: number) => unknown;
+  normalizeSolid: (shape: unknown) => unknown;
+  planeBasisFromFace: (face: unknown) => PlaneBasis;
+  readShape: (shape: unknown) => unknown;
+  resolve: (selector: unknown, upstream: KernelResult) => KernelSelection;
+  scaleVec: (v: [number, number, number], s: number) => [number, number, number];
+  sewShapeFaces: (shape: unknown, tolerance?: number) => unknown | null;
+  shapeHasSolid: (shape: unknown) => boolean;
+  addVec: (a: [number, number, number], b: [number, number, number]) => [number, number, number];
+};
