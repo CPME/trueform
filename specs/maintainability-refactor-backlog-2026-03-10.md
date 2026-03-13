@@ -47,6 +47,11 @@ boundary-extraction sweep.
 - after `Extract OCCT datum/pattern ops` (`f77feca`): 4077 lines
 - after `Extract OCCT shape analysis primitives`: 3986 lines
 
+### Validation Line Count Tracking
+
+- baseline before IR validation decomposition: `src/ir_validate.ts` at 3310 lines
+- after `Extract IR sketch + FTI validation modules`: 2344 lines
+
 ## Outstanding Work
 
 ### P0: Finish `src/backend_occt.ts` Decomposition
@@ -151,6 +156,10 @@ Goal: reduce manual drift between:
 - `src/ir.ts`
 - `src/ir_schema.ts`
 - `src/ir_validate.ts`
+
+Guardrail status:
+- `src/ir_validate.ts` is now under the `<= 2500` line maintainability limit
+  via extracted sketch/profile and FTI validation modules.
 
 Open work:
 

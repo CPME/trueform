@@ -3,16 +3,10 @@ import {
   AxisSpec,
   BuildContext,
   CosmeticThread,
-  DatumModifier,
-  DatumRef,
-  DimensionAngle,
-  DimensionDistance,
   ExtrudeAxis,
   Expr,
   FTIConstraint,
   FTIDatum,
-  FlatnessConstraint,
-  GeometryRef,
   HoleEndCondition,
   ID,
   IntentAssembly,
@@ -27,35 +21,42 @@ import {
   MateConnector,
   ParamDef,
   ParamType,
-  ParallelismConstraint,
   PatternRef,
   Path3D,
   PathSegment,
-  PerpendicularityConstraint,
   Point2D,
   Point3D,
   PlaneRef,
-  PositionConstraint,
   Predicate,
   Profile,
   ProfileRef,
   RankRule,
-  RefFrame,
-  RefSurface,
   Scalar,
   Selector,
-  SizeConstraint,
   SketchConstraint,
-  SketchConstraintPointRef,
   SketchEntity,
   SketchProfile,
   Transform,
-  ToleranceModifier,
   Unit,
   TF_IR_SCHEMA,
   TF_IR_VERSION,
 } from "./ir.js";
 import { CompileError } from "./errors.js";
+import {
+  validateConstraint as validateFtiConstraint,
+  validateCosmeticThread as validateFtiCosmeticThread,
+  validateDatum as validateFtiDatum,
+  type FtiValidationDeps,
+} from "./validation/ir_validation_fti.js";
+import {
+  validateDepth as validateFeatureDepth,
+  validatePatternRef as validateSketchPatternRef,
+  validateProfileRef as validateSketchProfileRef,
+  validateSketchConstraint as validateSketchConstraintShape,
+  validateSketchEntity as validateSketchEntityShape,
+  validateSketchProfile as validateSketchProfileShape,
+  type SketchValidationDeps,
+} from "./validation/ir_validation_sketch.js";
 
 export type ValidationMode = "strict" | "none";
 export type StagedFeaturePolicy = "allow" | "warn" | "error";
@@ -75,20 +76,6 @@ const AXIS_DIRECTIONS = new Set<AxisDirection>([
 
 const LENGTH_UNITS = new Set<Unit>(["mm", "cm", "m", "in"]);
 const ANGLE_UNITS = new Set<Unit>(["rad", "deg"]);
-const DATUM_MODIFIERS = new Set<DatumModifier>(["MMB", "LMB", "RMB"]);
-const TOLERANCE_MODIFIERS = new Set<ToleranceModifier>([
-  "MMC",
-  "LMC",
-  "RFS",
-  "PROJECTED",
-  "FREE_STATE",
-  "TANGENT_PLANE",
-  "STATISTICAL",
-]);
-const POSITION_ZONES = new Set<PositionConstraint["zone"]>([
-  "diameter",
-  "cartesian",
-]);
 
 export function shouldValidate(opts?: ValidationOptions): boolean {
   return opts?.validate !== "none";
@@ -332,6 +319,32 @@ function validateContext(ctx: BuildContext): void {
       "Tolerance values must be non-negative"
     );
   }
+}
+
+function sketchValidationDeps(): SketchValidationDeps {
+  return {
+    ensureArray,
+    ensureNonEmptyString,
+    ensureObject,
+    validateNonNegativeScalar,
+    validatePoint2,
+    validatePoint3,
+    validateScalar,
+    validatePositiveScalar,
+    scalarLiteral,
+  };
+}
+
+function ftiValidationDeps(): FtiValidationDeps {
+  return {
+    ensureArray,
+    ensureNonEmptyString,
+    ensureObject,
+    validateScalar,
+    validateSelector,
+    validateThreadHandedness,
+    scalarLiteral,
+  };
 }
 
 function validateAssembly(
@@ -1771,319 +1784,15 @@ function validateFeature(feature: IntentFeature): void {
 }
 
 function validateDatum(datum: FTIDatum): void {
-  ensureObject(datum, "validation_datum", "Datum must be an object");
-  ensureNonEmptyString(datum.id, "validation_datum_id", "Datum id is required");
-  ensureNonEmptyString(
-    datum.label,
-    "validation_datum_label",
-    "Datum label is required"
-  );
-  validateGeometryRef(datum.target, "Datum target");
-  if (datum.modifiers !== undefined) {
-    validateDatumModifiers(datum.modifiers, "Datum modifiers");
-  }
-  if (datum.capabilities !== undefined) {
-    validateIdArray(datum.capabilities, "Datum capabilities");
-  }
-  if (datum.requirement !== undefined) {
-    ensureNonEmptyString(
-      datum.requirement,
-      "validation_datum_requirement",
-      "Datum requirement must be a string"
-    );
-  }
+  validateFtiDatum(ftiValidationDeps(), datum);
 }
 
 function validateConstraint(constraint: FTIConstraint, datumIds: Set<ID>): void {
-  ensureObject(constraint, "validation_constraint", "Constraint must be an object");
-  const kind = (constraint as { kind?: string }).kind;
-  ensureNonEmptyString(
-    kind,
-    "validation_constraint_kind",
-    "Constraint kind is required"
-  );
-  ensureNonEmptyString(
-    (constraint as { id?: ID }).id,
-    "validation_constraint_id",
-    "Constraint id is required"
-  );
-
-  switch (kind) {
-    case "constraint.surfaceProfile": {
-      const entry = constraint as {
-        target?: RefSurface;
-        tolerance?: Scalar;
-        referenceFrame?: RefFrame;
-        capabilities?: ID[];
-        requirement?: ID;
-      };
-      validateRefSurface(entry.target, "Surface profile target");
-      validatePositiveScalar(entry.tolerance, "Surface profile tolerance");
-      if (entry.referenceFrame !== undefined) {
-        validateRefFrame(entry.referenceFrame, "Surface profile reference frame");
-      }
-      if (entry.capabilities !== undefined) {
-        validateIdArray(entry.capabilities, "Surface profile capabilities");
-      }
-      if (entry.requirement !== undefined) {
-        ensureNonEmptyString(
-          entry.requirement,
-          "validation_constraint_requirement",
-          "Surface profile requirement must be a string"
-        );
-      }
-      return;
-    }
-    case "constraint.flatness": {
-      const entry = constraint as FlatnessConstraint;
-      validateRefSurface(entry.target, "Flatness target");
-      validatePositiveScalar(entry.tolerance, "Flatness tolerance");
-      if (entry.capabilities !== undefined) {
-        validateIdArray(entry.capabilities, "Flatness capabilities");
-      }
-      if (entry.requirement !== undefined) {
-        ensureNonEmptyString(
-          entry.requirement,
-          "validation_constraint_requirement",
-          "Flatness requirement must be a string"
-        );
-      }
-      return;
-    }
-    case "constraint.parallelism": {
-      const entry = constraint as ParallelismConstraint;
-      validateRefSurface(entry.target, "Parallelism target");
-      validatePositiveScalar(entry.tolerance, "Parallelism tolerance");
-      validateDatumRefs(entry.datum, datumIds, "Parallelism datum refs");
-      if (entry.modifiers !== undefined) {
-        validateToleranceModifiers(entry.modifiers, "Parallelism modifiers");
-      }
-      if (entry.capabilities !== undefined) {
-        validateIdArray(entry.capabilities, "Parallelism capabilities");
-      }
-      if (entry.requirement !== undefined) {
-        ensureNonEmptyString(
-          entry.requirement,
-          "validation_constraint_requirement",
-          "Parallelism requirement must be a string"
-        );
-      }
-      return;
-    }
-    case "constraint.perpendicularity": {
-      const entry = constraint as PerpendicularityConstraint;
-      validateRefSurface(entry.target, "Perpendicularity target");
-      validatePositiveScalar(entry.tolerance, "Perpendicularity tolerance");
-      validateDatumRefs(entry.datum, datumIds, "Perpendicularity datum refs");
-      if (entry.modifiers !== undefined) {
-        validateToleranceModifiers(entry.modifiers, "Perpendicularity modifiers");
-      }
-      if (entry.capabilities !== undefined) {
-        validateIdArray(entry.capabilities, "Perpendicularity capabilities");
-      }
-      if (entry.requirement !== undefined) {
-        ensureNonEmptyString(
-          entry.requirement,
-          "validation_constraint_requirement",
-          "Perpendicularity requirement must be a string"
-        );
-      }
-      return;
-    }
-    case "constraint.position": {
-      const entry = constraint as PositionConstraint;
-      validateGeometryRef(entry.target, "Position target");
-      validatePositiveScalar(entry.tolerance, "Position tolerance");
-      validateDatumRefs(entry.datum, datumIds, "Position datum refs");
-      if (entry.modifiers !== undefined) {
-        validateToleranceModifiers(entry.modifiers, "Position modifiers");
-      }
-      if (entry.capabilities !== undefined) {
-        validateIdArray(entry.capabilities, "Position capabilities");
-      }
-      if (entry.requirement !== undefined) {
-        ensureNonEmptyString(
-          entry.requirement,
-          "validation_constraint_requirement",
-          "Position requirement must be a string"
-        );
-      }
-      if (entry.zone !== undefined && !POSITION_ZONES.has(entry.zone)) {
-        throw new CompileError(
-          "validation_constraint_zone",
-          `Unsupported position zone ${String(entry.zone)}`
-        );
-      }
-      return;
-    }
-    case "constraint.size": {
-      const entry = constraint as SizeConstraint;
-      validateGeometryRef(entry.target, "Size target");
-      const hasNominal = entry.nominal !== undefined || entry.tolerance !== undefined;
-      const hasLimits = entry.min !== undefined || entry.max !== undefined;
-      if (!hasNominal && !hasLimits) {
-        throw new CompileError(
-          "validation_constraint_size",
-          "Size constraint must include nominal+tolerance or min+max"
-        );
-      }
-      if (hasNominal) {
-        validateScalar(entry.nominal, "Size nominal");
-        validatePositiveScalar(entry.tolerance, "Size tolerance");
-      }
-      if (hasLimits) {
-        validateScalar(entry.min, "Size min");
-        validateScalar(entry.max, "Size max");
-        const minVal = scalarLiteral(entry.min);
-        const maxVal = scalarLiteral(entry.max);
-        if (minVal !== null && maxVal !== null && minVal > maxVal) {
-          throw new CompileError(
-            "validation_constraint_size_limits",
-            "Size min must be <= max"
-          );
-        }
-      }
-      if (entry.modifiers !== undefined) {
-        validateToleranceModifiers(entry.modifiers, "Size modifiers");
-      }
-      if (entry.capabilities !== undefined) {
-        validateIdArray(entry.capabilities, "Size capabilities");
-      }
-      if (entry.requirement !== undefined) {
-        ensureNonEmptyString(
-          entry.requirement,
-          "validation_constraint_requirement",
-          "Size requirement must be a string"
-        );
-      }
-      return;
-    }
-    case "dimension.distance": {
-      const entry = constraint as DimensionDistance;
-      validateGeometryRef(entry.from, "Distance dimension from");
-      validateGeometryRef(entry.to, "Distance dimension to");
-      validateDimensionToleranceFields(entry, "Distance dimension");
-      if (entry.capabilities !== undefined) {
-        validateIdArray(entry.capabilities, "Distance dimension capabilities");
-      }
-      if (entry.requirement !== undefined) {
-        ensureNonEmptyString(
-          entry.requirement,
-          "validation_constraint_requirement",
-          "Distance dimension requirement must be a string"
-        );
-      }
-      return;
-    }
-    case "dimension.angle": {
-      const entry = constraint as DimensionAngle;
-      validateGeometryRef(entry.from, "Angle dimension from");
-      validateGeometryRef(entry.to, "Angle dimension to");
-      validateDimensionToleranceFields(entry, "Angle dimension");
-      if (entry.capabilities !== undefined) {
-        validateIdArray(entry.capabilities, "Angle dimension capabilities");
-      }
-      if (entry.requirement !== undefined) {
-        ensureNonEmptyString(
-          entry.requirement,
-          "validation_constraint_requirement",
-          "Angle dimension requirement must be a string"
-        );
-      }
-      return;
-    }
-    default:
-      throw new CompileError(
-        "validation_constraint_kind",
-        `Unknown constraint kind ${String(kind)}`
-      );
-  }
+  validateFtiConstraint(ftiValidationDeps(), constraint, datumIds);
 }
 
 function validateCosmeticThread(thread: CosmeticThread): void {
-  ensureObject(thread, "validation_thread", "Cosmetic thread must be an object");
-  ensureNonEmptyString(thread.id, "validation_thread_id", "Thread id is required");
-  if (thread.kind !== "thread.cosmetic") {
-    throw new CompileError(
-      "validation_thread_kind",
-      `Unsupported thread kind ${String((thread as { kind?: unknown }).kind)}`
-    );
-  }
-  validateGeometryRef(thread.target, "Thread target");
-  if (thread.designation !== undefined) {
-    ensureNonEmptyString(
-      thread.designation,
-      "validation_thread_designation",
-      "Thread designation must be a string"
-    );
-  }
-  if (thread.standard !== undefined) {
-    ensureNonEmptyString(
-      thread.standard,
-      "validation_thread_standard",
-      "Thread standard must be a string"
-    );
-  }
-  if (thread.series !== undefined) {
-    ensureNonEmptyString(
-      thread.series,
-      "validation_thread_series",
-      "Thread series must be a string"
-    );
-  }
-  if (thread.class !== undefined) {
-    ensureNonEmptyString(
-      thread.class,
-      "validation_thread_class",
-      "Thread class must be a string"
-    );
-  }
-  if (thread.handedness !== undefined) {
-    validateThreadHandedness(thread.handedness);
-  }
-  if (thread.internal !== undefined && typeof thread.internal !== "boolean") {
-    throw new CompileError(
-      "validation_thread_internal",
-      "Thread internal flag must be a boolean"
-    );
-  }
-  if (thread.majorDiameter !== undefined) {
-    validateScalar(thread.majorDiameter, "Thread major diameter");
-  }
-  if (thread.minorDiameter !== undefined) {
-    validateScalar(thread.minorDiameter, "Thread minor diameter");
-  }
-  if (thread.pitch !== undefined) {
-    validateScalar(thread.pitch, "Thread pitch");
-  }
-  if (thread.length !== undefined) {
-    validateScalar(thread.length, "Thread length");
-  }
-  if (thread.depth !== undefined) {
-    validateScalar(thread.depth, "Thread depth");
-  }
-  if (thread.notes !== undefined) {
-    const notes = ensureArray<string>(
-      thread.notes,
-      "validation_thread_notes",
-      "Thread notes must be an array"
-    );
-    for (const note of notes) {
-      ensureNonEmptyString(
-        note,
-        "validation_thread_note",
-        "Thread note must be a string"
-      );
-    }
-  }
-  if (thread.designation === undefined) {
-    if (thread.majorDiameter === undefined || thread.pitch === undefined) {
-      throw new CompileError(
-        "validation_thread_required",
-        "Thread requires designation or both majorDiameter and pitch"
-      );
-    }
-  }
+  validateFtiCosmeticThread(ftiValidationDeps(), thread);
 }
 
 function validateAssertion(assertion: IntentAssertion): void {
@@ -2109,140 +1818,6 @@ function validateAssertion(assertion: IntentAssertion): void {
   }
 }
 
-function validateGeometryRef(ref: GeometryRef, label: string): void {
-  ensureObject(ref, "validation_ref", `${label} must be an object`);
-  switch (ref.kind) {
-    case "ref.surface":
-    case "ref.frame":
-    case "ref.edge":
-    case "ref.axis":
-      validateSelector(ref.selector);
-      return;
-    case "ref.point":
-      validateSelector(ref.selector);
-      if (
-        ref.locator !== undefined &&
-        ref.locator !== "center" &&
-        ref.locator !== "mid" &&
-        ref.locator !== "start" &&
-        ref.locator !== "end"
-      ) {
-        throw new CompileError(
-          "validation_ref_point_locator",
-          `Unsupported point locator ${String(ref.locator)}`
-        );
-      }
-      return;
-    default:
-      throw new CompileError(
-        "validation_ref_kind",
-        `Unknown geometry ref kind ${String((ref as { kind?: string }).kind)}`
-      );
-  }
-}
-
-function validateRefSurface(ref: RefSurface | undefined, label: string): void {
-  if (!ref) {
-    throw new CompileError("validation_ref_surface", `${label} is required`);
-  }
-  if (ref.kind !== "ref.surface") {
-    throw new CompileError("validation_ref_surface", `${label} must be ref.surface`);
-  }
-  validateSelector(ref.selector);
-}
-
-function validateRefFrame(ref: RefFrame, label: string): void {
-  if (!ref || ref.kind !== "ref.frame") {
-    throw new CompileError("validation_ref_frame", `${label} must be ref.frame`);
-  }
-  validateSelector(ref.selector);
-}
-
-function validateDatumRefs(refs: DatumRef[], datumIds: Set<ID>, label: string): void {
-  if (!Array.isArray(refs) || refs.length === 0) {
-    throw new CompileError(
-      "validation_constraint_datum_required",
-      `${label} must include at least one datum`
-    );
-  }
-  if (datumIds.size === 0) {
-    throw new CompileError(
-      "validation_constraint_datum_missing",
-      `${label} references datums but none are defined on the part`
-    );
-  }
-  for (const ref of refs) {
-    validateDatumRef(ref, datumIds);
-  }
-}
-
-function validateDatumRef(ref: DatumRef, datumIds: Set<ID>): void {
-  ensureObject(ref, "validation_datum_ref", "Datum ref must be an object");
-  if (ref.kind !== "datum.ref") {
-    throw new CompileError("validation_datum_ref", "Datum ref kind must be datum.ref");
-  }
-  ensureNonEmptyString(
-    ref.datum,
-    "validation_datum_ref_id",
-    "Datum ref id is required"
-  );
-  if (datumIds.size > 0 && !datumIds.has(ref.datum)) {
-    throw new CompileError(
-      "validation_datum_ref_missing",
-      `Datum ref ${ref.datum} not found`
-    );
-  }
-  if (ref.modifiers !== undefined) {
-    validateDatumModifiers(ref.modifiers, "Datum ref modifiers");
-  }
-}
-
-function validateDatumModifiers(modifiers: DatumModifier[], label: string): void {
-  const list = ensureArray<DatumModifier>(
-    modifiers,
-    "validation_datum_modifiers",
-    `${label} must be an array`
-  );
-  for (const mod of list) {
-    if (!DATUM_MODIFIERS.has(mod)) {
-      throw new CompileError(
-        "validation_datum_modifier",
-        `Unknown datum modifier ${String(mod)}`
-      );
-    }
-  }
-}
-
-function validateToleranceModifiers(
-  modifiers: ToleranceModifier[],
-  label: string
-): void {
-  const list = ensureArray<ToleranceModifier>(
-    modifiers,
-    "validation_tolerance_modifiers",
-    `${label} must be an array`
-  );
-  for (const mod of list) {
-    if (!TOLERANCE_MODIFIERS.has(mod)) {
-      throw new CompileError(
-        "validation_tolerance_modifier",
-        `Unknown tolerance modifier ${String(mod)}`
-      );
-    }
-  }
-}
-
-function validateIdArray(values: ID[], label: string): void {
-  const list = ensureArray<ID>(
-    values,
-    "validation_id_array",
-    `${label} must be an array`
-  );
-  for (const value of list) {
-    ensureNonEmptyString(value, "validation_id_array_item", `${label} must be strings`);
-  }
-}
-
 function validatePositiveScalar(value: Scalar | undefined, label: string): void {
   validateScalar(value, label);
   const literal = scalarLiteral(value);
@@ -2265,49 +1840,6 @@ function validateNonNegativeScalar(value: Scalar | undefined, label: string): vo
   }
 }
 
-function validateDimensionToleranceFields(
-  value: {
-    nominal?: Scalar;
-    tolerance?: Scalar;
-    plus?: Scalar;
-    minus?: Scalar;
-  },
-  label: string
-): void {
-  if (value.nominal !== undefined) {
-    validateScalar(value.nominal, `${label} nominal`);
-  }
-  const hasSymmetric = value.tolerance !== undefined;
-  const hasBilateral = value.plus !== undefined || value.minus !== undefined;
-  if (hasSymmetric && hasBilateral) {
-    throw new CompileError(
-      "validation_dimension_tolerance_shape",
-      `${label} cannot mix symmetric tolerance with plus/minus`
-    );
-  }
-  if (hasBilateral && (value.plus === undefined || value.minus === undefined)) {
-    throw new CompileError(
-      "validation_dimension_tolerance_shape",
-      `${label} plus/minus must both be provided`
-    );
-  }
-  if ((hasSymmetric || hasBilateral) && value.nominal === undefined) {
-    throw new CompileError(
-      "validation_dimension_tolerance_shape",
-      `${label} nominal is required when tolerance is provided`
-    );
-  }
-  if (value.tolerance !== undefined) {
-    validatePositiveScalar(value.tolerance, `${label} tolerance`);
-  }
-  if (value.plus !== undefined) {
-    validateNonNegativeScalar(value.plus, `${label} plus tolerance`);
-  }
-  if (value.minus !== undefined) {
-    validateNonNegativeScalar(value.minus, `${label} minus tolerance`);
-  }
-}
-
 function scalarLiteral(value: Scalar | undefined): number | null {
   if (typeof value === "number") return value;
   if (value && typeof value === "object" && value.kind === "expr.literal") {
@@ -2320,525 +1852,27 @@ function validateSketchProfile(
   profile: SketchProfile,
   entityMap?: Map<ID, SketchEntity>
 ): void {
-  ensureObject(profile, "validation_profile", "Sketch profile must be an object");
-  ensureNonEmptyString(
-    profile.name,
-    "validation_profile_name",
-    "Sketch profile name is required"
-  );
-  validateProfile(profile.profile);
-  if (profile.profile.kind === "profile.sketch") {
-    if (!entityMap || entityMap.size === 0) {
-      throw new CompileError(
-        "validation_sketch_profile_entities_missing",
-        "profile.sketch requires sketch entities"
-      );
-    }
-    const ids = new Set<ID>();
-    const loop = profile.profile.loop;
-    for (const id of loop) {
-      if (ids.has(id)) {
-        throw new CompileError(
-          "validation_sketch_profile_duplicate",
-          `profile.sketch loop id ${id} is duplicated`
-        );
-      }
-      ids.add(id);
-      const entity = entityMap.get(id);
-      if (!entity) {
-        throw new CompileError(
-          "validation_sketch_profile_missing_entity",
-          `profile.sketch references missing entity ${id}`
-        );
-      }
-      if (entity.construction) {
-        throw new CompileError(
-          "validation_sketch_profile_construction",
-          `profile.sketch entity ${id} is marked construction`
-        );
-      }
-      switch (entity.kind) {
-        case "sketch.line":
-        case "sketch.arc":
-        case "sketch.circle":
-        case "sketch.ellipse":
-        case "sketch.rectangle":
-        case "sketch.slot":
-        case "sketch.polygon":
-        case "sketch.spline":
-          break;
-        default:
-          throw new CompileError(
-            "validation_sketch_profile_entity_kind",
-            `profile.sketch entity ${id} kind ${entity.kind} is not supported`
-          );
-      }
-    }
-    for (const hole of profile.profile.holes ?? []) {
-      for (const id of hole) {
-        const entity = entityMap.get(id);
-        if (!entity) {
-          throw new CompileError(
-            "validation_sketch_profile_missing_entity",
-            `profile.sketch hole references missing entity ${id}`
-          );
-        }
-        if (entity.construction) {
-          throw new CompileError(
-            "validation_sketch_profile_construction",
-            `profile.sketch entity ${id} is marked construction`
-          );
-        }
-        switch (entity.kind) {
-          case "sketch.line":
-          case "sketch.arc":
-          case "sketch.circle":
-          case "sketch.ellipse":
-          case "sketch.rectangle":
-          case "sketch.slot":
-          case "sketch.polygon":
-          case "sketch.spline":
-            break;
-          default:
-            throw new CompileError(
-              "validation_sketch_profile_entity_kind",
-              `profile.sketch entity ${id} kind ${entity.kind} is not supported`
-            );
-        }
-      }
-    }
-  }
+  validateSketchProfileShape(sketchValidationDeps(), profile, entityMap);
 }
 
 function validateSketchEntity(entity: SketchEntity): void {
-  ensureObject(entity, "validation_sketch_entity", "Sketch entity must be an object");
-  ensureNonEmptyString(
-    entity.id,
-    "validation_sketch_entity_id",
-    "Sketch entity id is required"
-  );
-
-  switch (entity.kind) {
-    case "sketch.line":
-      validatePoint2(entity.start, "Sketch line start");
-      validatePoint2(entity.end, "Sketch line end");
-      return;
-    case "sketch.arc":
-      validatePoint2(entity.start, "Sketch arc start");
-      validatePoint2(entity.end, "Sketch arc end");
-      validatePoint2(entity.center, "Sketch arc center");
-      if (entity.direction !== "cw" && entity.direction !== "ccw") {
-        throw new CompileError(
-          "validation_sketch_arc_direction",
-          `Unknown arc direction ${String(entity.direction)}`
-        );
-      }
-      return;
-    case "sketch.circle":
-      validatePoint2(entity.center, "Sketch circle center");
-      validateScalar(entity.radius, "Sketch circle radius");
-      return;
-    case "sketch.ellipse":
-      validatePoint2(entity.center, "Sketch ellipse center");
-      validateScalar(entity.radiusX, "Sketch ellipse radiusX");
-      validateScalar(entity.radiusY, "Sketch ellipse radiusY");
-      if (entity.rotation !== undefined) {
-        validateScalar(entity.rotation, "Sketch ellipse rotation");
-      }
-      return;
-    case "sketch.rectangle": {
-      const rect = entity as {
-        mode?: "center" | "corner";
-        center?: Point2D;
-        corner?: Point2D;
-        width?: Scalar;
-        height?: Scalar;
-        rotation?: Scalar;
-      };
-      if (rect.mode !== "center" && rect.mode !== "corner") {
-        throw new CompileError(
-          "validation_sketch_rect_mode",
-          `Unknown rectangle mode ${String(rect.mode)}`
-        );
-      }
-      if (rect.mode === "center") {
-        if (!rect.center) {
-          throw new CompileError(
-            "validation_sketch_rect_center",
-            "Sketch rectangle center is required"
-          );
-        }
-        validatePoint2(rect.center, "Sketch rectangle center");
-      } else {
-        if (!rect.corner) {
-          throw new CompileError(
-            "validation_sketch_rect_corner",
-            "Sketch rectangle corner is required"
-          );
-        }
-        validatePoint2(rect.corner, "Sketch rectangle corner");
-      }
-      validateScalar(rect.width, "Sketch rectangle width");
-      validateScalar(rect.height, "Sketch rectangle height");
-      if (rect.rotation !== undefined) {
-        validateScalar(rect.rotation, "Sketch rectangle rotation");
-      }
-      return;
-    }
-    case "sketch.slot":
-      validatePoint2(entity.center, "Sketch slot center");
-      validateScalar(entity.length, "Sketch slot length");
-      validateScalar(entity.width, "Sketch slot width");
-      if (entity.rotation !== undefined) {
-        validateScalar(entity.rotation, "Sketch slot rotation");
-      }
-      if (entity.endStyle !== undefined) {
-        if (entity.endStyle !== "arc" && entity.endStyle !== "straight") {
-          throw new CompileError(
-            "validation_sketch_slot_endstyle",
-            `Unknown slot end style ${String(entity.endStyle)}`
-          );
-        }
-      }
-      return;
-    case "sketch.polygon":
-      validatePoint2(entity.center, "Sketch polygon center");
-      validateScalar(entity.radius, "Sketch polygon radius");
-      validateScalar(entity.sides, "Sketch polygon sides");
-      if (entity.rotation !== undefined) {
-        validateScalar(entity.rotation, "Sketch polygon rotation");
-      }
-      return;
-    case "sketch.spline":
-      const points = ensureArray<Point2D>(
-        entity.points,
-        "validation_sketch_spline_points",
-        "Sketch spline points must be an array"
-      );
-      if (points.length < 2) {
-        throw new CompileError(
-          "validation_sketch_spline_points",
-          "Sketch spline must have at least 2 points"
-        );
-      }
-      for (const point of points) {
-        validatePoint2(point, "Sketch spline point");
-      }
-      if (entity.degree !== undefined) {
-        validateScalar(entity.degree, "Sketch spline degree");
-      }
-      return;
-    case "sketch.point":
-      validatePoint2(entity.point, "Sketch point");
-      return;
-    default:
-      throw new CompileError(
-        "validation_sketch_entity_kind",
-        `Unknown sketch entity kind ${String((entity as { kind?: string }).kind)}`
-      );
-  }
+  validateSketchEntityShape(sketchValidationDeps(), entity);
 }
 
 function validateSketchConstraint(constraint: SketchConstraint): void {
-  ensureObject(
-    constraint,
-    "validation_sketch_constraint",
-    "Sketch constraint must be an object"
-  );
-  ensureNonEmptyString(
-    constraint.id,
-    "validation_sketch_constraint_id",
-    "Sketch constraint id is required"
-  );
-
-  switch (constraint.kind) {
-    case "sketch.constraint.coincident":
-      validateSketchConstraintPointRef(constraint.a, "Sketch coincident point a");
-      validateSketchConstraintPointRef(constraint.b, "Sketch coincident point b");
-      return;
-    case "sketch.constraint.horizontal":
-    case "sketch.constraint.vertical":
-      ensureNonEmptyString(
-        constraint.line,
-        "validation_sketch_constraint_line",
-        "Sketch line constraint requires a line id"
-      );
-      return;
-    case "sketch.constraint.parallel":
-    case "sketch.constraint.perpendicular":
-    case "sketch.constraint.equalLength":
-    case "sketch.constraint.tangent":
-    case "sketch.constraint.concentric":
-    case "sketch.constraint.collinear":
-      ensureNonEmptyString(
-        constraint.a,
-        "validation_sketch_constraint_line",
-        "Sketch two-entity constraint requires entity a"
-      );
-      ensureNonEmptyString(
-        constraint.b,
-        "validation_sketch_constraint_line",
-        "Sketch two-entity constraint requires entity b"
-      );
-      return;
-    case "sketch.constraint.pointOnLine":
-      validateSketchConstraintPointRef(constraint.point, "Sketch pointOnLine point");
-      ensureNonEmptyString(
-        constraint.line,
-        "validation_sketch_constraint_line",
-        "Sketch pointOnLine constraint requires line id"
-      );
-      return;
-    case "sketch.constraint.midpoint":
-      validateSketchConstraintPointRef(constraint.point, "Sketch midpoint point");
-      ensureNonEmptyString(
-        constraint.line,
-        "validation_sketch_constraint_line",
-        "Sketch midpoint constraint requires line id"
-      );
-      return;
-    case "sketch.constraint.symmetry":
-      validateSketchConstraintPointRef(constraint.a, "Sketch symmetry point a");
-      validateSketchConstraintPointRef(constraint.b, "Sketch symmetry point b");
-      ensureNonEmptyString(
-        constraint.axis,
-        "validation_sketch_constraint_line",
-        "Sketch symmetry constraint requires axis line id"
-      );
-      return;
-    case "sketch.constraint.distance":
-      validateSketchConstraintPointRef(constraint.a, "Sketch distance point a");
-      validateSketchConstraintPointRef(constraint.b, "Sketch distance point b");
-      validateScalar(constraint.distance, "Sketch distance constraint");
-      return;
-    case "sketch.constraint.angle":
-      ensureNonEmptyString(
-        constraint.a,
-        "validation_sketch_constraint_line",
-        "Sketch angle constraint requires line a"
-      );
-      ensureNonEmptyString(
-        constraint.b,
-        "validation_sketch_constraint_line",
-        "Sketch angle constraint requires line b"
-      );
-      validateSketchConstraintAngle(constraint.angle);
-      return;
-    case "sketch.constraint.radius":
-      ensureNonEmptyString(
-        constraint.curve,
-        "validation_sketch_constraint_curve",
-        "Sketch radius constraint requires a curve id"
-      );
-      validatePositiveScalar(constraint.radius, "Sketch radius constraint");
-      return;
-    case "sketch.constraint.fixPoint":
-      validateSketchConstraintPointRef(constraint.point, "Sketch fixPoint target");
-      if (constraint.x === undefined && constraint.y === undefined) {
-        throw new CompileError(
-          "validation_sketch_constraint_fix_point_target",
-          "Sketch fixPoint constraint requires x and/or y"
-        );
-      }
-      if (constraint.x !== undefined) {
-        validateScalar(constraint.x, "Sketch fixPoint x");
-      }
-      if (constraint.y !== undefined) {
-        validateScalar(constraint.y, "Sketch fixPoint y");
-      }
-      return;
-    default:
-      throw new CompileError(
-        "validation_sketch_constraint_kind",
-        `Unknown sketch constraint kind ${String((constraint as { kind?: unknown }).kind)}`
-      );
-  }
-}
-
-function validateSketchConstraintAngle(value: Scalar): void {
-  validateNonNegativeScalar(value, "Sketch angle constraint");
-  const literal = scalarLiteral(value);
-  if (literal !== null && literal > 180) {
-    throw new CompileError(
-      "validation_sketch_constraint_angle_range",
-      "Sketch angle constraint must be between 0 and 180 degrees"
-    );
-  }
-}
-
-function validateSketchConstraintPointRef(
-  ref: SketchConstraintPointRef,
-  label: string
-): void {
-  ensureObject(
-    ref,
-    "validation_sketch_constraint_ref",
-    `${label} must be an object`
-  );
-  ensureNonEmptyString(
-    ref.entity,
-    "validation_sketch_constraint_ref_entity",
-    `${label} entity is required`
-  );
-  if (ref.handle === undefined) return;
-  if (
-    ref.handle !== "start" &&
-    ref.handle !== "end" &&
-    ref.handle !== "center" &&
-    ref.handle !== "point" &&
-    ref.handle !== "corner"
-  ) {
-    throw new CompileError(
-      "validation_sketch_constraint_ref_handle",
-      `${label} handle ${String(ref.handle)} is not supported`
-    );
-  }
+  validateSketchConstraintShape(sketchValidationDeps(), constraint);
 }
 
 function validateProfileRef(profile: ProfileRef | undefined): void {
-  if (!profile) {
-    throw new CompileError(
-      "validation_profile_ref",
-      "Profile reference is required"
-    );
-  }
-  if ((profile as { kind?: string }).kind === "profile.ref") {
-    const name = (profile as { name?: string }).name;
-    ensureNonEmptyString(
-      name,
-      "validation_profile_ref_name",
-      "Profile ref name is required"
-    );
-    return;
-  }
-  validateProfile(profile as Profile);
-}
-
-function validateProfile(profile: Profile): void {
-  ensureObject(profile, "validation_profile", "Profile must be an object");
-  switch (profile.kind) {
-    case "profile.rectangle":
-      validateScalar(profile.width, "Profile width");
-      validateScalar(profile.height, "Profile height");
-      if (profile.center !== undefined) {
-        validatePoint3(
-          profile.center,
-          "validation_profile_center",
-          "Profile center must be a 3D point"
-        );
-      }
-      return;
-    case "profile.circle":
-      validateScalar(profile.radius, "Profile radius");
-      if (profile.center !== undefined) {
-        validatePoint3(
-          profile.center,
-          "validation_profile_center",
-          "Profile center must be a 3D point"
-        );
-      }
-      return;
-    case "profile.poly":
-      validateScalar(profile.sides, "Profile polygon sides");
-      validateScalar(profile.radius, "Profile polygon radius");
-      if (profile.center !== undefined) {
-        validatePoint3(
-          profile.center,
-          "validation_profile_center",
-          "Profile center must be a 3D point"
-        );
-      }
-      if (profile.rotation !== undefined) {
-        validateScalar(profile.rotation, "Profile polygon rotation");
-      }
-      return;
-    case "profile.sketch": {
-      if (profile.open !== undefined && typeof profile.open !== "boolean") {
-        throw new CompileError(
-          "validation_profile_sketch_open",
-          "profile.sketch open must be a boolean"
-        );
-      }
-      if (profile.open && profile.holes && profile.holes.length > 0) {
-        throw new CompileError(
-          "validation_profile_sketch_open_holes",
-          "profile.sketch open profiles cannot define holes"
-        );
-      }
-      const loop = ensureArray<ID>(
-        profile.loop,
-        "validation_profile_sketch_loop",
-        "Sketch profile loop must be an array"
-      );
-      if (loop.length === 0) {
-        throw new CompileError(
-          "validation_profile_sketch_loop",
-          "Sketch profile loop must not be empty"
-        );
-      }
-      for (const id of loop) {
-        ensureNonEmptyString(
-          id,
-          "validation_profile_sketch_loop_id",
-          "Sketch profile loop id must be a string"
-        );
-      }
-      if (profile.holes !== undefined) {
-        const holes = ensureArray<ID[]>(
-          profile.holes as ID[][],
-          "validation_profile_sketch_holes",
-          "Sketch profile holes must be an array"
-        );
-        for (const hole of holes) {
-          const loopIds = ensureArray<ID>(
-            hole,
-            "validation_profile_sketch_hole",
-            "Sketch profile hole must be an array"
-          );
-          if (loopIds.length === 0) {
-            throw new CompileError(
-              "validation_profile_sketch_hole",
-              "Sketch profile hole must not be empty"
-            );
-          }
-          for (const id of loopIds) {
-            ensureNonEmptyString(
-              id,
-              "validation_profile_sketch_hole_id",
-              "Sketch profile hole id must be a string"
-            );
-          }
-        }
-      }
-      return;
-    }
-    default:
-      throw new CompileError(
-        "validation_profile_kind",
-        `Unknown profile kind ${String((profile as { kind?: string }).kind)}`
-      );
-  }
+  validateSketchProfileRef(sketchValidationDeps(), profile);
 }
 
 function validatePatternRef(pattern: PatternRef): void {
-  ensureObject(pattern, "validation_pattern_ref", "Pattern ref must be an object");
-  const kind = (pattern as { kind?: string }).kind;
-  if (kind !== "pattern.linear" && kind !== "pattern.circular") {
-    throw new CompileError(
-      "validation_pattern_ref_kind",
-      `Unknown pattern ref kind ${String(kind)}`
-    );
-  }
-  ensureNonEmptyString(
-    (pattern as { ref?: string }).ref,
-    "validation_pattern_ref_id",
-    "Pattern ref id is required"
-  );
+  validateSketchPatternRef(sketchValidationDeps(), pattern);
 }
 
 function validateDepth(depth: Scalar | "throughAll" | undefined): void {
-  if (depth === "throughAll") return;
-  validateScalar(depth, "Feature depth");
+  validateFeatureDepth(sketchValidationDeps(), depth);
 }
 
 function validateSelector(selector: Selector | undefined): void {

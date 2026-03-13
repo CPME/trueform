@@ -11,6 +11,8 @@ To create the open sourced CAD tools and standards that enables the world of har
 ## General Instructions
 - Commit changes as you go (only the changes you made, unless otherwise noted)
 - Keep `src/backend_occt.ts` at or below `4000` lines. If a change would keep it above that threshold, extract a cohesive helper or feature module with direct tests instead of adding more backend-local logic.
+- Keep `src/ir_validate.ts` at or below `2500` lines. If validation work pushes it higher, extract domain-specific validators such as sketch/profile or FTI/GD&T validation into dedicated modules with direct tests.
+- Keep `src/sketch/constraints.ts` at or below `2200` lines. If solver work pushes it higher, extract cohesive math, reporting, or solve-session helpers instead of expanding the core solver file.
 
 ## Package Consumer Workflow
 - Consumers must import from published package exports only (`trueform`, `trueform/dsl/geometry`, etc). Do not import from `trueform/src/...`.
