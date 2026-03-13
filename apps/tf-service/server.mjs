@@ -1,5 +1,4 @@
 import http from "node:http";
-import { createHash } from "node:crypto";
 import { URL, pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import initOpenCascade from "opencascade.js/dist/node.js";
@@ -41,6 +40,21 @@ import { tryHandleDocumentRoute } from "./route_documents.mjs";
 import { tryHandleResourceRoute } from "./route_resources.mjs";
 import { tryHandleActionRoute } from "./route_actions.mjs";
 import { createJobRuntime } from "./job_runtime.mjs";
+import { createDocumentStoreService } from "./service_document_store.mjs";
+import {
+  cacheSet,
+  computeBounds,
+  makeExportKey,
+  makeLatencyBucket,
+  makeMeshKey,
+  makePartBuildKey,
+  memorySnapshot,
+  recordCacheEvent,
+  recordLatency,
+  sha256,
+  stableStringify,
+  triangleCountFromMesh,
+} from "./service_cache_stats.mjs";
 import {
   buildEdgeSelectionIndices,
   buildOutputsMap,
@@ -170,6 +184,26 @@ export function createTfServiceServer(options = {}) {
     }
     return backendFingerprintPromise;
   }
+
+  const documentStoreService = createDocumentStoreService({
+    documentStore,
+    documentVersionStore,
+    buildSessionStore,
+    maxDocBytes: MAX_DOC_BYTES,
+    maxDocsPerTenant: MAX_DOCS_PER_TENANT,
+    maxDocVersionsPerKey: MAX_DOC_VERSIONS_PER_KEY,
+    maxBuildSessionsPerTenant: MAX_BUILD_SESSIONS_PER_TENANT,
+    maxBuildsPerSession: MAX_BUILDS_PER_SESSION,
+    buildSessionTtlMs: BUILD_SESSION_TTL_MS,
+    makeHttpError: (status, code, message, details) =>
+      new HttpError(status, code, message, details),
+    stableStringify,
+    sha256,
+    nextBuildSessionId: () => {
+      sessionCounter += 1;
+      return `session_${Date.now()}_${sessionCounter}`;
+    },
+  });
 
   function json(res, status, payload) {
     writeJson(res, status, payload, TENANT_HEADER);
@@ -310,69 +344,6 @@ export function createTfServiceServer(options = {}) {
     return `build_${Date.now()}_${buildCounter}`;
   }
 
-  function nextBuildSessionId() {
-    sessionCounter += 1;
-    return `session_${Date.now()}_${sessionCounter}`;
-  }
-
-  function pruneExpiredBuildSessions() {
-    const now = Date.now();
-    for (const [sessionId, session] of buildSessionStore.entries()) {
-      if (session.expiresAtMs <= now) buildSessionStore.delete(sessionId);
-    }
-  }
-
-  function createBuildSession(tenantId) {
-    pruneExpiredBuildSessions();
-    assertTenantQuota(
-      tenantId,
-      "build_sessions_per_tenant",
-      MAX_BUILD_SESSIONS_PER_TENANT,
-      countTenantInStore(buildSessionStore, tenantId)
-    );
-    const now = Date.now();
-    const sessionId = nextBuildSessionId();
-    const session = {
-      id: sessionId,
-      tenantId,
-      createdAt: new Date(now).toISOString(),
-      updatedAt: new Date(now).toISOString(),
-      expiresAtMs: now + BUILD_SESSION_TTL_MS,
-      buildsByPartKey: new Map(),
-    };
-    buildSessionStore.set(sessionId, session);
-    return session;
-  }
-
-  function getBuildSession(tenantId, sessionId) {
-    pruneExpiredBuildSessions();
-    const session = buildSessionStore.get(sessionId);
-    if (!session || session.tenantId !== tenantId) return null;
-    const now = Date.now();
-    session.updatedAt = new Date(now).toISOString();
-    session.expiresAtMs = now + BUILD_SESSION_TTL_MS;
-    return session;
-  }
-
-  function dropBuildSession(tenantId, sessionId) {
-    const session = buildSessionStore.get(sessionId);
-    if (!session || session.tenantId !== tenantId) return false;
-    buildSessionStore.delete(sessionId);
-    return true;
-  }
-
-  function setBuildSessionEntry(session, sessionPartKey, entry) {
-    if (session.buildsByPartKey.has(sessionPartKey)) {
-      session.buildsByPartKey.delete(sessionPartKey);
-    }
-    session.buildsByPartKey.set(sessionPartKey, entry);
-    while (session.buildsByPartKey.size > MAX_BUILDS_PER_SESSION) {
-      const oldestKey = session.buildsByPartKey.keys().next().value;
-      if (typeof oldestKey !== "string") break;
-      session.buildsByPartKey.delete(oldestKey);
-    }
-  }
-
   function normalizePartialBuildHints(request) {
     const partial = request?.partial && typeof request.partial === "object" ? request.partial : {};
     const changedFeatureSource = Array.isArray(partial.changedFeatureIds)
@@ -416,290 +387,6 @@ export function createTfServiceServer(options = {}) {
     return match ? match[1] : null;
   }
 
-  function computeBounds(positions) {
-    if (!Array.isArray(positions) || positions.length < 3) return null;
-    let minX = positions[0];
-    let minY = positions[1];
-    let minZ = positions[2];
-    let maxX = positions[0];
-    let maxY = positions[1];
-    let maxZ = positions[2];
-    for (let i = 3; i < positions.length; i += 3) {
-      const x = positions[i];
-      const y = positions[i + 1];
-      const z = positions[i + 2];
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      if (z < minZ) minZ = z;
-      if (x > maxX) maxX = x;
-      if (y > maxY) maxY = y;
-      if (z > maxZ) maxZ = z;
-    }
-    return [
-      [minX, minY, minZ],
-      [maxX, maxY, maxZ],
-    ];
-  }
-
-  function triangleCountFromMesh(mesh) {
-    if (Array.isArray(mesh.indices) && mesh.indices.length >= 3) {
-      return Math.floor(mesh.indices.length / 3);
-    }
-    if (Array.isArray(mesh.positions) && mesh.positions.length >= 9) {
-      return Math.floor(mesh.positions.length / 9);
-    }
-    return 0;
-  }
-
-  function stableStringify(value) {
-    if (value === null || typeof value !== "object") return JSON.stringify(value);
-    if (Array.isArray(value)) {
-      return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
-    }
-    const keys = Object.keys(value).sort();
-    const entries = keys.map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`);
-    return `{${entries.join(",")}}`;
-  }
-
-  function sha256(input) {
-    return createHash("sha256").update(input).digest("hex");
-  }
-
-  function normalizeDocKey(value) {
-    if (typeof value !== "string") return null;
-    const trimmed = value.trim();
-    if (trimmed.length === 0) return null;
-    if (!/^[A-Za-z0-9._:-]{1,128}$/.test(trimmed)) {
-      throw new HttpError(
-        400,
-        "invalid_doc_key",
-        "docKey must match [A-Za-z0-9._:-]{1,128}"
-      );
-    }
-    return trimmed;
-  }
-
-  function migrateDocumentForStorage(document) {
-    const base =
-      document && typeof document === "object"
-        ? JSON.parse(JSON.stringify(document))
-        : document;
-    if (!base || typeof base !== "object") {
-      throw new HttpError(400, "invalid_document", "Document payload must be an object");
-    }
-    const currentVersion =
-      Number.isFinite(Number(base.irVersion)) && Number(base.irVersion) > 0
-        ? Number(base.irVersion)
-        : 1;
-    if (!Number.isFinite(currentVersion) || currentVersion <= 0) {
-      throw new HttpError(400, "invalid_document_version", "Document irVersion must be > 0");
-    }
-    // Migration hook for future persisted IR schema upgrades.
-    base.irVersion = currentVersion;
-    return {
-      document: base,
-      schemaVersion: currentVersion,
-      migrationsApplied: [],
-    };
-  }
-
-  function getDocumentVersionTrack(tenantId, docKey) {
-    const trackKey = tenantScopedKey(tenantId, docKey);
-    const existing = documentVersionStore.get(trackKey);
-    if (existing) return existing;
-    const created = {
-      tenantId,
-      docKey,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      versions: [],
-    };
-    documentVersionStore.set(trackKey, created);
-    return created;
-  }
-
-  function appendDocumentVersion(record) {
-    const track = getDocumentVersionTrack(record.tenantId, record.docKey);
-    const existing = track.versions.find((entry) => entry.docId === record.docId);
-    if (existing) {
-      record.version = existing.version;
-      track.updatedAt = new Date().toISOString();
-      return existing.version;
-    }
-    const nextVersion =
-      track.versions.length > 0 ? Number(track.versions[track.versions.length - 1].version) + 1 : 1;
-    const createdAt = new Date().toISOString();
-    track.versions.push({
-      version: nextVersion,
-      docId: record.docId,
-      createdAt,
-    });
-    if (track.versions.length > MAX_DOC_VERSIONS_PER_KEY) {
-      track.versions = track.versions.slice(track.versions.length - MAX_DOC_VERSIONS_PER_KEY);
-    }
-    track.updatedAt = createdAt;
-    record.version = nextVersion;
-    return nextVersion;
-  }
-
-  function makeDocumentRecord(tenantId, document, docKeyHint) {
-    const migrated = migrateDocumentForStorage(document);
-    const canonicalJson = stableStringify(migrated.document);
-    const canonicalDocument = JSON.parse(canonicalJson);
-    const bytes = Buffer.byteLength(canonicalJson);
-    if (bytes > MAX_DOC_BYTES) {
-      throw new HttpError(413, "document_too_large", `Document exceeds ${MAX_DOC_BYTES} bytes`, {
-        tenantId,
-        bytes,
-        maxBytes: MAX_DOC_BYTES,
-      });
-    }
-    const docId = sha256(canonicalJson);
-    const createdAt = new Date().toISOString();
-    const docKey = normalizeDocKey(docKeyHint) ?? docId;
-    return {
-      id: docId,
-      docId,
-      docKey,
-      version: 1,
-      tenantId,
-      contentHash: docId,
-      canonicalJson,
-      document: canonicalDocument,
-      schemaVersion: migrated.schemaVersion,
-      migrationsApplied: migrated.migrationsApplied,
-      createdAt,
-      bytes,
-    };
-  }
-
-  function storeDocument(tenantId, document, docKeyHint) {
-    const next = makeDocumentRecord(tenantId, document, docKeyHint);
-    const existing = documentStore.get(tenantScopedKey(tenantId, next.docId));
-    if (existing) {
-      return { record: existing, inserted: false };
-    }
-    assertTenantQuota(
-      tenantId,
-      "documents_per_tenant",
-      MAX_DOCS_PER_TENANT,
-      countTenantInStore(documentStore, tenantId)
-    );
-    appendDocumentVersion(next);
-    documentStore.set(tenantScopedKey(tenantId, next.docId), next);
-    return { record: next, inserted: true };
-  }
-
-  function makePartBuildKey(tenantId, part, context, overrides, backendFingerprint) {
-    if (!context) return null;
-    const coreKey = buildPartCacheKey(part, context, overrides);
-    const key = {
-      version: KEY_VERSION,
-      type: "partBuildKey",
-      tenantId,
-      backendFingerprint,
-      key: coreKey,
-    };
-    return { object: key, value: stableStringify(key) };
-  }
-
-  function makeMeshKey(partBuildKey, target, profile, options) {
-    if (!partBuildKey?.value) return null;
-    const key = {
-      version: KEY_VERSION,
-      type: "meshKey",
-      partBuildKey: partBuildKey.value,
-      target,
-      profile,
-      options,
-    };
-    return { object: key, value: stableStringify(key) };
-  }
-
-  function makeExportKey(partBuildKey, target, kind, options) {
-    if (!partBuildKey?.value) return null;
-    const key = {
-      version: KEY_VERSION,
-      type: "exportKey",
-      partBuildKey: partBuildKey.value,
-      target,
-      kind,
-      options,
-    };
-    return { object: key, value: stableStringify(key) };
-  }
-
-  function cacheSet(map, key, value, maxSize) {
-    if (map.has(key)) map.delete(key);
-    map.set(key, value);
-    if (map.size > maxSize) {
-      const oldest = map.keys().next().value;
-      if (oldest) map.delete(oldest);
-    }
-  }
-
-  function recordCacheEvent(layer, hit, keyValue) {
-    const bucket = cacheStats[layer];
-    if (!bucket) return;
-    if (hit) bucket.hit += 1;
-    else bucket.miss += 1;
-    const keyHash = keyValue ? sha256(keyValue).slice(0, 16) : null;
-    // eslint-disable-next-line no-console
-    console.log(
-      JSON.stringify({
-        event: "cache",
-        layer,
-        result: hit ? "hit" : "miss",
-        keyHash,
-        totals: { ...bucket },
-      })
-    );
-  }
-
-  function makeLatencyBucket() {
-    return {
-      count: 0,
-      succeeded: 0,
-      failed: 0,
-      canceled: 0,
-      timeout: 0,
-      totalMs: 0,
-      avgMs: 0,
-      maxMs: 0,
-      lastMs: 0,
-    };
-  }
-
-  function recordLatency(bucket, durationMs, state, errorCode = null) {
-    if (!bucket) return;
-    const ms = Number.isFinite(durationMs) ? Math.max(0, durationMs) : 0;
-    bucket.count += 1;
-    bucket.totalMs += ms;
-    bucket.avgMs = bucket.count > 0 ? Number((bucket.totalMs / bucket.count).toFixed(3)) : 0;
-    bucket.lastMs = Number(ms.toFixed(3));
-    bucket.maxMs = Number(Math.max(bucket.maxMs, ms).toFixed(3));
-    if (state === "succeeded") {
-      bucket.succeeded += 1;
-      return;
-    }
-    if (state === "canceled") {
-      bucket.canceled += 1;
-      return;
-    }
-    if (errorCode === "job_timeout") bucket.timeout += 1;
-    bucket.failed += 1;
-  }
-
-  function memorySnapshot() {
-    const usage = process.memoryUsage();
-    return {
-      rssBytes: usage.rss,
-      heapTotalBytes: usage.heapTotal,
-      heapUsedBytes: usage.heapUsed,
-      externalBytes: usage.external,
-      arrayBuffersBytes: usage.arrayBuffers,
-    };
-  }
 
   function storeAsset(tenantId, type, data, contentType, metadata = {}) {
     assertTenantQuota(
@@ -731,7 +418,7 @@ export function createTfServiceServer(options = {}) {
     let docId = request?.docId ?? null;
 
     if (request?.document) {
-      const stored = storeDocument(tenantId, request.document);
+      const stored = documentStoreService.storeDocument(tenantId, request.document);
       document = stored.record.document;
       docId = stored.record.docId;
     } else if (docId) {
@@ -796,10 +483,10 @@ export function createTfServiceServer(options = {}) {
       tenantId,
     } = params;
 
-    const meshKey = makeMeshKey(partBuildKey, target, profile, options);
+    const meshKey = makeMeshKey(KEY_VERSION, partBuildKey, target, profile, options);
     const cached = meshKey ? meshCache.get(meshKey.value) : null;
     if (cached) {
-      recordCacheEvent("mesh", true, meshKey.value);
+      recordCacheEvent(cacheStats, "mesh", true, meshKey.value);
       return {
         asset: cached.asset,
         bounds: cached.bounds,
@@ -809,7 +496,7 @@ export function createTfServiceServer(options = {}) {
       };
     }
 
-    recordCacheEvent("mesh", false, meshKey?.value);
+    recordCacheEvent(cacheStats, "mesh", false, meshKey?.value);
     throwIfCanceled(ctx);
     ctx?.updateProgress(0.6);
     const backend = await getBackendAsync();
@@ -883,7 +570,7 @@ export function createTfServiceServer(options = {}) {
       typeof request?.sessionId === "string" && request.sessionId.trim().length > 0
         ? request.sessionId.trim()
         : null;
-    const buildSession = sessionId ? getBuildSession(tenantId, sessionId) : null;
+    const buildSession = sessionId ? documentStoreService.getBuildSession(tenantId, sessionId) : null;
     if (sessionId && !buildSession) {
       throw new HttpError(404, "build_session_not_found", `Unknown build session ${sessionId}`);
     }
@@ -905,11 +592,13 @@ export function createTfServiceServer(options = {}) {
     const backendFingerprint = await getBackendFingerprint();
     throwIfCanceled(ctx);
     const partBuildKey = makePartBuildKey(
+      KEY_VERSION,
       tenantId,
       part,
       document?.context,
       overrides,
-      backendFingerprint
+      backendFingerprint,
+      buildPartCacheKey
     );
 
     let buildResult = null;
@@ -917,11 +606,11 @@ export function createTfServiceServer(options = {}) {
     if (partBuildKey && buildCache.has(partBuildKey.value)) {
       buildResult = buildCache.get(partBuildKey.value).result;
       partBuildHit = true;
-      recordCacheEvent("partBuild", true, partBuildKey.value);
+      recordCacheEvent(cacheStats, "partBuild", true, partBuildKey.value);
     }
 
     if (!buildResult) {
-      recordCacheEvent("partBuild", false, partBuildKey?.value);
+      recordCacheEvent(cacheStats, "partBuild", false, partBuildKey?.value);
       ctx?.updateProgress(0.05);
       const backend = await getBackendAsync();
       const sessionBuildEntry =
@@ -972,7 +661,7 @@ export function createTfServiceServer(options = {}) {
       }
     }
     if (buildSession && sessionPartKey) {
-      setBuildSessionEntry(buildSession, sessionPartKey, {
+      documentStoreService.setBuildSessionEntry(buildSession, sessionPartKey, {
         result: buildResult,
         partBuildKey: partBuildKey?.value ?? null,
       });
@@ -1119,7 +808,7 @@ export function createTfServiceServer(options = {}) {
     let document = null;
     let docId = request?.docId ?? null;
     if (request?.document) {
-      const stored = storeDocument(tenantId, request.document);
+      const stored = documentStoreService.storeDocument(tenantId, request.document);
       document = stored.record.document;
       docId = stored.record.docId;
     } else if (docId) {
@@ -1166,18 +855,20 @@ export function createTfServiceServer(options = {}) {
         throw new HttpError(400, "part_not_found", `Assembly references missing part ${partId}`);
       }
       const partBuildKey = makePartBuildKey(
+        KEY_VERSION,
         tenantId,
         part,
         document?.context,
         undefined,
-        backendFingerprint
+        backendFingerprint,
+        buildPartCacheKey
       );
       let built = null;
       if (partBuildKey && buildCache.has(partBuildKey.value)) {
         built = buildCache.get(partBuildKey.value).result;
-        recordCacheEvent("partBuild", true, partBuildKey.value);
+        recordCacheEvent(cacheStats, "partBuild", true, partBuildKey.value);
       } else {
-        recordCacheEvent("partBuild", false, partBuildKey?.value);
+        recordCacheEvent(cacheStats, "partBuild", false, partBuildKey?.value);
         built = await buildPartAsync(
           part,
           backend,
@@ -1294,10 +985,10 @@ export function createTfServiceServer(options = {}) {
       throw new HttpError(400, "missing_output", `Missing output ${target}`);
     }
 
-    const exportKey = makeExportKey(entry.partBuildKey, target, kind, options);
+    const exportKey = makeExportKey(KEY_VERSION, entry.partBuildKey, target, kind, options);
     const cached = exportKey ? exportCache.get(exportKey.value) : null;
     if (cached) {
-      recordCacheEvent("export", true, exportKey.value);
+      recordCacheEvent(cacheStats, "export", true, exportKey.value);
       ctx?.updateProgress(1);
       return {
         asset: cached.asset,
@@ -1307,7 +998,7 @@ export function createTfServiceServer(options = {}) {
       };
     }
 
-    recordCacheEvent("export", false, exportKey?.value);
+    recordCacheEvent(cacheStats, "export", false, exportKey?.value);
     throwIfCanceled(ctx);
     const backend = await getBackendAsync();
     let payload;
@@ -1557,7 +1248,7 @@ export function createTfServiceServer(options = {}) {
       defaultTenant: DEFAULT_TENANT,
       makeError: (status, code, message) => new HttpError(status, code, message),
     });
-    pruneExpiredBuildSessions();
+    documentStoreService.pruneExpiredBuildSessions();
     pruneBuildStore();
     pruneAssetStores();
     pruneJobOwners();
@@ -1587,12 +1278,12 @@ export function createTfServiceServer(options = {}) {
           json,
           sendNoContent,
           readJson,
-          storeDocument,
+          storeDocument: documentStoreService.storeDocument,
           documentStore,
           documentVersionStore,
           tenantScopedKey,
-          createBuildSession,
-          dropBuildSession,
+          createBuildSession: documentStoreService.createBuildSession,
+          dropBuildSession: documentStoreService.dropBuildSession,
           makeHttpError: (status, code, message, details) =>
             new HttpError(status, code, message, details),
         })

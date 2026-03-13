@@ -159,6 +159,7 @@ Runtime line-count tracking:
 - baseline before the latest runtime helper extraction: `apps/tf-service/server.mjs`
   at 2015 lines
 - after `Extract tf-service selection/measure helpers`: 1681 lines
+- after `Extract tf-service document store + cache/stat helpers`: 1372 lines
 
 Acceptance checks:
 - `npm run build -- --pretty false`
