@@ -30,6 +30,12 @@ Already done and no longer part of the active queue:
 The remaining work is deeper architecture cleanup rather than another broad
 boundary-extraction sweep.
 
+### Backend Line Count Tracking
+
+- baseline before the recent backend slices: `src/backend_occt.ts` at 5457 lines
+- after `Extract OCCT profile-plane adapters` (`693791a`): 5438 lines
+- current working slice after `shape_primitives` extraction: 5415 lines
+
 ## Outstanding Work
 
 ### P0: Finish `src/backend_occt.ts` Decomposition
@@ -62,8 +68,11 @@ Open slices:
    duplication.
 - Candidate moves: `makePnt`, `makeDir`, `makeVec`, `makeAxis`,
   prism/revolve helpers, and similar low-level constructors.
-- Do not extract this just for symmetry if it creates a thin wrapper module
-  without a clearer ownership boundary.
+- Progress landed in:
+  - `src/occt/shape_primitives.ts`
+- Remaining work:
+  - decide whether more constructor-style OCCT helpers should move into the
+    same module or whether the remaining thin delegates are good enough
 
 Acceptance checks per slice:
 - `npm run build -- --pretty false`

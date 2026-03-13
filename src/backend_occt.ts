@@ -107,6 +107,20 @@ import {
   transformShapeTranslate as translateOcctShape,
 } from "./occt/transform_primitives.js";
 import {
+  makeAx1 as makeOcctAx1,
+  makeAx2 as makeOcctAx2,
+  makeAx2WithXDir as makeOcctAx2WithXDir,
+  makeAxis as makeOcctAxis,
+  makeCirc as makeOcctCirc,
+  makeDir as makeOcctDir,
+  makePln as makeOcctPln,
+  makePnt as makeOcctPnt,
+  makePrism as makeOcctPrism,
+  makeRevol as makeOcctRevol,
+  makeVec as makeOcctVec,
+  type ShapePrimitiveDeps,
+} from "./occt/shape_primitives.js";
+import {
   execHexTubeSweep as execOcctHexTubeSweep,
   execPipeSweep as execOcctPipeSweep,
 } from "./occt/sweep_feature_ops.js";
@@ -4684,27 +4698,11 @@ export class OcctBackend implements Backend {
   }
 
   private makePrism(face: any, vec: any) {
-    try {
-      return this.newOcct("BRepPrimAPI_MakePrism", face, vec, false, true);
-    } catch {
-      return this.newOcct("BRepPrimAPI_MakePrism", face, vec);
-    }
+    return makeOcctPrism(this.shapePrimitiveDeps(), face, vec);
   }
 
   private makeRevol(face: any, axis: any, angleRad: number) {
-    const candidates: Array<unknown[]> = [
-      [face, axis, angleRad],
-      [face, axis, angleRad, true],
-      [face, axis],
-    ];
-    for (const args of candidates) {
-      try {
-        return this.newOcct("BRepPrimAPI_MakeRevol", ...args);
-      } catch {
-        continue;
-      }
-    }
-    throw new Error("OCCT backend: failed to construct BRepPrimAPI_MakeRevol");
+    return makeOcctRevol(this.shapePrimitiveDeps(), face, axis, angleRad);
   }
 
   private newOcct(name: string, ...args: unknown[]) {
@@ -4724,54 +4722,31 @@ export class OcctBackend implements Backend {
   }
 
   private makePnt(x: number, y: number, z: number) {
-    const occt = this.occt as any;
-    if (occt.gp_Pnt_3) return new occt.gp_Pnt_3(x, y, z);
-    throw new Error("OCCT backend: gp_Pnt_3 constructor not available");
+    return makeOcctPnt(this.shapePrimitiveDeps(), x, y, z);
   }
 
   private makeDir(x: number, y: number, z: number) {
-    const xyz = this.makeXYZ(x, y, z);
-    const occt = this.occt as any;
-    if (occt.gp_Dir_3) return new occt.gp_Dir_3(xyz);
-    throw new Error("OCCT backend: gp_Dir_3 constructor not available");
+    return makeOcctDir(this.shapePrimitiveDeps(), x, y, z);
   }
 
   private makeVec(x: number, y: number, z: number) {
-    const xyz = this.makeXYZ(x, y, z);
-    const occt = this.occt as any;
-    if (occt.gp_Vec_3) return new occt.gp_Vec_3(xyz);
-    throw new Error("OCCT backend: gp_Vec_3 constructor not available");
-  }
-
-  private makeXYZ(x: number, y: number, z: number) {
-    const occt = this.occt as any;
-    if (occt.gp_XYZ_2) return new occt.gp_XYZ_2(x, y, z);
-    throw new Error("OCCT backend: gp_XYZ_2 constructor not available");
+    return makeOcctVec(this.shapePrimitiveDeps(), x, y, z);
   }
 
   private makeAx2(pnt: any, dir: any) {
-    const occt = this.occt as any;
-    if (occt.gp_Ax2_3) return new occt.gp_Ax2_3(pnt, dir);
-    throw new Error("OCCT backend: gp_Ax2_3 constructor not available");
+    return makeOcctAx2(this.shapePrimitiveDeps(), pnt, dir);
   }
 
   private makeAx2WithXDir(pnt: any, dir: any, xDir: any) {
-    const occt = this.occt as any;
-    if (occt.gp_Ax2_2) return new occt.gp_Ax2_2(pnt, dir, xDir);
-    return this.makeAx2(pnt, dir);
+    return makeOcctAx2WithXDir(this.shapePrimitiveDeps(), pnt, dir, xDir);
   }
 
   private makeAx1(pnt: any, dir: any) {
-    const occt = this.occt as any;
-    if (occt.gp_Ax1_2) return new occt.gp_Ax1_2(pnt, dir);
-    if (occt.gp_Ax1_3) return new occt.gp_Ax1_3(pnt, dir);
-    throw new Error("OCCT backend: gp_Ax1 constructor not available");
+    return makeOcctAx1(this.shapePrimitiveDeps(), pnt, dir);
   }
 
   private makePln(origin: [number, number, number], normal: [number, number, number]) {
-    const pnt = this.makePnt(origin[0], origin[1], origin[2]);
-    const dir = this.makeDir(normal[0], normal[1], normal[2]);
-    return this.newOcct("gp_Pln", pnt, dir);
+    return makeOcctPln(this.shapePrimitiveDeps(), origin, normal);
   }
 
   private transformShapeTranslate(shape: any, delta: [number, number, number]) {
@@ -4799,16 +4774,18 @@ export class OcctBackend implements Backend {
     dir: AxisDirection,
     origin?: [number, number, number]
   ) {
-    const [x, y, z] = axisVector(dir);
-    const pnt = this.makePnt(origin?.[0] ?? 0, origin?.[1] ?? 0, origin?.[2] ?? 0);
-    const axisDir = this.makeDir(x, y, z);
-    return this.makeAx1(pnt, axisDir);
+    return makeOcctAxis(this.shapePrimitiveDeps(), dir, origin);
   }
 
   private makeCirc(ax2: any, radius: number) {
-    const occt = this.occt as any;
-    if (occt.gp_Circ_2) return new occt.gp_Circ_2(ax2, radius);
-    throw new Error("OCCT backend: gp_Circ_2 constructor not available");
+    return makeOcctCirc(this.shapePrimitiveDeps(), ax2, radius);
+  }
+
+  private shapePrimitiveDeps(): ShapePrimitiveDeps {
+    return {
+      occt: this.occt as any,
+      newOcct: (name: string, ...args: unknown[]) => this.newOcct(name, ...args),
+    };
   }
 
   private ensureTriangulation(shape: any, opts: MeshOptions) {
