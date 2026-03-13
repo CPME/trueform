@@ -1,5 +1,5 @@
 import { CompileError } from "../errors.js";
-import type { Point2D, SketchConstraint, SketchConstraintPointRef, SketchEntity } from "../ir.js";
+import type { SketchConstraint, SketchEntity } from "../ir.js";
 import {
   add,
   addLevenbergRegularization,
@@ -26,7 +26,6 @@ import {
   maxAbsValue,
   normalize,
   perpendicularDirections,
-  pointAccessor,
   quadraticForm,
   readAngleConstraint,
   readNumericPoint,
@@ -57,19 +56,25 @@ import {
   ensureUniqueConstraintIds as ensureUniqueSketchConstraintIds,
   type SolverAnalysisDeps,
 } from "./solver_analysis.js";
-
-type NumericPoint = [number, number];
-type NumericVector = [number, number];
-type ScalarVariableKind = "x" | "y" | "scalar";
-
-type ScalarVariable = {
-  entityId: string;
-  handle: string;
-  kind: ScalarVariableKind;
-  read: () => number;
-  write: (value: number) => void;
-  readPoint?: () => NumericPoint;
-};
+import {
+  preferredCurveSeparation,
+  projectCurveToCurveTangency,
+  projectCurveToLineTangency,
+  projectLineToCurveTangency,
+  resolveConcentricCurve,
+  resolveLine,
+  resolveRadiusTarget,
+  tryResolveLine,
+  tryResolveTangentCurve,
+  type NumericPoint,
+  type NumericVector,
+} from "./solver_geometry.js";
+import {
+  collectDrivenVariables,
+  collectScalarVariables,
+  resolvePointRef,
+  type ScalarVariable,
+} from "./solver_variables.js";
 
 export type SketchConstraintSolveStatus =
   | "fully-constrained"
@@ -627,7 +632,7 @@ function copyWarmStartGeometry(target: SketchEntity, source: SketchEntity): void
 function solverAnalysisDeps(): SolverAnalysisDeps {
   return {
     solveTolerance: SOLVE_TOLERANCE,
-    collectScalarVariables,
+    collectScalarVariables: (entities) => collectScalarVariables(entities, SOLVE_EPSILON),
     constraintResidualComponents,
     estimateConstraintConsumption,
     estimateEntityDegreesOfFreedom,
@@ -766,7 +771,7 @@ function solveSketchConstraintsNumerically(
   constraints: SketchConstraint[],
   execution: SketchSolveExecutionState
 ): void {
-  const variables = collectDrivenVariables(entities, constraints);
+  const variables = collectDrivenVariables(entities, constraints, SOLVE_EPSILON);
   if (variables.length === 0 || constraints.length === 0) return;
 
   let damping = 1e-3;
@@ -1141,17 +1146,17 @@ function applyConstraint(
     case "sketch.constraint.tangent": {
       const referenceLine = tryResolveLine(sketchId, entityMap, constraint.a);
       const targetLine = tryResolveLine(sketchId, entityMap, constraint.b);
-      const referenceCurve = tryResolveTangentCurve(sketchId, entityMap, constraint.a);
-      const targetCurve = tryResolveTangentCurve(sketchId, entityMap, constraint.b);
+      const referenceCurve = tryResolveTangentCurve(sketchId, entityMap, constraint.a, SOLVE_EPSILON);
+      const targetCurve = tryResolveTangentCurve(sketchId, entityMap, constraint.b, SOLVE_EPSILON);
 
       if (referenceLine && targetCurve) {
-        return projectCurveToLineTangency(referenceLine, targetCurve);
+        return projectCurveToLineTangency(referenceLine, targetCurve, SOLVE_EPSILON);
       }
       if (referenceCurve && targetLine) {
-        return projectLineToCurveTangency(targetLine, referenceCurve);
+        return projectLineToCurveTangency(targetLine, referenceCurve, SOLVE_EPSILON);
       }
       if (referenceCurve && targetCurve) {
-        return projectCurveToCurveTangency(referenceCurve, targetCurve);
+        return projectCurveToCurveTangency(referenceCurve, targetCurve, SOLVE_EPSILON);
       }
       throw new CompileError(
         "sketch_constraint_kind_mismatch",
@@ -1159,8 +1164,8 @@ function applyConstraint(
       );
     }
     case "sketch.constraint.concentric": {
-      const reference = resolveConcentricCurve(sketchId, entityMap, constraint.a);
-      const target = resolveConcentricCurve(sketchId, entityMap, constraint.b);
+      const reference = resolveConcentricCurve(sketchId, entityMap, constraint.a, SOLVE_EPSILON);
+      const target = resolveConcentricCurve(sketchId, entityMap, constraint.b, SOLVE_EPSILON);
       const referenceCenter = reference.readCenter();
       const currentTargetCenter = target.readCenter();
       target.writeCenter(referenceCenter);
@@ -1226,7 +1231,7 @@ function applyConstraint(
       return distance(currentEnd, next);
     }
     case "sketch.constraint.radius": {
-      const curve = resolveRadiusTarget(sketchId, entityMap, constraint.curve);
+      const curve = resolveRadiusTarget(sketchId, entityMap, constraint.curve, SOLVE_EPSILON);
       const targetRadius = readPositiveRadius(
         constraint.radius,
         `Sketch ${sketchId} radius constraint ${constraint.id}`
@@ -1345,8 +1350,8 @@ function constraintResidualComponents(
     case "sketch.constraint.tangent": {
       const referenceLine = tryResolveLine(sketchId, entityMap, constraint.a);
       const targetLine = tryResolveLine(sketchId, entityMap, constraint.b);
-      const referenceCurve = tryResolveTangentCurve(sketchId, entityMap, constraint.a);
-      const targetCurve = tryResolveTangentCurve(sketchId, entityMap, constraint.b);
+      const referenceCurve = tryResolveTangentCurve(sketchId, entityMap, constraint.a, SOLVE_EPSILON);
+      const targetCurve = tryResolveTangentCurve(sketchId, entityMap, constraint.b, SOLVE_EPSILON);
 
       if (referenceLine && targetCurve) {
         const lineStart = referenceLine.readStart();
@@ -1383,8 +1388,8 @@ function constraintResidualComponents(
       );
     }
     case "sketch.constraint.concentric": {
-      const a = resolveConcentricCurve(sketchId, entityMap, constraint.a);
-      const b = resolveConcentricCurve(sketchId, entityMap, constraint.b);
+      const a = resolveConcentricCurve(sketchId, entityMap, constraint.a, SOLVE_EPSILON);
+      const b = resolveConcentricCurve(sketchId, entityMap, constraint.b, SOLVE_EPSILON);
       const centerA = a.readCenter();
       const centerB = b.readCenter();
       return [centerA[0] - centerB[0], centerA[1] - centerB[1]];
@@ -1466,661 +1471,4 @@ function constraintResidualComponents(
       return out;
     }
   }
-}
-
-function resolveLine(
-  sketchId: string,
-  entityMap: Map<string, SketchEntity>,
-  lineId: string
-): {
-  readStart: () => NumericPoint;
-  readEnd: () => NumericPoint;
-  writeStart: (point: NumericPoint) => void;
-  write: (start: NumericPoint, end: NumericPoint) => void;
-  writeEnd: (point: NumericPoint) => void;
-} {
-  const entity = entityMap.get(lineId);
-  if (!entity) {
-    throw new CompileError(
-      "sketch_constraint_reference_missing",
-      `Sketch ${sketchId} references missing line ${lineId}`
-    );
-  }
-  if (entity.kind !== "sketch.line") {
-    throw new CompileError(
-      "sketch_constraint_kind_mismatch",
-      `Sketch ${sketchId} constraint line ${lineId} must reference a sketch.line`
-    );
-  }
-  return {
-    readStart: () => readNumericPoint(entity.start, `Sketch ${sketchId} line ${lineId} start`),
-    readEnd: () => readNumericPoint(entity.end, `Sketch ${sketchId} line ${lineId} end`),
-    writeStart: (point) => {
-      entity.start = point;
-    },
-    write: (start, end) => {
-      entity.start = start;
-      entity.end = end;
-    },
-    writeEnd: (point) => {
-      entity.end = point;
-    },
-  };
-}
-
-function tryResolveLine(
-  sketchId: string,
-  entityMap: Map<string, SketchEntity>,
-  lineId: string
-): ReturnType<typeof resolveLine> | null {
-  const entity = entityMap.get(lineId);
-  if (!entity) {
-    throw new CompileError(
-      "sketch_constraint_reference_missing",
-      `Sketch ${sketchId} references missing entity ${lineId}`
-    );
-  }
-  if (entity.kind !== "sketch.line") return null;
-  return resolveLine(sketchId, entityMap, lineId);
-}
-
-type CurveCenterAccessor = {
-  readCenter: () => NumericPoint;
-  writeCenter: (center: NumericPoint) => number;
-};
-
-type TangentCurveAccessor = CurveCenterAccessor & {
-  readRadius: () => number;
-};
-
-function resolveConcentricCurve(
-  sketchId: string,
-  entityMap: Map<string, SketchEntity>,
-  curveId: string
-): CurveCenterAccessor {
-  const curve = tryResolveTangentCurve(sketchId, entityMap, curveId);
-  if (curve) return curve;
-  throw new CompileError(
-    "sketch_constraint_kind_mismatch",
-    `Sketch ${sketchId} concentric constraint curve ${curveId} must reference a sketch.circle or sketch.arc`
-  );
-}
-
-function tryResolveTangentCurve(
-  sketchId: string,
-  entityMap: Map<string, SketchEntity>,
-  curveId: string
-): TangentCurveAccessor | null {
-  const entity = entityMap.get(curveId);
-  if (!entity) {
-    throw new CompileError(
-      "sketch_constraint_reference_missing",
-      `Sketch ${sketchId} references missing entity ${curveId}`
-    );
-  }
-
-  if (entity.kind === "sketch.circle") {
-    return {
-      readCenter: () => readNumericPoint(entity.center, `Sketch ${sketchId} circle ${curveId} center`),
-      readRadius: () => readPositiveRadius(entity.radius, `Sketch ${sketchId} circle ${curveId} radius`),
-      writeCenter: (nextCenter) => {
-        const currentCenter = readNumericPoint(
-          entity.center,
-          `Sketch ${sketchId} circle ${curveId} center`
-        );
-        entity.center = nextCenter;
-        return distance(currentCenter, nextCenter);
-      },
-    };
-  }
-
-  if (entity.kind === "sketch.arc") {
-    return {
-      readCenter: () => readNumericPoint(entity.center, `Sketch ${sketchId} arc ${curveId} center`),
-      readRadius: () => {
-        const center = readNumericPoint(entity.center, `Sketch ${sketchId} arc ${curveId} center`);
-        const start = readNumericPoint(entity.start, `Sketch ${sketchId} arc ${curveId} start`);
-        const end = readNumericPoint(entity.end, `Sketch ${sketchId} arc ${curveId} end`);
-        const startRadius = distance(center, start);
-        const endRadius = distance(center, end);
-        if (startRadius <= SOLVE_EPSILON || endRadius <= SOLVE_EPSILON) {
-          throw new CompileError(
-            "sketch_constraint_invalid_reference",
-            `Sketch ${sketchId} arc ${curveId} must have endpoints away from center`
-          );
-        }
-        return (startRadius + endRadius) * 0.5;
-      },
-      writeCenter: (nextCenter) => {
-        const currentCenter = readNumericPoint(entity.center, `Sketch ${sketchId} arc ${curveId} center`);
-        const delta = subtract(nextCenter, currentCenter);
-        const start = readNumericPoint(entity.start, `Sketch ${sketchId} arc ${curveId} start`);
-        const end = readNumericPoint(entity.end, `Sketch ${sketchId} arc ${curveId} end`);
-        entity.center = nextCenter;
-        entity.start = add(start, delta);
-        entity.end = add(end, delta);
-        return distance(currentCenter, nextCenter);
-      },
-    };
-  }
-
-  return null;
-}
-
-function projectCurveToLineTangency(
-  referenceLine: ReturnType<typeof resolveLine>,
-  targetCurve: TangentCurveAccessor
-): number {
-  const lineStart = referenceLine.readStart();
-  const lineEnd = referenceLine.readEnd();
-  const axis = normalize(subtract(lineEnd, lineStart));
-  const normal: NumericVector = [-axis[1], axis[0]];
-  const center = targetCurve.readCenter();
-  const signedDistance = dot(subtract(center, lineStart), normal);
-  const radius = targetCurve.readRadius();
-  const desiredSignedDistance =
-    Math.abs(signedDistance) <= SOLVE_EPSILON
-      ? radius
-      : Math.sign(signedDistance) * radius;
-  const nextCenter = add(center, scale(normal, desiredSignedDistance - signedDistance));
-  return targetCurve.writeCenter(nextCenter);
-}
-
-function projectLineToCurveTangency(
-  targetLine: ReturnType<typeof resolveLine>,
-  referenceCurve: TangentCurveAccessor
-): number {
-  const lineStart = targetLine.readStart();
-  const lineEnd = targetLine.readEnd();
-  const axis = normalize(subtract(lineEnd, lineStart));
-  const normal: NumericVector = [-axis[1], axis[0]];
-  const center = referenceCurve.readCenter();
-  const radius = referenceCurve.readRadius();
-  const signedDistance = dot(subtract(center, lineStart), normal);
-  const desiredSignedDistance =
-    Math.abs(signedDistance) <= SOLVE_EPSILON
-      ? radius
-      : Math.sign(signedDistance) * radius;
-  const shift = scale(normal, signedDistance - desiredSignedDistance);
-  const nextStart = add(lineStart, shift);
-  const nextEnd = add(lineEnd, shift);
-  targetLine.write(nextStart, nextEnd);
-  return distance(lineStart, nextStart);
-}
-
-function projectCurveToCurveTangency(
-  referenceCurve: TangentCurveAccessor,
-  targetCurve: TangentCurveAccessor
-): number {
-  const referenceCenter = referenceCurve.readCenter();
-  const targetCenter = targetCurve.readCenter();
-  const referenceRadius = referenceCurve.readRadius();
-  const targetRadius = targetCurve.readRadius();
-  const centerDelta = subtract(targetCenter, referenceCenter);
-  const centerDistance = vectorLength(centerDelta);
-  const direction: NumericVector =
-    centerDistance <= SOLVE_EPSILON ? [1, 0] : normalize(centerDelta);
-  const expectedSeparation = preferredCurveSeparation(
-    centerDistance,
-    referenceRadius,
-    targetRadius
-  );
-  const nextTargetCenter = add(referenceCenter, scale(direction, expectedSeparation));
-  return targetCurve.writeCenter(nextTargetCenter);
-}
-
-function preferredCurveSeparation(
-  centerDistance: number,
-  firstRadius: number,
-  secondRadius: number
-): number {
-  const external = firstRadius + secondRadius;
-  const internal = Math.abs(firstRadius - secondRadius);
-  return Math.abs(centerDistance - external) <= Math.abs(centerDistance - internal)
-    ? external
-    : internal;
-}
-
-function resolveRadiusTarget(
-  sketchId: string,
-  entityMap: Map<string, SketchEntity>,
-  curveId: string
-): {
-  residual: (radius: number) => number;
-  write: (radius: number) => number;
-} {
-  const entity = entityMap.get(curveId);
-  if (!entity) {
-    throw new CompileError(
-      "sketch_constraint_reference_missing",
-      `Sketch ${sketchId} references missing curve ${curveId}`
-    );
-  }
-
-  if (entity.kind === "sketch.circle") {
-    return {
-      residual: (radius) =>
-        Math.abs(
-          toFiniteNumber(entity.radius, `Sketch ${sketchId} circle ${curveId} radius`) - radius
-        ),
-      write: (radius) => {
-        const current = toFiniteNumber(
-          entity.radius,
-          `Sketch ${sketchId} circle ${curveId} radius`
-        );
-        entity.radius = radius;
-        return Math.abs(current - radius);
-      },
-    };
-  }
-
-  if (entity.kind === "sketch.arc") {
-    const readArc = (): {
-      center: NumericPoint;
-      start: NumericPoint;
-      end: NumericPoint;
-      startVector: NumericVector;
-      endVector: NumericVector;
-      startRadius: number;
-      endRadius: number;
-    } => {
-      const center = readNumericPoint(entity.center, `Sketch ${sketchId} arc ${curveId} center`);
-      const start = readNumericPoint(entity.start, `Sketch ${sketchId} arc ${curveId} start`);
-      const end = readNumericPoint(entity.end, `Sketch ${sketchId} arc ${curveId} end`);
-      const startVector = subtract(start, center);
-      const endVector = subtract(end, center);
-      const startRadius = vectorLength(startVector);
-      const endRadius = vectorLength(endVector);
-      if (startRadius <= SOLVE_EPSILON || endRadius <= SOLVE_EPSILON) {
-        throw new CompileError(
-          "sketch_constraint_invalid_reference",
-          `Sketch ${sketchId} radius constraint on ${curveId} requires arc endpoints away from center`
-        );
-      }
-      return {
-        center,
-        start,
-        end,
-        startVector,
-        endVector,
-        startRadius,
-        endRadius,
-      };
-    };
-
-    return {
-      residual: (radius) => {
-        const arc = readArc();
-        return Math.max(
-          Math.abs(arc.startRadius - radius),
-          Math.abs(arc.endRadius - radius)
-        );
-      },
-      write: (radius) => {
-        const arc = readArc();
-        const nextStart = add(arc.center, scale(normalize(arc.startVector), radius));
-        const nextEnd = add(arc.center, scale(normalize(arc.endVector), radius));
-        entity.start = nextStart;
-        entity.end = nextEnd;
-        return Math.max(distance(arc.start, nextStart), distance(arc.end, nextEnd));
-      },
-    };
-  }
-
-  throw new CompileError(
-    "sketch_constraint_kind_mismatch",
-    `Sketch ${sketchId} radius constraint ${curveId} must reference a sketch.circle or sketch.arc`
-  );
-}
-
-function collectDrivenVariables(
-  entities: SketchEntity[],
-  constraints: SketchConstraint[]
-): ScalarVariable[] {
-  const variables = collectScalarVariables(entities);
-  if (variables.length === 0 || constraints.length === 0) return variables;
-  const entityMap = new Map(entities.map((entity) => [entity.id, entity]));
-  const drivenHandles = collectDrivenVariableHandles(entityMap, constraints);
-  if (drivenHandles.size === 0) return [];
-  return variables.filter((variable) =>
-    drivenHandles.has(variableHandleKey(variable.entityId, variable.handle))
-  );
-}
-
-function collectDrivenVariableHandles(
-  entityMap: Map<string, SketchEntity>,
-  constraints: SketchConstraint[]
-): Set<string> {
-  const handles = new Set<string>();
-  const addHandle = (entityId: string, handle: string): void => {
-    if (!entityMap.has(entityId)) return;
-    handles.add(variableHandleKey(entityId, handle));
-  };
-  const addPointRef = (ref: SketchConstraintPointRef): void => {
-    const entity = entityMap.get(ref.entity);
-    const handle = entity ? normalizedPointRefHandle(entity, ref.handle) : ref.handle ?? null;
-    if (!handle) return;
-    handles.add(variableHandleKey(ref.entity, handle));
-  };
-  const addTangentTargetHandles = (entityId: string): void => {
-    const entity = entityMap.get(entityId);
-    if (!entity) return;
-    switch (entity.kind) {
-      case "sketch.line":
-        addHandle(entityId, "start");
-        addHandle(entityId, "end");
-        break;
-      case "sketch.circle":
-        addHandle(entityId, "center");
-        addHandle(entityId, "radius");
-        break;
-      case "sketch.arc":
-        addHandle(entityId, "center");
-        addHandle(entityId, "start");
-        addHandle(entityId, "end");
-        break;
-      default:
-        break;
-    }
-  };
-  const addConcentricTargetHandles = (entityId: string): void => {
-    const entity = entityMap.get(entityId);
-    if (!entity) return;
-    if (entity.kind === "sketch.circle" || entity.kind === "sketch.arc") {
-      addHandle(entityId, "center");
-    }
-  };
-
-  for (const constraint of constraints) {
-    switch (constraint.kind) {
-      case "sketch.constraint.coincident":
-        addPointRef(constraint.b);
-        break;
-      case "sketch.constraint.distance":
-        addPointRef(constraint.b);
-        break;
-      case "sketch.constraint.pointOnLine":
-        addPointRef(constraint.point);
-        break;
-      case "sketch.constraint.midpoint":
-        addPointRef(constraint.point);
-        break;
-      case "sketch.constraint.radius": {
-        const entity = entityMap.get(constraint.curve);
-        if (entity?.kind === "sketch.circle") {
-          addHandle(constraint.curve, "radius");
-        } else if (entity?.kind === "sketch.arc") {
-          addHandle(constraint.curve, "start");
-          addHandle(constraint.curve, "end");
-        }
-        break;
-      }
-      case "sketch.constraint.fixPoint":
-        addPointRef(constraint.point);
-        break;
-      case "sketch.constraint.tangent":
-        addTangentTargetHandles(constraint.b);
-        break;
-      case "sketch.constraint.concentric":
-        addConcentricTargetHandles(constraint.b);
-        break;
-      case "sketch.constraint.symmetry":
-        addPointRef(constraint.b);
-        break;
-      case "sketch.constraint.horizontal":
-      case "sketch.constraint.vertical":
-      case "sketch.constraint.parallel":
-      case "sketch.constraint.perpendicular":
-      case "sketch.constraint.equalLength":
-      case "sketch.constraint.angle":
-      case "sketch.constraint.collinear":
-        break;
-    }
-  }
-
-  return handles;
-}
-
-function variableHandleKey(entityId: string, handle: string): string {
-  return `${entityId}#${handle}`;
-}
-
-function normalizedPointRefHandle(
-  entity: SketchEntity,
-  handle: SketchConstraintPointRef["handle"]
-): string | null {
-  switch (entity.kind) {
-    case "sketch.line":
-      return handle === "start" || handle === "end" ? handle : null;
-    case "sketch.arc":
-      return handle === "start" || handle === "end"
-        ? handle
-        : handle === undefined || handle === "center"
-          ? "center"
-          : null;
-    case "sketch.circle":
-    case "sketch.ellipse":
-    case "sketch.slot":
-    case "sketch.polygon":
-      return handle === undefined || handle === "center" ? "center" : null;
-    case "sketch.rectangle":
-      if (entity.mode === "center") {
-        return handle === undefined || handle === "center" ? "center" : null;
-      }
-      return handle === undefined || handle === "corner" ? "corner" : null;
-    case "sketch.point":
-      return handle === undefined || handle === "point" ? "point" : null;
-    case "sketch.spline":
-      return null;
-  }
-}
-
-function collectScalarVariables(entities: SketchEntity[]): ScalarVariable[] {
-  const variables: ScalarVariable[] = [];
-  for (const entity of entities) {
-    switch (entity.kind) {
-      case "sketch.line":
-        pushPointVariables(variables, entity.id, "start", () => entity.start, (point) => {
-          entity.start = point;
-        });
-        pushPointVariables(variables, entity.id, "end", () => entity.end, (point) => {
-          entity.end = point;
-        });
-        break;
-      case "sketch.arc":
-        pushPointVariables(variables, entity.id, "start", () => entity.start, (point) => {
-          entity.start = point;
-        });
-        pushPointVariables(variables, entity.id, "end", () => entity.end, (point) => {
-          entity.end = point;
-        });
-        pushPointVariables(variables, entity.id, "center", () => entity.center, (point) => {
-          entity.center = point;
-        });
-        break;
-      case "sketch.circle":
-        pushPointVariables(variables, entity.id, "center", () => entity.center, (point) => {
-          entity.center = point;
-        });
-        variables.push({
-          entityId: entity.id,
-          handle: "radius",
-          kind: "scalar",
-          read: () => toFiniteNumber(entity.radius, `Sketch circle ${entity.id} radius`),
-          write: (value) => {
-            entity.radius = Math.max(SOLVE_EPSILON, value);
-          },
-        });
-        break;
-      case "sketch.ellipse":
-      case "sketch.slot":
-      case "sketch.polygon":
-        pushPointVariables(variables, entity.id, "center", () => entity.center, (point) => {
-          entity.center = point;
-        });
-        break;
-      case "sketch.rectangle":
-        if (entity.mode === "center") {
-          pushPointVariables(variables, entity.id, "center", () => entity.center, (point) => {
-            entity.center = point;
-          });
-        } else {
-          pushPointVariables(variables, entity.id, "corner", () => entity.corner, (point) => {
-            entity.corner = point;
-          });
-        }
-        break;
-      case "sketch.point":
-        pushPointVariables(variables, entity.id, "point", () => entity.point, (point) => {
-          entity.point = point;
-        });
-        break;
-      case "sketch.spline":
-        break;
-    }
-  }
-  return variables;
-}
-
-function pushPointVariables(
-  variables: ScalarVariable[],
-  entityId: string,
-  handle: string,
-  readPoint: () => Point2D,
-  writePoint: (point: Point2D) => void
-): void {
-  variables.push({
-    entityId,
-    handle,
-    kind: "x",
-    read: () => toFiniteNumber(readPoint()[0], `Sketch entity ${entityId} x`),
-    write: (value) => {
-      const point = readPoint();
-      writePoint([value, point[1]]);
-    },
-    readPoint: () => readNumericPoint(readPoint(), `Sketch entity ${entityId}`),
-  });
-  variables.push({
-    entityId,
-    handle,
-    kind: "y",
-    read: () => toFiniteNumber(readPoint()[1], `Sketch entity ${entityId} y`),
-    write: (value) => {
-      const point = readPoint();
-      writePoint([point[0], value]);
-    },
-    readPoint: () => readNumericPoint(readPoint(), `Sketch entity ${entityId}`),
-  });
-}
-
-function resolvePointRef(
-  sketchId: string,
-  entityMap: Map<string, SketchEntity>,
-  ref: SketchConstraintPointRef
-): {
-  read: () => NumericPoint;
-  write: (point: NumericPoint) => void;
-} {
-  const entity = entityMap.get(ref.entity);
-  if (!entity) {
-    throw new CompileError(
-      "sketch_constraint_reference_missing",
-      `Sketch ${sketchId} references missing entity ${ref.entity}`
-    );
-  }
-
-  switch (entity.kind) {
-    case "sketch.line":
-      if (ref.handle === "start") {
-        return pointAccessor(
-          () => readNumericPoint(entity.start, `Sketch ${sketchId} line ${ref.entity} start`),
-          (point) => {
-            entity.start = point;
-          }
-        );
-      }
-      if (ref.handle === "end") {
-        return pointAccessor(
-          () => readNumericPoint(entity.end, `Sketch ${sketchId} line ${ref.entity} end`),
-          (point) => {
-            entity.end = point;
-          }
-        );
-      }
-      break;
-    case "sketch.arc":
-      if (ref.handle === "start") {
-        return pointAccessor(
-          () => readNumericPoint(entity.start, `Sketch ${sketchId} arc ${ref.entity} start`),
-          (point) => {
-            entity.start = point;
-          }
-        );
-      }
-      if (ref.handle === "end") {
-        return pointAccessor(
-          () => readNumericPoint(entity.end, `Sketch ${sketchId} arc ${ref.entity} end`),
-          (point) => {
-            entity.end = point;
-          }
-        );
-      }
-      if (ref.handle === "center" || ref.handle === undefined) {
-        return pointAccessor(
-          () => readNumericPoint(entity.center, `Sketch ${sketchId} arc ${ref.entity} center`),
-          (point) => {
-            entity.center = point;
-          }
-        );
-      }
-      break;
-    case "sketch.circle":
-    case "sketch.ellipse":
-    case "sketch.slot":
-    case "sketch.polygon":
-      if (ref.handle === "center" || ref.handle === undefined) {
-        return pointAccessor(
-          () => readNumericPoint(entity.center, `Sketch ${sketchId} entity ${ref.entity} center`),
-          (point) => {
-            entity.center = point;
-          }
-        );
-      }
-      break;
-    case "sketch.rectangle":
-      if (entity.mode === "center" && (ref.handle === "center" || ref.handle === undefined)) {
-        return pointAccessor(
-          () => readNumericPoint(entity.center, `Sketch ${sketchId} rectangle ${ref.entity} center`),
-          (point) => {
-            entity.center = point;
-          }
-        );
-      }
-      if (entity.mode === "corner" && (ref.handle === "corner" || ref.handle === undefined)) {
-        return pointAccessor(
-          () => readNumericPoint(entity.corner, `Sketch ${sketchId} rectangle ${ref.entity} corner`),
-          (point) => {
-            entity.corner = point;
-          }
-        );
-      }
-      break;
-    case "sketch.point":
-      if (ref.handle === "point" || ref.handle === undefined) {
-        return pointAccessor(
-          () => readNumericPoint(entity.point, `Sketch ${sketchId} point ${ref.entity}`),
-          (point) => {
-            entity.point = point;
-          }
-        );
-      }
-      break;
-    case "sketch.spline":
-      break;
-  }
-
-  throw new CompileError(
-    "sketch_constraint_kind_mismatch",
-    `Sketch ${sketchId} ref ${ref.entity}${ref.handle ? `.${ref.handle}` : ""} is not supported`
-  );
 }
