@@ -88,6 +88,7 @@ export type MetadataContext = {
   edgeEndpoints: (
     edge: unknown
   ) => { start: [number, number, number]; end: [number, number, number] } | null;
+  faceOrientationValue: (face: unknown) => number | null;
   newOcct: (name: string, ...args: any[]) => any;
   planeBasisFromFace: (face: unknown) => PlaneBasis;
   pointToArray: (point: any) => [number, number, number];

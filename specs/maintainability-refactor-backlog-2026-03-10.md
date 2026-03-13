@@ -46,6 +46,7 @@ boundary-extraction sweep.
 - after `Extract OCCT shape mutation primitives` (`6b901bc`): 4242 lines
 - after `Extract OCCT datum/pattern ops` (`f77feca`): 4077 lines
 - after `Extract OCCT shape analysis primitives`: 3986 lines
+- after extracting OCCT backend support layers: 2965 lines
 
 ### Validation Line Count Tracking
 
@@ -67,9 +68,9 @@ boundary-extraction sweep.
 Goal: reduce `src/backend_occt.ts` to an orchestration-focused class plus
 cohesive helper modules.
 
-Status: the `<= 4000` line guardrail is now met. Remaining backend work is
-follow-up decomposition to improve ownership boundaries, not emergency line
-count reduction.
+Status: the longer-term `<= 3000` line target is now met. Remaining backend
+work is follow-up decomposition to improve ownership boundaries, not emergency
+line count reduction.
 
 Open slices:
 

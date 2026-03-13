@@ -354,6 +354,7 @@ import {
   VariableChamfer,
   HoleEndCondition,
 } from "./ir.js";
+import { OcctBackendMeshSupport } from "./occt_backend_mesh_support.js";
 
 export type OcctModule = {
   // Placeholder for OpenCascade.js module type.
@@ -401,10 +402,11 @@ type FaceSelectionBinding = {
   role?: string;
 };
 
-export class OcctBackend implements Backend {
-  private occt: OcctModule;
+export class OcctBackend extends OcctBackendMeshSupport implements Backend {
+  protected occt: OcctModule;
 
   constructor(options: OcctBackendOptions) {
+    super();
     this.occt = options.occt;
   }
 
@@ -902,7 +904,7 @@ export class OcctBackend implements Backend {
     };
   }
 
-  private metadataContext(): MetadataContext {
+  protected metadataContext(): MetadataContext {
     return {
       occt: this.occt,
       adjacentFaces: (adjacency, edge) => this.adjacentFaces(adjacency as any, edge),
@@ -912,6 +914,7 @@ export class OcctBackend implements Backend {
       callWithFallback: (target, methods, argSets) => this.callWithFallback(target, methods, argSets),
       dirToArray: (dir) => this.dirToArray(dir),
       edgeEndpoints: (edge) => this.edgeEndpoints(edge),
+      faceOrientationValue: (face) => this.faceOrientationValue(face),
       newOcct: (name, ...args) => this.newOcct(name, ...args),
       planeBasisFromFace: (face) => this.planeBasisFromFace(face),
       pointToArray: (point) => this.pointToArray(point),
@@ -2030,565 +2033,6 @@ export class OcctBackend implements Backend {
     return Array.from(new Set(selections.map((selection) => selection.id)));
   }
 
-  private shapeBoundsOverlap(a: any, b: any, tolerance = 1e-6): boolean {
-    const left = this.shapeBounds(a);
-    const right = this.shapeBounds(b);
-    return !(
-      left.max[0] < right.min[0] - tolerance ||
-      right.max[0] < left.min[0] - tolerance ||
-      left.max[1] < right.min[1] - tolerance ||
-      right.max[1] < left.min[1] - tolerance ||
-      left.max[2] < right.min[2] - tolerance ||
-      right.max[2] < left.min[2] - tolerance
-    );
-  }
-
-  private edgeDirection(edge: any, label: string): [number, number, number] {
-    const points = this.sampleEdgePoints(edge, { edgeSegmentLength: 0.5, edgeMaxSegments: 8 });
-    if (points.length < 2) {
-      throw new Error(`OCCT backend: ${label} edge has insufficient sample points`);
-    }
-    const start = points[0];
-    const end = points[points.length - 1];
-    if (!start || !end) {
-      throw new Error(`OCCT backend: ${label} edge points are missing`);
-    }
-    const direction = normalizeVector(this.subVec(end, start));
-    if (!isFiniteVec(direction)) {
-      throw new Error(`OCCT backend: ${label} edge direction is degenerate`);
-    }
-    return direction;
-  }
-
-  private projectBoundsOnBasis(
-    points: Array<[number, number, number]>,
-    origin: [number, number, number],
-    xDir: [number, number, number],
-    yDir: [number, number, number]
-  ): { uMin: number; uMax: number; vMin: number; vMax: number } {
-    let uMin = Infinity;
-    let uMax = -Infinity;
-    let vMin = Infinity;
-    let vMax = -Infinity;
-    for (const point of points) {
-      const delta = this.subVec(point, origin);
-      const u = dot(delta, xDir);
-      const v = dot(delta, yDir);
-      if (u < uMin) uMin = u;
-      if (u > uMax) uMax = u;
-      if (v < vMin) vMin = v;
-      if (v > vMax) vMax = v;
-    }
-    if (![uMin, uMax, vMin, vMax].every((value) => Number.isFinite(value))) {
-      throw new Error("OCCT backend: failed to project planar bounds");
-    }
-    return { uMin, uMax, vMin, vMax };
-  }
-
-  private classifyPlanarBoundaryEdge(
-    edge: any,
-    origin: [number, number, number],
-    xDir: [number, number, number],
-    yDir: [number, number, number],
-    extents: { uMin: number; uMax: number; vMin: number; vMax: number },
-    tolerance: number
-  ): "uMin" | "uMax" | "vMin" | "vMax" | null {
-    const points = this.sampleEdgePoints(edge, { edgeSegmentLength: 0.5, edgeMaxSegments: 8 });
-    if (points.length < 2) return null;
-    const projected = this.projectBoundsOnBasis(points, origin, xDir, yDir);
-    const near = (a: number, b: number) => Math.abs(a - b) <= tolerance;
-    const uSpan = projected.uMax - projected.uMin;
-    const vSpan = projected.vMax - projected.vMin;
-    const uMid = (projected.uMin + projected.uMax) / 2;
-    const vMid = (projected.vMin + projected.vMax) / 2;
-    const axisTolerance = tolerance * 4;
-    if (uSpan <= axisTolerance && near(uMid, extents.uMin)) {
-      return "uMin";
-    }
-    if (uSpan <= axisTolerance && near(uMid, extents.uMax)) {
-      return "uMax";
-    }
-    if (vSpan <= axisTolerance && near(vMid, extents.vMin)) {
-      return "vMin";
-    }
-    if (vSpan <= axisTolerance && near(vMid, extents.vMax)) {
-      return "vMax";
-    }
-    return null;
-  }
-
-  private makePlanarRectFace(
-    origin: [number, number, number],
-    xDir: [number, number, number],
-    yDir: [number, number, number],
-    extents: { uMin: number; uMax: number; vMin: number; vMax: number }
-  ): any {
-    const corner = (u: number, v: number): [number, number, number] => [
-      origin[0] + xDir[0] * u + yDir[0] * v,
-      origin[1] + xDir[1] * u + yDir[1] * v,
-      origin[2] + xDir[2] * u + yDir[2] * v,
-    ];
-    const corners: Array<[number, number, number]> = [
-      corner(extents.uMin, extents.vMin),
-      corner(extents.uMax, extents.vMin),
-      corner(extents.uMax, extents.vMax),
-      corner(extents.uMin, extents.vMax),
-    ];
-    const wire = this.makeWireFromEdges([
-      this.makeLineEdge(corners[0] as [number, number, number], corners[1] as [number, number, number]),
-      this.makeLineEdge(corners[1] as [number, number, number], corners[2] as [number, number, number]),
-      this.makeLineEdge(corners[2] as [number, number, number], corners[3] as [number, number, number]),
-      this.makeLineEdge(corners[3] as [number, number, number], corners[0] as [number, number, number]),
-    ]);
-    return this.readFace(this.makeFaceFromWire(wire));
-  }
-
-  private shapeBounds(shape: any): { min: [number, number, number]; max: [number, number, number] } {
-    return resolveOcctShapeBounds(this.shapeAnalysisDeps(), shape);
-  }
-
-  private firstFace(shape: any): any | null {
-    return resolveOcctFirstFace(this.shapeAnalysisDeps(), shape);
-  }
-
-  private listFaces(shape: any): any[] {
-    return resolveOcctListFaces(this.shapeAnalysisDeps(), shape);
-  }
-
-  private countFaces(shape: any): number {
-    return countOcctFaces(this.shapeAnalysisDeps(), shape);
-  }
-
-  private makeCompoundFromShapes(shapes: any[]): any {
-    return makeOcctCompoundFromShapes(this.shapeAnalysisDeps(), shapes);
-  }
-
-  private axisBounds(
-    axis: [number, number, number],
-    bounds: { min: [number, number, number]; max: [number, number, number] }
-  ): { min: number; max: number } | null {
-    return resolveOcctAxisBounds(axis, bounds);
-  }
-
-  private cylinderFromFace(face: any): {
-    origin: [number, number, number];
-    axis: [number, number, number];
-    xDir?: [number, number, number];
-    yDir?: [number, number, number];
-    radius: number;
-  } | null {
-    return resolveOcctCylinderFromFace(this.metadataContext(), face);
-  }
-
-  private cylinderReferenceXDirection(cylinder: {
-    axis: [number, number, number];
-    xDir?: [number, number, number];
-    yDir?: [number, number, number];
-  }): [number, number, number] {
-    return resolveOcctCylinderReferenceXDirection(cylinder);
-  }
-
-  private cylinderVExtents(
-    face: any,
-    cylinder: { origin: [number, number, number]; axis: [number, number, number] }
-  ): { min: number; max: number } | null {
-    return resolveOcctCylinderVExtents(this.shapeAnalysisDeps(), face, cylinder);
-  }
-
-  private surfaceUvExtents(
-    face: any
-  ): { uMin: number; uMax: number; vMin: number; vMax: number } | null {
-    return resolveOcctSurfaceUvExtents(this.shapeAnalysisDeps(), face);
-  }
-
-  private shapeCenter(shape: any): [number, number, number] {
-    return resolveOcctShapeCenter(this.shapeAnalysisDeps(), shape);
-  }
-
-  private throughAllDepth(
-    shape: any,
-    axisDir: [number, number, number],
-    origin?: [number, number, number]
-  ): number {
-    if (origin) {
-      const axis = normalizeVector(axisDir);
-      if (isFiniteVec(axis)) {
-        const extents = this.axisBounds(axis, this.shapeBounds(shape));
-        if (extents) {
-          const start = dot(origin, axis);
-          const next = extents.max - start;
-          if (next > 1e-6) {
-            return next + Math.max(0.05, next * 0.02);
-          }
-        }
-      }
-    }
-    const bounds = this.shapeBounds(shape);
-    const lenX = bounds.max[0] - bounds.min[0];
-    const lenY = bounds.max[1] - bounds.min[1];
-    const lenZ = bounds.max[2] - bounds.min[2];
-    const base =
-      Math.abs(axisDir[0]) > 0.5
-        ? lenX
-        : Math.abs(axisDir[1]) > 0.5
-          ? lenY
-          : lenZ;
-    const margin = Math.max(base * 0.2, 1);
-    return base + margin;
-  }
-
-  private makeCylinder(
-    radius: number,
-    height: number,
-    axisDir: [number, number, number],
-    origin: [number, number, number]
-  ) {
-    const pnt = this.makePnt(origin[0], origin[1], origin[2]);
-    const dir = this.makeDir(axisDir[0], axisDir[1], axisDir[2]);
-    const ax2 = this.makeAx2(pnt, dir);
-    const occt = this.occt as Record<string, any>;
-    const ctorWithAxis = occt.BRepPrimAPI_MakeCylinder_3;
-    if (typeof ctorWithAxis === "function") {
-      return new ctorWithAxis(ax2, radius, height);
-    }
-    const candidates: Array<unknown[]> = [
-      [ax2, radius, height],
-      [radius, height],
-    ];
-    for (const args of candidates) {
-      try {
-        return this.newOcct("BRepPrimAPI_MakeCylinder", ...args);
-      } catch {
-        continue;
-      }
-    }
-    throw new Error("OCCT backend: failed to construct cylinder");
-  }
-
-  private makeCone(
-    radius1: number,
-    radius2: number,
-    height: number,
-    axisDir: [number, number, number],
-    origin: [number, number, number]
-  ) {
-    const pnt = this.makePnt(origin[0], origin[1], origin[2]);
-    const dir = this.makeDir(axisDir[0], axisDir[1], axisDir[2]);
-    const ax2 = this.makeAx2(pnt, dir);
-    const occt = this.occt as Record<string, any>;
-    const ctorWithAxis = occt.BRepPrimAPI_MakeCone_3;
-    if (typeof ctorWithAxis === "function") {
-      return new ctorWithAxis(ax2, radius1, radius2, height);
-    }
-    const candidates: Array<unknown[]> = [
-      [ax2, radius1, radius2, height],
-      [ax2, radius1, radius2, height, 0],
-      [radius1, radius2, height],
-      [radius1, radius2, height, 0],
-    ];
-    for (const args of candidates) {
-      try {
-        return this.newOcct("BRepPrimAPI_MakeCone", ...args);
-      } catch {
-        continue;
-      }
-    }
-    throw new Error("OCCT backend: failed to construct cone");
-  }
-
-  private makeFilletBuilder(shape: any) {
-    return makeOcctFilletBuilder(this.builderPrimitiveDeps(), shape);
-  }
-
-  private makeChamferBuilder(shape: any) {
-    return makeOcctChamferBuilder(this.builderPrimitiveDeps(), shape);
-  }
-
-  private makeDraftBuilder(shape: any) {
-    return makeOcctDraftBuilder(this.builderPrimitiveDeps(), shape);
-  }
-
-  private makeLoftBuilder(isSolid: boolean) {
-    return makeOcctLoftBuilder(this.builderPrimitiveDeps(), isSolid);
-  }
-
-  private addLoftWire(builder: any, wire: any) {
-    return addOcctLoftWire(this.builderPrimitiveDeps(), builder, wire);
-  }
-
-  private makeBoolean(
-    op: "union" | "subtract" | "intersect" | "cut",
-    left: any,
-    right: any
-  ) {
-    return makeOcctBoolean(this.builderPrimitiveDeps(), op, left, right);
-  }
-
-  private makeSection(left: any, right: any) {
-    return makeOcctSection(this.builderPrimitiveDeps(), left, right);
-  }
-
-  private splitByTools(result: any, tools: any[]): any {
-    const occt = this.occt as Record<string, any>;
-    if (!occt.BOPAlgo_Splitter_1) return result;
-    const progress = this.makeProgressRange();
-    if (!progress) return result;
-    let splitter: any;
-    try {
-      splitter = this.newOcct("BOPAlgo_Splitter");
-    } catch {
-      return result;
-    }
-    const call = (name: string, ...args: unknown[]) => {
-      const method = splitter?.[name];
-      if (typeof method !== "function") return false;
-      try {
-        method.apply(splitter, args);
-        return true;
-      } catch {
-        return false;
-      }
-    };
-    call("SetNonDestructive", true);
-    const glueOff = occt.BOPAlgo_GlueEnum?.BOPAlgo_GlueOff;
-    if (glueOff) call("SetGlue", glueOff);
-    call("AddArgument", result);
-    for (const tool of tools) {
-      if (!tool) continue;
-      call("AddTool", tool);
-    }
-    try {
-      splitter.Perform(progress);
-    } catch {
-      return result;
-    }
-    try {
-      return this.readShape(splitter);
-    } catch {
-      return result;
-    }
-  }
-
-  private unifySameDomain(shape: any): any {
-    let unifier: any;
-    const ctorArgs: unknown[][] = [
-      [shape, true, true, true],
-      [shape, true, true, false],
-      [shape, true, true],
-      [shape],
-    ];
-    for (const args of ctorArgs) {
-      try {
-        unifier = this.newOcct("ShapeUpgrade_UnifySameDomain", ...args);
-        break;
-      } catch {
-        continue;
-      }
-    }
-    if (!unifier) return shape;
-
-    try {
-      this.callWithFallback(unifier, ["Build", "Build_1"], [[]]);
-    } catch {
-      return shape;
-    }
-
-    try {
-      return this.callWithFallback(unifier, ["Shape", "Shape_1"], [[]]);
-    } catch {
-      return shape;
-    }
-  }
-
-  private normalizeSolid(shape: any): any {
-    const occt = this.occt as any;
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_SOLID,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    const solids: any[] = [];
-    for (; explorer.More(); explorer.Next()) {
-      solids.push(explorer.Current());
-    }
-    if (solids.length === 0) return shape;
-    if (solids.length === 1) return solids[0];
-    if (!occt.GProp_GProps_1 || !occt.BRepGProp?.VolumeProperties_1) {
-      return solids[0];
-    }
-    let best = solids[0];
-    let bestVolume = -Infinity;
-    for (const solid of solids) {
-      const volume = this.solidVolume(solid);
-      if (volume > bestVolume) {
-        bestVolume = volume;
-        best = solid;
-      }
-    }
-    return best;
-  }
-
-  private countSolids(shape: any): number {
-    const occt = this.occt as any;
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_SOLID,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    let count = 0;
-    for (; explorer.More(); explorer.Next()) {
-      count += 1;
-    }
-    return count;
-  }
-
-  private reverseShape(shape: any): any {
-    const reversedCandidates = ["Reversed", "Reversed_1", "Reversed_2"];
-    for (const name of reversedCandidates) {
-      const fn = shape?.[name];
-      if (typeof fn !== "function") continue;
-      try {
-        const candidate = fn.call(shape);
-        if (candidate) return candidate;
-      } catch {
-        continue;
-      }
-    }
-    const reverseCandidates = ["Reverse", "Reverse_1", "Reverse_2"];
-    for (const name of reverseCandidates) {
-      const fn = shape?.[name];
-      if (typeof fn !== "function") continue;
-      try {
-        fn.call(shape);
-        return shape;
-      } catch {
-        continue;
-      }
-    }
-    return shape;
-  }
-
-  private shapeHasSolid(shape: any): boolean {
-    return this.countSolids(shape) > 0;
-  }
-
-  private makeSolidFromShells(shape: any): any | null {
-    return makeOcctSolidFromShells(this.shapeMutationPrimitiveDeps(), shape);
-  }
-
-  private deleteFacesWithDefeaturing(shape: any, removeFaces: any[]): any | null {
-    return deleteOcctFacesWithDefeaturing(this.shapeMutationPrimitiveDeps(), shape, removeFaces);
-  }
-
-  private deleteFacesBySewing(shape: any, removeFaces: any[]): any | null {
-    return deleteOcctFacesBySewing(this.shapeMutationPrimitiveDeps(), shape, removeFaces);
-  }
-
-  private replaceFacesWithReshape(
-    shape: any,
-    replacements: Array<{ from: any; to: any }>
-  ): any | null {
-    return replaceOcctFacesWithReshape(this.shapeMutationPrimitiveDeps(), shape, replacements);
-  }
-
-  private replaceFacesBySewing(
-    shape: any,
-    removeFaces: any[],
-    replacementFaces: any[]
-  ): any | null {
-    return replaceOcctFacesBySewing(this.shapeMutationPrimitiveDeps(), shape, removeFaces, replacementFaces);
-  }
-
-  private uniqueFaceShapes(selections: KernelSelection[]): any[] {
-    return collectOcctUniqueFaceShapes(this.shapeMutationPrimitiveDeps(), selections);
-  }
-
-  private collectToolFaces(selections: KernelSelection[]): any[] {
-    return collectOcctToolFaces(this.shapeMutationPrimitiveDeps(), selections);
-  }
-
-  private collectFacesFromShape(shape: any): any[] {
-    return collectOcctFacesFromShape(this.shapeMutationPrimitiveDeps(), shape);
-  }
-
-  private annotateEdgeAdjacencyMetadata(
-    shape: any,
-    edgeEntries: CollectedSubshape[],
-    faceBindings: FaceSelectionBinding[]
-  ): void {
-    annotateOcctEdgeAdjacencyMetadata(this.metadataContext(), shape, edgeEntries, faceBindings);
-  }
-
-  private collectEdgesFromShape(shape: any): any[] {
-    return collectOcctEdgesFromShape(this.shapeMutationPrimitiveDeps(), shape);
-  }
-
-  private uniqueShapeList(shapes: any[]): any[] {
-    return collectOcctUniqueShapeList(this.shapeMutationPrimitiveDeps(), shapes);
-  }
-
-  private containsShape(candidates: any[], shape: any): boolean {
-    return containsOcctShape(this.shapeMutationPrimitiveDeps(), candidates, shape);
-  }
-
-  private isValidShape(shape: any, kind: KernelObject["kind"] = "solid"): boolean {
-    return isOcctValidShape(this.shapeMutationPrimitiveDeps(), shape, kind);
-  }
-
-  private solidVolume(solid: any): number {
-    return resolveOcctSolidVolume(this.shapeMutationPrimitiveDeps(), solid);
-  }
-
-  private tryBuild(builder: any) {
-    if (!builder || typeof builder.Build !== "function") return;
-    const progress = this.makeProgressRange();
-    try {
-      builder.Build(progress);
-      return;
-    } catch {
-      // fall through
-    }
-    try {
-      builder.Build();
-    } catch {
-      // ignore build failures; some builders auto-build
-    }
-  }
-
-  private toFace(face: any) {
-    const occt = this.occt as any;
-    if (occt.TopoDS?.Face_1) {
-      return occt.TopoDS.Face_1(face);
-    }
-    return face;
-  }
-
-  private toEdge(edge: any) {
-    const occt = this.occt as any;
-    if (occt.TopoDS?.Edge_1) {
-      return occt.TopoDS.Edge_1(edge);
-    }
-    return edge;
-  }
-
-  private toWire(wire: any) {
-    const occt = this.occt as any;
-    if (occt.TopoDS?.Wire_1) {
-      return occt.TopoDS.Wire_1(wire);
-    }
-    return wire;
-  }
-
-  private toShell(shell: any) {
-    const occt = this.occt as any;
-    if (occt.TopoDS?.Shell_1) {
-      return occt.TopoDS.Shell_1(shell);
-    }
-    return shell;
-  }
-
   private resolveProfile(
     profileRef: ProfileRef,
     upstream: KernelResult
@@ -2710,7 +2154,7 @@ export class OcctBackend implements Backend {
     return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
   }
 
-  private subVec(
+  protected subVec(
     a: [number, number, number],
     b: [number, number, number]
   ): [number, number, number] {
@@ -2847,7 +2291,7 @@ export class OcctBackend implements Backend {
     return makeOcctRingFace(this.pipeShellPrimitiveDeps(), center, normal, outerRadius, innerRadius);
   }
 
-  private makeWireFromEdges(edges: any[]) {
+  protected makeWireFromEdges(edges: any[]) {
     return makeOcctWireFromEdges(this.profilePrimitiveDeps(), edges);
   }
 
@@ -2993,7 +2437,7 @@ export class OcctBackend implements Backend {
     return occtEllipseAxes(plane, radiusX, radiusY, rotation);
   }
 
-  private makeLineEdge(start: [number, number, number], end: [number, number, number]) {
+  protected makeLineEdge(start: [number, number, number], end: [number, number, number]) {
     return makeOcctLineEdge(this.curveEdgePrimitiveDeps(), start, end);
   }
 
@@ -3061,14 +2505,14 @@ export class OcctBackend implements Backend {
     };
   }
 
-  private makeFaceFromWire(wire: any) {
+  protected makeFaceFromWire(wire: any) {
     return makeOcctFaceFromWire({
       wire,
       newOcct: (name, ...args) => this.newOcct(name, ...args),
     });
   }
 
-  private readFace(builder: any) {
+  protected readFace(builder: any) {
     return readOcctFace({
       builder,
       readShape: (target) => this.readShape(target),
@@ -3157,7 +2601,7 @@ export class OcctBackend implements Backend {
     return makeOcctRevol(this.shapePrimitiveDeps(), face, axis, angleRad);
   }
 
-  private newOcct(name: string, ...args: unknown[]) {
+  protected newOcct(name: string, ...args: unknown[]) {
     const occt = this.occt as Record<string, any>;
     const candidates = [name];
     for (let i = 1; i <= 25; i += 1) candidates.push(`${name}_${i}`);
@@ -3173,11 +2617,11 @@ export class OcctBackend implements Backend {
     throw new Error(`OCCT backend: no constructor for ${name}`);
   }
 
-  private makePnt(x: number, y: number, z: number) {
+  protected makePnt(x: number, y: number, z: number) {
     return makeOcctPnt(this.shapePrimitiveDeps(), x, y, z);
   }
 
-  private makeDir(x: number, y: number, z: number) {
+  protected makeDir(x: number, y: number, z: number) {
     return makeOcctDir(this.shapePrimitiveDeps(), x, y, z);
   }
 
@@ -3185,7 +2629,7 @@ export class OcctBackend implements Backend {
     return makeOcctVec(this.shapePrimitiveDeps(), x, y, z);
   }
 
-  private makeAx2(pnt: any, dir: any) {
+  protected makeAx2(pnt: any, dir: any) {
     return makeOcctAx2(this.shapePrimitiveDeps(), pnt, dir);
   }
 
@@ -3266,7 +2710,7 @@ export class OcctBackend implements Backend {
     };
   }
 
-  private builderPrimitiveDeps(): BuilderPrimitiveDeps {
+  protected builderPrimitiveDeps(): BuilderPrimitiveDeps {
     return {
       occt: this.occt as Record<string, any>,
       newOcct: (name: string, ...args: unknown[]) => this.newOcct(name, ...args),
@@ -3276,6 +2720,165 @@ export class OcctBackend implements Backend {
         this.callWithFallback(target, methods, argSets as any),
       toWire: (wire: any) => this.toWire(wire),
     };
+  }
+
+  protected makeFilletBuilder(shape: any) {
+    return makeOcctFilletBuilder(this.builderPrimitiveDeps(), shape);
+  }
+
+  protected makeChamferBuilder(shape: any) {
+    return makeOcctChamferBuilder(this.builderPrimitiveDeps(), shape);
+  }
+
+  protected makeDraftBuilder(shape: any) {
+    return makeOcctDraftBuilder(this.builderPrimitiveDeps(), shape);
+  }
+
+  protected makeLoftBuilder(isSolid: boolean) {
+    return makeOcctLoftBuilder(this.builderPrimitiveDeps(), isSolid);
+  }
+
+  protected addLoftWire(builder: any, wire: any) {
+    return addOcctLoftWire(this.builderPrimitiveDeps(), builder, wire);
+  }
+
+  protected makeBoolean(
+    op: "union" | "subtract" | "intersect" | "cut",
+    left: any,
+    right: any
+  ) {
+    return makeOcctBoolean(this.builderPrimitiveDeps(), op, left, right);
+  }
+
+  protected makeSection(left: any, right: any) {
+    return makeOcctSection(this.builderPrimitiveDeps(), left, right);
+  }
+
+  protected splitByTools(result: any, tools: any[]): any {
+    const occt = this.occt as Record<string, any>;
+    if (!occt.BOPAlgo_Splitter_1) return result;
+    const progress = this.makeProgressRange();
+    if (!progress) return result;
+    let splitter: any;
+    try {
+      splitter = this.newOcct("BOPAlgo_Splitter");
+    } catch {
+      return result;
+    }
+    const call = (name: string, ...args: unknown[]) => {
+      const method = splitter?.[name];
+      if (typeof method !== "function") return false;
+      try {
+        method.apply(splitter, args);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    call("SetNonDestructive", true);
+    const glueOff = occt.BOPAlgo_GlueEnum?.BOPAlgo_GlueOff;
+    if (glueOff) call("SetGlue", glueOff);
+    call("AddArgument", result);
+    for (const tool of tools) {
+      if (!tool) continue;
+      call("AddTool", tool);
+    }
+    try {
+      splitter.Perform(progress);
+    } catch {
+      return result;
+    }
+    try {
+      const shape = this.callWithFallback(splitter, ["Shape", "Shape_1"], [[]]);
+      return shape ?? result;
+    } catch {
+      return result;
+    }
+  }
+
+  protected normalizeSolid(shape: any): any {
+    const unified = this.unifySameDomain(shape);
+    if (this.shapeHasSolid(unified)) return unified;
+    const solidified = this.makeSolidFromShells(unified);
+    if (solidified && this.shapeHasSolid(solidified)) return solidified;
+
+    const solids = this.collectUniqueSubshapes(
+      unified,
+      (this.occt as any).TopAbs_ShapeEnum.TopAbs_SOLID,
+      () => ({})
+    ).map((entry) => entry.shape);
+    if (solids.length === 0) return unified;
+
+    let bestSolid = solids[0];
+    let bestVolume = -Infinity;
+    for (const solid of solids) {
+      const volume = this.solidVolume(solid);
+      if (volume > bestVolume) {
+        bestVolume = volume;
+        bestSolid = solid;
+      }
+    }
+    return bestSolid;
+  }
+
+  protected countSolids(shape: any): number {
+    const occt = this.occt as any;
+    const explorer = new occt.TopExp_Explorer_1();
+    explorer.Init(
+      shape,
+      occt.TopAbs_ShapeEnum.TopAbs_SOLID,
+      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    let count = 0;
+    for (; explorer.More(); explorer.Next()) {
+      count += 1;
+    }
+    return count;
+  }
+
+  protected reverseShape(shape: any): any {
+    const candidates = ["Reverse_1", "Reverse"];
+    for (const name of candidates) {
+      const fn = shape?.[name];
+      if (typeof fn !== "function") continue;
+      try {
+        const candidate = fn.call(shape);
+        if (candidate) return candidate;
+      } catch {
+        continue;
+      }
+    }
+    for (const name of candidates) {
+      const fn = shape?.[name];
+      if (typeof fn !== "function") continue;
+      try {
+        fn.call(shape);
+        return shape;
+      } catch {
+        continue;
+      }
+    }
+    return shape;
+  }
+
+  protected shapeHasSolid(shape: any): boolean {
+    return this.countSolids(shape) > 0;
+  }
+
+  protected tryBuild(builder: any) {
+    if (!builder || typeof builder.Build !== "function") return;
+    const progress = this.makeProgressRange();
+    try {
+      builder.Build(progress);
+      return;
+    } catch {
+      // fall through
+    }
+    try {
+      builder.Build();
+    } catch {
+      // ignore build failures; some builders auto-build
+    }
   }
 
   private pipeShellPrimitiveDeps(): PipeShellPrimitiveDeps {
@@ -3302,7 +2905,7 @@ export class OcctBackend implements Backend {
     };
   }
 
-  private shapeMutationPrimitiveDeps(): ShapeMutationPrimitiveDeps {
+  protected shapeMutationPrimitiveDeps(): ShapeMutationPrimitiveDeps {
     return {
       occt: this.occt as any,
       newOcct: (name: string, ...args: unknown[]) => this.newOcct(name, ...args),
@@ -3322,7 +2925,7 @@ export class OcctBackend implements Backend {
     };
   }
 
-  private shapeAnalysisDeps(): ShapeAnalysisPrimitiveDeps {
+  protected shapeAnalysisDeps(): ShapeAnalysisPrimitiveDeps {
     return {
       occt: this.occt as any,
       newOcct: (name: string, ...args: unknown[]) => this.newOcct(name, ...args),
@@ -3359,628 +2962,4 @@ export class OcctBackend implements Backend {
     };
   }
 
-  private ensureTriangulation(shape: any, opts: MeshOptions) {
-    const linear = opts.linearDeflection ?? 0.5;
-    const angular = opts.angularDeflection ?? 0.5;
-    const relative = opts.relative ?? false;
-    const progress = this.makeProgressRange();
-    const argsList: Array<unknown[]> = [
-      ["BRepMesh_IncrementalMesh_2", [shape, linear, relative, angular, progress]],
-      [
-        "BRepMesh_IncrementalMesh_2",
-        [shape, linear, relative, angular, this.makeProgressRange()],
-      ],
-    ];
-    for (const [name, args] of argsList) {
-      try {
-        this.newOcct(name as string, ...(args as unknown[]));
-        return;
-      } catch {
-        continue;
-      }
-    }
-    throw new Error("OCCT backend: failed to triangulate shape");
-  }
-
-  private makeProgressRange() {
-    try {
-      return this.newOcct("Message_ProgressRange_1");
-    } catch {
-      return null;
-    }
-  }
-
-  private configureStepExport(occt: any, opts: StepExportOptions): void {
-    const setCVal = occt.Interface_Static_SetCVal ?? occt.Interface_Static?.SetCVal;
-    const setIVal = occt.Interface_Static_SetIVal ?? occt.Interface_Static?.SetIVal;
-    const setRVal = occt.Interface_Static_SetRVal ?? occt.Interface_Static?.SetRVal;
-    if (opts.schema && typeof setCVal === "function") {
-      setCVal("write.step.schema", opts.schema);
-    }
-    if (opts.unit && typeof setCVal === "function") {
-      setCVal("write.step.unit", this.stepUnitToken(opts.unit));
-    }
-    if (typeof opts.precision === "number" && Number.isFinite(opts.precision)) {
-      if (typeof setIVal === "function") setIVal("write.step.precision.mode", 1);
-      if (typeof setRVal === "function") setRVal("write.step.precision.val", opts.precision);
-    }
-  }
-
-  private resolveStepModelType(occt: any, kind: KernelObject["kind"]): number {
-    const types = occt?.STEPControl_StepModelType;
-    if (!types) return 0;
-    if (kind === "solid") {
-      return (
-        types.STEPControl_ManifoldSolidBrep ??
-        types.STEPControl_AsIs ??
-        0
-      );
-    }
-    return types.STEPControl_AsIs ?? 0;
-  }
-
-  private assertStepStatus(occt: any, status: unknown, label: string): void {
-    if (typeof status === "boolean") {
-      if (!status) throw new Error(`OCCT backend: ${label} failed`);
-      return;
-    }
-    if (typeof status === "number") {
-      const retDone = occt.IFSelect_ReturnStatus?.IFSelect_RetDone;
-      if (typeof retDone === "number" && status !== retDone) {
-        throw new Error(`OCCT backend: ${label} failed (status ${status})`);
-      }
-    }
-  }
-
-  private callWithFallback(
-    target: any,
-    names: string[],
-    argsList: unknown[][]
-  ): unknown {
-    let sawFunction = false;
-    let lastError: unknown = null;
-    for (const name of names) {
-      const fn = target?.[name];
-      if (typeof fn !== "function") continue;
-      sawFunction = true;
-      for (const args of argsList) {
-        try {
-          return fn.call(target, ...args);
-        } catch (err) {
-          lastError = err;
-          continue;
-        }
-      }
-    }
-    if (sawFunction && lastError) {
-      const msg = lastError instanceof Error ? lastError.message : String(lastError);
-      throw new Error(`OCCT backend: ${names.join(" or ")} failed: ${msg}`);
-    }
-    throw new Error(`OCCT backend: missing ${names.join(" or ")}()`);
-  }
-
-  private makeStepPath(fs: any): string {
-    const dir = "/tmp";
-    if (typeof fs?.mkdir === "function") {
-      try {
-        fs.mkdir(dir);
-      } catch {
-        // ignore if it already exists
-      }
-    }
-    const rand = Math.random().toString(36).slice(2);
-    return `${dir}/trueform-${Date.now()}-${rand}.step`;
-  }
-
-  private makeStlPath(fs: any): string {
-    const dir = "/tmp";
-    if (typeof fs?.mkdir === "function") {
-      try {
-        fs.mkdir(dir);
-      } catch {
-        // ignore if it already exists
-      }
-    }
-    const rand = Math.random().toString(36).slice(2);
-    return `${dir}/trueform-${Date.now()}-${rand}.stl`;
-  }
-
-  private stepUnitToken(unit: StepExportOptions["unit"]): string {
-    switch (unit) {
-      case "mm":
-        return "MM";
-      case "cm":
-        return "CM";
-      case "m":
-        return "M";
-      case "in":
-        return "INCH";
-      default:
-        return "MM";
-    }
-  }
-
-  private getTriangulation(face: any): { triangulation: any; loc: any } {
-    const occt = this.occt as any;
-    const loc = this.newOcct("TopLoc_Location_1");
-    const tool = occt.BRep_Tool;
-    const topo = occt.TopoDS;
-    if (!tool?.Triangulation) {
-      throw new Error("OCCT backend: BRep_Tool.Triangulation not available");
-    }
-    if (!topo?.Face_1) {
-      throw new Error("OCCT backend: TopoDS.Face_1 not available");
-    }
-    const faceHandle = topo.Face_1(face);
-    const triHandle = tool.Triangulation(faceHandle, loc, 0);
-    if (triHandle?.IsNull && triHandle.IsNull()) {
-      return { triangulation: null, loc };
-    }
-    const triangulation = triHandle?.get ? triHandle.get() : triHandle;
-    return { triangulation, loc };
-  }
-
-  private applyLocation(pnt: any, loc: any) {
-    if (!loc || typeof loc.Transformation !== "function") return pnt;
-    const trsf = loc.Transformation();
-    if (!trsf || typeof pnt.Transformed !== "function") return pnt;
-    return pnt.Transformed(trsf);
-  }
-
-  private pointToArray(pnt: any): [number, number, number] {
-    if (typeof pnt.X === "function") {
-      return [pnt.X(), pnt.Y(), pnt.Z()];
-    }
-    if (typeof pnt.x === "function") {
-      return [pnt.x(), pnt.y(), pnt.z()];
-    }
-    if (typeof pnt.Coord === "function") {
-      const out = { value: [] as number[] };
-      pnt.Coord(out);
-      const coords = out.value;
-      return [coords[0] ?? 0, coords[1] ?? 0, coords[2] ?? 0];
-    }
-    throw new Error("OCCT backend: unsupported point type");
-  }
-
-  private dirToArray(dir: any): [number, number, number] {
-    if (typeof dir.X === "function") {
-      return [dir.X(), dir.Y(), dir.Z()];
-    }
-    if (typeof dir.x === "function") {
-      return [dir.x(), dir.y(), dir.z()];
-    }
-    if (typeof dir.Coord === "function") {
-      const out = { value: [] as number[] };
-      dir.Coord(out);
-      const coords = out.value;
-      return [coords[0] ?? 0, coords[1] ?? 0, coords[2] ?? 0];
-    }
-    throw new Error("OCCT backend: unsupported direction type");
-  }
-
-  private computeNormals(positions: number[], indices: number[]): number[] {
-    if (positions.length === 0 || indices.length === 0) return [];
-    const normals = new Array(positions.length).fill(0);
-    for (let i = 0; i < indices.length; i += 3) {
-      const iaIndex = indices[i];
-      const ibIndex = indices[i + 1];
-      const icIndex = indices[i + 2];
-      if (iaIndex === undefined || ibIndex === undefined || icIndex === undefined) {
-        continue;
-      }
-      const ia = iaIndex * 3;
-      const ib = ibIndex * 3;
-      const ic = icIndex * 3;
-      const ax = positions[ia] ?? 0;
-      const ay = positions[ia + 1] ?? 0;
-      const az = positions[ia + 2] ?? 0;
-      const bx = positions[ib] ?? 0;
-      const by = positions[ib + 1] ?? 0;
-      const bz = positions[ib + 2] ?? 0;
-      const cx = positions[ic] ?? 0;
-      const cy = positions[ic + 1] ?? 0;
-      const cz = positions[ic + 2] ?? 0;
-      const abx = bx - ax;
-      const aby = by - ay;
-      const abz = bz - az;
-      const acx = cx - ax;
-      const acy = cy - ay;
-      const acz = cz - az;
-      const nx = aby * acz - abz * acy;
-      const ny = abz * acx - abx * acz;
-      const nz = abx * acy - aby * acx;
-      normals[ia] += nx;
-      normals[ia + 1] += ny;
-      normals[ia + 2] += nz;
-      normals[ib] += nx;
-      normals[ib + 1] += ny;
-      normals[ib + 2] += nz;
-      normals[ic] += nx;
-      normals[ic + 1] += ny;
-      normals[ic + 2] += nz;
-    }
-
-    for (let i = 0; i < normals.length; i += 3) {
-      const nx = normals[i];
-      const ny = normals[i + 1];
-      const nz = normals[i + 2];
-      const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-      if (len > 1e-12) {
-        normals[i] = nx / len;
-        normals[i + 1] = ny / len;
-        normals[i + 2] = nz / len;
-      } else {
-        normals[i] = 0;
-        normals[i + 1] = 0;
-        normals[i + 2] = 0;
-      }
-    }
-    return normals;
-  }
-
-  private triangleNodes(tri: any): [number, number, number] {
-    if (typeof tri.Value === "function") {
-      return [tri.Value(1), tri.Value(2), tri.Value(3)];
-    }
-    if (typeof tri.Get === "function") {
-      const a = { value: 0 };
-      const b = { value: 0 };
-      const c = { value: 0 };
-      tri.Get(a, b, c);
-      return [a.value, b.value, c.value];
-    }
-    throw new Error("OCCT backend: unsupported triangle type");
-  }
-
-  private faceOrientationValue(face: any): number | null {
-    const candidates = ["Orientation", "Orientation_1", "Orientation_2", "Orientation_3"];
-    for (const name of candidates) {
-      const fn = face?.[name];
-      if (typeof fn !== "function") continue;
-      try {
-        const value = fn.call(face);
-        if (typeof value === "number") return value;
-        if (value && typeof value.value === "number") return value.value;
-      } catch {
-        continue;
-      }
-    }
-    return null;
-  }
-
-  private sewShapeFaces(shape: any, tolerance = 1e-6): any | null {
-    const occt = this.occt as any;
-    let sewing: any;
-    try {
-      sewing = this.newOcct("BRepBuilderAPI_Sewing", tolerance, true, true, true, false);
-    } catch {
-      return null;
-    }
-    const add =
-      typeof sewing.Add_1 === "function"
-        ? sewing.Add_1.bind(sewing)
-        : typeof sewing.Add === "function"
-          ? sewing.Add.bind(sewing)
-          : null;
-    if (!add) return null;
-
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_FACE,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    let sawFace = false;
-    for (; explorer.More(); explorer.Next()) {
-      sawFace = true;
-      add(explorer.Current());
-    }
-    if (!sawFace) return null;
-
-    const progress = this.makeProgressRange();
-    try {
-      sewing.Perform(progress);
-    } catch {
-      try {
-        sewing.Perform();
-      } catch {
-        return null;
-      }
-    }
-    try {
-      return this.callWithFallback(sewing, ["SewedShape", "SewedShape_1"], [[]]);
-    } catch {
-      return null;
-    }
-  }
-
-  private edgeContinuityValue(edge: any, faceA: any, faceB: any): number | null {
-    const occt = this.occt as any;
-    const tool = occt.BRep_Tool;
-    if (!tool) return null;
-    const edgeHandle = this.toEdge(edge);
-    const face1 = this.toFace(faceA);
-    const face2 = this.toFace(faceB);
-    const candidates = ["Continuity_1", "Continuity"];
-    for (const name of candidates) {
-      const fn = tool?.[name];
-      if (typeof fn !== "function") continue;
-      try {
-        const value = fn.call(tool, edgeHandle, face1, face2);
-        if (typeof value === "number") return value;
-        if (value && typeof value.value === "number") return value.value;
-      } catch {
-        continue;
-      }
-    }
-    return null;
-  }
-
-  private shapeHash(shape: any, upper = 2147483647): number {
-    if (shape && typeof shape.HashCode === "function") {
-      try {
-        const value = shape.HashCode(upper);
-        if (typeof value === "number") return value;
-      } catch {
-        // ignore hash errors
-      }
-    }
-    return 0;
-  }
-
-  private shapesSame(a: any, b: any): boolean {
-    if (a === b) return true;
-    if (a && typeof a.IsSame === "function") {
-      try {
-        return !!a.IsSame(b);
-      } catch {
-        // fall through
-      }
-    }
-    if (a && typeof a.IsEqual === "function") {
-      try {
-        return !!a.IsEqual(b);
-      } catch {
-        // fall through
-      }
-    }
-    return false;
-  }
-
-  private buildEdgeAdjacency(
-    shape: any
-  ): Map<number, Array<{ edge: any; faces: any[] }>> | null {
-    const occt = this.occt as any;
-    if (!occt.TopExp_Explorer_1) return null;
-    const adjacency = new Map<number, Array<{ edge: any; faces: any[] }>>();
-    const faceExplorer = new occt.TopExp_Explorer_1();
-    faceExplorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_FACE,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    for (; faceExplorer.More(); faceExplorer.Next()) {
-      const face = faceExplorer.Current();
-      const faceHandle = this.toFace(face);
-      const edgeExplorer = new occt.TopExp_Explorer_1();
-      edgeExplorer.Init(
-        face,
-        occt.TopAbs_ShapeEnum.TopAbs_EDGE,
-        occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-      );
-      for (; edgeExplorer.More(); edgeExplorer.Next()) {
-        const edge = this.toEdge(edgeExplorer.Current());
-        const hash = this.shapeHash(edge);
-        const bucket = adjacency.get(hash) ?? [];
-        let entry = bucket.find((item) => this.shapesSame(item.edge, edge));
-        if (!entry) {
-          entry = { edge, faces: [] };
-          bucket.push(entry);
-        }
-        if (!entry.faces.some((f) => this.shapesSame(f, faceHandle))) {
-          entry.faces.push(faceHandle);
-        }
-        if (!adjacency.has(hash)) adjacency.set(hash, bucket);
-      }
-    }
-    return adjacency;
-  }
-
-  private adjacentFaces(
-    adjacency: Map<number, Array<{ edge: any; faces: any[] }>> | null,
-    edge: any
-  ): any[] {
-    if (!adjacency) return [];
-    const hash = this.shapeHash(edge);
-    const bucket = adjacency.get(hash);
-    if (!bucket) return [];
-    for (const entry of bucket) {
-      if (this.shapesSame(entry.edge, edge)) {
-        return entry.faces;
-      }
-    }
-    return [];
-  }
-
-  private buildFaceSurfaceMap(shape: any): FaceSurfaceMap | null {
-    const occt = this.occt as any;
-    if (!occt.TopExp_Explorer_1) return null;
-    const surfaces: FaceSurfaceMap = new Map();
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_FACE,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    for (; explorer.More(); explorer.Next()) {
-      const face = this.toFace(explorer.Current());
-      const hash = this.shapeHash(face);
-      const bucket = surfaces.get(hash) ?? [];
-      if (!bucket.some((entry) => this.shapesSame(entry.face, face))) {
-        bucket.push({
-          face,
-          surface: this.faceSurfaceClass(face),
-        });
-      }
-      if (!surfaces.has(hash)) surfaces.set(hash, bucket);
-    }
-    return surfaces;
-  }
-
-  private faceSurfaceClass(face: any): FaceSurfaceClass {
-    try {
-      const faceHandle = this.toFace(face);
-      const adaptor = this.newOcct("BRepAdaptor_Surface", faceHandle, true);
-      const type = this.call(adaptor, "GetType") as { value?: number } | undefined;
-      const types = (this.occt as any).GeomAbs_SurfaceType;
-      if (!types || typeof type?.value !== "number") return "unknown";
-      const value = type.value;
-      const matches = (entry: { value?: number } | undefined) =>
-        typeof entry?.value === "number" && entry.value === value;
-      if (matches(types.GeomAbs_Plane)) return "plane";
-      if (matches(types.GeomAbs_Cylinder)) return "cylinder";
-      if (matches(types.GeomAbs_Cone)) return "cone";
-      if (matches(types.GeomAbs_Sphere)) return "sphere";
-      if (matches(types.GeomAbs_Torus)) return "torus";
-      if (matches(types.GeomAbs_BSplineSurface)) return "bspline";
-      if (matches(types.GeomAbs_BezierSurface)) return "bezier";
-      if (matches(types.GeomAbs_SurfaceOfExtrusion)) return "extrusion";
-      if (matches(types.GeomAbs_SurfaceOfRevolution)) return "revolution";
-      if (matches(types.GeomAbs_OffsetSurface)) return "offset";
-      return "other";
-    } catch {
-      return "unknown";
-    }
-  }
-
-  private surfaceClassForFace(
-    surfaces: FaceSurfaceMap | null,
-    face: any
-  ): FaceSurfaceClass | null {
-    if (!surfaces) return null;
-    const hash = this.shapeHash(face);
-    const bucket = surfaces.get(hash);
-    if (!bucket) return null;
-    for (const entry of bucket) {
-      if (this.shapesSame(entry.face, face)) {
-        return entry.surface;
-      }
-    }
-    return null;
-  }
-
-  private includeSmoothFeatureEdge(
-    faces: any[],
-    surfaces: FaceSurfaceMap | null
-  ): boolean {
-    if (faces.length !== 2) return false;
-    const a = this.surfaceClassForFace(surfaces, faces[0]);
-    const b = this.surfaceClassForFace(surfaces, faces[1]);
-    if (!a || !b) return false;
-    if (a === "unknown" || b === "unknown") return false;
-    return a !== b;
-  }
-
-  private call(target: any, name: string, ...args: unknown[]) {
-    const fn = target?.[name];
-    if (typeof fn !== "function") {
-      throw new Error(`OCCT backend: missing ${name}()`);
-    }
-    return fn.call(target, ...args);
-  }
-
-  private callNumber(target: any, name: string): number {
-    const value = this.call(target, name);
-    if (typeof value !== "number") {
-      throw new Error(`OCCT backend: ${name}() did not return number`);
-    }
-    return value;
-  }
-
-  private buildEdgeLines(
-    shape: any,
-    opts: MeshOptions
-  ): { positions: number[]; edgeIndices: number[] } {
-    const occt = this.occt as any;
-    const includeAllTangentEdges = opts.includeTangentEdges === true;
-    const hideAllTangentEdges = opts.hideTangentEdges === true && !includeAllTangentEdges;
-    const adjacency = this.buildEdgeAdjacency(shape);
-    const surfaces =
-      includeAllTangentEdges || hideAllTangentEdges ? null : this.buildFaceSurfaceMap(shape);
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_EDGE,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-
-    const positions: number[] = [];
-    const edgeIndices: number[] = [];
-    let edgeIndex = 0;
-    for (; explorer.More(); explorer.Next()) {
-      const edgeShape = explorer.Current();
-      const edge = this.toEdge(edgeShape);
-      const faces = this.adjacentFaces(adjacency, edge);
-      if (faces.length > 0 && faces.length < 2) {
-        edgeIndex += 1;
-        continue;
-      }
-      if (faces.length >= 2) {
-        const continuity = this.edgeContinuityValue(edge, faces[0], faces[1]);
-        if (!includeAllTangentEdges && continuity !== null && continuity > 0) {
-          if (hideAllTangentEdges || !this.includeSmoothFeatureEdge(faces, surfaces)) {
-            edgeIndex += 1;
-            continue;
-          }
-        }
-      }
-      const points = this.sampleEdgePoints(edge, opts);
-      if (points.length < 2) {
-        edgeIndex += 1;
-        continue;
-      }
-      for (let i = 0; i + 1 < points.length; i += 1) {
-        const a = points[i];
-        const b = points[i + 1];
-        if (!a || !b) continue;
-        positions.push(a[0], a[1], a[2], b[0], b[1], b[2]);
-        edgeIndices.push(edgeIndex);
-      }
-      edgeIndex += 1;
-    }
-    return { positions, edgeIndices };
-  }
-
-  private sampleEdgePoints(edge: any, opts: MeshOptions): Array<[number, number, number]> {
-    try {
-      const adaptor = this.newOcct("BRepAdaptor_Curve", edge);
-      const first = this.callNumber(adaptor, "FirstParameter");
-      const last = this.callNumber(adaptor, "LastParameter");
-      if (!Number.isFinite(first) || !Number.isFinite(last)) return [];
-
-      const bounds = this.shapeBounds(edge);
-      const dx = bounds.max[0] - bounds.min[0];
-      const dy = bounds.max[1] - bounds.min[1];
-      const dz = bounds.max[2] - bounds.min[2];
-      const diag = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      const step = opts.edgeSegmentLength && opts.edgeSegmentLength > 0 ? opts.edgeSegmentLength : 1;
-      const maxSegments = Math.max(1, opts.edgeMaxSegments ?? 64);
-      const span = Math.abs(last - first);
-      const byDiag = Math.ceil((diag || step) / step);
-      const bySpan = Math.ceil(span || 1);
-      const segments = Math.min(maxSegments, Math.max(1, byDiag, bySpan));
-
-      const points: Array<[number, number, number]> = [];
-      for (let i = 0; i <= segments; i += 1) {
-        const t = i / segments;
-        const u = first + (last - first) * t;
-        const pnt = this.call(adaptor, "Value", u);
-        points.push(this.pointToArray(pnt));
-      }
-      return points;
-    } catch {
-      return [];
-    }
-  }
 }

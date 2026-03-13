@@ -207,7 +207,13 @@ export function faceProperties(ctx: MetadataContext, face: any): {
       const plane = ctx.call(adaptor, "Plane");
       const axis = ctx.call(plane, "Axis");
       const dir = ctx.call(axis, "Direction");
-      const [x, y, z] = ctx.dirToArray(dir);
+      let [x, y, z] = ctx.dirToArray(dir);
+      const orientation = ctx.faceOrientationValue(face);
+      if (orientation === ctx.occt.TopAbs_Orientation?.TopAbs_REVERSED?.value) {
+        x *= -1;
+        y *= -1;
+        z *= -1;
+      }
       normalVec = normalizeVector([x, y, z]);
       normal = axisDirectionFromVector([x, y, z]);
     }
