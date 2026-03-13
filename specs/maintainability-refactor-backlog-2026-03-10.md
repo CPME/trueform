@@ -81,14 +81,17 @@ Suggested structure:
 - `apps/tf-service/stores/*.mjs`
 
 Open slices:
-
-1. Build/mesh/export enqueue orchestration module.
+- no remaining P0 route slices in the current queue
 
 Completed in a follow-up slice:
 - metadata routes extracted to `apps/tf-service/route_metadata.mjs`
 - document and build-session routes extracted to `apps/tf-service/route_documents.mjs`
 - job, asset, artifact, and metrics routes extracted to
   `apps/tf-service/route_resources.mjs`
+- build/mesh/export/assembly/measure POST action routing extracted to
+  `apps/tf-service/route_actions.mjs`
+- job enqueue/orchestration and job-envelope helpers extracted to
+  `apps/tf-service/job_runtime.mjs`
 
 Acceptance checks:
 - `npm run build -- --pretty false`

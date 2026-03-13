@@ -39,6 +39,8 @@ import {
 import { tryHandleMetadataRoute } from "./route_metadata.mjs";
 import { tryHandleDocumentRoute } from "./route_documents.mjs";
 import { tryHandleResourceRoute } from "./route_resources.mjs";
+import { tryHandleActionRoute } from "./route_actions.mjs";
+import { createJobRuntime } from "./job_runtime.mjs";
 
 const DEFAULT_PORT = Number(process.env.TF_RUNTIME_PORT || process.env.PORT || 8080);
 const DEFAULT_JOB_TIMEOUT_MS = Number(process.env.TF_RUNTIME_JOB_TIMEOUT_MS || 30000);
@@ -1819,91 +1821,6 @@ export function createTfServiceServer(options = {}) {
     };
   }
 
-  async function enqueueJob(tenantId, kind, handler, payload, timeoutMs) {
-    pruneJobOwners();
-    assertTenantQuota(
-      tenantId,
-      "pending_jobs_per_tenant",
-      MAX_PENDING_JOBS_PER_TENANT,
-      countPendingJobsForTenant(tenantId)
-    );
-    const bucket = jobLatencyStats[kind];
-    const job = jobQueue.enqueue(
-      async (ctx) => {
-        const startedAtMs = Date.now();
-        try {
-          const result = await handler(tenantId, payload, ctx);
-          recordLatency(bucket, Date.now() - startedAtMs, "succeeded");
-          return result;
-        } catch (err) {
-          const code =
-            err && typeof err === "object" && typeof err.code === "string" ? err.code : null;
-          const state = code === "job_canceled" ? "canceled" : "failed";
-          recordLatency(bucket, Date.now() - startedAtMs, state, code);
-          throw err;
-        }
-      },
-      timeoutMs ? { timeoutMs } : {}
-    );
-    jobOwners.set(job.id, { tenantId, completedAtMs: null });
-    return job;
-  }
-
-  function enqueueBuild(tenantId, payload) {
-    const timeoutMs = payload?.timeoutMs ?? payload?.options?.timeoutMs;
-    return enqueueJob(tenantId, "build", handleBuild, payload, timeoutMs);
-  }
-
-  function enqueueMesh(tenantId, payload) {
-    const timeoutMs = payload?.timeoutMs;
-    return enqueueJob(tenantId, "mesh", handleMesh, payload, timeoutMs);
-  }
-
-  function enqueueAssemblySolve(tenantId, payload) {
-    const timeoutMs = payload?.timeoutMs ?? payload?.options?.timeoutMs;
-    return enqueueJob(tenantId, "assemblySolve", handleAssemblySolve, payload, timeoutMs);
-  }
-
-  function enqueueExport(tenantId, payload, kind) {
-    const timeoutMs = payload?.timeoutMs;
-    const metricKind = kind === "step" ? "exportStep" : "exportStl";
-    return enqueueJob(
-      tenantId,
-      metricKind,
-      (ownerTenantId, request, ctx) => handleExport(ownerTenantId, request, kind, ctx),
-      payload,
-      timeoutMs
-    );
-  }
-
-  function assertTenantJobAccess(tenantId, jobId) {
-    pruneJobOwners();
-    const owner = jobOwners.get(jobId);
-    if (!owner || owner.tenantId !== tenantId) {
-      throw new HttpError(404, "job_not_found", "Job not found");
-    }
-  }
-
-  function toJobRecordEnvelope(record) {
-    if (!record || typeof record !== "object") return record;
-    const id = String(record.id ?? record.jobId ?? "");
-    const jobId = String(record.jobId ?? record.id ?? "");
-    return {
-      ...record,
-      id,
-      jobId,
-    };
-  }
-
-  function toJobAccepted(record) {
-    const job = toJobRecordEnvelope(record);
-    return {
-      id: job.id,
-      jobId: job.jobId,
-      state: job.state,
-    };
-  }
-
   function getMetricsPayload(tenantId) {
     const queueStats =
       typeof jobQueue.getStats === "function"
@@ -1938,6 +1855,23 @@ export function createTfServiceServer(options = {}) {
       },
     };
   }
+
+  const jobRuntime = createJobRuntime({
+    jobQueue,
+    jobOwners,
+    jobLatencyStats,
+    pruneJobOwners,
+    assertTenantQuota,
+    countPendingJobsForTenant,
+    maxPendingJobsPerTenant: MAX_PENDING_JOBS_PER_TENANT,
+    recordLatency,
+    makeHttpError: (status, code, message, details) =>
+      new HttpError(status, code, message, details),
+    handleBuild,
+    handleMesh,
+    handleAssemblySolve,
+    handleExport,
+  });
 
   const server = http.createServer(async (req, res) => {
     if (!req.url) {
@@ -2001,59 +1935,21 @@ export function createTfServiceServer(options = {}) {
       }
 
       if (
-        req.method === "POST" &&
-        (pathname === TF_API_ENDPOINTS.build ||
-          pathname === TF_API_ENDPOINTS.buildJobs ||
-          pathname === TF_API_ENDPOINTS.buildPartial ||
-          pathname === TF_API_ENDPOINTS.buildPartialJobs)
+        await tryHandleActionRoute({
+          req,
+          res,
+          pathname,
+          tenantId,
+          json,
+          readJson,
+          enqueueBuild: jobRuntime.enqueueBuild,
+          enqueueAssemblySolve: jobRuntime.enqueueAssemblySolve,
+          handleMeasure,
+          enqueueMesh: jobRuntime.enqueueMesh,
+          enqueueExport: jobRuntime.enqueueExport,
+          toJobAccepted: jobRuntime.toJobAccepted,
+        })
       ) {
-        const payload = await readJson(req);
-        const job = await enqueueBuild(tenantId, payload);
-        json(res, 202, toJobAccepted(job));
-        return;
-      }
-
-      if (
-        req.method === "POST" &&
-        (pathname === TF_API_ENDPOINTS.assemblySolve ||
-          pathname === TF_API_ENDPOINTS.assemblySolveJobs)
-      ) {
-        const payload = await readJson(req);
-        const job = await enqueueAssemblySolve(tenantId, payload);
-        json(res, 202, toJobAccepted(job));
-        return;
-      }
-
-      if (req.method === "POST" && pathname === TF_API_ENDPOINTS.measure) {
-        const payload = await readJson(req);
-        json(res, 200, await handleMeasure(tenantId, payload));
-        return;
-      }
-
-      if (req.method === "POST" && (pathname === TF_API_ENDPOINTS.mesh || pathname === TF_API_ENDPOINTS.meshJobs)) {
-        const payload = await readJson(req);
-        const job = await enqueueMesh(tenantId, payload);
-        json(res, 202, toJobAccepted(job));
-        return;
-      }
-
-      if (
-        req.method === "POST" &&
-        (pathname === TF_API_ENDPOINTS.exportStep || pathname === TF_API_ENDPOINTS.exportStepJobs)
-      ) {
-        const payload = await readJson(req);
-        const job = await enqueueExport(tenantId, payload, "step");
-        json(res, 202, toJobAccepted(job));
-        return;
-      }
-
-      if (
-        req.method === "POST" &&
-        (pathname === TF_API_ENDPOINTS.exportStl || pathname === TF_API_ENDPOINTS.exportStlJobs)
-      ) {
-        const payload = await readJson(req);
-        const job = await enqueueExport(tenantId, payload, "stl");
-        json(res, 202, toJobAccepted(job));
         return;
       }
 
@@ -2071,8 +1967,8 @@ export function createTfServiceServer(options = {}) {
           writeSse,
           getJob: (jobId) => jobQueue.get(jobId),
           cancelJob: (jobId) => jobQueue.cancel(jobId),
-          assertTenantJobAccess,
-          toJobRecordEnvelope,
+          assertTenantJobAccess: jobRuntime.assertTenantJobAccess,
+          toJobRecordEnvelope: jobRuntime.toJobRecordEnvelope,
           getAsset: (id) => assetStore.get(id),
           getArtifact: (id) => artifactStore.get(id),
           getMetricsPayload,
