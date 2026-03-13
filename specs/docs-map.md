@@ -15,11 +15,12 @@ Purpose: define the source of truth for each topic to prevent drift.
 - Functional tolerancing intent: `specs/functional-tolerancing-intent.md`
 - Feature maturity/staging registry: `specs/feature-staging.md`
 - Runtime execution milestone plan: `specs/webapp-runtime-two-milestones.md`
+- Task inventory review (2026-03-13): `specs/task-review-2026-03-13.md`
 - Vision-to-current-state bridge plan: `specs/vision-gap-bridge-plan-2026-03-01.md`
-- Pre-feature execution board (runtime/platform before feature dev): `specs/pre-feature-sprint-board.md`
+- Archived pre-feature execution board (runtime/platform before feature dev): `specs/archive/pre-feature-sprint-board.md`
 - Roadmap ideas (non-MVP): `specs/geometric-abstractions.md`
 - Sketch constraint solver proposal: `specs/sketch-constraint-solver-outline.md`
-- Sketch dimensioning TrueForm execution plan: `specs/sketch-dimensioning-trueform-plan.md`
+- Archived Sketch dimensioning TrueForm execution plan: `specs/archive/sketch-dimensioning-trueform-plan.md`
 - Sketch dimensioning TrueCAD integration plan: `specs/sketch-dimensioning-truecad-plan.md`
 - Sketch solver backlog for TrueCAD support: `specs/sketch-solver-truecad-backlog.md`
 - Geometric parity target matrix: `specs/geometric-parity-matrix.md`
