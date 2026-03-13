@@ -44,7 +44,8 @@ boundary-extraction sweep.
 - after `Extract OCCT hole depth ops` (`dc0394f`): 4732 lines
 - after `Extract OCCT pipe shell primitives` (`f347a11`): 4503 lines
 - after `Extract OCCT shape mutation primitives` (`6b901bc`): 4242 lines
-- after `Extract OCCT datum/pattern ops`: 4077 lines
+- after `Extract OCCT datum/pattern ops` (`f77feca`): 4077 lines
+- after `Extract OCCT shape analysis primitives`: 3986 lines
 
 ## Outstanding Work
 
@@ -52,6 +53,10 @@ boundary-extraction sweep.
 
 Goal: reduce `src/backend_occt.ts` to an orchestration-focused class plus
 cohesive helper modules.
+
+Status: the `<= 4000` line guardrail is now met. Remaining backend work is
+follow-up decomposition to improve ownership boundaries, not emergency line
+count reduction.
 
 Open slices:
 

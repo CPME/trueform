@@ -187,6 +187,19 @@ import {
   type ShapeMutationPrimitiveDeps,
 } from "./occt/shape_mutation_primitives.js";
 import {
+  axisBounds as resolveOcctAxisBounds,
+  countFaces as countOcctFaces,
+  cylinderReferenceXDirection as resolveOcctCylinderReferenceXDirection,
+  cylinderVExtents as resolveOcctCylinderVExtents,
+  firstFace as resolveOcctFirstFace,
+  listFaces as resolveOcctListFaces,
+  makeCompoundFromShapes as makeOcctCompoundFromShapes,
+  shapeBounds as resolveOcctShapeBounds,
+  shapeCenter as resolveOcctShapeCenter,
+  surfaceUvExtents as resolveOcctSurfaceUvExtents,
+  type ShapeAnalysisPrimitiveDeps,
+} from "./occt/shape_analysis_primitives.js";
+import {
   basisFromNormal as buildOcctBasisFromNormal,
   execDatumAxis as execOcctDatumAxis,
   execDatumFrame as execOcctDatumFrame,
@@ -2131,94 +2144,30 @@ export class OcctBackend implements Backend {
   }
 
   private shapeBounds(shape: any): { min: [number, number, number]; max: [number, number, number] } {
-    const occt = this.occt as any;
-    const box = this.newOcct("Bnd_Box");
-    if (!occt.BRepBndLib?.Add) {
-      return { min: [0, 0, 0], max: [0, 0, 0] };
-    }
-    occt.BRepBndLib.Add(shape, box, true);
-    const min = this.pointToArray(box.CornerMin());
-    const max = this.pointToArray(box.CornerMax());
-    return { min, max };
+    return resolveOcctShapeBounds(this.shapeAnalysisDeps(), shape);
   }
 
   private firstFace(shape: any): any | null {
-    const occt = this.occt as any;
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_FACE,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    if (!explorer.More()) return null;
-    return this.toFace(explorer.Current());
+    return resolveOcctFirstFace(this.shapeAnalysisDeps(), shape);
   }
 
   private listFaces(shape: any): any[] {
-    const occt = this.occt as any;
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_FACE,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    const faces: any[] = [];
-    for (; explorer.More(); explorer.Next()) {
-      faces.push(this.toFace(explorer.Current()));
-    }
-    return faces;
+    return resolveOcctListFaces(this.shapeAnalysisDeps(), shape);
   }
 
   private countFaces(shape: any): number {
-    const occt = this.occt as any;
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_FACE,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    let count = 0;
-    for (; explorer.More(); explorer.Next()) count += 1;
-    return count;
+    return countOcctFaces(this.shapeAnalysisDeps(), shape);
   }
 
   private makeCompoundFromShapes(shapes: any[]): any {
-    if (shapes.length === 0) {
-      throw new Error("OCCT backend: cannot create compound from empty shape list");
-    }
-    if (shapes.length === 1) return shapes[0];
-    const compound = this.newOcct("TopoDS_Compound");
-    const builder = this.newOcct("BRep_Builder");
-    this.callWithFallback(builder, ["MakeCompound", "MakeCompound_1"], [[compound]]);
-    for (const shape of shapes) {
-      this.callWithFallback(builder, ["Add", "Add_1"], [[compound, shape]]);
-    }
-    return compound;
+    return makeOcctCompoundFromShapes(this.shapeAnalysisDeps(), shapes);
   }
 
   private axisBounds(
     axis: [number, number, number],
     bounds: { min: [number, number, number]; max: [number, number, number] }
   ): { min: number; max: number } | null {
-    const corners: Array<[number, number, number]> = [
-      [bounds.min[0], bounds.min[1], bounds.min[2]],
-      [bounds.min[0], bounds.min[1], bounds.max[2]],
-      [bounds.min[0], bounds.max[1], bounds.min[2]],
-      [bounds.min[0], bounds.max[1], bounds.max[2]],
-      [bounds.max[0], bounds.min[1], bounds.min[2]],
-      [bounds.max[0], bounds.min[1], bounds.max[2]],
-      [bounds.max[0], bounds.max[1], bounds.min[2]],
-      [bounds.max[0], bounds.max[1], bounds.max[2]],
-    ];
-    let min = Infinity;
-    let max = -Infinity;
-    for (const corner of corners) {
-      const proj = dot(corner, axis);
-      if (proj < min) min = proj;
-      if (proj > max) max = proj;
-    }
-    if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
-    return { min, max };
+    return resolveOcctAxisBounds(axis, bounds);
   }
 
   private cylinderFromFace(face: any): {
@@ -2236,77 +2185,24 @@ export class OcctBackend implements Backend {
     xDir?: [number, number, number];
     yDir?: [number, number, number];
   }): [number, number, number] {
-    const axis = normalizeVector(cylinder.axis);
-    if (!isFiniteVec(axis)) return [1, 0, 0];
-
-    const candidates: Array<[number, number, number] | undefined> = [
-      cylinder.xDir,
-      cylinder.yDir ? cross(cylinder.yDir, axis) : undefined,
-      Math.abs(axis[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0],
-    ];
-    for (const candidate of candidates) {
-      if (!candidate) continue;
-      const projected = this.subVec(candidate, this.scaleVec(axis, dot(candidate, axis)));
-      const normalized = normalizeVector(projected);
-      if (isFiniteVec(normalized)) return normalized;
-    }
-    return [1, 0, 0];
+    return resolveOcctCylinderReferenceXDirection(cylinder);
   }
 
   private cylinderVExtents(
     face: any,
     cylinder: { origin: [number, number, number]; axis: [number, number, number] }
   ): { min: number; max: number } | null {
-    try {
-      const faceHandle = this.toFace(face);
-      const adaptor = this.newOcct("BRepAdaptor_Surface", faceHandle, true);
-      const first = this.callNumber(adaptor, "FirstVParameter");
-      const last = this.callNumber(adaptor, "LastVParameter");
-      const axis = normalizeVector(cylinder.axis);
-      if (!isFiniteVec(axis)) return null;
-      const base = dot(cylinder.origin, axis);
-      const min = base + Math.min(first, last);
-      const max = base + Math.max(first, last);
-      if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
-      return { min, max };
-    } catch {
-      const axis = normalizeVector(cylinder.axis);
-      if (!isFiniteVec(axis)) return null;
-      return this.axisBounds(axis, this.shapeBounds(face));
-    }
+    return resolveOcctCylinderVExtents(this.shapeAnalysisDeps(), face, cylinder);
   }
 
   private surfaceUvExtents(
     face: any
   ): { uMin: number; uMax: number; vMin: number; vMax: number } | null {
-    try {
-      const faceHandle = this.toFace(face);
-      const adaptor = this.newOcct("BRepAdaptor_Surface", faceHandle, true);
-      const u0 = this.callNumber(adaptor, "FirstUParameter");
-      const u1 = this.callNumber(adaptor, "LastUParameter");
-      const v0 = this.callNumber(adaptor, "FirstVParameter");
-      const v1 = this.callNumber(adaptor, "LastVParameter");
-      if (![u0, u1, v0, v1].every((value) => Number.isFinite(value))) {
-        return null;
-      }
-      return {
-        uMin: Math.min(u0, u1),
-        uMax: Math.max(u0, u1),
-        vMin: Math.min(v0, v1),
-        vMax: Math.max(v0, v1),
-      };
-    } catch {
-      return null;
-    }
+    return resolveOcctSurfaceUvExtents(this.shapeAnalysisDeps(), face);
   }
 
   private shapeCenter(shape: any): [number, number, number] {
-    const bounds = this.shapeBounds(shape);
-    return [
-      (bounds.min[0] + bounds.max[0]) / 2,
-      (bounds.min[1] + bounds.max[1]) / 2,
-      (bounds.min[2] + bounds.max[2]) / 2,
-    ];
+    return resolveOcctShapeCenter(this.shapeAnalysisDeps(), shape);
   }
 
   private throughAllDepth(
@@ -3426,7 +3322,20 @@ export class OcctBackend implements Backend {
     };
   }
 
+  private shapeAnalysisDeps(): ShapeAnalysisPrimitiveDeps {
+    return {
+      occt: this.occt as any,
+      newOcct: (name: string, ...args: unknown[]) => this.newOcct(name, ...args),
+      pointToArray: (point: any) => this.pointToArray(point),
+      toFace: (face: any) => this.toFace(face),
+      callWithFallback: (target: any, methods: string[], argSets: unknown[][]) =>
+        this.callWithFallback(target, methods, argSets as any),
+      callNumber: (target: any, name: string) => this.callNumber(target, name),
+    };
+  }
+
   private datumPatternDeps(): DatumPatternDeps {
+    const shapeAnalysis = this.shapeAnalysisDeps();
     return {
       datumKey: (id: string) => this.datumKey(id),
       patternKey: (id: string) => this.patternKey(id),
@@ -3434,8 +3343,8 @@ export class OcctBackend implements Backend {
       subVec: (a, b) => this.subVec(a, b),
       scaleVec: (v, s) => this.scaleVec(v, s),
       planeBasisFromFace: (face: unknown) => this.planeBasisFromFace(face),
-      axisBounds: (axis, bounds) => this.axisBounds(axis, bounds),
-      shapeBounds: (shape: unknown) => this.shapeBounds(shape),
+      axisBounds: resolveOcctAxisBounds,
+      shapeBounds: (shape: unknown) => resolveOcctShapeBounds(shapeAnalysis, shape),
     };
   }
 
