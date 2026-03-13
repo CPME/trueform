@@ -139,6 +139,17 @@ import {
   type CurveEdgePrimitiveDeps,
 } from "./occt/curve_edge_primitives.js";
 import {
+  addLoftWire as addOcctLoftWire,
+  makeBoolean as makeOcctBoolean,
+  makeChamferBuilder as makeOcctChamferBuilder,
+  makeDraftBuilder as makeOcctDraftBuilder,
+  makeFilletBuilder as makeOcctFilletBuilder,
+  makeLoftBuilder as makeOcctLoftBuilder,
+  makeSection as makeOcctSection,
+  makeShapeList as makeOcctShapeList,
+  type BuilderPrimitiveDeps,
+} from "./occt/builder_primitives.js";
+import {
   buildSketchWire as buildOcctSketchWire,
   buildSketchWireWithStatus as buildOcctSketchWireWithStatus,
   segmentSlotsForLoop as collectOcctSegmentSlotsForLoop,
@@ -2822,63 +2833,23 @@ export class OcctBackend implements Backend {
   }
 
   private makeFilletBuilder(shape: any) {
-    const occt = this.occt as any;
-    const filletShape = occt.ChFi3d_FilletShape?.ChFi3d_Rational;
-    const candidates: Array<unknown[]> = filletShape ? [[shape, filletShape], [shape]] : [[shape]];
-    for (const args of candidates) {
-      try {
-        return this.newOcct("BRepFilletAPI_MakeFillet", ...args);
-      } catch {
-        continue;
-      }
-    }
-    throw new Error("OCCT backend: failed to construct fillet builder");
+    return makeOcctFilletBuilder(this.builderPrimitiveDeps(), shape);
   }
 
   private makeChamferBuilder(shape: any) {
-    try {
-      return this.newOcct("BRepFilletAPI_MakeChamfer", shape);
-    } catch {
-      throw new Error("OCCT backend: failed to construct chamfer builder");
-    }
+    return makeOcctChamferBuilder(this.builderPrimitiveDeps(), shape);
   }
 
   private makeDraftBuilder(shape: any) {
-    const candidates: Array<unknown[]> = [[shape], []];
-    for (const args of candidates) {
-      try {
-        return this.newOcct("BRepOffsetAPI_DraftAngle", ...args);
-      } catch {
-        continue;
-      }
-    }
-    throw new Error("OCCT backend: failed to construct draft builder");
+    return makeOcctDraftBuilder(this.builderPrimitiveDeps(), shape);
   }
 
   private makeLoftBuilder(isSolid: boolean) {
-    const candidates: Array<unknown[]> = [
-      [isSolid, false, 1e-6],
-      [isSolid, false],
-      [isSolid],
-      [],
-    ];
-    for (const args of candidates) {
-      try {
-        return this.newOcct("BRepOffsetAPI_ThruSections", ...args);
-      } catch {
-        continue;
-      }
-    }
-    throw new Error("OCCT backend: failed to construct loft builder");
+    return makeOcctLoftBuilder(this.builderPrimitiveDeps(), isSolid);
   }
 
   private addLoftWire(builder: any, wire: any) {
-    const wireHandle = this.toWire(wire);
-    this.callWithFallback(
-      builder,
-      ["AddWire", "AddWire_1", "Add"],
-      [[wireHandle]]
-    );
+    return addOcctLoftWire(this.builderPrimitiveDeps(), builder, wire);
   }
 
   private makeBoolean(
@@ -2886,63 +2857,11 @@ export class OcctBackend implements Backend {
     left: any,
     right: any
   ) {
-    const map: Record<string, string> = {
-      union: "BRepAlgoAPI_Fuse",
-      subtract: "BRepAlgoAPI_Cut",
-      cut: "BRepAlgoAPI_Cut",
-      intersect: "BRepAlgoAPI_Common",
-    };
-    const ctor = map[op];
-    if (!ctor) {
-      throw new Error(`OCCT backend: unsupported boolean op ${op}`);
-    }
-    const progress = this.makeProgressRange();
-    const occt = this.occt as Record<string, any>;
-    const ctorWithProgress = occt[`${ctor}_3`];
-    if (typeof ctorWithProgress === "function" && progress) {
-      try {
-        const builder = new ctorWithProgress(left, right, progress);
-        this.tryBuild(builder);
-        return builder;
-      } catch {
-        // fall back to generic constructor search
-      }
-    }
-
-    const candidates: Array<unknown[]> = [
-      [left, right, progress],
-      [left, right],
-    ];
-    for (const args of candidates) {
-      try {
-        const builder = this.newOcct(ctor, ...args);
-        this.tryBuild(builder);
-        return builder;
-      } catch {
-        continue;
-      }
-    }
-    throw new Error(`OCCT backend: failed to construct ${ctor}`);
+    return makeOcctBoolean(this.builderPrimitiveDeps(), op, left, right);
   }
 
   private makeSection(left: any, right: any) {
-    const progress = this.makeProgressRange();
-    const candidates: Array<unknown[]> = [
-      [left, right, false, progress],
-      [left, right, false],
-      [left, right, progress],
-      [left, right],
-    ];
-    for (const args of candidates) {
-      try {
-        const builder = this.newOcct("BRepAlgoAPI_Section", ...args);
-        this.tryBuild(builder);
-        return builder;
-      } catch {
-        continue;
-      }
-    }
-    throw new Error("OCCT backend: failed to construct BRepAlgoAPI_Section");
+    return makeOcctSection(this.builderPrimitiveDeps(), left, right);
   }
 
   private splitByTools(result: any, tools: any[]): any {
@@ -3770,15 +3689,7 @@ export class OcctBackend implements Backend {
   }
 
   private makeShapeList(shapes: any[]): any {
-    const list = this.newOcct("TopTools_ListOfShape");
-    for (const shape of shapes) {
-      this.callWithFallback(
-        list,
-        ["Append", "Append_1", "Add", "Add_1", "add"],
-        [[shape]]
-      );
-    }
-    return list;
+    return makeOcctShapeList(this.builderPrimitiveDeps(), shapes);
   }
 
   private makeThickSolid(
@@ -4550,6 +4461,18 @@ export class OcctBackend implements Backend {
       makeSplineEdge3D: (path: Extract<Path3D, { kind: "path.spline" }>) => this.makeSplineEdge3D(path),
       pointsClose: (left: [number, number, number], right: [number, number, number], tol?: number) =>
         this.pointsClose(left, right, tol),
+    };
+  }
+
+  private builderPrimitiveDeps(): BuilderPrimitiveDeps {
+    return {
+      occt: this.occt as Record<string, any>,
+      newOcct: (name: string, ...args: unknown[]) => this.newOcct(name, ...args),
+      tryBuild: (builder: any) => this.tryBuild(builder),
+      makeProgressRange: () => this.makeProgressRange(),
+      callWithFallback: (target: any, methods: string[], argSets: unknown[][]) =>
+        this.callWithFallback(target, methods, argSets as any),
+      toWire: (wire: any) => this.toWire(wire),
     };
   }
 
