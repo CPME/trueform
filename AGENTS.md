@@ -10,6 +10,7 @@ To create the open sourced CAD tools and standards that enables the world of har
 
 ## General Instructions
 - Commit changes as you go (only the changes you made, unless otherwise noted)
+- Keep `src/backend_occt.ts` at or below `4000` lines. If a change would keep it above that threshold, extract a cohesive helper or feature module with direct tests instead of adding more backend-local logic.
 
 ## Package Consumer Workflow
 - Consumers must import from published package exports only (`trueform`, `trueform/dsl/geometry`, etc). Do not import from `trueform/src/...`.
