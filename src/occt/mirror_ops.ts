@@ -3,6 +3,7 @@ import type { Mirror, Selector } from "../ir.js";
 import type { MirrorContext } from "./operation_contexts.js";
 import { occtFeatureError } from "./feature_errors.js";
 import { publishShapeResult } from "./shape_result.js";
+import { mirrorShape } from "./transform_primitives.js";
 
 export function execMirror(
   ctx: MirrorContext,
@@ -28,15 +29,7 @@ export function execMirror(
   }
 
   const plane = ctx.resolvePlaneBasis(feature.plane, upstream, resolve);
-  const origin = ctx.makePnt(plane.origin[0], plane.origin[1], plane.origin[2]);
-  const normal = ctx.makeDir(plane.normal[0], plane.normal[1], plane.normal[2]);
-  const xDir = ctx.makeDir(plane.xDir[0], plane.xDir[1], plane.xDir[2]);
-  const ax2 = ctx.makeAx2WithXDir(origin, normal, xDir);
-  const trsf = ctx.newOcct("gp_Trsf");
-  ctx.callWithFallback(trsf, ["SetMirror", "SetMirror_1", "SetMirror_2", "SetMirror_3"], [[ax2]]);
-  const builder = ctx.newOcct("BRepBuilderAPI_Transform", shape, trsf, true);
-  ctx.tryBuild(builder);
-  const mirrored = ctx.readShape(builder);
+  const mirrored = mirrorShape(ctx, shape, plane);
   const outputKind: "solid" | "face" | "surface" =
     target.kind === "solid" ? "solid" : target.kind === "surface" ? "surface" : "face";
   return publishShapeResult({

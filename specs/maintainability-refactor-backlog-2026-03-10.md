@@ -97,6 +97,13 @@ Purpose: track the remaining maintainability-heavy refactor work after the first
 - Extended: `src/errors.ts` `BackendError` now carries optional `details`
 - Added direct coverage: `src/tests/occt.draft.module.test.ts`
 - Regression coverage: build + `occt.draft.e2e` + `occt.modifier_lineage.e2e` + `occt.selector_stability.e2e`
+- Commit: `d549850`
+
+17. Extracted shared transform primitives for translate/scale/rotate/mirror.
+- Added: `src/occt/transform_primitives.ts`
+- Added direct coverage: `src/tests/occt.transform_primitives.module.test.ts`
+- Reused by backend transform helpers and `src/occt/mirror_ops.ts`
+- Regression coverage: build + `occt.transform_primitives.module` + `occt.move_body.e2e.probe` + `occt.move_face.e2e.probe` + `occt.mirror.e2e` + `occt.unwrap.e2e`
 - Commit: pending in current worktree
 
 ## Remaining Maintainability Work (Prioritized)
@@ -168,7 +175,7 @@ Current status of the OCCT backend decomposition queue:
    - feature-scoped backend errors are standardized for those new module paths
    - direct module coverage exists for the remaining feature families touched in this campaign
 3. The remaining work is now deeper architecture work rather than boundary cleanup:
-   - broader primitive-adapter extraction beyond the sweep/path family
+   - broader primitive-adapter extraction beyond the sweep/path/transform families
    - wider migration of inline `Error` throws to structured backend errors
    - direct module coverage for other backend-local helpers if they are extracted later
 

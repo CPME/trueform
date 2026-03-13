@@ -100,6 +100,12 @@ import { execSketch as execOcctSketch } from "./occt/sketch_ops.js";
 import { execDraft as execOcctDraft } from "./occt/draft_ops.js";
 import { execMirror as execOcctMirror } from "./occt/mirror_ops.js";
 import {
+  mirrorShape as mirrorOcctShape,
+  transformShapeRotate as rotateOcctShape,
+  transformShapeScale as scaleOcctShape,
+  transformShapeTranslate as translateOcctShape,
+} from "./occt/transform_primitives.js";
+import {
   execHexTubeSweep as execOcctHexTubeSweep,
   execPipeSweep as execOcctPipeSweep,
 } from "./occt/sweep_feature_ops.js";
@@ -1447,17 +1453,11 @@ export class OcctBackend implements Backend {
 
   private mirrorContext(resolve: ExecuteInput["resolve"]): MirrorContext {
     return {
+      ...this.transformPrimitiveContext(),
       collectSelections: (shape, featureId, ownerKey, featureTags, opts) =>
         this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
-      callWithFallback: (target, methods, argSets) => this.callWithFallback(target, methods, argSets as any),
-      makeAx2WithXDir: (origin, normal, xDir) => this.makeAx2WithXDir(origin, normal, xDir),
-      makeDir: (x, y, z) => this.makeDir(x, y, z),
-      makePnt: (x, y, z) => this.makePnt(x, y, z),
-      newOcct: (name, ...args) => this.newOcct(name, ...args),
-      readShape: (shape) => this.readShape(shape),
       resolvePlaneBasis: (planeRef, upstream, resolver) =>
         this.resolvePlaneBasis(planeRef as PlaneRef, upstream, resolver as ExecuteInput["resolve"]),
-      tryBuild: (builder) => this.tryBuild(builder),
     };
   }
 
@@ -1480,6 +1480,22 @@ export class OcctBackend implements Backend {
       toFace: (shape) => this.toFace(shape),
       toResolutionContext: (upstream) => this.toResolutionContext(upstream),
       tryBuild: (builder) => this.tryBuild(builder),
+    };
+  }
+
+  private transformPrimitiveContext() {
+    return {
+      callWithFallback: (target: unknown, methods: string[], argSets: unknown[][]) =>
+        this.callWithFallback(target, methods, argSets as any),
+      makeAx1: (origin: unknown, axis: unknown) => this.makeAx1(origin, axis),
+      makeAx2WithXDir: (origin: unknown, normal: unknown, xDir: unknown) =>
+        this.makeAx2WithXDir(origin, normal, xDir),
+      makeDir: (x: number, y: number, z: number) => this.makeDir(x, y, z),
+      makePnt: (x: number, y: number, z: number) => this.makePnt(x, y, z),
+      makeVec: (x: number, y: number, z: number) => this.makeVec(x, y, z),
+      newOcct: (name: string, ...args: unknown[]) => this.newOcct(name, ...args),
+      readShape: (shape: unknown) => this.readShape(shape),
+      tryBuild: (builder: unknown) => this.tryBuild(builder),
     };
   }
 
@@ -4778,16 +4794,7 @@ export class OcctBackend implements Backend {
   }
 
   private transformShapeTranslate(shape: any, delta: [number, number, number]) {
-    const trsf = this.newOcct("gp_Trsf");
-    const vec = this.makeVec(delta[0], delta[1], delta[2]);
-    this.callWithFallback(
-      trsf,
-      ["SetTranslation", "SetTranslation_1", "SetTranslationPart"],
-      [[vec]]
-    );
-    const builder = this.newOcct("BRepBuilderAPI_Transform", shape, trsf, true);
-    this.tryBuild(builder);
-    return this.readShape(builder);
+    return translateOcctShape(this.transformPrimitiveContext(), shape, delta);
   }
 
   private transformShapeScale(
@@ -4795,12 +4802,7 @@ export class OcctBackend implements Backend {
     origin: [number, number, number],
     factor: number
   ) {
-    const trsf = this.newOcct("gp_Trsf");
-    const pnt = this.makePnt(origin[0], origin[1], origin[2]);
-    this.callWithFallback(trsf, ["SetScale", "SetScale_1"], [[pnt, factor]]);
-    const builder = this.newOcct("BRepBuilderAPI_Transform", shape, trsf, true);
-    this.tryBuild(builder);
-    return this.readShape(builder);
+    return scaleOcctShape(this.transformPrimitiveContext(), shape, origin, factor);
   }
 
   private transformShapeRotate(
@@ -4809,14 +4811,7 @@ export class OcctBackend implements Backend {
     axis: [number, number, number],
     angle: number
   ) {
-    const trsf = this.newOcct("gp_Trsf");
-    const pnt = this.makePnt(origin[0], origin[1], origin[2]);
-    const dir = this.makeDir(axis[0], axis[1], axis[2]);
-    const ax1 = this.makeAx1(pnt, dir);
-    this.callWithFallback(trsf, ["SetRotation", "SetRotation_1"], [[ax1, angle]]);
-    const builder = this.newOcct("BRepBuilderAPI_Transform", shape, trsf, true);
-    this.tryBuild(builder);
-    return this.readShape(builder);
+    return rotateOcctShape(this.transformPrimitiveContext(), shape, origin, axis, angle);
   }
 
   private makeAxis(
