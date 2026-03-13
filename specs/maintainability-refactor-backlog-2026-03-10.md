@@ -52,6 +52,11 @@ boundary-extraction sweep.
 - baseline before IR validation decomposition: `src/ir_validate.ts` at 3310 lines
 - after `Extract IR sketch + FTI validation modules`: 2344 lines
 
+### Sketch Solver Line Count Tracking
+
+- baseline before sketch solver decomposition: `src/sketch/constraints.ts` at 2892 lines
+- after `Extract sketch solver math helpers`: 2471 lines
+
 ## Outstanding Work
 
 ### P0: Finish `src/backend_occt.ts` Decomposition
