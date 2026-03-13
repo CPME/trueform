@@ -164,6 +164,13 @@ import {
   type HoleDepthDeps,
 } from "./occt/hole_depth_ops.js";
 import {
+  makePipeSolid as makeOcctPipeSolid,
+  makeRingFace as makeOcctRingFace,
+  makeSweepSolid as makeOcctSweepSolid,
+  makeThickSolid as makeOcctThickSolid,
+  type PipeShellPrimitiveDeps,
+} from "./occt/pipe_shell_primitives.js";
+import {
   buildSketchWire as buildOcctSketchWire,
   buildSketchWireWithStatus as buildOcctSketchWireWithStatus,
   segmentSlotsForLoop as collectOcctSegmentSlotsForLoop,
@@ -3321,76 +3328,7 @@ export class OcctBackend implements Backend {
       removeInternalEdges?: boolean;
     }
   ): any {
-    const faces = this.makeShapeList(removeFaces.map((face) => this.toFace(face)));
-    const occt = this.occt as any;
-    const mode = occt.BRepOffset_Mode?.BRepOffset_Skin;
-    const join = occt.GeomAbs_JoinType?.GeomAbs_Arc;
-    const progress = this.makeProgressRange();
-    const intersection = opts?.intersection ?? false;
-    const selfIntersection = opts?.selfIntersection ?? false;
-    const removeInternalEdges = opts?.removeInternalEdges ?? false;
-    const argsList: unknown[][] = [[shape, faces, offset, tolerance]];
-    if (mode !== undefined) {
-      argsList.push([shape, faces, offset, tolerance, mode]);
-    }
-    if (mode !== undefined && join !== undefined) {
-      argsList.push([
-        shape,
-        faces,
-        offset,
-        tolerance,
-        mode,
-        intersection,
-        selfIntersection,
-        join,
-        removeInternalEdges,
-      ]);
-      if (progress !== null && progress !== undefined) {
-        argsList.push([
-          shape,
-          faces,
-          offset,
-          tolerance,
-          mode,
-          intersection,
-          selfIntersection,
-          join,
-          removeInternalEdges,
-          progress,
-        ]);
-      }
-    }
-
-    let builder: any | null = null;
-    try {
-      builder = this.newOcct("BRepOffsetAPI_MakeThickSolid");
-    } catch {
-      builder = null;
-    }
-    if (builder) {
-      this.callWithFallback(
-        builder,
-        ["MakeThickSolidByJoin", "MakeThickSolidByJoin_1", "MakeThickSolidByJoin_2"],
-        argsList
-      );
-      this.tryBuild(builder);
-      return this.readShape(builder);
-    }
-
-    const ctorArgs = [
-      [shape, faces, offset, tolerance],
-      [shape, faces, offset],
-    ];
-    for (const args of ctorArgs) {
-      try {
-        const candidate = this.newOcct("BRepOffsetAPI_MakeThickSolid", ...args);
-        this.tryBuild(candidate);
-        return this.readShape(candidate);
-      } catch {
-        continue;
-      }
-    }
-    throw new Error("OCCT backend: failed to construct thick solid");
+    return makeOcctThickSolid(this.pipeShellPrimitiveDeps(), shape, removeFaces, offset, tolerance, opts);
   }
 
   private makePipeSolid(
@@ -3410,52 +3348,7 @@ export class OcctBackend implements Backend {
     frame?: PlaneBasis | { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean },
     opts?: { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean }
   ) {
-    const resolvedFrame =
-      frame && "origin" in frame ? (frame as PlaneBasis) : undefined;
-    const resolvedOpts =
-      frame && "origin" in frame
-        ? opts
-        : (frame as
-            | { makeSolid?: boolean; allowFallback?: boolean; frenet?: boolean }
-            | undefined);
-    const occt = this.occt as any;
-    const makeSolid = resolvedOpts?.makeSolid !== false;
-    const allowFallback = resolvedOpts?.allowFallback !== false;
-    const frenet = resolvedOpts?.frenet === true;
-    try {
-      const shell = this.newOcct("BRepOffsetAPI_MakePipeShell", spine);
-      if (resolvedFrame) {
-        this.trySetPipeShellMode(shell, resolvedFrame);
-      } else {
-        this.trySetPipeShellFrenet(shell, frenet);
-      }
-      const mode = occt.BRepBuilderAPI_TransitionMode?.BRepBuilderAPI_RoundCorner;
-      if (mode && typeof shell.SetTransitionMode === "function") {
-        shell.SetTransitionMode(mode);
-      }
-      const add =
-        typeof shell.Add_1 === "function"
-          ? shell.Add_1.bind(shell)
-          : typeof shell.Add === "function"
-            ? shell.Add.bind(shell)
-            : null;
-      if (!add) {
-        throw new Error("OCCT backend: pipe shell missing Add()");
-      }
-      add(profile, false, false);
-      this.tryBuild(shell);
-      if (makeSolid && typeof shell.MakeSolid === "function") {
-        shell.MakeSolid();
-      }
-      return this.readShape(shell);
-    } catch {
-      if (!allowFallback) {
-        throw new Error("OCCT backend: pipe shell failed and fallback is disabled");
-      }
-      const builder = this.newOcct("BRepOffsetAPI_MakePipe", spine, profile);
-      this.tryBuild(builder);
-      return this.readShape(builder);
-    }
+    return makeOcctPipeSolid(this.pipeShellPrimitiveDeps(), spine, profile, frame as any, opts);
   }
 
   private makeSweepSolid(
@@ -3505,139 +3398,7 @@ export class OcctBackend implements Backend {
       auxiliaryKeepContact?: boolean;
       }
   ) {
-    type SweepOpts = {
-      makeSolid?: boolean;
-      allowFallback?: boolean;
-      frenet?: boolean;
-      auxiliarySpine?: any;
-      auxiliaryCurvilinear?: boolean;
-      auxiliaryKeepContact?: boolean;
-    };
-    const resolvedFrame =
-      frame && "origin" in frame ? (frame as PlaneBasis) : undefined;
-    const resolvedOpts: SweepOpts | undefined =
-      frame && "origin" in frame
-        ? (opts as SweepOpts | undefined)
-        : (frame as SweepOpts | undefined);
-    const occt = this.occt as any;
-    const makeSolid = resolvedOpts?.makeSolid !== false;
-    const allowFallback = resolvedOpts?.allowFallback !== false;
-    const frenet = resolvedOpts?.frenet !== false;
-    const auxiliarySpine = resolvedOpts?.auxiliarySpine;
-    try {
-      const shell = this.newOcct("BRepOffsetAPI_MakePipeShell", spine);
-      if (auxiliarySpine) {
-        const applied = this.trySetPipeShellAuxiliary(shell, auxiliarySpine, {
-          curvilinear: resolvedOpts?.auxiliaryCurvilinear,
-          keepContact: resolvedOpts?.auxiliaryKeepContact,
-        });
-        if (!applied) {
-          if (resolvedFrame) {
-            this.trySetPipeShellMode(shell, resolvedFrame);
-          } else {
-            this.trySetPipeShellFrenet(shell, frenet);
-          }
-        }
-      } else if (resolvedFrame) {
-        this.trySetPipeShellMode(shell, resolvedFrame);
-      } else {
-        this.trySetPipeShellFrenet(shell, frenet);
-      }
-      const mode = occt.BRepBuilderAPI_TransitionMode?.BRepBuilderAPI_RoundCorner;
-      if (mode && typeof shell.SetTransitionMode === "function") {
-        shell.SetTransitionMode(mode);
-      }
-      const add =
-        typeof shell.Add_1 === "function"
-          ? shell.Add_1.bind(shell)
-          : typeof shell.Add === "function"
-            ? shell.Add.bind(shell)
-            : null;
-      if (!add) {
-        throw new Error("OCCT backend: sweep shell missing Add()");
-      }
-      add(profile, false, false);
-      this.tryBuild(shell);
-      if (makeSolid && typeof shell.MakeSolid === "function") {
-        shell.MakeSolid();
-      }
-      return this.readShape(shell);
-    } catch {
-      if (!allowFallback) {
-        throw new Error("OCCT backend: sweep shell failed and fallback is disabled");
-      }
-      const builder = this.newOcct("BRepOffsetAPI_MakePipe", spine, profile);
-      this.tryBuild(builder);
-      return this.readShape(builder);
-    }
-  }
-
-  private trySetPipeShellFrenet(shell: any, frenet: boolean): boolean {
-    const candidates = ["SetMode_1", "SetMode"];
-    for (const name of candidates) {
-      const fn = shell?.[name];
-      if (typeof fn !== "function") continue;
-      try {
-        fn.call(shell, frenet);
-        return true;
-      } catch {
-        continue;
-      }
-    }
-    return false;
-  }
-
-  private trySetPipeShellMode(shell: any, frame: PlaneBasis): boolean {
-    const origin = this.makePnt(frame.origin[0], frame.origin[1], frame.origin[2]);
-    const normal = this.makeDir(frame.normal[0], frame.normal[1], frame.normal[2]);
-    const xDir = this.makeDir(frame.xDir[0], frame.xDir[1], frame.xDir[2]);
-    const ax2 = this.makeAx2WithXDir(origin, normal, xDir);
-    const candidates: Array<{ names: string[]; args: unknown[] }> = [
-      { names: ["SetMode_3", "SetMode_2", "SetMode_1", "SetMode"], args: [ax2] },
-      { names: ["SetMode_2", "SetMode_1", "SetMode"], args: [xDir] },
-      { names: ["SetMode_1", "SetMode"], args: [false] },
-    ];
-    for (const candidate of candidates) {
-      for (const name of candidate.names) {
-        const fn = shell?.[name];
-        if (typeof fn !== "function") continue;
-        try {
-          fn.call(shell, ...candidate.args);
-          return true;
-        } catch {
-          continue;
-        }
-      }
-    }
-    return false;
-  }
-
-  private trySetPipeShellAuxiliary(
-    shell: any,
-    auxiliarySpine: any,
-    opts?: { curvilinear?: boolean; keepContact?: boolean }
-  ): boolean {
-    const wire = this.toWire(auxiliarySpine);
-    const curvilinear = opts?.curvilinear ?? true;
-    const keepContact = opts?.keepContact ?? true;
-    const candidates: Array<{ names: string[]; args: unknown[] }> = [
-      { names: ["SetMode_5", "SetMode_4", "SetMode_3", "SetMode_2", "SetMode"], args: [wire, curvilinear, keepContact] },
-      { names: ["SetMode_5", "SetMode_4", "SetMode_3", "SetMode_2", "SetMode"], args: [wire, curvilinear] },
-      { names: ["SetMode_5", "SetMode_4", "SetMode_3", "SetMode_2", "SetMode"], args: [wire] },
-    ];
-    for (const candidate of candidates) {
-      for (const name of candidate.names) {
-        const fn = shell?.[name];
-        if (typeof fn !== "function") continue;
-        try {
-          fn.call(shell, ...candidate.args);
-          return true;
-        } catch {
-          continue;
-        }
-      }
-    }
-    return false;
+    return makeOcctSweepSolid(this.pipeShellPrimitiveDeps(), spine, profile, frame as any, opts);
   }
 
   private makeRingFace(
@@ -3646,21 +3407,7 @@ export class OcctBackend implements Backend {
     outerRadius: number,
     innerRadius: number
   ) {
-    const outerEdge = this.makeCircleEdge(center, outerRadius, normal);
-    const outerWire = this.makeWireFromEdges([outerEdge]);
-    const faceBuilder = this.makeFaceFromWire(outerWire);
-    if (innerRadius > 0) {
-      const innerEdge = this.makeCircleEdge(center, innerRadius, normal);
-      const innerWire = this.makeWireFromEdges([innerEdge]);
-      if (typeof faceBuilder.Add === "function") {
-        faceBuilder.Add(innerWire);
-      } else if (typeof faceBuilder.add === "function") {
-        faceBuilder.add(innerWire);
-      } else {
-        throw new Error("OCCT backend: face builder missing Add()");
-      }
-    }
-    return this.readFace(faceBuilder);
+    return makeOcctRingFace(this.pipeShellPrimitiveDeps(), center, normal, outerRadius, innerRadius);
   }
 
   private makeWireFromEdges(edges: any[]) {
@@ -4091,6 +3838,30 @@ export class OcctBackend implements Backend {
       callWithFallback: (target: any, methods: string[], argSets: unknown[][]) =>
         this.callWithFallback(target, methods, argSets as any),
       toWire: (wire: any) => this.toWire(wire),
+    };
+  }
+
+  private pipeShellPrimitiveDeps(): PipeShellPrimitiveDeps {
+    return {
+      occt: this.occt as any,
+      newOcct: (name: string, ...args: unknown[]) => this.newOcct(name, ...args),
+      tryBuild: (builder: any) => this.tryBuild(builder),
+      readShape: (shape: any) => this.readShape(shape),
+      readFace: (shape: any) => this.readFace(shape),
+      callWithFallback: (target: any, methods: string[], argSets: unknown[][]) =>
+        this.callWithFallback(target, methods, argSets as any),
+      makeProgressRange: () => this.makeProgressRange(),
+      makeShapeList: (shapes: any[]) => this.makeShapeList(shapes),
+      toFace: (face: any) => this.toFace(face),
+      toWire: (wire: any) => this.toWire(wire),
+      makePnt: (x: number, y: number, z: number) => this.makePnt(x, y, z),
+      makeDir: (x: number, y: number, z: number) => this.makeDir(x, y, z),
+      makeAx2WithXDir: (origin: any, normal: any, xDir: any) =>
+        this.makeAx2WithXDir(origin, normal, xDir),
+      makeCircleEdge: (center: [number, number, number], radius: number, normal: [number, number, number]) =>
+        this.makeCircleEdge(center, radius, normal),
+      makeWireFromEdges: (edges: any[]) => this.makeWireFromEdges(edges),
+      makeFaceFromWire: (wire: any) => this.makeFaceFromWire(wire),
     };
   }
 
