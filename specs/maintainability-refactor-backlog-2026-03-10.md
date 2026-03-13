@@ -46,8 +46,10 @@ Open slices:
   - `src/occt/sketch_geometry.ts`
   - `src/occt/wire_ops.ts`
   - `src/occt/spline_edges.ts`
+- Additional adapter slice landed in:
+  - `src/occt/profile_plane_adapters.ts`
 - Remaining work:
-  - remove the leftover inline resolution glue from `src/backend_occt.ts`
+  - continue removing the leftover inline resolution glue from `src/backend_occt.ts`
   - tighten module ownership boundaries and direct module coverage where needed
 
 2. Convert `src/backend_occt.ts` into an orchestration-focused class.

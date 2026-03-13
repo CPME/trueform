@@ -48,20 +48,21 @@ import {
 } from "./occt/export_ops.js";
 import { mesh as buildOcctMesh } from "./occt/mesh_ops.js";
 import {
-  buildProfileFace as buildOcctProfileFace,
-  buildProfileWire as buildOcctProfileWire,
-  type ProfileBuildDeps,
   resolveProfile as resolveOcctProfile,
   type ResolvedProfile,
 } from "./occt/profile_resolution.js";
 import {
-  planeBasisFromFace as buildPlaneBasisFromFace,
   planeBasisFromNormal as buildPlaneBasisFromNormal,
-  resolvePlaneBasis as resolveOcctPlaneBasis,
-  resolveSketchPlane as resolveOcctSketchPlane,
   type PlaneBasis,
-  type PlaneBasisFaceDeps,
 } from "./occt/plane_basis.js";
+import {
+  buildProfileFaceWithDeps,
+  buildProfileWireWithDeps,
+  planeBasisFromFaceWithDeps,
+  resolvePlaneBasisWithDeps,
+  resolveSketchPlaneWithDeps,
+  type ProfilePlaneAdapterDeps,
+} from "./occt/profile_plane_adapters.js";
 import {
   arcMidpoint as occtArcMidpoint,
   dist2 as occtDist2,
@@ -3467,22 +3468,32 @@ export class OcctBackend implements Backend {
   }
 
   private buildProfileFace(profile: ResolvedProfile) {
-    return buildOcctProfileFace(profile, this.profileBuildDeps());
+    return buildProfileFaceWithDeps(profile, this.profilePlaneAdapterDeps());
   }
 
   private buildProfileWire(profile: ResolvedProfile): { wire: any; closed: boolean } {
-    return buildOcctProfileWire(profile, this.profileBuildDeps());
+    return buildProfileWireWithDeps(profile, this.profilePlaneAdapterDeps());
   }
 
-  private profileBuildDeps(): ProfileBuildDeps {
+  private profilePlaneAdapterDeps(): ProfilePlaneAdapterDeps {
     return {
-      makeRectangleFace: (width, height, center) => this.makeRectangleFace(width, height, center),
-      makeCircleFace: (radius, center) => this.makeCircleFace(radius, center),
-      makeRegularPolygonFace: (sides, radius, center, rotation) =>
+      datumKey: (id: string) => this.datumKey(id),
+      occt: this.occt as any,
+      toFace: (target: unknown) => this.toFace(target),
+      newOcct: (name: string, ...args: any[]) => this.newOcct(name, ...args),
+      call: (target: unknown, name: string, ...args: any[]) =>
+        this.call(target, name, ...args),
+      pointToArray: (point: unknown) => this.pointToArray(point),
+      dirToArray: (dir: unknown) => this.dirToArray(dir),
+      makeRectangleFace: (width: number, height: number, center: any) =>
+        this.makeRectangleFace(width, height, center),
+      makeCircleFace: (radius: number, center: any) => this.makeCircleFace(radius, center),
+      makeRegularPolygonFace: (sides: number, radius: number, center: any, rotation?: number) =>
         this.makeRegularPolygonFace(sides, radius, center, rotation),
-      makeRectangleWire: (width, height, center) => this.makeRectangleWire(width, height, center),
-      makeCircleWire: (radius, center) => this.makeCircleWire(radius, center),
-      makeRegularPolygonWire: (sides, radius, center, rotation) =>
+      makeRectangleWire: (width: number, height: number, center: any) =>
+        this.makeRectangleWire(width, height, center),
+      makeCircleWire: (radius: number, center: any) => this.makeCircleWire(radius, center),
+      makeRegularPolygonWire: (sides: number, radius: number, center: any, rotation?: number) =>
         this.makeRegularPolygonWire(sides, radius, center, rotation),
     };
   }
@@ -3492,15 +3503,7 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     resolve: ExecuteInput["resolve"]
   ): PlaneBasis {
-    return resolveOcctSketchPlane({
-      feature,
-      upstream,
-      resolve,
-      deps: {
-        datumKey: (id) => this.datumKey(id),
-        planeBasisFromFace: (face) => this.planeBasisFromFace(face),
-      },
-    });
+    return resolveSketchPlaneWithDeps(feature, upstream, resolve, this.profilePlaneAdapterDeps());
   }
 
   private resolvePlaneBasis(
@@ -3508,33 +3511,11 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     resolve: ExecuteInput["resolve"]
   ): PlaneBasis {
-    return resolveOcctPlaneBasis({
-      planeRef,
-      upstream,
-      resolve,
-      deps: {
-        datumKey: (id) => this.datumKey(id),
-        planeBasisFromFace: (face) => this.planeBasisFromFace(face),
-      },
-    });
+    return resolvePlaneBasisWithDeps(planeRef, upstream, resolve, this.profilePlaneAdapterDeps());
   }
 
   private planeBasisFromFace(face: any): PlaneBasis {
-    return buildPlaneBasisFromFace({
-      face,
-      deps: this.planeBasisFaceDeps(),
-    });
-  }
-
-  private planeBasisFaceDeps(): PlaneBasisFaceDeps {
-    return {
-      occt: this.occt as any,
-      toFace: (target) => this.toFace(target),
-      newOcct: (name, ...args) => this.newOcct(name, ...args),
-      call: (target, name, ...args) => this.call(target, name, ...args),
-      pointToArray: (point) => this.pointToArray(point),
-      dirToArray: (dir) => this.dirToArray(dir),
-    };
+    return planeBasisFromFaceWithDeps(face, this.profilePlaneAdapterDeps());
   }
 
   private planeBasisFromNormal(
