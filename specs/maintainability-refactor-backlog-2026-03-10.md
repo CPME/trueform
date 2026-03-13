@@ -35,6 +35,7 @@ boundary-extraction sweep.
 - baseline before the recent backend slices: `src/backend_occt.ts` at 5457 lines
 - after `Extract OCCT profile-plane adapters` (`693791a`): 5438 lines
 - current working slice after `shape_primitives` extraction: 5415 lines
+- current working slice after `profile_primitives` extraction: 5346 lines
 
 ## Outstanding Work
 
@@ -54,6 +55,8 @@ Open slices:
   - `src/occt/spline_edges.ts`
 - Additional adapter slice landed in:
   - `src/occt/profile_plane_adapters.ts`
+- Primitive profile constructors now live in:
+  - `src/occt/profile_primitives.ts`
 - Remaining work:
   - continue removing the leftover inline resolution glue from `src/backend_occt.ts`
   - tighten module ownership boundaries and direct module coverage where needed

@@ -121,6 +121,18 @@ import {
   type ShapePrimitiveDeps,
 } from "./occt/shape_primitives.js";
 import {
+  makeCircleFace as makeOcctCircleFace,
+  makeCircleWire as makeOcctCircleWire,
+  makePolygonWire as makeOcctPolygonWire,
+  makeRectangleFace as makeOcctRectangleFace,
+  makeRectangleWire as makeOcctRectangleWire,
+  makeRegularPolygonFace as makeOcctRegularPolygonFace,
+  makeRegularPolygonWire as makeOcctRegularPolygonWire,
+  regularPolygonPoints as buildOcctRegularPolygonPoints,
+  makeWireFromEdges as makeOcctWireFromEdges,
+  type ProfilePrimitiveDeps,
+} from "./occt/profile_primitives.js";
+import {
   execHexTubeSweep as execOcctHexTubeSweep,
   execPipeSweep as execOcctPipeSweep,
 } from "./occt/sweep_feature_ops.js";
@@ -4234,30 +4246,11 @@ export class OcctBackend implements Backend {
   }
 
   private makeWireFromEdges(edges: any[]) {
-    const wireBuilder = this.newOcct("BRepBuilderAPI_MakeWire");
-    for (const edge of edges) {
-      if (!this.addWireEdge(wireBuilder, edge)) {
-        throw new Error("OCCT backend: wire builder missing Add()");
-      }
-    }
-    if (typeof wireBuilder.Wire === "function") return wireBuilder.Wire();
-    if (typeof wireBuilder.wire === "function") return wireBuilder.wire();
-    if (wireBuilder.Shape) return wireBuilder.Shape();
-    throw new Error("OCCT backend: wire builder missing Wire()");
+    return makeOcctWireFromEdges(this.profilePrimitiveDeps(), edges);
   }
 
   private makePolygonWire(points: [number, number, number][]) {
-    if (points.length < 3) {
-      throw new Error("OCCT backend: polygon wire requires at least 3 points");
-    }
-    const edges: any[] = [];
-    for (let i = 0; i < points.length; i += 1) {
-      const start = points[i];
-      const end = points[(i + 1) % points.length];
-      if (!start || !end) continue;
-      edges.push(this.makeLineEdge(start, end));
-    }
-    return this.makeWireFromEdges(edges);
+    return makeOcctPolygonWire(this.profilePrimitiveDeps(), points);
   }
 
   private regularPolygonPoints(
@@ -4268,21 +4261,7 @@ export class OcctBackend implements Backend {
     sides: number,
     rotation = 0
   ): [number, number, number][] {
-    if (sides < 3) {
-      throw new Error("OCCT backend: regular polygon requires at least 3 sides");
-    }
-    const points: [number, number, number][] = [];
-    for (let i = 0; i < sides; i += 1) {
-      const angle = rotation + (Math.PI * 2 * i) / sides;
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle);
-      points.push([
-        center[0] + xDir[0] * radius * cos + yDir[0] * radius * sin,
-        center[1] + xDir[1] * radius * cos + yDir[1] * radius * sin,
-        center[2] + xDir[2] * radius * cos + yDir[2] * radius * sin,
-      ]);
-    }
-    return points;
+    return buildOcctRegularPolygonPoints(center, xDir, yDir, radius, sides, rotation);
   }
 
   private point3Numbers(point: Point3D, label: string): [number, number, number] {
@@ -4599,59 +4578,19 @@ export class OcctBackend implements Backend {
   }
 
   private makeRectangleWire(width: number, height: number, center?: Point3D) {
-    const [cx, cy, cz] = center
-      ? this.point3Numbers(center, "profile center")
-      : [0, 0, 0];
-    const hw = width / 2;
-    const hh = height / 2;
-    const p1 = this.makePnt(cx - hw, cy - hh, cz);
-    const p2 = this.makePnt(cx + hw, cy - hh, cz);
-    const p3 = this.makePnt(cx + hw, cy + hh, cz);
-    const p4 = this.makePnt(cx - hw, cy + hh, cz);
-    let poly = this.newOcct("BRepBuilderAPI_MakePolygon");
-    if (typeof poly.Add === "function") {
-      poly.Add(p1);
-      poly.Add(p2);
-      poly.Add(p3);
-      poly.Add(p4);
-      if (typeof poly.Close === "function") poly.Close();
-    } else {
-      poly = this.newOcct("BRepBuilderAPI_MakePolygon", p1, p2, p3, p4, true);
-    }
-    const wire = typeof poly.Wire === "function" ? poly.Wire() : poly.wire?.();
-    if (!wire) {
-      throw new Error("OCCT backend: rectangle wire builder missing Wire()");
-    }
-    return wire;
+    return makeOcctRectangleWire(this.profilePrimitiveDeps(), width, height, center);
   }
 
   private makeRectangleFace(width: number, height: number, center?: Point3D) {
-    const wire = this.makeRectangleWire(width, height, center);
-    const face = new (this.occt as any).BRepBuilderAPI_MakeFace_15(wire, true);
-    return face.Face();
+    return makeOcctRectangleFace(this.profilePrimitiveDeps(), width, height, center);
   }
 
   private makeCircleWire(radius: number, center?: Point3D) {
-    const [cx, cy, cz] = center
-      ? this.point3Numbers(center, "profile center")
-      : [0, 0, 0];
-    const pnt = this.makePnt(cx, cy, cz);
-    const dir = this.makeDir(0, 0, 1);
-    const ax2 = this.makeAx2(pnt, dir);
-    const circle = this.makeCirc(ax2, radius);
-    const edge = new (this.occt as any).BRepBuilderAPI_MakeEdge_8(circle);
-    const wireBuilder = new (this.occt as any).BRepBuilderAPI_MakeWire_2(edge.Edge());
-    const wire = typeof wireBuilder.Wire === "function" ? wireBuilder.Wire() : wireBuilder.wire?.();
-    if (!wire) {
-      throw new Error("OCCT backend: circle wire builder missing Wire()");
-    }
-    return wire;
+    return makeOcctCircleWire(this.profilePrimitiveDeps(), radius, center);
   }
 
   private makeCircleFace(radius: number, center?: Point3D) {
-    const wire = this.makeCircleWire(radius, center);
-    const face = new (this.occt as any).BRepBuilderAPI_MakeFace_15(wire, true);
-    return face.Face();
+    return makeOcctCircleFace(this.profilePrimitiveDeps(), radius, center);
   }
 
   private makeRegularPolygonWire(
@@ -4660,24 +4599,7 @@ export class OcctBackend implements Backend {
     center?: Point3D,
     rotation?: number
   ) {
-    const count = Math.round(sides);
-    if (count < 3) {
-      throw new Error("OCCT backend: polygon profile must have at least 3 sides");
-    }
-    const rot =
-      rotation === undefined ? 0 : expectNumber(rotation, "profile rotation");
-    const centerVec: [number, number, number] = center
-      ? this.point3Numbers(center, "profile center")
-      : [0, 0, 0];
-    const points = this.regularPolygonPoints(
-      centerVec,
-      [1, 0, 0],
-      [0, 1, 0],
-      radius,
-      count,
-      rot
-    );
-    return this.makePolygonWire(points);
+    return makeOcctRegularPolygonWire(this.profilePrimitiveDeps(), sides, radius, center, rotation);
   }
 
   private makeRegularPolygonFace(
@@ -4686,9 +4608,7 @@ export class OcctBackend implements Backend {
     center?: Point3D,
     rotation?: number
   ) {
-    const wire = this.makeRegularPolygonWire(sides, radius, center, rotation);
-    const face = new (this.occt as any).BRepBuilderAPI_MakeFace_15(wire, true);
-    return face.Face();
+    return makeOcctRegularPolygonFace(this.profilePrimitiveDeps(), sides, radius, center, rotation);
   }
 
   private readShape(builder: any) {
@@ -4785,6 +4705,17 @@ export class OcctBackend implements Backend {
     return {
       occt: this.occt as any,
       newOcct: (name: string, ...args: unknown[]) => this.newOcct(name, ...args),
+    };
+  }
+
+  private profilePrimitiveDeps(): ProfilePrimitiveDeps {
+    return {
+      ...this.shapePrimitiveDeps(),
+      point3Numbers: (point: Point3D, label: string) => this.point3Numbers(point, label),
+      readShape: (builder: any) => this.readShape(builder),
+      makeFaceFromWire: (wire: any) => this.makeFaceFromWire(wire),
+      readFace: (builder: any) => this.readFace(builder),
+      addWireEdge: (builder: any, edge: any) => this.addWireEdge(builder, edge),
     };
   }
 
