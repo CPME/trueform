@@ -150,6 +150,15 @@ import {
   type BuilderPrimitiveDeps,
 } from "./occt/builder_primitives.js";
 import {
+  execExtrude as execOcctExtrude,
+  execLoft as execOcctLoft,
+  execPipe as execOcctPipe,
+  execPlane as execOcctPlane,
+  execRevolve as execOcctRevolve,
+  execSurface as execOcctSurface,
+  type ModelingFeatureContext,
+} from "./occt/modeling_feature_ops.js";
+import {
   buildSketchWire as buildOcctSketchWire,
   buildSketchWireWithStatus as buildOcctSketchWireWithStatus,
   segmentSlotsForLoop as collectOcctSegmentSlotsForLoop,
@@ -663,84 +672,53 @@ export class OcctBackend implements Backend {
     };
   }
 
-  private execExtrude(feature: Extrude, upstream: KernelResult): KernelResult {
-    if (feature.depth === "throughAll") {
-      throw new Error("OCCT backend: throughAll not implemented yet");
-    }
-    if (typeof feature.depth !== "number") {
-      throw new Error("OCCT backend: extrude depth must be normalized to number");
-    }
-    const depth = feature.depth;
-    const profile = this.resolveProfile(feature.profile, upstream);
-    const mode = feature.mode ?? "solid";
-    if (
-      mode === "solid" &&
-      profile.profile.kind === "profile.sketch" &&
-      profile.profile.open
-    ) {
-      throw new Error("OCCT backend: extrude solid requires a closed sketch profile");
-    }
-    const axis = this.resolveExtrudeAxis(feature.axis, profile, upstream);
-    const [ax, ay, az] = axis;
-    const vec: [number, number, number] = [
-      (ax ?? 0) * depth,
-      (ay ?? 0) * depth,
-      (az ?? 0) * depth,
-    ];
-    if (mode === "surface") {
-      const section = this.buildProfileWire(profile);
-      const prism = this.makePrism(
-        section.wire,
-        this.makeVec(vec[0], vec[1], vec[2])
-      );
-      const shape = this.readShape(prism);
-      const outputs = new Map([
-        [
-          feature.result,
-          {
-            id: `${feature.id}:surface`,
-            kind: "surface" as const,
-            meta: { shape },
-          },
-        ],
-      ]);
-      const selections = this.collectSelections(
-        shape,
-        feature.id,
-        feature.result,
-        feature.tags,
-        { rootKind: "face" }
-      );
-      return { outputs, selections };
-    }
-
-    const face = this.buildProfileFace(profile);
-    const prism = this.makePrism(face, this.makeVec(vec[0], vec[1], vec[2]));
-    const solid = this.readShape(prism);
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:solid`,
-          kind: "solid" as const,
-          meta: { shape: solid },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      solid,
-      feature.id,
-      feature.result,
-      feature.tags,
-      {
-        ledgerPlan: this.makePrismSelectionLedgerPlan(axis, {
-          prism,
-          wire: profile.wire,
-          wireSegmentSlots: profile.wireSegmentSlots,
+  private modelingFeatureContext(): ModelingFeatureContext {
+    return {
+      collectSelections: (shape, featureId, ownerKey, featureTags, opts) =>
+        this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
+      resolveProfile: (profileRef, upstream) => this.resolveProfile(profileRef as ProfileRef, upstream),
+      buildProfileFace: (profile) => this.buildProfileFace(profile as ResolvedProfile),
+      buildProfileWire: (profile) => this.buildProfileWire(profile as ResolvedProfile),
+      resolveExtrudeAxis: (axis, profile, upstream) =>
+        this.resolveExtrudeAxis(axis as ExtrudeAxis | undefined, profile as ResolvedProfile, upstream),
+      makeVec: (x, y, z) => this.makeVec(x, y, z),
+      makePrism: (faceOrWire, vec) => this.makePrism(faceOrWire, vec),
+      readShape: (builder) => this.readShape(builder),
+      makePrismSelectionLedgerPlan: (axis, ctx) =>
+        this.makePrismSelectionLedgerPlan(axis, ctx as {
+          prism: any;
+          wire?: any;
+          wireSegmentSlots?: string[];
         }),
-      }
-    );
-    return { outputs, selections };
+      resolvePlaneBasis: (planeRef, upstream, resolve) =>
+        this.resolvePlaneBasis(planeRef as PlaneRef, upstream, resolve),
+      scaleVec: (v, s) => this.scaleVec(v, s),
+      addVec: (a, b) => this.addVec(a, b),
+      subVec: (a, b) => this.subVec(a, b),
+      makePolygonWire: (points) => this.makePolygonWire(points as [number, number, number][]),
+      makeFaceFromWire: (wire) => this.makeFaceFromWire(wire),
+      makeAxis: (dir, origin) => this.makeAxis(dir as Revolve["axis"], origin as Revolve["origin"]),
+      makeRevol: (faceOrWire, axis, angleRad) => this.makeRevol(faceOrWire, axis, angleRad),
+      tryBuild: (builder) => this.tryBuild(builder),
+      makeRevolveSelectionLedgerPlan: (angleRad, ctx) =>
+        this.makeRevolveSelectionLedgerPlan(angleRad, ctx as {
+          revol: any;
+          wire: any;
+          wireSegmentSlots: string[];
+        }),
+      makeLoftBuilder: (isSolid) => this.makeLoftBuilder(isSolid),
+      addLoftWire: (builder, wire) => this.addLoftWire(builder, wire),
+      callWithFallback: (target, methods, argSets) =>
+        this.callWithFallback(target, methods, argSets as any),
+      makeCylinder: (radius, height, axis, center) => this.makeCylinder(radius, height, axis, center),
+      makeBoolean: (op, left, right) => this.makeBoolean(op, left, right),
+      splitByTools: (shape, tools) => this.splitByTools(shape, tools as any[]),
+      normalizeSolid: (shape) => this.normalizeSolid(shape),
+    };
+  }
+
+  private execExtrude(feature: Extrude, upstream: KernelResult): KernelResult {
+    return execOcctExtrude(this.modelingFeatureContext(), feature, upstream);
   }
 
   private execPlane(
@@ -748,231 +726,19 @@ export class OcctBackend implements Backend {
     upstream: KernelResult,
     resolve: ExecuteInput["resolve"]
   ): KernelResult {
-    const width = expectNumber(feature.width, "plane width");
-    const height = expectNumber(feature.height, "plane height");
-    if (!(width > 0)) {
-      throw new Error("OCCT backend: plane width must be greater than zero");
-    }
-    if (!(height > 0)) {
-      throw new Error("OCCT backend: plane height must be greater than zero");
-    }
-
-    const basis = feature.plane
-      ? this.resolvePlaneBasis(feature.plane, upstream, resolve)
-      : {
-          origin: [0, 0, 0] as [number, number, number],
-          xDir: [1, 0, 0] as [number, number, number],
-          yDir: [0, 1, 0] as [number, number, number],
-          normal: [0, 0, 1] as [number, number, number],
-        };
-    const originOffset = feature.origin ?? [0, 0, 0];
-    const center: [number, number, number] = [
-      basis.origin[0] + expectNumber(originOffset[0], "plane origin[0]"),
-      basis.origin[1] + expectNumber(originOffset[1], "plane origin[1]"),
-      basis.origin[2] + expectNumber(originOffset[2], "plane origin[2]"),
-    ];
-
-    const halfWidth = width / 2;
-    const halfHeight = height / 2;
-    const xOffset = this.scaleVec(basis.xDir, halfWidth);
-    const yOffset = this.scaleVec(basis.yDir, halfHeight);
-    const corners: [number, number, number][] = [
-      this.addVec(this.addVec(center, xOffset), yOffset),
-      this.addVec(this.subVec(center, xOffset), yOffset),
-      this.subVec(this.subVec(center, xOffset), yOffset),
-      this.subVec(this.addVec(center, xOffset), yOffset),
-    ];
-
-    const wire = this.makePolygonWire(corners);
-    const faceBuilder = this.makeFaceFromWire(wire);
-    const shape = this.readShape(faceBuilder);
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:face`,
-          kind: "face" as const,
-          meta: { shape },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      shape,
-      feature.id,
-      feature.result,
-      feature.tags,
-      { rootKind: "face" }
-    );
-    return { outputs, selections };
+    return execOcctPlane(this.modelingFeatureContext(), feature, upstream, resolve);
   }
 
   private execSurface(feature: Surface, upstream: KernelResult): KernelResult {
-    const profile = this.resolveProfile(feature.profile, upstream);
-    const face = this.buildProfileFace(profile);
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:face`,
-          kind: "face" as const,
-          meta: { shape: face },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      face,
-      feature.id,
-      feature.result,
-      feature.tags,
-      { rootKind: "face" }
-    );
-    return { outputs, selections };
+    return execOcctSurface(this.modelingFeatureContext(), feature, upstream);
   }
 
   private execRevolve(feature: Revolve, upstream: KernelResult): KernelResult {
-    const angle = feature.angle ?? "full";
-    const angleRad =
-      angle === "full"
-        ? Math.PI * 2
-        : typeof angle === "number"
-          ? angle
-          : (() => {
-              throw new Error("OCCT backend: revolve angle must be normalized to number");
-            })();
-    const profile = this.resolveProfile(feature.profile, upstream);
-    const axis = this.makeAxis(feature.axis, feature.origin);
-    const mode = feature.mode ?? "solid";
-    if (mode === "surface") {
-      const section = this.buildProfileWire(profile);
-      const revol = this.makeRevol(section.wire, axis, angleRad);
-      this.tryBuild(revol);
-      const shape = this.readShape(revol);
-      const outputs = new Map([
-        [
-          feature.result,
-          {
-            id: `${feature.id}:surface`,
-            kind: "surface" as const,
-            meta: { shape },
-          },
-        ],
-      ]);
-      const selections = this.collectSelections(
-        shape,
-        feature.id,
-        feature.result,
-        feature.tags,
-        {
-          rootKind: "face",
-          ledgerPlan:
-            profile.wire && profile.wireSegmentSlots
-              ? this.makeRevolveSelectionLedgerPlan(angleRad, {
-                  revol,
-                  wire: profile.wire,
-                  wireSegmentSlots: profile.wireSegmentSlots,
-                })
-              : undefined,
-        }
-      );
-      return { outputs, selections };
-    }
-
-    const face = this.buildProfileFace(profile);
-    const revol = this.makeRevol(face, axis, angleRad);
-    this.tryBuild(revol);
-    const solid = this.readShape(revol);
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:solid`,
-          kind: "solid" as const,
-          meta: { shape: solid },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      solid,
-      feature.id,
-      feature.result,
-      feature.tags,
-      {
-        ledgerPlan:
-          profile.wire && profile.wireSegmentSlots
-            ? this.makeRevolveSelectionLedgerPlan(angleRad, {
-                revol,
-                wire: profile.wire,
-                wireSegmentSlots: profile.wireSegmentSlots,
-              })
-            : undefined,
-      }
-    );
-    return { outputs, selections };
+    return execOcctRevolve(this.modelingFeatureContext(), feature, upstream);
   }
 
   private execLoft(feature: Loft, upstream: KernelResult): KernelResult {
-    const profiles = feature.profiles ?? [];
-    if (profiles.length < 2) {
-      throw new Error("OCCT backend: loft requires at least two profiles");
-    }
-    const resolved = profiles.map((profileRef) =>
-      this.resolveProfile(profileRef, upstream)
-    );
-    const sections = resolved.map((profile) => this.buildProfileWire(profile));
-    const allClosed = sections.every((section) => section.closed);
-    let isSolid = allClosed;
-    const mode = feature.mode;
-    if (mode === "surface") {
-      isSolid = false;
-    } else if (mode === "solid") {
-      if (!allClosed) {
-        throw new Error("OCCT backend: loft solid requires closed profiles");
-      }
-      isSolid = true;
-    } else {
-      // Default: auto-select by closed/open profiles.
-      isSolid = allClosed;
-    }
-    const loft = this.makeLoftBuilder(isSolid);
-
-    for (const section of sections) {
-      this.addLoftWire(loft, section.wire);
-    }
-    if (
-      typeof (loft as any).CheckCompatibility === "function" ||
-      typeof (loft as any).CheckCompatibility_1 === "function"
-    ) {
-      try {
-        this.callWithFallback(
-          loft,
-          ["CheckCompatibility", "CheckCompatibility_1"],
-          [[true], [false]]
-        );
-      } catch {
-        // ignore compatibility check failures; build will surface real issues
-      }
-    }
-    this.tryBuild(loft);
-    const shape = this.readShape(loft);
-    const outputKind: "solid" | "surface" = isSolid ? "solid" : "surface";
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:${outputKind}`,
-          kind: outputKind,
-          meta: { shape },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      shape,
-      feature.id,
-      feature.result,
-      feature.tags,
-      { rootKind: isSolid ? "solid" : "face" }
-    );
-    return { outputs, selections };
+    return execOcctLoft(this.modelingFeatureContext(), feature, upstream);
   }
 
   private execSweep(
@@ -1034,67 +800,7 @@ export class OcctBackend implements Backend {
   }
 
   private execPipe(feature: Pipe, _upstream: KernelResult): KernelResult {
-    const axisDir = axisVector(feature.axis);
-    const length = expectNumber(feature.length, "feature.length");
-    if (length <= 0) {
-      throw new Error("OCCT backend: pipe length must be positive");
-    }
-    const outerDia = expectNumber(feature.outerDiameter, "feature.outerDiameter");
-    const innerDia =
-      feature.innerDiameter === undefined
-        ? 0
-        : expectNumber(feature.innerDiameter, "feature.innerDiameter");
-    const outerRadius = outerDia / 2;
-    const innerRadius = innerDia / 2;
-    if (outerRadius <= 0) {
-      throw new Error("OCCT backend: pipe outer diameter must be positive");
-    }
-    if (innerRadius < 0) {
-      throw new Error("OCCT backend: pipe inner diameter must be non-negative");
-    }
-    if (innerRadius > 0 && innerRadius >= outerRadius) {
-      throw new Error("OCCT backend: pipe inner diameter must be smaller than outer diameter");
-    }
-
-    const origin = feature.origin ?? [0, 0, 0];
-    const [ox, oy, oz] = origin;
-    const originVec: [number, number, number] = [
-      expectNumber(ox ?? 0, "feature.origin[0]"),
-      expectNumber(oy ?? 0, "feature.origin[1]"),
-      expectNumber(oz ?? 0, "feature.origin[2]"),
-    ];
-    const outerShape = this.readShape(
-      this.makeCylinder(outerRadius, length, axisDir, originVec)
-    );
-
-    let solid = outerShape;
-    if (innerRadius > 0) {
-      const innerShape = this.readShape(
-        this.makeCylinder(innerRadius, length, axisDir, originVec)
-      );
-      const cut = this.makeBoolean("cut", outerShape, innerShape);
-      solid = this.readShape(cut);
-      solid = this.splitByTools(solid, [outerShape, innerShape]);
-      solid = this.normalizeSolid(solid);
-    }
-
-    const outputs = new Map([
-      [
-        feature.result,
-        {
-          id: `${feature.id}:solid`,
-          kind: "solid" as const,
-          meta: { shape: solid },
-        },
-      ],
-    ]);
-    const selections = this.collectSelections(
-      solid,
-      feature.id,
-      feature.result,
-      feature.tags
-    );
-    return { outputs, selections };
+    return execOcctPipe(this.modelingFeatureContext(), feature);
   }
 
   private execDatumPlane(feature: DatumPlane, upstream: KernelResult): KernelResult {
