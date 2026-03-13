@@ -150,6 +150,13 @@ Completed in a follow-up slice:
   `apps/tf-service/route_actions.mjs`
 - job enqueue/orchestration and job-envelope helpers extracted to
   `apps/tf-service/job_runtime.mjs`
+- selection/measurement serialization and summarization helpers extracted to
+  `apps/tf-service/service_selection_measure.mjs`
+
+Runtime line-count tracking:
+- baseline before the latest runtime helper extraction: `apps/tf-service/server.mjs`
+  at 2015 lines
+- after `Extract tf-service selection/measure helpers`: 1681 lines
 
 Acceptance checks:
 - `npm run build -- --pretty false`
