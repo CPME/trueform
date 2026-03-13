@@ -1,36 +1,51 @@
 # Feature Sandbox Task List
 
-Updated: 2026-02-15
+Status: active narrow backlog
+Updated: 2026-03-13
+Owner: geometry/core
 
-Scope audited against requested feature set:
+Purpose: track the remaining sandbox follow-up work that is not already better
+owned by the broader parity plan.
 
-- [x] Sketch
-- [x] Extrude
-- [x] Revolve
-- [x] Sweep
-- [x] Loft
-- [x] Fillet
-- [x] Chamfer
-- [x] Boolean
-- [x] Pattern (linear/circular layout and source-solid replication)
-- [x] Mirror
-- [x] Shell
-- [x] Draft (staging)
-- [x] Reference geometry (datum plane/axis/frame + selector-based references)
+Related:
+- `specs/geometric-parity-plan.md` - overall parity milestones and promotion flow
+- `specs/feature-staging.md` - staging policy and current feature maturity
 
-## Active Sandbox Work
+## Shipped Scope Summary
 
-- [x] Add `feature.draft` to IR + DSL + compile graph + normalization + validation
-- [x] Add backend execution path for `feature.draft` in OCCT and mock backends
-- [x] Add focused tests:
-  - `src/tests/occt.draft.e2e.test.ts`
-  - `src/tests/dsl.helpers.e2e.test.ts` (draft helper)
-  - `src/tests/graph.inference.e2e.test.ts` (draft dependency inference)
-  - `src/tests/feature_staging.e2e.test.ts` (draft staging signal)
-- [x] Stage `feature.draft` in `src/feature_staging.ts` while robustness hardening continues
+The requested sandbox scope is already present for:
 
-## Next Tasks
+- sketch
+- extrude
+- revolve
+- sweep
+- loft
+- fillet
+- chamfer
+- boolean
+- pattern (linear/circular layout and source-solid replication)
+- mirror
+- shell
+- draft
+- reference geometry (datum plane/axis/frame plus selector-based references)
 
-- [ ] Extend pattern source support beyond solids (e.g., surface/face replication semantics).
-- [ ] Add negative-path draft tests (invalid selector kinds, extreme angles, mismatched source owners).
-- [ ] Add negative-path feature-pattern tests (result without source, invalid source kind, zero/negative counts).
+The original `feature.draft` implementation track is complete; remaining work is
+follow-up hardening only.
+
+## Outstanding Work
+
+1. Extend pattern source support beyond solids.
+- Add surface and face replication semantics only if the selector contract can
+  stay deterministic.
+
+2. Add negative-path draft tests.
+- Cover invalid selector kinds, extreme angles, and mismatched source owners.
+
+3. Add negative-path feature-pattern tests.
+- Cover missing result source, invalid source kind, and zero or negative counts.
+
+## Rule
+
+If a task changes feature maturity or parity state, track the promotion outcome
+in `specs/geometric-parity-plan.md` and `specs/feature-staging.md` rather than
+expanding this file into another broad tracker.

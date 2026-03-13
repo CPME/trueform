@@ -13,6 +13,10 @@ under `specs/`. There is no `ai-tasks/` directory in this checkout.
   - The scoped refactor items are complete and validated; follow-on work now lives in the maintainability backlog.
 - `specs/archive/sketch-dimensioning-trueform-plan.md`
   - The initial TrueForm sketch-dimensioning implementation plan is effectively complete; active follow-on work now lives in the TrueCAD backlog and runtime contract docs.
+- `specs/archive/sketch-solver-truecad-progress-2026-03-05.md`
+  - Completed sketch-solver implementation history moved out of the live backlog.
+- `specs/archive/maintainability-refactor-session-log-2026-03-10.md`
+  - Completed maintainability extraction history moved out of the live backlog.
 
 ## Outstanding Work
 
@@ -87,3 +91,6 @@ under `specs/`. There is no `ai-tasks/` directory in this checkout.
   - `specs/advanced-surfacing-three-slices-plan.md`
   - `specs/maintainability-refactor-backlog-2026-03-10.md`
   - `specs/sketch-solver-truecad-backlog.md`
+- Cleanup rule now applied:
+  - active docs should keep only remaining work
+  - completed implementation history belongs in `specs/archive/`

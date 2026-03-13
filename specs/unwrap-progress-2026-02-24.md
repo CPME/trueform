@@ -1,103 +1,74 @@
 # Unwrap Progress Tracker (2026-02-24)
 
-Purpose: capture current unwrap implementation status and the next execution
-steps so work can resume cleanly in the next session.
+Status: active tracker
+Updated: 2026-03-13
+Owner: geometry/core
 
-## Latest State
+Purpose: capture the current unwrap implementation state and the remaining
+quality work before public examples are re-enabled.
 
-- Branch: `main`
-- Last unwrap-focused commit: `c2d3364`
-- Public docs exposure status:
-  - `unwrap-solid` and `unwrap-shell` examples are removed from docs examples
-    and gallery output until quality sign-off.
-  - Public assets deleted:
-    - `docs/public/examples/dsl/unwrap-solid.iso.png`
-    - `docs/public/examples/dsl/unwrap-shell.iso.png`
+## Current State
 
-## Completed Milestones
+Latest notable unwrap commits:
 
-1. Planar face unwrap: `12bc68f`
-2. Cylindrical face unwrap: `b1dea7f`
-3. Unwrap metrics metadata: `95824a9`
-4. Multi-face developable input support: `e1aadaf`
-5. Thin-solid sheet extraction wrapper: `45152d4`
-6. Connected-face alignment + docs gating: `3bf56e1`
-7. Cube-style solid unwrap net fallback: `d7a66fa`
-8. Full solid-cylinder net (side + caps): `c2d3364`
-9. Deterministic seam ordering + stitch fallback + determinism test: `932b0ac`
+- `c2d3364` full solid-cylinder net (side plus caps)
+- `932b0ac` deterministic seam ordering, stitch fallback, and determinism test
 
-## Current Behavior
+Public docs exposure remains gated:
 
-- Supported unwrap source selections:
-  - `face`
-  - `surface` (single or multi-face)
-  - `solid` (thin-sheet, planar-polyhedral, and box-net paths)
-- Supported source geometry classes:
-  - Planar faces
-  - Cylindrical faces
-  - Thin solids via paired planar/cylindrical face extraction
-  - Axis-aligned rectangular solids (cube/cuboid) via deterministic net layout
-  - Full solid cylinders via rectangle + two cap faces
-  - Planar polyhedral solids (fallback connected layout)
-- Unwrap output:
-  - Face or compound face output on XY plane
-  - Metadata under `meta.unwrap`
+- `unwrap-solid` and `unwrap-shell` examples are still removed from docs and
+  gallery output until quality sign-off
+- public assets remain deleted:
+  - `docs/public/examples/dsl/unwrap-solid.iso.png`
+  - `docs/public/examples/dsl/unwrap-shell.iso.png`
 
-## Known Gaps
+## Supported Behavior
 
-1. Multi-face unwrap for complex swept surfaces can still look janky in
-   some cases (edge choices can create awkward overlaps even with deterministic
-   ordering and fallback placement).
-2. Complex enclosed boxy solids (many planar faces from stacked extrusions +
-   boolean ops) are now covered by e2e test, but current visual layout can
-   still overlap heavily and look unusable.
-3. Box/cube representative net is deterministic only for axis-aligned
-   rectangular solids; arbitrarily oriented boxes use planar-polyhedral fallback.
-4. No dedicated “before vs after unwrap” checked-in examples yet; current
-   review snapshots are generated privately under `/tmp/unwrap-review`.
+Supported source selections:
 
-## Resume Checklist
+- `face`
+- `surface` (single or multi-face)
+- `solid` (thin-sheet, planar-polyhedral, and box-net paths)
 
-1. Add seam-stitching pass after connected-face placement for unfoldable
-   face sets (prefer deterministic ordering and stable tolerances).
-2. Add targeted e2e assertions for seam continuity (beyond coincident vertices).
-3. Add non-public review render workflow/script for before/after snapshots.
-4. Re-enable public unwrap-solid and unwrap-shell docs examples only after
-   acceptance of visual/geometry quality.
+Supported source geometry classes:
 
-## Execution Plan (2026-02-25)
+- planar faces
+- cylindrical faces
+- thin solids via paired planar/cylindrical face extraction
+- axis-aligned rectangular solids via deterministic net layout
+- full solid cylinders via rectangle plus two cap faces
+- planar polyhedral solids via fallback connected layout
 
-1. Solid cylinder complete net
-   - Implement solid-cylinder unwrap path that emits:
-     - one lateral rectangle (`2*pi*r` by `height`)
-     - two circular cap faces
-   - Layout target:
-     - rectangle centered at origin, one cap above, one cap below
-   - Metadata:
-     - `solidExtraction.method = "solidCylinderNet"`
-     - include `radius`, `height`, `capCount`.
-   - Acceptance:
-     - unwrap e2e verifies `>=3` faces, area conservation, and metadata.
+Output:
 
-2. Deterministic seam-cut policy for planar polyhedra
-   - Replace traversal-order dependence with stable face ordering + stable
-     adjacency edge ordering.
-   - Prefer non-overlapping placement and consistent cut choices.
-   - Acceptance:
-     - cube and representative planar-poly tests give repeatable layouts across runs.
+- face or compound-face result on the XY plane
+- metadata under `meta.unwrap`
 
-3. Post-layout merge/stitch attempt
-  - Add optional merge attempt for connected coplanar seams after placement.
-  - Keep fallback to existing compound output if merge fails.
-  - Acceptance:
-    - no regressions in existing unwrap tests.
-    - add targeted assertions where merged topology is expected.
+## Outstanding Work
 
-4. Visual and docs gating workflow
-   - Keep new unwrap examples private until manual sign-off.
-   - Regenerate `/tmp/unwrap-review` images for each milestone.
-   - Acceptance:
-     - explicit before/after image set for shell, cylinder, and cube.
+1. Seam stitching after connected-face placement.
+- Prefer deterministic ordering and stable tolerances for unfoldable face sets.
+
+2. Seam continuity assertions.
+- Add targeted e2e assertions that go beyond coincident vertices.
+
+3. Private visual review workflow.
+- Add a non-public render workflow or script for before/after snapshots.
+
+4. Public example re-enable gate.
+- Re-enable `unwrap-solid` and `unwrap-shell` only after visual and geometry
+  quality sign-off.
+
+## Known Quality Gaps
+
+1. Multi-face unwrap for complex swept surfaces can still produce awkward
+   overlaps.
+2. Complex enclosed boxy solids can still produce heavily overlapping layouts.
+3. Box/cube representative nets are deterministic only for axis-aligned
+   rectangular solids; arbitrarily oriented boxes still use the planar-polyhedral
+   fallback.
+4. Checked-in before/after review examples do not exist yet; current snapshots
+   are generated privately under `/tmp/unwrap-review`.
 
 ## Validation Commands
 

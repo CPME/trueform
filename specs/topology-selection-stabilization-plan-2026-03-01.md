@@ -1,5 +1,16 @@
 # Topology Selection Stabilization Plan (2026-03-01)
 
+Status: reference checkpoint
+Updated: 2026-03-13
+Owner: geometry/core
+
+Purpose: record the current semantic-topology stopping point and the narrow
+follow-up work that still looks worthwhile.
+
+Use:
+- this file as a checkpoint/reference doc
+- `specs/task-review-2026-03-13.md` for the broader outstanding-task inventory
+
 This file records the current stopping point for the semantic topology refactor.
 
 ## Goal

@@ -1,8 +1,8 @@
 # Advanced Surfacing Three-Slice Plan
 
-Updated: 2026-02-25
+Updated: 2026-03-13
 Owner: geometry/core
-Status: in_progress
+Status: active technical design
 
 Purpose: define a concrete implementation path for the highest-value surfacing
 gaps vs leading CAD systems, while preserving TrueForm determinism and webapp-safe
@@ -12,6 +12,22 @@ Related:
 - `specs/geometric-parity-plan.md` (overall parity tracker)
 - `specs/geometric-benchmark-corpus.json` (scoring source of truth)
 - `specs/feature-staging.md` (staging registry policy)
+
+## Ownership
+
+This doc owns the technical design and slice boundaries for advanced surfacing.
+
+The live milestone state stays in `specs/geometric-parity-plan.md`:
+
+- M11 owns overall advanced-surfacing parity status
+- this file owns slice-specific technical design and acceptance detail
+
+## Outstanding Work Snapshot
+
+1. Finish Slice 2 (`boundary` and `fill`) implementation and validation.
+2. Finish Slice 3 (guide-curve and curve-on-surface infrastructure).
+3. Promote Slice 1 (`trim`, `extend`, `knit`) from staging only after the
+   parity promotion gates clear.
 
 ## Scope
 

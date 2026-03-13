@@ -1,7 +1,16 @@
 # Sketch Webapp Runtime Contract
 
-Status: TrueForm surface frozen (v1 candidate), TrueCAD wiring pending
+Status: reference contract (TrueForm surface frozen, TrueCAD wiring pending)
 Updated: 2026-03-05
+Owner: sketch/runtime
+
+Purpose: define the interaction contract between TrueCAD and the shared
+TrueForm sketch solver during high-frequency editing.
+
+Use:
+- this file for the stable runtime contract
+- `specs/sketch-solver-truecad-backlog.md` for remaining shared-solver work
+- `specs/sketch-dimensioning-truecad-plan.md` for TrueCAD-owned integration work
 
 ## Goal
 
