@@ -43,7 +43,8 @@ boundary-extraction sweep.
 - after `Extract OCCT modeling feature ops` (`1e0a277`): 4820 lines
 - after `Extract OCCT hole depth ops` (`dc0394f`): 4732 lines
 - after `Extract OCCT pipe shell primitives` (`f347a11`): 4503 lines
-- after `Extract OCCT shape mutation primitives`: 4242 lines
+- after `Extract OCCT shape mutation primitives` (`6b901bc`): 4242 lines
+- after `Extract OCCT datum/pattern ops`: 4077 lines
 
 ## Outstanding Work
 
@@ -81,8 +82,11 @@ Open slices:
   - `src/occt/pipe_shell_primitives.ts`
 - Shape mutation / collection helpers now live in:
   - `src/occt/shape_mutation_primitives.ts`
+- Datum/pattern helpers now live in:
+  - `src/occt/datum_pattern_ops.ts`
 - Remaining work:
-  - continue removing the leftover inline resolution glue from `src/backend_occt.ts`
+  - continue removing the leftover inline geometry-analysis and resolution glue
+    from `src/backend_occt.ts`
   - tighten module ownership boundaries and direct module coverage where needed
 
 2. Convert `src/backend_occt.ts` into an orchestration-focused class.
