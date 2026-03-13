@@ -159,6 +159,11 @@ import {
   type ModelingFeatureContext,
 } from "./occt/modeling_feature_ops.js";
 import {
+  resolveHoleDepth as resolveOcctHoleDepth,
+  resolveHoleEndCondition as resolveOcctHoleEndCondition,
+  type HoleDepthDeps,
+} from "./occt/hole_depth_ops.js";
+import {
   buildSketchWire as buildOcctSketchWire,
   buildSketchWireWithStatus as buildOcctSketchWireWithStatus,
   segmentSlotsForLoop as collectOcctSegmentSlotsForLoop,
@@ -714,6 +719,24 @@ export class OcctBackend implements Backend {
       makeBoolean: (op, left, right) => this.makeBoolean(op, left, right),
       splitByTools: (shape, tools) => this.splitByTools(shape, tools as any[]),
       normalizeSolid: (shape) => this.normalizeSolid(shape),
+    };
+  }
+
+  private holeDepthDeps(): HoleDepthDeps {
+    return {
+      occt: this.occt as any,
+      shapeBounds: (shape: any) => this.shapeBounds(shape),
+      axisBounds: (axis: [number, number, number], bounds) => this.axisBounds(axis, bounds),
+      throughAllDepth: (shape: any, axisDir: [number, number, number], origin: [number, number, number]) =>
+        this.throughAllDepth(shape, axisDir, origin),
+      readShape: (shape: any) => this.readShape(shape),
+      makeCylinder: (
+        radius: number,
+        height: number,
+        axisDir: [number, number, number],
+        origin: [number, number, number]
+      ) => this.makeCylinder(radius, height, axisDir, origin),
+      makeBoolean: (op: "intersect", left: any, right: any) => this.makeBoolean(op, left, right),
     };
   }
 
@@ -1453,9 +1476,17 @@ export class OcctBackend implements Backend {
         patternCenters: (patternRef, position, holePlane, context) =>
           this.patternCenters(patternRef as ID, position, holePlane, context),
         addVec: (a, b) => this.addVec(a, b),
-        resolveHoleEndCondition: (holeFeature) => this.resolveHoleEndCondition(holeFeature),
+        resolveHoleEndCondition: (holeFeature) => resolveOcctHoleEndCondition(holeFeature),
         resolveHoleDepth: (holeFeature, ownerShape, holeAxis, origin, holeRadius, endCondition) =>
-          this.resolveHoleDepth(holeFeature, ownerShape, holeAxis, origin, holeRadius, endCondition),
+          resolveOcctHoleDepth(
+            this.holeDepthDeps(),
+            holeFeature,
+            ownerShape,
+            holeAxis,
+            origin,
+            holeRadius,
+            endCondition
+          ),
         readShape: (shape) => this.readShape(shape),
         makeCylinder: (rad, height, holeAxis, origin) =>
           this.makeCylinder(rad, height, holeAxis, origin),
@@ -1497,134 +1528,6 @@ export class OcctBackend implements Backend {
       }
     );
     return { outputs, selections };
-  }
-
-  private resolveHoleEndCondition(feature: Hole): HoleEndCondition {
-    if (feature.wizard?.endCondition) {
-      return feature.wizard.endCondition;
-    }
-    return feature.depth === "throughAll" ? "throughAll" : "blind";
-  }
-
-  private resolveHoleDepth(
-    feature: Hole,
-    owner: any,
-    axisDir: [number, number, number],
-    origin: [number, number, number],
-    holeRadius: number,
-    endCondition: HoleEndCondition
-  ): number {
-    if (endCondition === "blind") {
-      return expectNumber(feature.depth, "feature.depth");
-    }
-    if (endCondition === "throughAll" || endCondition === "upToLast") {
-      return this.depthToBodyLimit(owner, axisDir, origin, holeRadius, "last");
-    }
-    return this.depthToBodyLimit(owner, axisDir, origin, holeRadius, "next");
-  }
-
-  private depthToBodyLimit(
-    shape: any,
-    axisDir: [number, number, number],
-    origin: [number, number, number],
-    holeRadius: number,
-    mode: "next" | "last"
-  ): number {
-    const probeDepth = this.depthToBodyLimitByProbe(shape, axisDir, origin, holeRadius, mode);
-    if (probeDepth !== null) return probeDepth;
-    const boundsDepth = this.depthToBodyLimitByBounds(shape, axisDir, origin, mode);
-    if (boundsDepth !== null) return boundsDepth;
-    return this.throughAllDepth(shape, axisDir, origin);
-  }
-
-  private depthToBodyLimitByProbe(
-    shape: any,
-    axisDir: [number, number, number],
-    origin: [number, number, number],
-    holeRadius: number,
-    mode: "next" | "last"
-  ): number | null {
-    const axis = normalizeVector(axisDir);
-    if (!isFiniteVec(axis)) return null;
-    const maxDepth = this.depthToBodyLimitByBounds(shape, axis, origin, "last");
-    if (!(maxDepth !== null && maxDepth > 0)) return null;
-
-    const probeRadius = Math.max(0.05, Math.min(0.5, holeRadius * 0.25));
-    const probeHeight = maxDepth + this.holeDepthMargin(maxDepth);
-    if (!(probeHeight > 0)) return null;
-
-    let probe: any;
-    let intersected: any;
-    try {
-      probe = this.readShape(this.makeCylinder(probeRadius, probeHeight, axis, origin));
-      intersected = this.readShape(this.makeBoolean("intersect", shape, probe));
-    } catch {
-      return null;
-    }
-
-    const ranges = this.collectSolidProjectionRanges(intersected, axis);
-    if (ranges.length === 0) return null;
-    const start = dot(origin, axis);
-    const eps = 1e-6;
-    const distances: number[] = [];
-    for (const range of ranges) {
-      const entry = Math.max(range.min, start);
-      const exit = range.max;
-      const depth = exit - entry;
-      if (exit > start + eps && depth > eps) {
-        distances.push(exit - start);
-      }
-    }
-    if (distances.length === 0) return null;
-    const base = mode === "next" ? Math.min(...distances) : Math.max(...distances);
-    if (!(base > 0)) return null;
-    return base + this.holeDepthMargin(base);
-  }
-
-  private depthToBodyLimitByBounds(
-    shape: any,
-    axisDir: [number, number, number],
-    origin: [number, number, number],
-    mode: "next" | "last"
-  ): number | null {
-    const axis = normalizeVector(axisDir);
-    if (!isFiniteVec(axis)) return null;
-    const extents = this.axisBounds(axis, this.shapeBounds(shape));
-    if (!extents) return null;
-    const start = dot(origin, axis);
-    const span = extents.max - extents.min;
-    if (!(span > 0)) return null;
-    const next = extents.max - start;
-    if (!(next > 1e-6)) return null;
-    const base = mode === "last" ? next : next;
-    return base + this.holeDepthMargin(base);
-  }
-
-  private collectSolidProjectionRanges(
-    shape: any,
-    axis: [number, number, number]
-  ): Array<{ min: number; max: number }> {
-    const occt = this.occt as any;
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_SOLID,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    const ranges: Array<{ min: number; max: number }> = [];
-    for (; explorer.More(); explorer.Next()) {
-      const solid = explorer.Current();
-      const bounds = this.axisBounds(axis, this.shapeBounds(solid));
-      if (bounds) {
-        ranges.push({ min: bounds.min, max: bounds.max });
-      }
-    }
-    ranges.sort((a, b) => a.min - b.min);
-    return ranges;
-  }
-
-  private holeDepthMargin(depth: number): number {
-    return Math.max(0.05, depth * 0.02);
   }
 
   private execBoolean(
@@ -2462,8 +2365,17 @@ export class OcctBackend implements Backend {
     origin?: [number, number, number]
   ): number {
     if (origin) {
-      const byBounds = this.depthToBodyLimitByBounds(shape, axisDir, origin, "last");
-      if (byBounds !== null) return byBounds;
+      const axis = normalizeVector(axisDir);
+      if (isFiniteVec(axis)) {
+        const extents = this.axisBounds(axis, this.shapeBounds(shape));
+        if (extents) {
+          const start = dot(origin, axis);
+          const next = extents.max - start;
+          if (next > 1e-6) {
+            return next + Math.max(0.05, next * 0.02);
+          }
+        }
+      }
     }
     const bounds = this.shapeBounds(shape);
     const lenX = bounds.max[0] - bounds.min[0];
