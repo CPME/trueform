@@ -171,6 +171,22 @@ import {
   type PipeShellPrimitiveDeps,
 } from "./occt/pipe_shell_primitives.js";
 import {
+  collectEdgesFromShape as collectOcctEdgesFromShape,
+  collectFacesFromShape as collectOcctFacesFromShape,
+  collectToolFaces as collectOcctToolFaces,
+  containsShape as containsOcctShape,
+  deleteFacesBySewing as deleteOcctFacesBySewing,
+  deleteFacesWithDefeaturing as deleteOcctFacesWithDefeaturing,
+  isValidShape as isOcctValidShape,
+  makeSolidFromShells as makeOcctSolidFromShells,
+  replaceFacesBySewing as replaceOcctFacesBySewing,
+  replaceFacesWithReshape as replaceOcctFacesWithReshape,
+  solidVolume as resolveOcctSolidVolume,
+  uniqueFaceShapes as collectOcctUniqueFaceShapes,
+  uniqueShapeList as collectOcctUniqueShapeList,
+  type ShapeMutationPrimitiveDeps,
+} from "./occt/shape_mutation_primitives.js";
+import {
   buildSketchWire as buildOcctSketchWire,
   buildSketchWireWithStatus as buildOcctSketchWireWithStatus,
   segmentSlotsForLoop as collectOcctSegmentSlotsForLoop,
@@ -2636,188 +2652,22 @@ export class OcctBackend implements Backend {
   }
 
   private makeSolidFromShells(shape: any): any | null {
-    const occt = this.occt as any;
-    const shells: any[] = [];
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_SHELL,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    for (; explorer.More(); explorer.Next()) {
-      shells.push(explorer.Current());
-    }
-    if (shells.length === 0) return null;
-    let builder: any;
-    try {
-      builder = this.newOcct("BRepBuilderAPI_MakeSolid");
-    } catch {
-      return null;
-    }
-    for (const shell of shells) {
-      this.callWithFallback(builder, ["Add", "Add_1"], [[this.toShell(shell)]]);
-    }
-    this.tryBuild(builder);
-    try {
-      return this.readShape(builder);
-    } catch {
-      return null;
-    }
+    return makeOcctSolidFromShells(this.shapeMutationPrimitiveDeps(), shape);
   }
 
   private deleteFacesWithDefeaturing(shape: any, removeFaces: any[]): any | null {
-    let builder: any;
-    try {
-      builder = this.newOcct("BRepAlgoAPI_Defeaturing", shape);
-    } catch {
-      try {
-        builder = this.newOcct("BRepAlgoAPI_Defeaturing");
-      } catch {
-        return null;
-      }
-      try {
-        this.callWithFallback(builder, ["SetShape", "SetShape_1"], [[shape]]);
-      } catch {
-        return null;
-      }
-    }
-
-    const faceList = this.makeShapeList(removeFaces.map((face) => this.toFace(face)));
-    let added = false;
-    try {
-      this.callWithFallback(
-        builder,
-        ["AddFacesToRemove", "AddFacesToRemove_1", "SetFacesToRemove", "SetFacesToRemove_1"],
-        [[faceList]]
-      );
-      added = true;
-    } catch {
-      // Fall back to adding faces one-by-one.
-    }
-    if (!added) {
-      for (const face of removeFaces) {
-        try {
-          this.callWithFallback(
-            builder,
-            ["AddFaceToRemove", "AddFaceToRemove_1", "AddFace", "AddFace_1", "Add", "Add_1"],
-            [[this.toFace(face)]]
-          );
-          added = true;
-        } catch {
-          // Try next method/face.
-        }
-      }
-    }
-    if (!added) return null;
-
-    try {
-      this.tryBuild(builder);
-      return this.readShape(builder);
-    } catch {
-      return null;
-    }
+    return deleteOcctFacesWithDefeaturing(this.shapeMutationPrimitiveDeps(), shape, removeFaces);
   }
 
   private deleteFacesBySewing(shape: any, removeFaces: any[]): any | null {
-    const occt = this.occt as any;
-    let sewing: any;
-    try {
-      sewing = this.newOcct("BRepBuilderAPI_Sewing", 1e-6, true, true, true, false);
-    } catch {
-      try {
-        sewing = this.newOcct("BRepBuilderAPI_Sewing");
-      } catch {
-        return null;
-      }
-    }
-    const add =
-      typeof sewing.Add_1 === "function"
-        ? sewing.Add_1.bind(sewing)
-        : typeof sewing.Add === "function"
-          ? sewing.Add.bind(sewing)
-          : null;
-    if (!add) return null;
-
-    let kept = 0;
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_FACE,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    for (; explorer.More(); explorer.Next()) {
-      const face = this.toFace(explorer.Current());
-      if (this.containsShape(removeFaces, face)) {
-        continue;
-      }
-      try {
-        add(face);
-        kept += 1;
-      } catch {
-        continue;
-      }
-    }
-    if (kept === 0) return null;
-
-    try {
-      const progress = this.makeProgressRange();
-      if (progress !== null && progress !== undefined) {
-        sewing.Perform(progress);
-      } else {
-        sewing.Perform();
-      }
-    } catch {
-      try {
-        sewing.Perform();
-      } catch {
-        return null;
-      }
-    }
-
-    try {
-      return this.callWithFallback(sewing, ["SewedShape", "SewedShape_1"], [[]]);
-    } catch {
-      return null;
-    }
+    return deleteOcctFacesBySewing(this.shapeMutationPrimitiveDeps(), shape, removeFaces);
   }
 
   private replaceFacesWithReshape(
     shape: any,
     replacements: Array<{ from: any; to: any }>
   ): any | null {
-    let reshape: any;
-    try {
-      reshape = this.newOcct("BRepTools_ReShape");
-    } catch {
-      try {
-        reshape = this.newOcct("ShapeBuild_ReShape");
-      } catch {
-        return null;
-      }
-    }
-
-    let replacedAny = false;
-    for (const replacement of replacements) {
-      const fromFace = this.toFace(replacement.from);
-      const toFace = this.toFace(replacement.to);
-      try {
-        this.callWithFallback(reshape, ["Replace", "Replace_1"], [
-          [fromFace, toFace],
-          [fromFace, toFace, true],
-          [fromFace, toFace, false],
-        ]);
-        replacedAny = true;
-      } catch {
-        continue;
-      }
-    }
-    if (!replacedAny) return null;
-
-    try {
-      return this.callWithFallback(reshape, ["Apply", "Apply_1"], [[shape]]);
-    } catch {
-      return null;
-    }
+    return replaceOcctFacesWithReshape(this.shapeMutationPrimitiveDeps(), shape, replacements);
   }
 
   private replaceFacesBySewing(
@@ -2825,114 +2675,19 @@ export class OcctBackend implements Backend {
     removeFaces: any[],
     replacementFaces: any[]
   ): any | null {
-    const occt = this.occt as any;
-    let sewing: any;
-    try {
-      sewing = this.newOcct("BRepBuilderAPI_Sewing", 1e-6, true, true, true, false);
-    } catch {
-      try {
-        sewing = this.newOcct("BRepBuilderAPI_Sewing");
-      } catch {
-        return null;
-      }
-    }
-    const add =
-      typeof sewing.Add_1 === "function"
-        ? sewing.Add_1.bind(sewing)
-        : typeof sewing.Add === "function"
-          ? sewing.Add.bind(sewing)
-          : null;
-    if (!add) return null;
-
-    const facesToRemove = this.uniqueShapeList(removeFaces);
-    let added = 0;
-
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_FACE,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    for (; explorer.More(); explorer.Next()) {
-      const face = this.toFace(explorer.Current());
-      if (this.containsShape(facesToRemove, face)) continue;
-      try {
-        add(face);
-        added += 1;
-      } catch {
-        continue;
-      }
-    }
-    for (const face of replacementFaces) {
-      try {
-        add(this.toFace(face));
-        added += 1;
-      } catch {
-        continue;
-      }
-    }
-    if (added === 0) return null;
-
-    try {
-      const progress = this.makeProgressRange();
-      if (progress !== null && progress !== undefined) {
-        sewing.Perform(progress);
-      } else {
-        sewing.Perform();
-      }
-    } catch {
-      try {
-        sewing.Perform();
-      } catch {
-        return null;
-      }
-    }
-    try {
-      return this.callWithFallback(sewing, ["SewedShape", "SewedShape_1"], [[]]);
-    } catch {
-      return null;
-    }
+    return replaceOcctFacesBySewing(this.shapeMutationPrimitiveDeps(), shape, removeFaces, replacementFaces);
   }
 
   private uniqueFaceShapes(selections: KernelSelection[]): any[] {
-    const faces: any[] = [];
-    for (const selection of selections) {
-      const shape = selection.meta["shape"];
-      if (!shape) continue;
-      faces.push(this.toFace(shape));
-    }
-    return this.uniqueShapeList(faces);
+    return collectOcctUniqueFaceShapes(this.shapeMutationPrimitiveDeps(), selections);
   }
 
   private collectToolFaces(selections: KernelSelection[]): any[] {
-    const faces: any[] = [];
-    for (const selection of selections) {
-      const shape = selection.meta["shape"];
-      if (!shape) continue;
-      if (selection.kind === "face") {
-        faces.push(this.toFace(shape));
-        continue;
-      }
-      if (selection.kind === "surface") {
-        faces.push(...this.collectFacesFromShape(shape));
-      }
-    }
-    return this.uniqueShapeList(faces);
+    return collectOcctToolFaces(this.shapeMutationPrimitiveDeps(), selections);
   }
 
   private collectFacesFromShape(shape: any): any[] {
-    const occt = this.occt as any;
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_FACE,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    const faces: any[] = [];
-    for (; explorer.More(); explorer.Next()) {
-      faces.push(this.toFace(explorer.Current()));
-    }
-    return faces;
+    return collectOcctFacesFromShape(this.shapeMutationPrimitiveDeps(), shape);
   }
 
   private annotateEdgeAdjacencyMetadata(
@@ -2944,59 +2699,23 @@ export class OcctBackend implements Backend {
   }
 
   private collectEdgesFromShape(shape: any): any[] {
-    const occt = this.occt as any;
-    const explorer = new occt.TopExp_Explorer_1();
-    explorer.Init(
-      shape,
-      occt.TopAbs_ShapeEnum.TopAbs_EDGE,
-      occt.TopAbs_ShapeEnum.TopAbs_SHAPE
-    );
-    const edges: any[] = [];
-    for (; explorer.More(); explorer.Next()) {
-      edges.push(this.toEdge(explorer.Current()));
-    }
-    return edges;
+    return collectOcctEdgesFromShape(this.shapeMutationPrimitiveDeps(), shape);
   }
 
   private uniqueShapeList(shapes: any[]): any[] {
-    const unique: any[] = [];
-    for (const shape of shapes) {
-      if (this.containsShape(unique, shape)) continue;
-      unique.push(shape);
-    }
-    return unique;
+    return collectOcctUniqueShapeList(this.shapeMutationPrimitiveDeps(), shapes);
   }
 
   private containsShape(candidates: any[], shape: any): boolean {
-    const hash = this.shapeHash(shape);
-    for (const candidate of candidates) {
-      if (this.shapeHash(candidate) !== hash) continue;
-      if (this.shapesSame(candidate, shape)) return true;
-    }
-    return false;
+    return containsOcctShape(this.shapeMutationPrimitiveDeps(), candidates, shape);
   }
 
   private isValidShape(shape: any, kind: KernelObject["kind"] = "solid"): boolean {
-    try {
-      return this.checkValid({ id: "tmp", kind, meta: { shape } } as KernelObject);
-    } catch {
-      return true;
-    }
+    return isOcctValidShape(this.shapeMutationPrimitiveDeps(), shape, kind);
   }
 
   private solidVolume(solid: any): number {
-    const occt = this.occt as any;
-    if (!occt.GProp_GProps_1 || !occt.BRepGProp?.VolumeProperties_1) {
-      return -Infinity;
-    }
-    try {
-      const props = new occt.GProp_GProps_1();
-      occt.BRepGProp.VolumeProperties_1(solid, props, true, true, true);
-      const mass = typeof props.Mass === "function" ? props.Mass() : undefined;
-      return typeof mass === "number" && !Number.isNaN(mass) ? mass : -Infinity;
-    } catch {
-      return -Infinity;
-    }
+    return resolveOcctSolidVolume(this.shapeMutationPrimitiveDeps(), solid);
   }
 
   private tryBuild(builder: any) {
@@ -3862,6 +3581,26 @@ export class OcctBackend implements Backend {
         this.makeCircleEdge(center, radius, normal),
       makeWireFromEdges: (edges: any[]) => this.makeWireFromEdges(edges),
       makeFaceFromWire: (wire: any) => this.makeFaceFromWire(wire),
+    };
+  }
+
+  private shapeMutationPrimitiveDeps(): ShapeMutationPrimitiveDeps {
+    return {
+      occt: this.occt as any,
+      newOcct: (name: string, ...args: unknown[]) => this.newOcct(name, ...args),
+      callWithFallback: (target: any, methods: string[], argSets: unknown[][]) =>
+        this.callWithFallback(target, methods, argSets as any),
+      tryBuild: (builder: any) => this.tryBuild(builder),
+      readShape: (shape: any) => this.readShape(shape),
+      makeProgressRange: () => this.makeProgressRange(),
+      toFace: (face: any) => this.toFace(face),
+      toEdge: (edge: any) => this.toEdge(edge),
+      toShell: (shell: any) => this.toShell(shell),
+      shapeHash: (shape: any) => this.shapeHash(shape),
+      shapesSame: (left: any, right: any) => this.shapesSame(left, right),
+      checkValid: (target: KernelObject) => this.checkValid(target),
+      countSolids: (shape: any) => this.countSolids(shape),
+      makeShapeList: (shapes: any[]) => this.makeShapeList(shapes),
     };
   }
 

@@ -42,7 +42,8 @@ boundary-extraction sweep.
 - after `Extract OCCT builder primitives` (`a29b0e3`): 5114 lines
 - after `Extract OCCT modeling feature ops` (`1e0a277`): 4820 lines
 - after `Extract OCCT hole depth ops` (`dc0394f`): 4732 lines
-- after `Extract OCCT pipe shell primitives`: 4503 lines
+- after `Extract OCCT pipe shell primitives` (`f347a11`): 4503 lines
+- after `Extract OCCT shape mutation primitives`: 4242 lines
 
 ## Outstanding Work
 
@@ -78,6 +79,8 @@ Open slices:
   - `src/occt/hole_depth_ops.ts`
 - Thick-solid / pipe-shell / sweep-shell helpers now live in:
   - `src/occt/pipe_shell_primitives.ts`
+- Shape mutation / collection helpers now live in:
+  - `src/occt/shape_mutation_primitives.ts`
 - Remaining work:
   - continue removing the leftover inline resolution glue from `src/backend_occt.ts`
   - tighten module ownership boundaries and direct module coverage where needed
