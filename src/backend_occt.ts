@@ -132,6 +132,13 @@ import {
   type ProfilePrimitiveDeps,
 } from "./occt/profile_primitives.js";
 import {
+  makeArcEdge as makeOcctArcEdge,
+  makeCircleEdge as makeOcctCircleEdge,
+  makeEllipseEdge as makeOcctEllipseEdge,
+  makeLineEdge as makeOcctLineEdge,
+  type CurveEdgePrimitiveDeps,
+} from "./occt/curve_edge_primitives.js";
+import {
   buildSketchWire as buildOcctSketchWire,
   buildSketchWireWithStatus as buildOcctSketchWireWithStatus,
   segmentSlotsForLoop as collectOcctSegmentSlotsForLoop,
@@ -4397,10 +4404,7 @@ export class OcctBackend implements Backend {
   }
 
   private makeLineEdge(start: [number, number, number], end: [number, number, number]) {
-    const p1 = this.makePnt(start[0], start[1], start[2]);
-    const p2 = this.makePnt(end[0], end[1], end[2]);
-    const builder = this.newOcct("BRepBuilderAPI_MakeEdge", p1, p2);
-    return this.readShape(builder);
+    return makeOcctLineEdge(this.curveEdgePrimitiveDeps(), start, end);
   }
 
   private makeArcEdge(
@@ -4408,24 +4412,7 @@ export class OcctBackend implements Backend {
     mid: [number, number, number],
     end: [number, number, number]
   ) {
-    const p1 = this.makePnt(start[0], start[1], start[2]);
-    const p2 = this.makePnt(mid[0], mid[1], mid[2]);
-    const p3 = this.makePnt(end[0], end[1], end[2]);
-    try {
-      const arc = this.newOcct("GC_MakeArcOfCircle", p1, p2, p3);
-      const curveHandle = this.call(arc, "Value");
-      const curve = curveHandle?.get ? curveHandle.get() : curveHandle;
-      const curveBase = this.newOcct("Handle_Geom_Curve", curve);
-      const edgeBuilder = this.newOcct("BRepBuilderAPI_MakeEdge", curveBase);
-      return this.readShape(edgeBuilder);
-    } catch {
-      try {
-        const builder = this.newOcct("BRepBuilderAPI_MakeEdge", p1, p2, p3);
-        return this.readShape(builder);
-      } catch {
-        return this.makeLineEdge(start, end);
-      }
-    }
+    return makeOcctArcEdge(this.curveEdgePrimitiveDeps(), start, mid, end);
   }
 
   private makeCircleEdge(
@@ -4433,12 +4420,7 @@ export class OcctBackend implements Backend {
     radius: number,
     normal: [number, number, number]
   ) {
-    const pnt = this.makePnt(center[0], center[1], center[2]);
-    const dir = this.makeDir(normal[0], normal[1], normal[2]);
-    const ax2 = this.makeAx2(pnt, dir);
-    const circ = this.makeCirc(ax2, radius);
-    const builder = this.newOcct("BRepBuilderAPI_MakeEdge", circ);
-    return this.readShape(builder);
+    return makeOcctCircleEdge(this.curveEdgePrimitiveDeps(), center, radius, normal);
   }
 
   private makeEllipseEdge(
@@ -4448,13 +4430,7 @@ export class OcctBackend implements Backend {
     major: number,
     minor: number
   ) {
-    const pnt = this.makePnt(center[0], center[1], center[2]);
-    const dir = this.makeDir(normal[0], normal[1], normal[2]);
-    const xAxis = this.makeDir(xDir[0], xDir[1], xDir[2]);
-    const ax2 = this.makeAx2WithXDir(pnt, dir, xAxis);
-    const elips = this.newOcct("gp_Elips", ax2, major, minor);
-    const builder = this.newOcct("BRepBuilderAPI_MakeEdge", elips);
-    return this.readShape(builder);
+    return makeOcctEllipseEdge(this.curveEdgePrimitiveDeps(), center, xDir, normal, major, minor);
   }
 
   private makeSplineEdge(
@@ -4671,6 +4647,14 @@ export class OcctBackend implements Backend {
     return {
       occt: this.occt as any,
       newOcct: (name: string, ...args: unknown[]) => this.newOcct(name, ...args),
+    };
+  }
+
+  private curveEdgePrimitiveDeps(): CurveEdgePrimitiveDeps {
+    return {
+      ...this.shapePrimitiveDeps(),
+      readShape: (builder: any) => this.readShape(builder),
+      call: (target: any, method: string, ...args: any[]) => this.call(target, method, ...args),
     };
   }
 

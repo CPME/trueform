@@ -34,9 +34,10 @@ boundary-extraction sweep.
 
 - baseline before the recent backend slices: `src/backend_occt.ts` at 5457 lines
 - after `Extract OCCT profile-plane adapters` (`693791a`): 5438 lines
-- current working slice after `shape_primitives` extraction: 5415 lines
-- current working slice after `profile_primitives` extraction: 5346 lines
-- current working slice after `sketch_wire_builder` extraction: 5312 lines
+- after `Extract OCCT shape primitives` (`233f9bc`): 5415 lines
+- after `Extract OCCT profile primitives` (`98430c7`): 5346 lines
+- after `Extract OCCT sketch wire builder` (`435accf`): 5312 lines
+- after `Extract OCCT curve edge primitives`: 5296 lines
 
 ## Outstanding Work
 
@@ -60,6 +61,8 @@ Open slices:
   - `src/occt/profile_primitives.ts`
 - Sketch loop/wire assembly now lives in:
   - `src/occt/sketch_wire_builder.ts`
+- Curve edge constructors now live in:
+  - `src/occt/curve_edge_primitives.ts`
 - Remaining work:
   - continue removing the leftover inline resolution glue from `src/backend_occt.ts`
   - tighten module ownership boundaries and direct module coverage where needed
