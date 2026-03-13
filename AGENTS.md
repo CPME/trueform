@@ -10,10 +10,8 @@ To create the open sourced CAD tools and standards that enables the world of har
 
 ## General Instructions
 - Commit changes as you go (only the changes you made, unless otherwise noted)
-- Keep `src/backend_occt.ts` at or below `4000` lines. If a change would keep it above that threshold, extract a cohesive helper or feature module with direct tests instead of adding more backend-local logic.
-- Keep `src/ir_validate.ts` at or below `2500` lines. If validation work pushes it higher, extract domain-specific validators such as sketch/profile or FTI/GD&T validation into dedicated modules with direct tests.
-- Keep `src/sketch/constraints.ts` at or below `2200` lines. If solver work pushes it higher, extract cohesive math, reporting, or solve-session helpers instead of expanding the core solver file.
-- Keep `apps/tf-service/server.mjs` at or below `1800` lines. If runtime work pushes it higher, extract route-adjacent service/store/helper modules instead of adding more nested server-local utilities.
+- Keep handwritten procedural modules at maintainable line counts. As a default, aim to keep them under roughly `1200-1500` lines, treat `2000` lines as a hard warning sign, and extract cohesive helpers/services/validators before adding more logic to an already-large file.
+- Do not apply the same threshold mechanically to declarative catalogs, schemas, generated files, or dense data-only fixtures. For those files, optimize for clarity, drift resistance, and ownership boundaries rather than raw line count alone.
 
 ## Package Consumer Workflow
 - Consumers must import from published package exports only (`trueform`, `trueform/dsl/geometry`, etc). Do not import from `trueform/src/...`.

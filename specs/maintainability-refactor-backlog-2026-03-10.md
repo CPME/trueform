@@ -51,6 +51,7 @@ boundary-extraction sweep.
 
 - baseline before IR validation decomposition: `src/ir_validate.ts` at 3310 lines
 - after `Extract IR sketch + FTI validation modules`: 2344 lines
+- after `Extract IR validation core + structure modules`: 1590 lines
 
 ### Sketch Solver Line Count Tracking
 
@@ -171,8 +172,8 @@ Goal: reduce manual drift between:
 - `src/ir_validate.ts`
 
 Guardrail status:
-- `src/ir_validate.ts` is now under the `<= 2500` line maintainability limit
-  via extracted sketch/profile and FTI validation modules.
+- `src/ir_validate.ts` is now under the long-term `<= 1800` line target via
+  extracted sketch/profile, FTI, core, and structure validation modules.
 
 Open work:
 
