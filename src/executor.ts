@@ -5,15 +5,14 @@ import {
   KernelResult,
 } from "./backend.js";
 import { compileNormalizedPart } from "./compiler.js";
-import { normalizePart } from "./ir_normalize.js";
 import { type Graph, IntentPart, Selector, Units } from "./ir.js";
 import { resolveConnectors, type ConnectorFrame } from "./connectors.js";
-import { hashFeature } from "./hash.js";
 import { ParamOverrides } from "./params.js";
 import { resolveSelector } from "./selectors.js";
 import { type ValidationOptions } from "./validate.js";
 import { BackendError } from "./errors.js";
 import { kernelResultToResolutionContext } from "./resolution_context.js";
+import { preparePart, type PreparedPart } from "./part_preparation.js";
 
 export type FeatureStep = {
   featureId: string;
@@ -46,10 +45,8 @@ export type BuildExecutionOptions = {
 };
 
 type PreparedBuild = {
-  normalized: IntentPart;
+  preparedPart: PreparedPart;
   compiled: ReturnType<typeof compileNormalizedPart>;
-  byId: Map<string, IntentPart["features"][number]>;
-  featureHashes: Record<string, string>;
   plan: IncrementalPlan;
 };
 
@@ -70,7 +67,7 @@ export function buildPart(
 
   for (let i = prepared.plan.startIndex; i < prepared.compiled.featureOrder.length; i += 1) {
     const id = prepared.compiled.featureOrder[i] as string;
-    const feature = prepared.byId.get(id);
+    const feature = prepared.preparedPart.featureById.get(id);
     if (!feature) throw new Error(`Missing feature ${id}`);
     ensureBackendSupports(caps, feature.kind);
 
@@ -111,7 +108,7 @@ export async function buildPartAsync(
 
   for (let i = prepared.plan.startIndex; i < prepared.compiled.featureOrder.length; i += 1) {
     const id = prepared.compiled.featureOrder[i] as string;
-    const feature = prepared.byId.get(id);
+    const feature = prepared.preparedPart.featureById.get(id);
     if (!feature) throw new Error(`Missing feature ${id}`);
     ensureBackendSupports(caps, feature.kind);
 
@@ -142,18 +139,16 @@ function prepareBuild(
   units: Units | undefined,
   incremental: BuildExecutionOptions["incremental"] | undefined
 ): PreparedBuild {
-  const normalized = normalizePart(part, overrides, options, units);
-  const compiled = compileNormalizedPart(normalized);
-  const byId = new Map(normalized.features.map((f) => [f.id, f]));
-  const featureHashes = hashFeatures(normalized);
+  const preparedPart = preparePart(part, overrides, options, units);
+  const compiled = compileNormalizedPart(preparedPart.normalized);
   const plan = createIncrementalPlan(
     compiled.partId,
     compiled.featureOrder,
     compiled.graph,
-    featureHashes,
+    preparedPart.featureHashes,
     incremental
   );
-  return { normalized, compiled, byId, featureHashes, plan };
+  return { preparedPart, compiled, plan };
 }
 
 function finalizeBuildResult(
@@ -167,8 +162,8 @@ function finalizeBuildResult(
     order: prepared.compiled.featureOrder,
     final,
     steps,
-    connectors: resolveConnectors(prepared.normalized.connectors, final),
-    featureHashes: prepared.featureHashes,
+    connectors: resolveConnectors(prepared.preparedPart.normalized.connectors, final),
+    featureHashes: prepared.preparedPart.featureHashes,
     diagnostics: {
       mode: prepared.plan.mode,
       requestedChangedFeatureIds: prepared.plan.requestedChangedFeatureIds,
@@ -331,14 +326,6 @@ function sameOrder(a: string[], b: string[]): boolean {
     if (a[i] !== b[i]) return false;
   }
   return true;
-}
-
-function hashFeatures(part: IntentPart): Record<string, string> {
-  const hashes: Record<string, string> = {};
-  for (const feature of part.features) {
-    hashes[feature.id] = hashFeature(feature);
-  }
-  return hashes;
 }
 
 function withFeatureId(err: unknown, featureId: string): unknown {

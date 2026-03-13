@@ -1,9 +1,8 @@
-import { CompileResult, IntentDocument, IntentFeature, IntentPart, Units } from "./ir.js";
-import { buildDependencyGraph, topoSortDeterministic } from "./graph.js";
+import { CompileResult, IntentDocument, IntentPart, Units } from "./ir.js";
 import { ParamOverrides } from "./params.js";
-import { hashFeature } from "./hash.js";
 import { shouldValidate, validateDocument, type ValidationOptions } from "./ir_validate.js";
 import { normalizePart } from "./ir_normalize.js";
+import { compilePreparedPart, prepareNormalizedPart, preparePart } from "./part_preparation.js";
 
 export { normalizePart } from "./ir_normalize.js";
 
@@ -41,8 +40,7 @@ export function compilePart(
   options?: ValidationOptions,
   units?: Units
 ): CompileResult {
-  const normalized = normalizePart(part, overrides, options, units);
-  return compileNormalizedPart(normalized);
+  return compilePreparedPart(preparePart(part, overrides, options, units));
 }
 
 export function compilePartWithHashes(
@@ -50,21 +48,16 @@ export function compilePartWithHashes(
   options?: ValidationOptions,
   units?: Units
 ): CompiledPart {
-  const normalized = normalizePart(part, undefined, options, units);
-  const graph = buildDependencyGraph({ ...normalized, features: normalized.features });
-  const order = topoSortDeterministic(normalized.features, graph);
-  const hashes = new Map<string, string>();
-  for (const id of order) {
-    const feature = normalized.features.find((f) => f.id === id) as IntentFeature;
-    hashes.set(id, hashFeature(feature));
-  }
-  return { partId: normalized.id, order, hashes };
+  const prepared = preparePart(part, undefined, options, units);
+  return {
+    partId: prepared.normalized.id,
+    order: prepared.featureOrder,
+    hashes: new Map<string, string>(Object.entries(prepared.featureHashes)),
+  };
 }
 
 export function compileNormalizedPart(part: IntentPart): CompileResult {
-  const graph = buildDependencyGraph(part);
-  const order = topoSortDeterministic(part.features, graph);
-  return { partId: part.id, featureOrder: order, graph };
+  return compilePreparedPart(prepareNormalizedPart(part));
 }
 
 function warnPlaceholders(doc: IntentDocument) {

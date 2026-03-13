@@ -1,7 +1,7 @@
 import type { BuildContext, ID, IntentPart } from "./ir.js";
-import { buildDependencyGraph, topoSortDeterministic } from "./graph.js";
-import { hashFeature, hashValue } from "./hash.js";
+import { hashValue } from "./hash.js";
 import type { ParamOverrides } from "./params.js";
+import { preparePart } from "./part_preparation.js";
 
 export type PartCacheKey = {
   partId: ID;
@@ -17,16 +17,11 @@ export function buildPartCacheKey(
   context: BuildContext,
   overrides?: ParamOverrides
 ): PartCacheKey {
-  const featureHashes: Record<ID, string> = {};
-  for (const feature of part.features) {
-    featureHashes[feature.id] = hashFeature(feature);
-  }
-  const graph = buildDependencyGraph(part);
-  const order = topoSortDeterministic(part.features, graph);
+  const prepared = preparePart(part, overrides, undefined, context.units);
   return {
-    partId: part.id,
-    featureOrder: order,
-    featureHashes,
+    partId: prepared.normalized.id,
+    featureOrder: prepared.featureOrder as ID[],
+    featureHashes: prepared.featureHashes as Record<ID, string>,
     paramsHash: hashValue(part.params ?? []),
     contextHash: hashValue(context),
     overridesHash: overrides ? hashValue(overrides) : undefined,
