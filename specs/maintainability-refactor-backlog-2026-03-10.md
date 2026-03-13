@@ -56,6 +56,7 @@ boundary-extraction sweep.
 
 - baseline before sketch solver decomposition: `src/sketch/constraints.ts` at 2892 lines
 - after `Extract sketch solver math helpers`: 2471 lines
+- after `Extract sketch solver analysis helpers`: 2126 lines
 
 ## Outstanding Work
 
