@@ -81,7 +81,6 @@ import {
   readFace as readOcctFace,
 } from "./occt/wire_ops.js";
 import {
-  sketchEntityToSegments as buildOcctSketchEntitySegments,
   type SketchEdgeSegment,
 } from "./occt/sketch_segments.js";
 import {
@@ -132,6 +131,12 @@ import {
   makeWireFromEdges as makeOcctWireFromEdges,
   type ProfilePrimitiveDeps,
 } from "./occt/profile_primitives.js";
+import {
+  buildSketchWire as buildOcctSketchWire,
+  buildSketchWireWithStatus as buildOcctSketchWireWithStatus,
+  segmentSlotsForLoop as collectOcctSegmentSlotsForLoop,
+  type SketchWireBuilderDeps,
+} from "./occt/sketch_wire_builder.js";
 import {
   execHexTubeSweep as execOcctHexTubeSweep,
   execPipeSweep as execOcctPipeSweep,
@@ -4291,8 +4296,7 @@ export class OcctBackend implements Backend {
     entityMap: Map<ID, SketchEntity>,
     plane: PlaneBasis
   ) {
-    const result = this.buildSketchWireWithStatus(loop, entityMap, plane, false);
-    return result.wire;
+    return buildOcctSketchWire(loop, entityMap, plane, this.sketchWireBuilderDeps());
   }
 
   private buildSketchWireWithStatus(
@@ -4301,25 +4305,13 @@ export class OcctBackend implements Backend {
     plane: PlaneBasis,
     allowOpen: boolean
   ): { wire: any; closed: boolean } {
-    const segments: EdgeSegment[] = [];
-    for (const id of loop) {
-      const entity = entityMap.get(id);
-      if (!entity) {
-        throw new Error(`OCCT backend: sketch entity ${id} not found`);
-      }
-      segments.push(...this.sketchEntityToSegments(entity, plane));
-    }
-    const closed = this.checkLoopContinuity(segments, allowOpen);
-    const wireBuilder = this.newOcct("BRepBuilderAPI_MakeWire");
-    for (const segment of segments) {
-      if (!this.addWireEdge(wireBuilder, segment.edge)) {
-        throw new Error("OCCT backend: wire builder missing Add()");
-      }
-    }
-    if (typeof wireBuilder.Wire === "function") return { wire: wireBuilder.Wire(), closed };
-    if (typeof wireBuilder.wire === "function") return { wire: wireBuilder.wire(), closed };
-    if (wireBuilder.Shape) return { wire: wireBuilder.Shape(), closed };
-    throw new Error("OCCT backend: wire builder missing Wire()");
+    return buildOcctSketchWireWithStatus(
+      loop,
+      entityMap,
+      plane,
+      allowOpen,
+      this.sketchWireBuilderDeps()
+    );
   }
 
   private segmentSlotsForLoop(
@@ -4327,41 +4319,15 @@ export class OcctBackend implements Backend {
     entityMap: Map<ID, SketchEntity>,
     plane: PlaneBasis
   ): string[] {
-    const slots: string[] = [];
-    for (const id of loop) {
-      const entity = entityMap.get(id);
-      if (!entity) {
-        throw new Error(`OCCT backend: sketch entity ${id} not found`);
-      }
-      for (const segment of this.sketchEntityToSegments(entity, plane)) {
-        slots.push(segment.sourceSlot ?? entity.id);
-      }
-    }
-    return slots;
+    return collectOcctSegmentSlotsForLoop(loop, entityMap, plane, this.sketchWireBuilderDeps());
   }
 
-  private withEntitySegmentSlots(entityId: string, segments: EdgeSegment[]): EdgeSegment[] {
-    if (segments.length <= 1) {
-      return segments.map((segment) => ({ ...segment, sourceSlot: entityId }));
-    }
-    return segments.map((segment, index) => ({
-      ...segment,
-      sourceSlot: `${entityId}.${index + 1}`,
-    }));
-  }
-
-  private sketchEntityToSegments(entity: SketchEntity, plane: PlaneBasis): EdgeSegment[] {
-    return buildOcctSketchEntitySegments({
-      entity,
-      plane,
-      deps: this.sketchSegmentDeps(),
-    }) as EdgeSegment[];
-  }
-
-  private sketchSegmentDeps() {
+  private sketchWireBuilderDeps(): SketchWireBuilderDeps {
     return {
-      withEntitySegmentSlots: (entityId: string, segments: SketchEdgeSegment[]) =>
-        this.withEntitySegmentSlots(entityId, segments as EdgeSegment[]) as SketchEdgeSegment[],
+      newOcct: (name: string, ...args: any[]) => this.newOcct(name, ...args),
+      addWireEdge: (builder: any, edge: any) => this.addWireEdge(builder, edge),
+      checkLoopContinuity: (segments: SketchEdgeSegment[], allowOpen: boolean) =>
+        this.checkLoopContinuity(segments as EdgeSegment[], allowOpen),
       point2To3: (point: Point2D, sketchPlane: PlaneBasis) => this.point2To3(point, sketchPlane),
       point2Numbers: (point: Point2D, label: string) => this.point2Numbers(point, label),
       dist2: (a: Point2D, b: Point2D) => this.dist2(a, b),
