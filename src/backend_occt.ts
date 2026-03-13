@@ -145,6 +145,11 @@ import {
   type SketchWireBuilderDeps,
 } from "./occt/sketch_wire_builder.js";
 import {
+  buildPathWire as buildOcctPathWire,
+  pathStartTangent as buildOcctPathStartTangent,
+  type PathWireBuilderDeps,
+} from "./occt/path_wire_builder.js";
+import {
   execHexTubeSweep as execOcctHexTubeSweep,
   execPipeSweep as execOcctPipeSweep,
 } from "./occt/sweep_feature_ops.js";
@@ -3752,144 +3757,16 @@ export class OcctBackend implements Backend {
   }
 
   private buildPathWire(path: Path3D) {
-    const segments: EdgeSegment[] = [];
-    if (path.kind === "path.spline") {
-      const { edge, start, end } = this.makeSplineEdge3D(path);
-      segments.push({ edge, start, end });
-    } else if (path.kind === "path.polyline") {
-      const points = path.points;
-      for (let i = 0; i < points.length - 1; i += 1) {
-        const startPoint = points[i];
-        const endPoint = points[i + 1];
-        if (!startPoint || !endPoint) continue;
-        const start = this.point3Numbers(startPoint, "path point");
-        const end = this.point3Numbers(endPoint, "path point");
-        segments.push({ edge: this.makeLineEdge(start, end), start, end });
-      }
-      if (path.closed && points.length > 1) {
-        const startPoint = points[points.length - 1];
-        const endPoint = points[0];
-        if (startPoint && endPoint) {
-          const start = this.point3Numbers(startPoint, "path point");
-          const end = this.point3Numbers(endPoint, "path point");
-          segments.push({ edge: this.makeLineEdge(start, end), start, end });
-        }
-      }
-    } else {
-      for (const segment of path.segments) {
-        if (segment.kind === "path.line") {
-          const start = this.point3Numbers(segment.start, "path line start");
-          const end = this.point3Numbers(segment.end, "path line end");
-          segments.push({ edge: this.makeLineEdge(start, end), start, end });
-          continue;
-        }
-        if (segment.kind === "path.arc") {
-          const start = this.point3Numbers(segment.start, "path arc start");
-          const end = this.point3Numbers(segment.end, "path arc end");
-          const center = this.point3Numbers(segment.center, "path arc center");
-          const mid = this.arcMidpointFromCenter(start, end, center, segment.direction);
-          segments.push({ edge: this.makeArcEdge(start, mid, end), start, end });
-        }
-      }
-    }
-
-    if (segments.length === 0) {
-      throw new Error("OCCT backend: path must have at least one segment");
-    }
-    for (let i = 0; i < segments.length - 1; i += 1) {
-      const current = segments[i];
-      const next = segments[i + 1];
-      if (!current || !next) continue;
-      if (!this.pointsClose(current.end, next.start)) {
-        throw new Error("OCCT backend: path segments are not connected");
-      }
-    }
-    const wireBuilder = this.newOcct("BRepBuilderAPI_MakeWire");
-    for (const segment of segments) {
-      if (!this.addWireEdge(wireBuilder, segment.edge)) {
-        throw new Error("OCCT backend: path wire builder missing Add()");
-      }
-    }
-    if (typeof wireBuilder.Wire === "function") return wireBuilder.Wire();
-    if (typeof wireBuilder.wire === "function") return wireBuilder.wire();
-    if (wireBuilder.Shape) return wireBuilder.Shape();
-    throw new Error("OCCT backend: path wire builder missing Wire()");
+    return buildOcctPathWire(path, this.pathWireBuilderDeps());
   }
 
   private pathStartTangent(path: Path3D): {
     start: [number, number, number];
     tangent: [number, number, number];
   } {
-    if (path.kind === "path.polyline") {
-      if (path.points.length < 2) {
-        throw new Error("OCCT backend: path needs at least 2 points");
-      }
-      const startPoint = path.points[0];
-      const nextPoint = path.points[1];
-      if (!startPoint || !nextPoint) {
-        throw new Error("OCCT backend: path needs at least 2 points");
-      }
-      const start = this.point3Numbers(startPoint, "path point");
-      const next = this.point3Numbers(nextPoint, "path point");
-      return { start, tangent: this.subVec(next, start) };
-    }
-    if (path.kind === "path.spline") {
-      if (path.points.length < 2) {
-        throw new Error("OCCT backend: path needs at least 2 points");
-      }
-      const startPoint = path.points[0];
-      const nextPoint = path.points[1];
-      if (!startPoint || !nextPoint) {
-        throw new Error("OCCT backend: path needs at least 2 points");
-      }
-      const start = this.point3Numbers(startPoint, "path point");
-      const next = this.point3Numbers(nextPoint, "path point");
-      return { start, tangent: this.subVec(next, start) };
-    }
-    if (path.segments.length === 0) {
-      throw new Error("OCCT backend: path has no segments");
-    }
-    const first = path.segments[0];
-    if (!first) {
-      throw new Error("OCCT backend: path has no segments");
-    }
-    if (first.kind === "path.line") {
-      const start = this.point3Numbers(first.start, "path line start");
-      const end = this.point3Numbers(first.end, "path line end");
-      return { start, tangent: this.subVec(end, start) };
-    }
-    if (first.kind === "path.arc") {
-      const start = this.point3Numbers(first.start, "path arc start");
-      const end = this.point3Numbers(first.end, "path arc end");
-      const center = this.point3Numbers(first.center, "path arc center");
-      const mid = this.arcMidpointFromCenter(start, end, center, first.direction);
-      return { start, tangent: this.subVec(mid, start) };
-    }
-    throw new Error("OCCT backend: unsupported path segment");
-  }
-
-  private arcMidpointFromCenter(
-    start: [number, number, number],
-    end: [number, number, number],
-    center: [number, number, number],
-    direction?: "cw" | "ccw"
-  ): [number, number, number] {
-    const v1 = this.subVec(start, center);
-    const v2 = this.subVec(end, center);
-    const r1 = vecLength(v1);
-    const r2 = vecLength(v2);
-    if (Math.abs(r1 - r2) > 1e-5 || r1 === 0) {
-      throw new Error("OCCT backend: path arc radius mismatch");
-    }
-    const n = normalizeVector(cross(v1, v2));
-    if (!isFiniteVec(n)) {
-      throw new Error("OCCT backend: path arc is degenerate");
-    }
-    const dotVal = clamp(dot(v1, v2) / (r1 * r2), -1, 1);
-    const angle = Math.acos(dotVal);
-    const axis = direction === "cw" ? this.scaleVec(n, -1) : n;
-    const midVec = rotateAroundAxis(v1, axis, angle / 2);
-    return this.addVec(center, midVec);
+    return buildOcctPathStartTangent(path, {
+      point3Numbers: (point: Point3D, label: string) => this.point3Numbers(point, label),
+    });
   }
 
   private makeShapeList(shapes: any[]): any {
@@ -4655,6 +4532,24 @@ export class OcctBackend implements Backend {
       ...this.shapePrimitiveDeps(),
       readShape: (builder: any) => this.readShape(builder),
       call: (target: any, method: string, ...args: any[]) => this.call(target, method, ...args),
+    };
+  }
+
+  private pathWireBuilderDeps(): PathWireBuilderDeps {
+    return {
+      newOcct: (name: string, ...args: any[]) => this.newOcct(name, ...args),
+      addWireEdge: (builder: any, edge: any) => this.addWireEdge(builder, edge),
+      point3Numbers: (point: Point3D, label: string) => this.point3Numbers(point, label),
+      makeLineEdge: (start: [number, number, number], end: [number, number, number]) =>
+        this.makeLineEdge(start, end),
+      makeArcEdge: (
+        start: [number, number, number],
+        mid: [number, number, number],
+        end: [number, number, number]
+      ) => this.makeArcEdge(start, mid, end),
+      makeSplineEdge3D: (path: Extract<Path3D, { kind: "path.spline" }>) => this.makeSplineEdge3D(path),
+      pointsClose: (left: [number, number, number], right: [number, number, number], tol?: number) =>
+        this.pointsClose(left, right, tol),
     };
   }
 
