@@ -859,6 +859,22 @@ static std::vector<unsigned char> exportStepWithPmi(const TopoDS_Shape& shape,
   return readFileBytes(path);
 }
 
+static json capabilitiesPayload() {
+  json payload;
+  payload["name"] = "opencascade.native";
+  payload["featureKinds"] = json::array({"feature.extrude"});
+  payload["featureStages"] = {
+      {"feature.extrude", {{"stage", "stable"}}},
+  };
+  payload["mesh"] = true;
+  payload["exports"] = {
+      {"step", true},
+      {"stl", false},
+  };
+  payload["assertions"] = json::array();
+  return payload;
+}
+
 int main(int argc, char** argv) {
   std::string host = "127.0.0.1";
   int port = 8081;
@@ -886,6 +902,10 @@ int main(int argc, char** argv) {
 
   SessionManager sessions;
   httplib::Server server;
+
+  server.Get("/v1/capabilities", [&](const httplib::Request&, httplib::Response& res) {
+    res.set_content(capabilitiesPayload().dump(), "application/json");
+  });
 
   server.Post("/v1/exec-feature", [&](const httplib::Request& req, httplib::Response& res) {
     try {

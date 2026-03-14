@@ -1,4 +1,4 @@
-import type { MeshData } from "./backend.js";
+import type { BackendCapabilities, MeshData } from "./backend.js";
 import type {
   NativeExecFeatureRequest,
   NativeExecFeatureResponse,
@@ -43,6 +43,15 @@ export class HttpOcctTransport implements NativeOcctTransport {
     request: NativeExecFeatureRequest
   ): Promise<NativeExecFeatureResponse> {
     return this.postJson<NativeExecFeatureResponse>("/v1/exec-feature", request);
+  }
+
+  async capabilities(): Promise<BackendCapabilities> {
+    const response = await this.fetchWithTimeout(this.buildUrl("/v1/capabilities"), {
+      method: "GET",
+      headers: { ...this.headers },
+    });
+    await assertOk(response, "/v1/capabilities");
+    return (await response.json()) as BackendCapabilities;
   }
 
   async mesh(request: NativeMeshRequest): Promise<MeshData> {

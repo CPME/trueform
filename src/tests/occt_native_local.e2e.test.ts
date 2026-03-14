@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import initOpenCascade from "opencascade.js/dist/node.js";
 import { dsl } from "../dsl.js";
+import { OcctBackend } from "../backend_occt.js";
 import { buildPartAsync } from "../executor.js";
 import { OcctNativeBackend } from "../backend_occt_native.js";
 import { LocalOcctTransport } from "../backend_occt_native_local.js";
@@ -25,6 +26,21 @@ const tests = [
 
       const mesh = await backend.mesh(body, { linearDeflection: 0.2 });
       assert.ok(mesh.positions.length > 0, "mesh should contain positions");
+    },
+  },
+  {
+    name: "occt native local: capabilities pass through from delegated backend",
+    fn: async () => {
+      const occt = await initOpenCascade();
+      const delegate = new OcctBackend({ occt });
+      const transport = new LocalOcctTransport({ occt, backend: delegate });
+      const backend = new OcctNativeBackend({ transport });
+
+      const nativeCaps = await backend.capabilities?.();
+      const delegateCaps = delegate.capabilities();
+
+      assert.deepEqual(nativeCaps, delegateCaps);
+      await backend.close?.();
     },
   },
 ];

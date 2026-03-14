@@ -210,12 +210,18 @@ Progress:
 - `packages/tf-api` and `packages/tf-service-client` now follow the same
   explicit workspace-entrypoint pattern so the runtime-facing consumer surfaces
   do not depend on legacy direct manifest wiring.
+- `packages/tf-backend-ocjs` and `packages/tf-backend-native` now own explicit
+  workspace entrypoints, package-local wrappers, and cross-package parity
+  coverage for the backend surfaces.
+- Native backend capability reporting now exists across the wrapper,
+  local-transport, HTTP-transport, and native-server layers so backend contract
+  mismatches are observable instead of implicit.
 
 Remaining targets:
-- `packages/tf-backend-ocjs`
-- `packages/tf-backend-native`
 - move more source ownership behind package-local module trees instead of
   keeping transitional wrappers pointed at `src/*`
+- expand true dual-backend parity coverage beyond capability/build/export smoke
+  checks so native-vs-OCCT.js feature drift fails fast
 
 Requirements:
 - keep the root `trueform` compatibility facade stable

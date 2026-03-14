@@ -95,6 +95,9 @@ PR 3: extract DSL package.
 PR 4: extract backend implementations.
 - Move OCCT.js/native transports into backend packages.
 - Keep subpath compatibility exports from `trueform`.
+- PR 4a completed: added explicit workspace entrypoints for
+  `@trueform/backend-ocjs` and `@trueform/backend-native` plus package parity
+  tests; implementation ownership is still transitional and rooted in `src/*`.
 
 PR 5: extract export tooling package.
 - Move STEP/GLB/3MF/SVG/DXF exporters to `packages/tf-export`.

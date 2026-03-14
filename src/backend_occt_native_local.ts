@@ -1,4 +1,5 @@
 import type {
+  BackendCapabilities,
   KernelObject,
   KernelResult,
   KernelSelection,
@@ -110,6 +111,15 @@ export class LocalOcctTransport implements NativeOcctTransport {
       0,
       Math.floor(options.shapeRegistryIdleMs ?? 30 * 60 * 1000)
     );
+  }
+
+  capabilities(): BackendCapabilities {
+    return this.backend.capabilities?.() ?? {
+      name: "opencascade.js",
+      mesh: true,
+      exports: { step: true, stl: Boolean(this.backend.exportStl) },
+      assertions: [],
+    };
   }
 
   async execFeature(

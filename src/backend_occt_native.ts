@@ -1,4 +1,5 @@
 import type {
+  BackendCapabilities,
   BackendAsync,
   ExecuteInput,
   KernelObject,
@@ -64,6 +65,7 @@ export type NativeStlExportRequest = {
 };
 
 export type NativeOcctTransport = {
+  capabilities?(): Promise<BackendCapabilities> | BackendCapabilities;
   execFeature(request: NativeExecFeatureRequest): Promise<NativeExecFeatureResponse>;
   mesh(request: NativeMeshRequest): Promise<MeshData>;
   exportStep(request: NativeExportRequest): Promise<Uint8Array>;
@@ -101,6 +103,18 @@ export class OcctNativeBackend implements BackendAsync {
         );
       };
     }
+  }
+
+  capabilities(): Promise<BackendCapabilities> | BackendCapabilities {
+    if (this.transport.capabilities) {
+      return this.transport.capabilities();
+    }
+    return {
+      name: "opencascade.native",
+      mesh: true,
+      exports: { step: true, stl: Boolean(this.transport.exportStl) },
+      assertions: [],
+    };
   }
 
   async execute(input: ExecuteInput): Promise<KernelResult> {

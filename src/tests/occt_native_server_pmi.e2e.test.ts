@@ -59,6 +59,10 @@ const tests = [
       try {
         const transport = new HttpOcctTransport({ baseUrl: server.url });
         const backend = new OcctNativeBackend({ transport });
+        const caps = await backend.capabilities?.();
+        assert.equal(caps?.name, "opencascade.native");
+        assert.deepEqual(caps?.featureKinds, ["feature.extrude"]);
+        assert.deepEqual(caps?.exports, { step: true, stl: false });
 
         const target = dsl.refSurface(
           dsl.selectorFace(
@@ -79,23 +83,23 @@ const tests = [
         const body = result.final.outputs.get("body:main");
         assert.ok(body, "missing body:main output");
 
-      const exported = await exportStepAp242WithPmiAsync(
-        backend,
-        body,
-        part,
-        { schema: "AP242" }
-      );
-      assert.equal(exported.embedded, true, "expected embedded PMI export");
-      assert.ok(exported.step.byteLength > 0, "expected STEP bytes");
-      assert.equal(exported.pmi, undefined, "embedded export should not return PMI JSON");
+        const exported = await exportStepAp242WithPmiAsync(
+          backend,
+          body,
+          part,
+          { schema: "AP242" }
+        );
+        assert.equal(exported.embedded, true, "expected embedded PMI export");
+        assert.ok(exported.step.byteLength > 0, "expected STEP bytes");
+        assert.equal(exported.pmi, undefined, "embedded export should not return PMI JSON");
 
-      const outPath = process.env.TF_NATIVE_STEP_OUT;
-      if (outPath) {
-        await writeFile(outPath, exported.step);
+        const outPath = process.env.TF_NATIVE_STEP_OUT;
+        if (outPath) {
+          await writeFile(outPath, exported.step);
+        }
+      } finally {
+        await stopServer(server);
       }
-    } finally {
-      await stopServer(server);
-    }
     },
   },
 ];

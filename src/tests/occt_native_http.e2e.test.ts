@@ -43,12 +43,30 @@ async function startNativeHttpServer(): Promise<ServerContext> {
 
   const server = http.createServer(async (req, res) => {
     try {
-      if (req.method !== "POST" || !req.url) {
+      if (!req.url) {
         res.statusCode = 404;
         res.end();
         return;
       }
       const path = req.url.split("?")[0] ?? "";
+      if (path === "/v1/capabilities") {
+        writeJson(res, {
+          name: "opencascade.native",
+          featureKinds: ["feature.extrude"],
+          featureStages: {
+            "feature.extrude": { stage: "stable" },
+          },
+          mesh: true,
+          exports: { step: true, stl: false },
+          assertions: [],
+        });
+        return;
+      }
+      if (req.method !== "POST") {
+        res.statusCode = 404;
+        res.end();
+        return;
+      }
       if (path === "/v1/exec-feature") {
         const payload = await readJson(req);
         const result = await transport.execFeature(payload);
@@ -159,6 +177,18 @@ function createFakeFetch(): FetchLike {
     const url = typeof input === "string" ? input : input.toString();
     const body = init?.body ? JSON.parse(String(init.body)) : {};
     void body;
+    if (url.endsWith("/v1/capabilities")) {
+      return makeJsonResponse({
+        name: "opencascade.native",
+        featureKinds: ["feature.extrude"],
+        featureStages: {
+          "feature.extrude": { stage: "stable" },
+        },
+        mesh: true,
+        exports: { step: true, stl: false },
+        assertions: [],
+      });
+    }
     if (url.endsWith("/v1/exec-feature")) {
       return makeJsonResponse(execResponse);
     }
@@ -238,6 +268,35 @@ const tests = [
 
       const step = await backend.exportStep(body, { schema: "AP242" });
       assert.ok(step.byteLength > 0, "step export should return bytes");
+    },
+  },
+  {
+    name: "occt native http: capabilities round-trip through transport contract",
+    fn: async () => {
+      if (useLiveServer) {
+        const server = await startNativeHttpServer();
+        try {
+          const transport = new HttpOcctTransport({ baseUrl: server.url });
+          const backend = new OcctNativeBackend({ transport });
+          const caps = await backend.capabilities?.();
+          assert.equal(caps?.name, "opencascade.native");
+          assert.deepEqual(caps?.featureKinds, ["feature.extrude"]);
+          assert.deepEqual(caps?.exports, { step: true, stl: false });
+        } finally {
+          await server.close();
+        }
+        return;
+      }
+
+      const transport = new HttpOcctTransport({
+        baseUrl: "http://fake-native",
+        fetch: createFakeFetch(),
+      });
+      const backend = new OcctNativeBackend({ transport });
+      const caps = await backend.capabilities?.();
+      assert.equal(caps?.name, "opencascade.native");
+      assert.deepEqual(caps?.featureKinds, ["feature.extrude"]);
+      assert.deepEqual(caps?.exports, { step: true, stl: false });
     },
   },
 ];
