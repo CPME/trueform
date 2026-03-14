@@ -138,6 +138,13 @@ static gp_Pnt parsePoint2D(const json& value, double z = 0.0) {
   return gp_Pnt(parseScalar(value[0]), parseScalar(value[1]), z);
 }
 
+static gp_Pnt parsePoint3D(const json& value) {
+  if (!value.is_array() || value.size() < 3) {
+    return gp_Pnt(0, 0, 0);
+  }
+  return gp_Pnt(parseScalar(value[0]), parseScalar(value[1]), parseScalar(value[2]));
+}
+
 static gp_Vec axisVectorFromString(const std::string& dir) {
   if (dir == "+X") return gp_Vec(1, 0, 0);
   if (dir == "-X") return gp_Vec(-1, 0, 0);
@@ -305,6 +312,18 @@ static json makeEdgeMeta(const std::string& handle,
   meta["centerZ"] = center.Z();
   if (!tags.is_null()) meta["featureTags"] = tags;
   return meta;
+}
+
+static KernelResult makeDatumResult(const std::string& key,
+                                    const std::string& id,
+                                    const json& meta) {
+  KernelResult result;
+  KernelObject output;
+  output.id = id;
+  output.kind = "datum";
+  output.meta = meta;
+  result.outputs[key] = output;
+  return result;
 }
 
 static gp_Pnt shapeCenter(const TopoDS_Shape& shape) {
@@ -862,8 +881,10 @@ static std::vector<unsigned char> exportStepWithPmi(const TopoDS_Shape& shape,
 static json capabilitiesPayload() {
   json payload;
   payload["name"] = "opencascade.native";
-  payload["featureKinds"] = json::array({"feature.extrude"});
+  payload["featureKinds"] = json::array({"datum.plane", "datum.axis", "feature.extrude"});
   payload["featureStages"] = {
+      {"datum.plane", {{"stage", "stable"}}},
+      {"datum.axis", {{"stage", "stable"}}},
       {"feature.extrude", {{"stage", "stable"}}},
   };
   payload["mesh"] = true;
@@ -918,6 +939,56 @@ int main(int argc, char** argv) {
       const std::string kind = feature.value("kind", "");
       const std::string featureId = feature.value("id", "feature");
       const json tags = feature.value("tags", json::array());
+
+      if (kind == "datum.plane") {
+        gp_Vec normal = parseAxis(feature.value("normal", json("+Z")));
+        if (normal.Magnitude() == 0) {
+          throw std::runtime_error("datum.plane normal is invalid");
+        }
+        normal.Normalize();
+        gp_Pnt origin = parsePoint3D(feature.value("origin", json::array({0, 0, 0})));
+        gp_Vec xAxis(0, 0, 0);
+        if (feature.contains("xAxis")) {
+          xAxis = parseAxis(feature["xAxis"]);
+          if (xAxis.Magnitude() != 0) {
+            xAxis.Normalize();
+          }
+        }
+        json meta;
+        meta["type"] = "plane";
+        meta["origin"] = pointToJson(origin);
+        meta["normal"] = vecToJson(normal);
+        if (xAxis.Magnitude() != 0) meta["xDir"] = vecToJson(xAxis);
+        KernelResult built = makeDatumResult("datum:" + featureId, featureId + ":datum", meta);
+        KernelResult merged = mergeResults(upstream, built);
+        session.current = merged;
+
+        json response;
+        response["result"] = serializeKernelResult(built);
+        res.set_content(response.dump(), "application/json");
+        return;
+      }
+
+      if (kind == "datum.axis") {
+        gp_Vec direction = parseAxis(feature.value("direction", json("+Z")));
+        if (direction.Magnitude() == 0) {
+          throw std::runtime_error("datum.axis direction is invalid");
+        }
+        direction.Normalize();
+        gp_Pnt origin = parsePoint3D(feature.value("origin", json::array({0, 0, 0})));
+        json meta;
+        meta["type"] = "axis";
+        meta["origin"] = pointToJson(origin);
+        meta["direction"] = vecToJson(direction);
+        KernelResult built = makeDatumResult("datum:" + featureId, featureId + ":datum", meta);
+        KernelResult merged = mergeResults(upstream, built);
+        session.current = merged;
+
+        json response;
+        response["result"] = serializeKernelResult(built);
+        res.set_content(response.dump(), "application/json");
+        return;
+      }
 
       if (kind != "feature.extrude") {
         throw std::runtime_error("Unsupported feature kind: " + kind);

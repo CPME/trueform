@@ -216,12 +216,16 @@ Progress:
 - Native backend capability reporting now exists across the wrapper,
   local-transport, HTTP-transport, and native-server layers so backend contract
   mismatches are observable instead of implicit.
+- `npm run verify:workspace-packages` now provides one repeatable gate for
+  package-local typechecks plus workspace parity/entrypoint tests.
 
 Remaining targets:
 - move more source ownership behind package-local module trees instead of
   keeping transitional wrappers pointed at `src/*`
 - expand true dual-backend parity coverage beyond capability/build/export smoke
   checks so native-vs-OCCT.js feature drift fails fast
+- continue native-server feature-port work beyond the current low-complexity
+  baseline (`datum.plane`, `datum.axis`, `feature.extrude`)
 
 Requirements:
 - keep the root `trueform` compatibility facade stable

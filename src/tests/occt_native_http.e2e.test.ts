@@ -6,6 +6,7 @@ import { buildPartAsync } from "../executor.js";
 import { OcctNativeBackend } from "../backend_occt_native.js";
 import { LocalOcctTransport } from "../backend_occt_native_local.js";
 import { HttpOcctTransport } from "../backend_occt_native_http.js";
+import { BackendError } from "../errors.js";
 import { runTests } from "./occt_test_utils.js";
 import type {
   NativeExecFeatureResponse,
@@ -52,8 +53,10 @@ async function startNativeHttpServer(): Promise<ServerContext> {
       if (path === "/v1/capabilities") {
         writeJson(res, {
           name: "opencascade.native",
-          featureKinds: ["feature.extrude"],
+          featureKinds: ["datum.plane", "datum.axis", "feature.extrude"],
           featureStages: {
+            "datum.plane": { stage: "stable" },
+            "datum.axis": { stage: "stable" },
             "feature.extrude": { stage: "stable" },
           },
           mesh: true,
@@ -180,8 +183,10 @@ function createFakeFetch(): FetchLike {
     if (url.endsWith("/v1/capabilities")) {
       return makeJsonResponse({
         name: "opencascade.native",
-        featureKinds: ["feature.extrude"],
+        featureKinds: ["datum.plane", "datum.axis", "feature.extrude"],
         featureStages: {
+          "datum.plane": { stage: "stable" },
+          "datum.axis": { stage: "stable" },
           "feature.extrude": { stage: "stable" },
         },
         mesh: true,
@@ -280,7 +285,7 @@ const tests = [
           const backend = new OcctNativeBackend({ transport });
           const caps = await backend.capabilities?.();
           assert.equal(caps?.name, "opencascade.native");
-          assert.deepEqual(caps?.featureKinds, ["feature.extrude"]);
+          assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "feature.extrude"]);
           assert.deepEqual(caps?.exports, { step: true, stl: false });
         } finally {
           await server.close();
@@ -295,8 +300,32 @@ const tests = [
       const backend = new OcctNativeBackend({ transport });
       const caps = await backend.capabilities?.();
       assert.equal(caps?.name, "opencascade.native");
-      assert.deepEqual(caps?.featureKinds, ["feature.extrude"]);
+      assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "feature.extrude"]);
       assert.deepEqual(caps?.exports, { step: true, stl: false });
+    },
+  },
+  {
+    name: "occt native http: unsupported features fail from declared capabilities",
+    fn: async () => {
+      const transport = new HttpOcctTransport({
+        baseUrl: "http://fake-native",
+        fetch: createFakeFetch(),
+      });
+      const backend = new OcctNativeBackend({ transport });
+      const part = dsl.part("http-native-unsupported", [
+        dsl.sketch2d("sketch-base", [
+          { name: "profile:base", profile: dsl.profileRect(22, 12) },
+        ]),
+        dsl.extrude("base", dsl.profileRef("profile:base"), 4, "body:main", ["sketch-base"]),
+      ]);
+
+      await assert.rejects(
+        () => buildPartAsync(part, backend),
+        (err) =>
+          err instanceof BackendError &&
+          err.code === "backend_unsupported_feature" &&
+          err.message.includes("feature.sketch2d")
+      );
     },
   },
 ];

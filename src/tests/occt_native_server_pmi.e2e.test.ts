@@ -61,8 +61,18 @@ const tests = [
         const backend = new OcctNativeBackend({ transport });
         const caps = await backend.capabilities?.();
         assert.equal(caps?.name, "opencascade.native");
-        assert.deepEqual(caps?.featureKinds, ["feature.extrude"]);
+        assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "feature.extrude"]);
         assert.deepEqual(caps?.exports, { step: true, stl: false });
+
+        const datumPart = dsl.part("native-datum", [
+          dsl.datumPlane("datum-a", "+Z", [0, 0, 0]),
+          dsl.datumAxis("axis-a", "+X", [0, 0, 0]),
+        ]);
+        const datumResult = await buildPartAsync(datumPart, backend);
+        const datum = datumResult.final.outputs.get("datum:datum-a");
+        const axis = datumResult.final.outputs.get("datum:axis-a");
+        assert.equal(datum?.kind, "datum");
+        assert.equal(axis?.kind, "datum");
 
         const target = dsl.refSurface(
           dsl.selectorFace(
