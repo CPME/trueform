@@ -61,7 +61,7 @@ const tests = [
         const backend = new OcctNativeBackend({ transport });
         const caps = await backend.capabilities?.();
         assert.equal(caps?.name, "opencascade.native");
-        assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve"]);
+        assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve", "feature.pipe", "feature.loft"]);
         assert.deepEqual(caps?.exports, { step: true, stl: false });
 
         const datumPart = dsl.part("native-datum", [
@@ -125,6 +125,27 @@ const tests = [
         const revolvedBody = planeRevolveResult.final.outputs.get("body:revolve");
         assert.equal(plane?.kind, "surface");
         assert.equal(revolvedBody?.kind, "solid");
+
+        const pipePart = dsl.part("native-pipe", [
+          dsl.pipe("pipe-1", "+Z", 24, 10, 6, "body:pipe"),
+        ]);
+        const pipeResult = await buildPartAsync(pipePart, backend);
+        const pipeBody = pipeResult.final.outputs.get("body:pipe");
+        assert.equal(pipeBody?.kind, "solid");
+
+        const loftPart = dsl.part("native-loft", [
+          dsl.loft(
+            "loft-1",
+            [
+              dsl.profileCircle(8, [0, 0, 0]),
+              dsl.profilePoly(6, 10, [0, 0, 16], Math.PI / 6),
+            ],
+            "body:loft"
+          ),
+        ]);
+        const loftResult = await buildPartAsync(loftPart, backend);
+        const loftBody = loftResult.final.outputs.get("body:loft");
+        assert.equal(loftBody?.kind, "solid");
 
         const target = dsl.refSurface(
           dsl.selectorFace(

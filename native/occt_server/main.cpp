@@ -2,12 +2,15 @@
 #include "json.hpp"
 
 #include <BRepAdaptor_Surface.hxx>
+#include <BRepAlgoAPI_Cut.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepGProp.hxx>
+#include <BRepOffsetAPI_ThruSections.hxx>
+#include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRep_Tool.hxx>
@@ -136,7 +139,8 @@ static gp_Pnt parsePoint2D(const json& value, double z = 0.0) {
   if (!value.is_array() || value.size() < 2) {
     return gp_Pnt(0, 0, z);
   }
-  return gp_Pnt(parseScalar(value[0]), parseScalar(value[1]), z);
+  const double zValue = value.size() >= 3 ? parseScalar(value[2]) : z;
+  return gp_Pnt(parseScalar(value[0]), parseScalar(value[1]), zValue);
 }
 
 static gp_Pnt parsePoint3D(const json& value) {
@@ -180,21 +184,22 @@ static TopoDS_Face makeRectangleFace(double width, double height, const gp_Pnt& 
   const double halfH = height / 2.0;
   const double cx = center.X();
   const double cy = center.Y();
+  const double cz = center.Z();
   BRepBuilderAPI_MakePolygon poly;
-  poly.Add(gp_Pnt(cx - halfW, cy - halfH, 0));
-  poly.Add(gp_Pnt(cx + halfW, cy - halfH, 0));
-  poly.Add(gp_Pnt(cx + halfW, cy + halfH, 0));
-  poly.Add(gp_Pnt(cx - halfW, cy + halfH, 0));
+  poly.Add(gp_Pnt(cx - halfW, cy - halfH, cz));
+  poly.Add(gp_Pnt(cx + halfW, cy - halfH, cz));
+  poly.Add(gp_Pnt(cx + halfW, cy + halfH, cz));
+  poly.Add(gp_Pnt(cx - halfW, cy + halfH, cz));
   poly.Close();
   TopoDS_Wire wire = poly.Wire();
-  return BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), wire, true);
+  return BRepBuilderAPI_MakeFace(gp_Pln(center, gp_Dir(0, 0, 1)), wire, true);
 }
 
 static TopoDS_Face makeCircleFace(double radius, const gp_Pnt& center) {
   gp_Circ circ(gp_Ax2(center, gp_Dir(0, 0, 1)), radius);
   TopoDS_Edge edge = BRepBuilderAPI_MakeEdge(circ);
   TopoDS_Wire wire = BRepBuilderAPI_MakeWire(edge);
-  return BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), wire, true);
+  return BRepBuilderAPI_MakeFace(gp_Pln(center, gp_Dir(0, 0, 1)), wire, true);
 }
 
 static TopoDS_Face makePolygonFace(int sides, double radius, const gp_Pnt& center, double rotation) {
@@ -207,11 +212,11 @@ static TopoDS_Face makePolygonFace(int sides, double radius, const gp_Pnt& cente
     const double angle = rotation + step * static_cast<double>(i);
     const double x = center.X() + radius * std::cos(angle);
     const double y = center.Y() + radius * std::sin(angle);
-    poly.Add(gp_Pnt(x, y, 0));
+    poly.Add(gp_Pnt(x, y, center.Z()));
   }
   poly.Close();
   TopoDS_Wire wire = poly.Wire();
-  return BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), wire, true);
+  return BRepBuilderAPI_MakeFace(gp_Pln(center, gp_Dir(0, 0, 1)), wire, true);
 }
 
 static TopoDS_Face buildProfileFace(const json& profile) {
@@ -247,11 +252,12 @@ static TopoDS_Wire buildProfileWire(const json& profile) {
     const double halfH = height / 2.0;
     const double cx = center.X();
     const double cy = center.Y();
+    const double cz = center.Z();
     BRepBuilderAPI_MakePolygon poly;
-    poly.Add(gp_Pnt(cx - halfW, cy - halfH, 0));
-    poly.Add(gp_Pnt(cx + halfW, cy - halfH, 0));
-    poly.Add(gp_Pnt(cx + halfW, cy + halfH, 0));
-    poly.Add(gp_Pnt(cx - halfW, cy + halfH, 0));
+    poly.Add(gp_Pnt(cx - halfW, cy - halfH, cz));
+    poly.Add(gp_Pnt(cx + halfW, cy - halfH, cz));
+    poly.Add(gp_Pnt(cx + halfW, cy + halfH, cz));
+    poly.Add(gp_Pnt(cx - halfW, cy + halfH, cz));
     poly.Close();
     return poly.Wire();
   }
@@ -273,7 +279,7 @@ static TopoDS_Wire buildProfileWire(const json& profile) {
       const double angle = rotation + step * static_cast<double>(i);
       const double x = center.X() + radius * std::cos(angle);
       const double y = center.Y() + radius * std::sin(angle);
-      poly.Add(gp_Pnt(x, y, 0));
+      poly.Add(gp_Pnt(x, y, center.Z()));
     }
     poly.Close();
     return poly.Wire();
@@ -1046,7 +1052,7 @@ static std::vector<unsigned char> exportStepWithPmi(const TopoDS_Shape& shape,
 static json capabilitiesPayload() {
   json payload;
   payload["name"] = "opencascade.native";
-  payload["featureKinds"] = json::array({"datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve"});
+  payload["featureKinds"] = json::array({"datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve", "feature.pipe", "feature.loft"});
   payload["featureStages"] = {
       {"datum.plane", {{"stage", "stable"}}},
       {"datum.axis", {{"stage", "stable"}}},
@@ -1056,6 +1062,8 @@ static json capabilitiesPayload() {
       {"feature.plane", {{"stage", "stable"}}},
       {"feature.surface", {{"stage", "stable"}}},
       {"feature.revolve", {{"stage", "stable"}}},
+      {"feature.pipe", {{"stage", "stable"}}},
+      {"feature.loft", {{"stage", "stable"}}},
   };
   payload["mesh"] = true;
   payload["exports"] = {
@@ -1276,6 +1284,78 @@ int main(int argc, char** argv) {
         const std::string resultKey = feature.value("result", "body:main");
         KernelResult built = collectSelections(
             shape, session.registry, featureId, resultKey, "solid", tags);
+        KernelResult merged = mergeResults(upstream, built);
+        session.current = merged;
+
+        json response;
+        response["result"] = serializeKernelResult(built);
+        res.set_content(response.dump(), "application/json");
+        return;
+      }
+
+      if (kind == "feature.pipe") {
+        gp_Vec axisVec = parseAxis(feature.value("axis", json("+Z")));
+        if (axisVec.Magnitude() == 0) {
+          throw std::runtime_error("feature.pipe axis is invalid");
+        }
+        axisVec.Normalize();
+        const double length = parseScalar(feature.value("length", 0.0));
+        const double outerDia = parseScalar(feature.value("outerDiameter", 0.0));
+        const double innerDia = feature.contains("innerDiameter")
+            ? parseScalar(feature["innerDiameter"])
+            : 0.0;
+        if (!(length > 0)) {
+          throw std::runtime_error("feature.pipe length must be positive");
+        }
+        if (!(outerDia > 0)) {
+          throw std::runtime_error("feature.pipe outer diameter must be positive");
+        }
+        if (innerDia < 0) {
+          throw std::runtime_error("feature.pipe inner diameter must be non-negative");
+        }
+        if (innerDia > 0 && innerDia >= outerDia) {
+          throw std::runtime_error("feature.pipe inner diameter must be smaller than outer diameter");
+        }
+        gp_Pnt origin = parsePoint3D(feature.value("origin", json::array({0, 0, 0})));
+        gp_Ax2 axis(origin, gp_Dir(axisVec));
+        TopoDS_Shape outer = BRepPrimAPI_MakeCylinder(axis, outerDia / 2.0, length);
+        TopoDS_Shape shape = outer;
+        if (innerDia > 0) {
+          TopoDS_Shape inner = BRepPrimAPI_MakeCylinder(axis, innerDia / 2.0, length);
+          shape = BRepAlgoAPI_Cut(outer, inner);
+        }
+        const std::string resultKey = feature.value("result", "body:main");
+        KernelResult built = collectSelections(
+            shape, session.registry, featureId, resultKey, "solid", tags);
+        KernelResult merged = mergeResults(upstream, built);
+        session.current = merged;
+
+        json response;
+        response["result"] = serializeKernelResult(built);
+        res.set_content(response.dump(), "application/json");
+        return;
+      }
+
+      if (kind == "feature.loft") {
+        const json profiles = feature.value("profiles", json::array());
+        if (!profiles.is_array() || profiles.size() < 2) {
+          throw std::runtime_error("feature.loft requires at least two profiles");
+        }
+        const bool makeSolid = feature.value("mode", std::string("solid")) != "surface";
+        BRepOffsetAPI_ThruSections loftBuilder(makeSolid, false, Precision::Confusion());
+        for (const auto& profileRef : profiles) {
+          const json profile = resolveProfileJson(profileRef, upstream);
+          loftBuilder.AddWire(buildProfileWire(profile));
+        }
+        loftBuilder.Build();
+        if (!loftBuilder.IsDone()) {
+          throw std::runtime_error("feature.loft failed to build");
+        }
+        TopoDS_Shape shape = loftBuilder.Shape();
+        const std::string resultKey = feature.value(
+            "result", makeSolid ? "body:main" : "surface:main");
+        KernelResult built = collectSelections(
+            shape, session.registry, featureId, resultKey, makeSolid ? "solid" : "surface", tags);
         KernelResult merged = mergeResults(upstream, built);
         session.current = merged;
 

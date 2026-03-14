@@ -216,6 +216,9 @@ Progress:
 - Native backend capability reporting now exists across the wrapper,
   local-transport, HTTP-transport, and native-server layers so backend contract
   mismatches are observable instead of implicit.
+- The live native-server baseline now covers `datum.plane`, `datum.axis`,
+  `datum.frame`, `feature.sketch2d`, `feature.surface`, `feature.plane`,
+  `feature.extrude`, `feature.revolve`, `feature.pipe`, and `feature.loft`.
 - `npm run verify:workspace-packages` now provides one repeatable gate for
   package-local typechecks plus workspace parity/entrypoint tests.
 - live-tested native-server baseline now includes `datum.plane`, `datum.axis`,

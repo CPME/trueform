@@ -45,7 +45,7 @@ Exit gate:
 Status:
 - current live-tested native baseline includes `datum.plane`, `datum.axis`,
   `datum.frame`, `feature.sketch2d`, `feature.surface`, `feature.plane`,
-  `feature.extrude`, and `feature.revolve`
+  `feature.extrude`, `feature.revolve`, `feature.pipe`, and `feature.loft`
 
 ### Phase N3: Feature-port waves
 
@@ -114,7 +114,7 @@ Exit gate:
 
 ## Immediate Next Slices
 
-1. native-server `datum.plane` + `datum.axis`
-2. native-local parity test against direct OCCT.js backend
-3. `verify:workspace-packages` CI command
-4. native-server sketch/profile-ref + surface/frame baseline
+1. native-server `feature.sweep` baseline for primitive/profile-ref flows
+2. broader live native parity coverage beyond a single smoke e2e
+3. move backend implementation ownership under package-local source trees
+4. add selector/semantic-topology parity checks for native-server outputs
