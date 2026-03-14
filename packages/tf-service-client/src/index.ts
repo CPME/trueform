@@ -1,2 +1,2 @@
 // Transitional package-local service client surface.
-export * from "../../../src/service_client.js";
+export * from "../../../dist/service_client.js";

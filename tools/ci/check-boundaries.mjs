@@ -76,6 +76,7 @@ const projectSourceFiles = [...srcFiles, ...appFiles];
 await checkResolutionContextUtilityBoundaries(projectSourceFiles, boundaryErrors);
 await checkSelectionSlotUtilityBoundaries(projectSourceFiles, boundaryErrors);
 await checkTfServiceBoundaries(boundaryErrors);
+await checkWorkspacePackageBoundaries(boundaryErrors);
 
 if (boundaryErrors.length > 0) {
   console.error("Boundary guardrail failed:");
@@ -170,6 +171,26 @@ async function checkTfServiceBoundaries(boundaryErrors) {
             `tf-service services/job runtime must not import server or routes: ${file} -> ${specifier}`
           );
         }
+      }
+    }
+  }
+}
+
+async function checkWorkspacePackageBoundaries(boundaryErrors) {
+  const workspacePackageFiles = (
+    await walkFiles(resolve("packages"), [".ts"])
+  ).map((file) => relativize(file));
+
+  for (const file of workspacePackageFiles) {
+    if (!file.includes("/src/")) continue;
+    const content = await readFile(resolve(file), "utf8");
+    const imports = [...content.matchAll(/from\s+["'](.+?)["']/g)].map((match) => match[1]);
+
+    for (const specifier of imports) {
+      if (specifier.includes("/src/")) {
+        boundaryErrors.push(
+          `workspace package source must not import root src modules directly: ${file} -> ${specifier}`
+        );
       }
     }
   }

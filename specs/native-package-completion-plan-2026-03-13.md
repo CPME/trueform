@@ -120,6 +120,12 @@ Status:
 - `@trueform/backend-native` now has a package-local build and package-local
   implementation modules for its public backend/transport surface rather than
   pointing directly at root `dist/*`
+- `@trueform/backend-ocjs` now follows the same package-local build pattern for
+  its public backend surface
+- the other public workspace packages (`@trueform/core`, `@trueform/dsl`,
+  `@trueform/export`, `@trueform/api`, `@trueform/service-client`) now also
+  build package-local `dist/*` entrypoints and no longer point package source
+  wrappers directly at root `src/*`
 
 ### Phase P4: Publishable package model
 
@@ -132,7 +138,6 @@ Exit gate:
 
 ## Immediate Next Slices
 
-1. broaden live native parity coverage beyond a single smoke e2e
-2. move backend implementation ownership under package-local source trees
-3. add selector/semantic-topology parity checks for native-server outputs
-4. extend native support beyond primitive/profile-ref feature flows
+1. move deeper shared implementation ownership under package-local source trees
+2. extend native support only when additional feature waves need parity
+3. keep selector/semantic-topology parity in the live native verification loop

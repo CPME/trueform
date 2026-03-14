@@ -213,6 +213,12 @@ Progress:
 - `packages/tf-backend-ocjs` and `packages/tf-backend-native` now own explicit
   workspace entrypoints, package-local wrappers, and cross-package parity
   coverage for the backend surfaces.
+- `packages/tf-core`, `packages/tf-dsl`, `packages/tf-export`,
+  `packages/tf-api`, and `packages/tf-service-client` now also own
+  package-local build configs and package-local `dist/*` entrypoints instead of
+  pointing their package manifests and source wrappers back at root `src/*`.
+- `packages/tf-backend-ocjs` now follows the same package-local build pattern
+  as `packages/tf-backend-native` for its public backend surface.
 - `packages/tf-backend-native` now also owns a package-local build plus
   package-local implementation modules for its public backend/transport surface.
 - Native backend capability reporting now exists across the wrapper,
@@ -237,12 +243,10 @@ Progress:
   primitive sketch profiles.
 
 Remaining targets:
-- move more source ownership behind package-local module trees instead of
-  keeping transitional wrappers pointed at `src/*`
-- expand true dual-backend parity coverage beyond capability/build/export smoke
-  checks so native-vs-OCCT.js feature drift fails fast
-- continue native-server feature-port work beyond the current low-complexity
-  baseline (`datum.plane`, `datum.axis`, `feature.extrude`)
+- move deeper implementation ownership behind package-local module trees instead
+  of keeping transitional wrappers pointed at built root `dist/*`
+- expand native-server feature coverage only when additional feature waves need
+  parity beyond the current supported surface
 
 Requirements:
 - keep the root `trueform` compatibility facade stable
@@ -260,6 +264,9 @@ Progress:
 - `tools/ci/check-boundaries.mjs` now enforces the `apps/tf-service`
   route/service/job-runtime layering so those modules cannot drift back into a
   single import graph.
+- `tools/ci/check-boundaries.mjs` now blocks `packages/*/src` from importing
+  root `src/*` directly, so the workspace package model does not regress back
+  into source-level coupling.
 
 Open work:
 1. Expand the runtime boundary checks from import rules to ownership rules

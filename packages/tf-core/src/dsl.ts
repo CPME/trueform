@@ -1,1 +1,1 @@
-export * from "../../../src/dsl.js";
+export * from "../../../dist/dsl.js";

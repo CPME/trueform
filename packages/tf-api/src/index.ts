@@ -1,2 +1,2 @@
 // Transitional package-local API surface.
-export * from "../../../src/api.js";
+export * from "../../../dist/api.js";

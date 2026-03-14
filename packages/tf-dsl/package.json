@@ -4,16 +4,16 @@
   "private": true,
   "type": "module",
   "source": "./src/index.ts",
-  "main": "./index.js",
-  "types": "./index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./index.d.ts",
-      "default": "./index.js"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./geometry": {
-      "types": "./geometry.d.ts",
-      "default": "./geometry.js"
+      "types": "./dist/geometry.d.ts",
+      "default": "./dist/geometry.js"
     }
   }
 }

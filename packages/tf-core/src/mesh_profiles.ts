@@ -1,1 +1,1 @@
-export * from "../../../src/mesh_profiles.js";
+export * from "../../../dist/mesh_profiles.js";

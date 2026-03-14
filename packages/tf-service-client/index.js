@@ -1,1 +1,1 @@
-export * from "../../dist/service_client.js";
+export * from "./dist/index.js";

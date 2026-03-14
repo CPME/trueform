@@ -1,1 +1,1 @@
-export { OcctBackend } from "../../dist/backend_occt.js";
+export * from "./dist/index.js";

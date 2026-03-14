@@ -1,1 +1,1 @@
-export * from "../../../src/dimensions.js";
+export * from "../../../dist/dimensions.js";

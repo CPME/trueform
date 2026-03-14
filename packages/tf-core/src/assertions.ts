@@ -1,1 +1,1 @@
-export * from "../../../src/assertions.js";
+export * from "../../../dist/assertions.js";

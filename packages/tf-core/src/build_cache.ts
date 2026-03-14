@@ -1,1 +1,1 @@
-export * from "../../../src/build_cache.js";
+export * from "../../../dist/build_cache.js";
