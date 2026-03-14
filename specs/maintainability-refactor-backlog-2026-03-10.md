@@ -219,8 +219,9 @@ Progress:
 - `npm run verify:workspace-packages` now provides one repeatable gate for
   package-local typechecks plus workspace parity/entrypoint tests.
 - live-tested native-server baseline now includes `datum.plane`, `datum.axis`,
-  `datum.frame`, `feature.sketch2d`, `feature.surface`, and `feature.extrude`
-  with `profile.ref` support for primitive sketch profiles.
+  `datum.frame`, `feature.sketch2d`, `feature.surface`, `feature.plane`,
+  `feature.extrude`, and `feature.revolve` with `profile.ref` support for
+  primitive sketch profiles.
 
 Remaining targets:
 - move more source ownership behind package-local module trees instead of

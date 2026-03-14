@@ -44,7 +44,8 @@ Exit gate:
 
 Status:
 - current live-tested native baseline includes `datum.plane`, `datum.axis`,
-  `datum.frame`, `feature.sketch2d`, `feature.surface`, and `feature.extrude`
+  `datum.frame`, `feature.sketch2d`, `feature.surface`, `feature.plane`,
+  `feature.extrude`, and `feature.revolve`
 
 ### Phase N3: Feature-port waves
 

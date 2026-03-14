@@ -53,14 +53,16 @@ async function startNativeHttpServer(): Promise<ServerContext> {
       if (path === "/v1/capabilities") {
         writeJson(res, {
           name: "opencascade.native",
-          featureKinds: ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.surface"],
+          featureKinds: ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve"],
           featureStages: {
             "datum.plane": { stage: "stable" },
             "datum.axis": { stage: "stable" },
             "datum.frame": { stage: "stable" },
             "feature.sketch2d": { stage: "stable" },
             "feature.extrude": { stage: "stable" },
+            "feature.plane": { stage: "stable" },
             "feature.surface": { stage: "stable" },
+            "feature.revolve": { stage: "stable" },
           },
           mesh: true,
           exports: { step: true, stl: false },
@@ -186,14 +188,16 @@ function createFakeFetch(): FetchLike {
     if (url.endsWith("/v1/capabilities")) {
       return makeJsonResponse({
         name: "opencascade.native",
-        featureKinds: ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.surface"],
+        featureKinds: ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve"],
         featureStages: {
           "datum.plane": { stage: "stable" },
           "datum.axis": { stage: "stable" },
           "datum.frame": { stage: "stable" },
           "feature.sketch2d": { stage: "stable" },
           "feature.extrude": { stage: "stable" },
+          "feature.plane": { stage: "stable" },
           "feature.surface": { stage: "stable" },
+          "feature.revolve": { stage: "stable" },
         },
         mesh: true,
         exports: { step: true, stl: false },
@@ -291,7 +295,7 @@ const tests = [
           const backend = new OcctNativeBackend({ transport });
           const caps = await backend.capabilities?.();
           assert.equal(caps?.name, "opencascade.native");
-          assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.surface"]);
+          assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve"]);
           assert.deepEqual(caps?.exports, { step: true, stl: false });
         } finally {
           await server.close();
@@ -306,7 +310,7 @@ const tests = [
       const backend = new OcctNativeBackend({ transport });
       const caps = await backend.capabilities?.();
       assert.equal(caps?.name, "opencascade.native");
-      assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.surface"]);
+      assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve"]);
       assert.deepEqual(caps?.exports, { step: true, stl: false });
     },
   },
@@ -319,7 +323,11 @@ const tests = [
       });
       const backend = new OcctNativeBackend({ transport });
       const part = dsl.part("http-native-unsupported", [
-        dsl.revolve("base", dsl.profileRect(22, 12), "+Z", 45, "body:main"),
+        dsl.loft(
+          "base",
+          [dsl.profileRect(22, 12), dsl.profileCircle(8, [0, 0, 10])],
+          "body:main"
+        ),
       ]);
 
       await assert.rejects(
@@ -327,7 +335,7 @@ const tests = [
         (err) =>
           err instanceof BackendError &&
           err.code === "backend_unsupported_feature" &&
-          err.message.includes("feature.revolve")
+          err.message.includes("feature.loft")
       );
     },
   },

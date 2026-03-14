@@ -61,7 +61,7 @@ const tests = [
         const backend = new OcctNativeBackend({ transport });
         const caps = await backend.capabilities?.();
         assert.equal(caps?.name, "opencascade.native");
-        assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.surface"]);
+        assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve"]);
         assert.deepEqual(caps?.exports, { step: true, stl: false });
 
         const datumPart = dsl.part("native-datum", [
@@ -106,6 +106,25 @@ const tests = [
         const frame = frameSurfaceResult.final.outputs.get("datum:frame-a");
         assert.equal(surface?.kind, "surface");
         assert.equal(frame?.kind, "datum");
+
+        const planeRevolvePart = dsl.part("native-plane-revolve", [
+          dsl.datumPlane("plane-datum", "+X"),
+          dsl.plane("plane-1", 30, 18, "surface:plane", {
+            plane: dsl.planeDatum("plane-datum"),
+          }),
+          dsl.revolve(
+            "revolve-1",
+            dsl.profileRect(2, 4, [1, 2, 0]),
+            "+X",
+            "full",
+            "body:revolve"
+          ),
+        ]);
+        const planeRevolveResult = await buildPartAsync(planeRevolvePart, backend);
+        const plane = planeRevolveResult.final.outputs.get("surface:plane");
+        const revolvedBody = planeRevolveResult.final.outputs.get("body:revolve");
+        assert.equal(plane?.kind, "surface");
+        assert.equal(revolvedBody?.kind, "solid");
 
         const target = dsl.refSurface(
           dsl.selectorFace(

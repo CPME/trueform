@@ -8,6 +8,7 @@
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepGProp.hxx>
+#include <BRepPrimAPI_MakeRevol.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRep_Tool.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
@@ -236,6 +237,50 @@ static TopoDS_Face buildProfileFace(const json& profile) {
   throw std::runtime_error("Unsupported profile kind: " + kind);
 }
 
+static TopoDS_Wire buildProfileWire(const json& profile) {
+  const std::string kind = profile.value("kind", "");
+  if (kind == "profile.rectangle") {
+    double width = parseScalar(profile["width"]);
+    double height = parseScalar(profile["height"]);
+    gp_Pnt center = parsePoint2D(profile.value("center", json::array({0, 0})));
+    const double halfW = width / 2.0;
+    const double halfH = height / 2.0;
+    const double cx = center.X();
+    const double cy = center.Y();
+    BRepBuilderAPI_MakePolygon poly;
+    poly.Add(gp_Pnt(cx - halfW, cy - halfH, 0));
+    poly.Add(gp_Pnt(cx + halfW, cy - halfH, 0));
+    poly.Add(gp_Pnt(cx + halfW, cy + halfH, 0));
+    poly.Add(gp_Pnt(cx - halfW, cy + halfH, 0));
+    poly.Close();
+    return poly.Wire();
+  }
+  if (kind == "profile.circle") {
+    double radius = parseScalar(profile["radius"]);
+    gp_Pnt center = parsePoint2D(profile.value("center", json::array({0, 0})));
+    gp_Circ circ(gp_Ax2(center, gp_Dir(0, 0, 1)), radius);
+    TopoDS_Edge edge = BRepBuilderAPI_MakeEdge(circ);
+    return BRepBuilderAPI_MakeWire(edge);
+  }
+  if (kind == "profile.poly") {
+    int sides = static_cast<int>(parseScalar(profile["sides"]));
+    double radius = parseScalar(profile["radius"]);
+    gp_Pnt center = parsePoint2D(profile.value("center", json::array({0, 0})));
+    double rotation = parseScalar(profile.value("rotation", 0.0));
+    BRepBuilderAPI_MakePolygon poly;
+    const double step = (2.0 * M_PI) / static_cast<double>(sides);
+    for (int i = 0; i < sides; ++i) {
+      const double angle = rotation + step * static_cast<double>(i);
+      const double x = center.X() + radius * std::cos(angle);
+      const double y = center.Y() + radius * std::sin(angle);
+      poly.Add(gp_Pnt(x, y, 0));
+    }
+    poly.Close();
+    return poly.Wire();
+  }
+  throw std::runtime_error("Unsupported profile kind for wire: " + kind);
+}
+
 static json resolveProfileJson(const json& profileRef, const KernelResult& upstream) {
   const std::string kind = profileRef.value("kind", "");
   if (kind != "profile.ref") return profileRef;
@@ -251,6 +296,38 @@ static json resolveProfileJson(const json& profileRef, const KernelResult& upstr
     throw std::runtime_error("Profile output missing profile data: " + name);
   }
   return it->second.meta["profile"];
+}
+
+static json resolvePlaneBasisJson(const json& planeRef, const KernelResult& upstream) {
+  if (!planeRef.is_object()) {
+    return {
+        {"origin", json::array({0, 0, 0})},
+        {"xDir", json::array({1, 0, 0})},
+        {"yDir", json::array({0, 1, 0})},
+        {"normal", json::array({0, 0, 1})},
+    };
+  }
+  if (planeRef.value("kind", "") == "plane.datum") {
+    const std::string ref = planeRef.value("ref", "");
+    auto it = upstream.outputs.find("datum:" + ref);
+    if (it == upstream.outputs.end()) {
+      throw std::runtime_error("Missing plane datum: " + ref);
+    }
+    if (it->second.kind != "datum") {
+      throw std::runtime_error("Referenced plane datum is not a datum: " + ref);
+    }
+    const json meta = it->second.meta;
+    if (meta.value("type", "") != "plane") {
+      throw std::runtime_error("Referenced datum is not a plane: " + ref);
+    }
+    return {
+        {"origin", meta.value("origin", json::array({0, 0, 0}))},
+        {"xDir", meta.value("xDir", json::array({1, 0, 0}))},
+        {"yDir", meta.value("yDir", json::array({0, 1, 0}))},
+        {"normal", meta.value("normal", json::array({0, 0, 1}))},
+    };
+  }
+  throw std::runtime_error("Native backend plane feature currently supports default or plane.datum references only");
 }
 
 static gp_Vec parseAxis(const json& axis) {
@@ -369,6 +446,46 @@ static KernelResult makeSketchProfileResult(const json& feature) {
     result.outputs[name] = output;
   }
   return result;
+}
+
+static TopoDS_Face makePlaneFaceFromBasis(const json& basis,
+                                          double width,
+                                          double height,
+                                          const json& originOffset) {
+  gp_Pnt origin = parsePoint3D(basis.value("origin", json::array({0, 0, 0})));
+  json xDirJson = basis.value("xDir", json::array({1, 0, 0}));
+  json yDirJson = basis.value("yDir", json::array({0, 1, 0}));
+  gp_Vec xDir(parseScalar(xDirJson[0]), parseScalar(xDirJson[1]), parseScalar(xDirJson[2]));
+  gp_Vec yDir(parseScalar(yDirJson[0]), parseScalar(yDirJson[1]), parseScalar(yDirJson[2]));
+  if (xDir.Magnitude() == 0 || yDir.Magnitude() == 0) {
+    throw std::runtime_error("Invalid plane basis");
+  }
+  xDir.Normalize();
+  yDir.Normalize();
+
+  gp_Vec offset(
+      parseScalar(originOffset[0]),
+      parseScalar(originOffset[1]),
+      parseScalar(originOffset[2]));
+  gp_Pnt center(
+      origin.X() + offset.X(),
+      origin.Y() + offset.Y(),
+      origin.Z() + offset.Z());
+
+  const double halfW = width / 2.0;
+  const double halfH = height / 2.0;
+  auto addVec = [](const gp_Pnt& p, const gp_Vec& v) {
+    return gp_Pnt(p.X() + v.X(), p.Y() + v.Y(), p.Z() + v.Z());
+  };
+  gp_Vec xOff = xDir.Multiplied(halfW);
+  gp_Vec yOff = yDir.Multiplied(halfH);
+  BRepBuilderAPI_MakePolygon poly;
+  poly.Add(addVec(addVec(center, xOff), yOff));
+  poly.Add(addVec(addVec(center, xOff.Reversed()), yOff));
+  poly.Add(addVec(addVec(center, xOff.Reversed()), yOff.Reversed()));
+  poly.Add(addVec(addVec(center, xOff), yOff.Reversed()));
+  poly.Close();
+  return BRepBuilderAPI_MakeFace(poly.Wire());
 }
 
 static gp_Pnt shapeCenter(const TopoDS_Shape& shape) {
@@ -929,14 +1046,16 @@ static std::vector<unsigned char> exportStepWithPmi(const TopoDS_Shape& shape,
 static json capabilitiesPayload() {
   json payload;
   payload["name"] = "opencascade.native";
-  payload["featureKinds"] = json::array({"datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.surface"});
+  payload["featureKinds"] = json::array({"datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve"});
   payload["featureStages"] = {
       {"datum.plane", {{"stage", "stable"}}},
       {"datum.axis", {{"stage", "stable"}}},
       {"datum.frame", {{"stage", "stable"}}},
       {"feature.sketch2d", {{"stage", "stable"}}},
       {"feature.extrude", {{"stage", "stable"}}},
+      {"feature.plane", {{"stage", "stable"}}},
       {"feature.surface", {{"stage", "stable"}}},
+      {"feature.revolve", {{"stage", "stable"}}},
   };
   payload["mesh"] = true;
   payload["exports"] = {
@@ -1099,6 +1218,64 @@ int main(int argc, char** argv) {
         const std::string resultKey = feature.value("result", "surface:main");
         KernelResult built = collectSelections(
             face, session.registry, featureId, resultKey, "surface", tags);
+        KernelResult merged = mergeResults(upstream, built);
+        session.current = merged;
+
+        json response;
+        response["result"] = serializeKernelResult(built);
+        res.set_content(response.dump(), "application/json");
+        return;
+      }
+
+      if (kind == "feature.plane") {
+        const double width = parseScalar(feature.value("width", 0.0));
+        const double height = parseScalar(feature.value("height", 0.0));
+        if (!(width > 0) || !(height > 0)) {
+          throw std::runtime_error("feature.plane requires positive width and height");
+        }
+        const json basis = feature.contains("plane")
+            ? resolvePlaneBasisJson(feature["plane"], upstream)
+            : json{
+                  {"origin", json::array({0, 0, 0})},
+                  {"xDir", json::array({1, 0, 0})},
+                  {"yDir", json::array({0, 1, 0})},
+                  {"normal", json::array({0, 0, 1})},
+              };
+        const json originOffset = feature.value("origin", json::array({0, 0, 0}));
+        TopoDS_Face face = makePlaneFaceFromBasis(basis, width, height, originOffset);
+        const std::string resultKey = feature.value("result", "surface:main");
+        KernelResult built = collectSelections(
+            face, session.registry, featureId, resultKey, "surface", tags);
+        KernelResult merged = mergeResults(upstream, built);
+        session.current = merged;
+
+        json response;
+        response["result"] = serializeKernelResult(built);
+        res.set_content(response.dump(), "application/json");
+        return;
+      }
+
+      if (kind == "feature.revolve") {
+        const json profile = resolveProfileJson(feature.value("profile", json::object()), upstream);
+        TopoDS_Face face = buildProfileFace(profile);
+        gp_Vec axisVec = parseAxis(feature.value("axis", json("+Z")));
+        if (axisVec.Magnitude() == 0) {
+          throw std::runtime_error("feature.revolve axis is invalid");
+        }
+        axisVec.Normalize();
+        gp_Pnt origin = parsePoint3D(feature.value("origin", json::array({0, 0, 0})));
+        gp_Ax1 axis(origin, gp_Dir(axisVec));
+        json angleJson = feature.value("angle", "full");
+        double angleRad = 2.0 * M_PI;
+        if (angleJson.is_number()) {
+          angleRad = parseScalar(angleJson);
+        } else if (angleJson.is_string() && angleJson.get<std::string>() != "full") {
+          throw std::runtime_error("feature.revolve angle must be numeric or 'full'");
+        }
+        TopoDS_Shape shape = BRepPrimAPI_MakeRevol(face, axis, angleRad);
+        const std::string resultKey = feature.value("result", "body:main");
+        KernelResult built = collectSelections(
+            shape, session.registry, featureId, resultKey, "solid", tags);
         KernelResult merged = mergeResults(upstream, built);
         session.current = merged;
 
