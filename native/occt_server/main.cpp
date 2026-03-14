@@ -9,6 +9,7 @@
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepGProp.hxx>
+#include <BRepOffsetAPI_MakePipe.hxx>
 #include <BRepOffsetAPI_ThruSections.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
@@ -285,6 +286,41 @@ static TopoDS_Wire buildProfileWire(const json& profile) {
     return poly.Wire();
   }
   throw std::runtime_error("Unsupported profile kind for wire: " + kind);
+}
+
+static TopoDS_Wire buildPathWire(const json& path) {
+  const std::string kind = path.value("kind", "");
+  if (kind == "path.polyline") {
+    const json points = path.value("points", json::array());
+    if (!points.is_array() || points.size() < 2) {
+      throw std::runtime_error("path.polyline requires at least two points");
+    }
+    BRepBuilderAPI_MakePolygon poly;
+    for (const auto& point : points) {
+      poly.Add(parsePoint3D(point));
+    }
+    if (path.value("closed", false)) {
+      poly.Close();
+    }
+    return poly.Wire();
+  }
+  if (kind == "path.segments") {
+    const json segments = path.value("segments", json::array());
+    if (!segments.is_array() || segments.empty()) {
+      throw std::runtime_error("path.segments requires at least one segment");
+    }
+    BRepBuilderAPI_MakeWire wire;
+    for (const auto& segment : segments) {
+      if (segment.value("kind", "") != "path.line") {
+        throw std::runtime_error("Native backend sweep currently supports only line path segments");
+      }
+      wire.Add(BRepBuilderAPI_MakeEdge(
+          parsePoint3D(segment.value("start", json::array({0, 0, 0}))),
+          parsePoint3D(segment.value("end", json::array({0, 0, 0})))));
+    }
+    return wire.Wire();
+  }
+  throw std::runtime_error("Native backend sweep currently supports path.polyline or line-only path.segments");
 }
 
 static json resolveProfileJson(const json& profileRef, const KernelResult& upstream) {
@@ -1052,7 +1088,7 @@ static std::vector<unsigned char> exportStepWithPmi(const TopoDS_Shape& shape,
 static json capabilitiesPayload() {
   json payload;
   payload["name"] = "opencascade.native";
-  payload["featureKinds"] = json::array({"datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve", "feature.pipe", "feature.loft"});
+  payload["featureKinds"] = json::array({"datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve", "feature.pipe", "feature.loft", "feature.sweep"});
   payload["featureStages"] = {
       {"datum.plane", {{"stage", "stable"}}},
       {"datum.axis", {{"stage", "stable"}}},
@@ -1064,6 +1100,7 @@ static json capabilitiesPayload() {
       {"feature.revolve", {{"stage", "stable"}}},
       {"feature.pipe", {{"stage", "stable"}}},
       {"feature.loft", {{"stage", "stable"}}},
+      {"feature.sweep", {{"stage", "experimental"}}},
   };
   payload["mesh"] = true;
   payload["exports"] = {
@@ -1352,6 +1389,40 @@ int main(int argc, char** argv) {
           throw std::runtime_error("feature.loft failed to build");
         }
         TopoDS_Shape shape = loftBuilder.Shape();
+        const std::string resultKey = feature.value(
+            "result", makeSolid ? "body:main" : "surface:main");
+        KernelResult built = collectSelections(
+            shape, session.registry, featureId, resultKey, makeSolid ? "solid" : "surface", tags);
+        KernelResult merged = mergeResults(upstream, built);
+        session.current = merged;
+
+        json response;
+        response["result"] = serializeKernelResult(built);
+        res.set_content(response.dump(), "application/json");
+        return;
+      }
+
+      if (kind == "feature.sweep") {
+        if (feature.contains("frame")) {
+          throw std::runtime_error("Native backend sweep does not support custom frame references yet");
+        }
+        if (feature.contains("orientation") &&
+            feature["orientation"].is_string() &&
+            feature["orientation"].get<std::string>() != "frenet") {
+          throw std::runtime_error("Native backend sweep currently supports only frenet orientation");
+        }
+        const json profile = resolveProfileJson(feature.value("profile", json::object()), upstream);
+        TopoDS_Wire pathWire = buildPathWire(feature.value("path", json::object()));
+        const bool makeSolid = feature.value("mode", std::string("solid")) != "surface";
+        TopoDS_Shape section = makeSolid
+            ? TopoDS_Shape(buildProfileFace(profile))
+            : TopoDS_Shape(buildProfileWire(profile));
+        BRepOffsetAPI_MakePipe sweepBuilder(pathWire, section);
+        sweepBuilder.Build();
+        if (!sweepBuilder.IsDone()) {
+          throw std::runtime_error("feature.sweep failed to build");
+        }
+        TopoDS_Shape shape = sweepBuilder.Shape();
         const std::string resultKey = feature.value(
             "result", makeSolid ? "body:main" : "surface:main");
         KernelResult built = collectSelections(

@@ -53,7 +53,7 @@ async function startNativeHttpServer(): Promise<ServerContext> {
       if (path === "/v1/capabilities") {
         writeJson(res, {
           name: "opencascade.native",
-          featureKinds: ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve", "feature.pipe", "feature.loft"],
+          featureKinds: ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve", "feature.pipe", "feature.loft", "feature.sweep"],
           featureStages: {
             "datum.plane": { stage: "stable" },
             "datum.axis": { stage: "stable" },
@@ -65,6 +65,7 @@ async function startNativeHttpServer(): Promise<ServerContext> {
             "feature.revolve": { stage: "stable" },
             "feature.pipe": { stage: "stable" },
             "feature.loft": { stage: "stable" },
+            "feature.sweep": { stage: "experimental" },
           },
           mesh: true,
           exports: { step: true, stl: false },
@@ -190,7 +191,7 @@ function createFakeFetch(): FetchLike {
     if (url.endsWith("/v1/capabilities")) {
       return makeJsonResponse({
         name: "opencascade.native",
-        featureKinds: ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve", "feature.pipe", "feature.loft"],
+        featureKinds: ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve", "feature.pipe", "feature.loft", "feature.sweep"],
         featureStages: {
           "datum.plane": { stage: "stable" },
           "datum.axis": { stage: "stable" },
@@ -202,6 +203,7 @@ function createFakeFetch(): FetchLike {
           "feature.revolve": { stage: "stable" },
           "feature.pipe": { stage: "stable" },
           "feature.loft": { stage: "stable" },
+          "feature.sweep": { stage: "experimental" },
         },
         mesh: true,
         exports: { step: true, stl: false },
@@ -299,7 +301,7 @@ const tests = [
           const backend = new OcctNativeBackend({ transport });
           const caps = await backend.capabilities?.();
           assert.equal(caps?.name, "opencascade.native");
-          assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve", "feature.pipe", "feature.loft"]);
+          assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve", "feature.pipe", "feature.loft", "feature.sweep"]);
           assert.deepEqual(caps?.exports, { step: true, stl: false });
         } finally {
           await server.close();
@@ -314,7 +316,7 @@ const tests = [
       const backend = new OcctNativeBackend({ transport });
       const caps = await backend.capabilities?.();
       assert.equal(caps?.name, "opencascade.native");
-      assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve", "feature.pipe", "feature.loft"]);
+      assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve", "feature.pipe", "feature.loft", "feature.sweep"]);
       assert.deepEqual(caps?.exports, { step: true, stl: false });
     },
   },
@@ -327,15 +329,7 @@ const tests = [
       });
       const backend = new OcctNativeBackend({ transport });
       const part = dsl.part("http-native-unsupported", [
-        dsl.sweep(
-          "base",
-          dsl.profileCircle(8),
-          dsl.pathPolyline([
-            [0, 0, 0],
-            [0, 0, 10],
-          ]),
-          "body:main"
-        ),
+        dsl.thread("base", "+Z", 10, 8, 1, "body:main"),
       ]);
 
       await assert.rejects(
@@ -343,7 +337,7 @@ const tests = [
         (err) =>
           err instanceof BackendError &&
           err.code === "backend_unsupported_feature" &&
-          err.message.includes("feature.sweep")
+          err.message.includes("feature.thread")
       );
     },
   },

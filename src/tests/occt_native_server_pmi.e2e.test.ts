@@ -61,7 +61,7 @@ const tests = [
         const backend = new OcctNativeBackend({ transport });
         const caps = await backend.capabilities?.();
         assert.equal(caps?.name, "opencascade.native");
-        assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve", "feature.pipe", "feature.loft"]);
+        assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.plane", "feature.surface", "feature.revolve", "feature.pipe", "feature.loft", "feature.sweep"]);
         assert.deepEqual(caps?.exports, { step: true, stl: false });
 
         const datumPart = dsl.part("native-datum", [
@@ -146,6 +146,22 @@ const tests = [
         const loftResult = await buildPartAsync(loftPart, backend);
         const loftBody = loftResult.final.outputs.get("body:loft");
         assert.equal(loftBody?.kind, "solid");
+
+        const sweepPart = dsl.part("native-sweep", [
+          dsl.sweep(
+            "sweep-1",
+            dsl.profileCircle(4),
+            dsl.pathPolyline([
+              [0, 0, 0],
+              [0, 0, 12],
+              [6, 4, 20],
+            ]),
+            "body:sweep"
+          ),
+        ]);
+        const sweepResult = await buildPartAsync(sweepPart, backend);
+        const sweepBody = sweepResult.final.outputs.get("body:sweep");
+        assert.equal(sweepBody?.kind, "solid");
 
         const target = dsl.refSurface(
           dsl.selectorFace(
