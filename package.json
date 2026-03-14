@@ -53,6 +53,7 @@
     "prepack": "npm run build -- --pretty false",
     "verify:package": "node tools/ci/verify-package.mjs",
     "verify:workspace-packages": "node tools/ci/verify-workspace-packages.mjs",
+    "verify:native-live": "node tools/ci/verify-native-live.mjs",
     "guardrails": "npm run guardrails:docs && npm run guardrails:boundaries",
     "guardrails:docs": "node tools/ci/check-docs-drift.mjs",
     "guardrails:boundaries": "node tools/ci/check-boundaries.mjs",

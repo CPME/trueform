@@ -73,6 +73,12 @@ Exit gate:
 Exit gate:
 - backend drift fails tests directly instead of being discovered downstream
 
+Status:
+- live parity coverage now exists in
+  `src/tests/occt_native_server_parity.e2e.test.ts`
+- repeatable live-native verification now exists as
+  `npm run verify:native-live`
+
 ## Package Ownership Finish Plan
 
 ### Phase P1: Transitional workspace surfaces

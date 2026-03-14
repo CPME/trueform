@@ -77,6 +77,13 @@ cd /home/eveber/code/trueform
 TF_NATIVE_SERVER=1 node dist/tests/occt_native_server_pmi.e2e.test.js
 ```
 
+Live native verification loop (build + native server build + HTTP/native parity):
+
+```bash
+cd /home/eveber/code/trueform
+npm run verify:native-live
+```
+
 ## Agent Guide (E2E Feature Workflow)
 
 Use this when adding a new feature end-to-end to avoid digging:

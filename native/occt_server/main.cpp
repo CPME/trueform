@@ -28,11 +28,13 @@
 #include <TDF_LabelSequence.hxx>
 #include <TDocStd_Document.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopExp.hxx>
 #include <TopLoc_Location.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
 #include <XCAFDoc_Datum.hxx>
 #include <XCAFDoc_DimTolTool.hxx>
 #include <XCAFDoc_DocumentTool.hxx>
@@ -558,9 +560,10 @@ static KernelResult collectSelections(const TopoDS_Shape& shape,
     result.selections.push_back(solidSelection);
   }
 
-  TopExp_Explorer faceExp(shape, TopAbs_FACE);
-  for (; faceExp.More(); faceExp.Next()) {
-    TopoDS_Face face = TopoDS::Face(faceExp.Current());
+  TopTools_IndexedMapOfShape faceMap;
+  TopExp::MapShapes(shape, TopAbs_FACE, faceMap);
+  for (int index = 1; index <= faceMap.Extent(); ++index) {
+    TopoDS_Face face = TopoDS::Face(faceMap(index));
     std::string faceHandle = registry.registerShape(face);
 
     GProp_GProps props;
@@ -598,9 +601,10 @@ static KernelResult collectSelections(const TopoDS_Shape& shape,
     result.selections.push_back(sel);
   }
 
-  TopExp_Explorer edgeExp(shape, TopAbs_EDGE);
-  for (; edgeExp.More(); edgeExp.Next()) {
-    TopoDS_Edge edge = TopoDS::Edge(edgeExp.Current());
+  TopTools_IndexedMapOfShape edgeMap;
+  TopExp::MapShapes(shape, TopAbs_EDGE, edgeMap);
+  for (int index = 1; index <= edgeMap.Extent(); ++index) {
+    TopoDS_Edge edge = TopoDS::Edge(edgeMap(index));
     std::string edgeHandle = registry.registerShape(edge);
     gp_Pnt center = shapeCenter(edge);
     KernelSelection sel;

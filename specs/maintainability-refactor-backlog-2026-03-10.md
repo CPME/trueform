@@ -220,8 +220,13 @@ Progress:
   `datum.frame`, `feature.sketch2d`, `feature.surface`, `feature.plane`,
   `feature.extrude`, `feature.revolve`, `feature.pipe`, `feature.loft`, and
   `feature.sweep`.
+- Live native-server parity coverage now checks supported primitive feature
+  flows against the direct OCCT.js backend for output keys, output kinds, and
+  selection counts.
 - `npm run verify:workspace-packages` now provides one repeatable gate for
   package-local typechecks plus workspace parity/entrypoint tests.
+- `npm run verify:native-live` now provides one repeatable gate for native HTTP,
+  native PMI export, and native-vs-direct parity coverage.
 - live-tested native-server baseline now includes `datum.plane`, `datum.axis`,
   `datum.frame`, `feature.sketch2d`, `feature.surface`, `feature.plane`,
   `feature.extrude`, and `feature.revolve` with `profile.ref` support for
