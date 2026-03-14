@@ -87,13 +87,13 @@
     "rib-web": {
       "targetOutput": "body:main",
       "kind": "solid",
-      "faces": 14,
-      "edges": 68,
-      "solids": 1,
+      "faces": 21,
+      "edges": 98,
+      "solids": 2,
       "extent": [84, 40, 44],
-      "area": 15907.429,
-      "volume": 88764.992,
-      "surfaceTypes": { "plane": 14 }
+      "area": 18776.348,
+      "volume": 91344.915,
+      "surfaceTypes": { "plane": 21 }
     },
     "sweep-sketch": {
       "targetOutput": "body:main",

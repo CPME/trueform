@@ -244,10 +244,17 @@ const examplePart = part("example-rib-web", [
     side: "oneSided",
   }),
   booleanOp(
-    "union-rib-web",
+    "union-rib",
     "union",
     selectorNamed("body:support"),
     selectorNamed("body:rib"),
+    "body:ribbed"
+  ),
+  booleanOp(
+    "union-rib-web",
+    "union",
+    selectorNamed("body:ribbed"),
+    selectorNamed("body:web"),
     "body:main"
   ),
 ]);

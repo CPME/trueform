@@ -3,11 +3,51 @@ import { dsl } from "../dsl.js";
 import { buildPart } from "../executor.js";
 import {
   assertValidShape,
+  countEdges,
   countFaces,
   countSolids,
   getBackendContext,
   runTests,
 } from "./occt_test_utils.js";
+
+function measureSurfaceArea(occt: any, shape: any): number {
+  const props = new occt.GProp_GProps_1();
+  occt.BRepGProp.SurfaceProperties_1(shape, props, true, true);
+  const area = typeof props.Mass === "function" ? props.Mass() : Number.NaN;
+  if (!Number.isFinite(area)) {
+    throw new Error(`Expected finite surface area, got ${String(area)}`);
+  }
+  return area;
+}
+
+function targetSurfaceTypes(
+  selections: Array<{ id: string; kind: string; meta: Record<string, unknown> }>,
+  ownerKey: string
+): Record<string, number> {
+  const faceSelections = selections.filter(
+    (selection) => selection.kind === "face" && selection.meta["ownerKey"] === ownerKey
+  );
+  const uniqueSelections = new Map(faceSelections.map((selection) => [selection.id, selection]));
+  const counts: Record<string, number> = {};
+  for (const selection of uniqueSelections.values()) {
+    const surfaceType =
+      typeof selection.meta["surfaceType"] === "string"
+        ? (selection.meta["surfaceType"] as string)
+        : "unknown";
+    counts[surfaceType] = (counts[surfaceType] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function polylineLength(points: Array<[number, number, number]>): number {
+  let length = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1] as [number, number, number];
+    const end = points[index] as [number, number, number];
+    length += Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2]);
+  }
+  return length;
+}
 
 const tests = [
   {
@@ -76,7 +116,14 @@ const tests = [
       assert.ok(shape, "missing shape metadata");
       assertValidShape(occt, shape, "extrude surface");
       assert.equal(countSolids(occt, shape), 0);
-      assert.ok(countFaces(occt, shape) > 0, "expected surface to have faces");
+      assert.equal(countFaces(occt, shape), 1, "expected one ruled face");
+      assert.equal(countEdges(occt, shape), 4, "expected rectangular boundary edges");
+      const area = measureSurfaceArea(occt, shape);
+      assert.ok(Math.abs(area - 300) < 1e-6, `expected area 300, got ${area}`);
+      assert.deepEqual(
+        targetSurfaceTypes(result.final.selections as any[], "surface:wall"),
+        { plane: 1 }
+      );
     },
   },
   {
@@ -94,11 +141,12 @@ const tests = [
         ],
         { entities: [line] }
       );
-      const path = dsl.pathPolyline([
+      const pathPoints: Array<[number, number, number]> = [
         [0, 0, 0],
         [0, 0, 20],
         [15, 0, 30],
-      ]);
+      ];
+      const path = dsl.pathPolyline(pathPoints);
       const part = dsl.part("sweep-surface", [
         sketch,
         dsl.sweep(
@@ -119,7 +167,18 @@ const tests = [
       assert.ok(shape, "missing shape metadata");
       assertValidShape(occt, shape, "sweep surface");
       assert.equal(countSolids(occt, shape), 0);
-      assert.ok(countFaces(occt, shape) > 0, "expected surface to have faces");
+      assert.equal(countFaces(occt, shape), 3, "expected one planar patch per path segment");
+      assert.equal(countEdges(occt, shape), 13, "expected open sweep sheet boundary topology");
+      const expectedArea = 16 * polylineLength(pathPoints);
+      const area = measureSurfaceArea(occt, shape);
+      assert.ok(
+        Math.abs(area - expectedArea) < 4,
+        `expected sweep area near ${expectedArea}, got ${area}`
+      );
+      assert.deepEqual(
+        targetSurfaceTypes(result.final.selections as any[], "surface:main"),
+        { plane: 3 }
+      );
     },
   },
   {

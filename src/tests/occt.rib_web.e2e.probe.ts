@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { dsl } from "../dsl.js";
 import { buildPart } from "../executor.js";
+import { dslFeatureExamples } from "../examples/dsl_feature_examples.js";
 import {
   assertPositiveVolume,
   assertValidShape,
@@ -37,6 +38,45 @@ function solidVolume(occt: any, shape: any): number {
 }
 
 const tests = [
+  {
+    name: "occt parity probe: rib/web example main output includes both staged features",
+    fn: async () => {
+      const { backend, occt } = await getBackendContext();
+      const example = dslFeatureExamples.find((entry) => entry.id === "rib-web");
+      assert.ok(example, "missing rib-web example");
+
+      const result = buildPart(example.part, backend);
+      const support = result.final.outputs.get("body:support");
+      const ribbed = result.final.outputs.get("body:ribbed");
+      const web = result.final.outputs.get("body:web");
+      const main = result.final.outputs.get("body:main");
+      assert.ok(support, "missing support output");
+      assert.ok(ribbed, "missing ribbed output");
+      assert.ok(web, "missing web output");
+      assert.ok(main, "missing main output");
+
+      const supportShape = support.meta["shape"] as any;
+      const ribbedShape = ribbed.meta["shape"] as any;
+      const webShape = web.meta["shape"] as any;
+      const mainShape = main.meta["shape"] as any;
+      assertValidShape(occt, supportShape, "rib/web support");
+      assertValidShape(occt, ribbedShape, "ribbed support");
+      assertValidShape(occt, webShape, "web example body");
+      assertValidShape(occt, mainShape, "rib/web main");
+
+      const supportVolume = solidVolume(occt, supportShape);
+      const ribbedVolume = solidVolume(occt, ribbedShape);
+      const mainVolume = solidVolume(occt, mainShape);
+      assert.ok(
+        ribbedVolume > supportVolume,
+        `expected rib union to add material (${ribbedVolume} <= ${supportVolume})`
+      );
+      assert.ok(
+        mainVolume > ribbedVolume,
+        `expected final union to include web material (${mainVolume} <= ${ribbedVolume})`
+      );
+    },
+  },
   {
     name: "occt parity probe: rib/web produce valid solids from open sketch profiles",
     fn: async () => {

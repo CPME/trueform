@@ -493,7 +493,20 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         web("web-1", profileRef("profile:web"), 2, 80, "body:web", ["support-union", "rib-sketch"], {
           side: "oneSided",
         }),
-        booleanOp("union-rib-web", "union", selectorNamed("body:support"), selectorNamed("body:rib"), "body:main"),
+        booleanOp(
+          "union-rib",
+          "union",
+          selectorNamed("body:support"),
+          selectorNamed("body:rib"),
+          "body:ribbed"
+        ),
+        booleanOp(
+          "union-rib-web",
+          "union",
+          selectorNamed("body:ribbed"),
+          selectorNamed("body:web"),
+          "body:main"
+        ),
       ]);
     })(),
     render: {
