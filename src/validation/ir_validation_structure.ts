@@ -1,4 +1,5 @@
 import { CompileError } from "../errors.js";
+import { LENGTH_UNITS, isContractValue } from "../ir_contract.js";
 import type {
   AssemblyInstance,
   AssemblyMate,
@@ -28,11 +29,9 @@ import {
   validateSelector,
 } from "./ir_validation_core.js";
 
-const LENGTH_UNITS = new Set<Unit>(["mm", "cm", "m", "in"]);
-
 export function validateContext(ctx: BuildContext): void {
   ensureObject(ctx, "validation_context", "BuildContext must be an object");
-  if (!LENGTH_UNITS.has(ctx.units as Unit)) {
+  if (!isContractValue(LENGTH_UNITS, ctx.units as Unit)) {
     throw new CompileError("validation_context_units", `Unsupported units ${String(ctx.units)}`);
   }
   ensureObject(ctx.kernel, "validation_context_kernel", "Kernel config is required");

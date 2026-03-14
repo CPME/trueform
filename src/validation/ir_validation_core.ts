@@ -1,4 +1,20 @@
 import { CompileError } from "../errors.js";
+import {
+  ANGLE_UNITS,
+  AXIS_DIRECTIONS,
+  EXTRUDE_MODES,
+  EXTEND_SURFACE_MODES,
+  HOLE_END_CONDITIONS,
+  LENGTH_UNITS,
+  PARAM_TYPES,
+  RIB_THICKNESS_SIDES,
+  SWEEP_ORIENTATIONS,
+  THICKEN_DIRECTIONS,
+  THREAD_HANDEDNESS,
+  TRIM_SURFACE_KEEPS,
+  UNWRAP_MODES,
+  isContractValue,
+} from "../ir_contract.js";
 import type {
   AxisDirection,
   AxisSpec,
@@ -15,10 +31,6 @@ import type {
   Selector,
   Unit,
 } from "../ir.js";
-
-const AXIS_DIRECTIONS = new Set<AxisDirection>(["+X", "-X", "+Y", "-Y", "+Z", "-Z"]);
-const LENGTH_UNITS = new Set<Unit>(["mm", "cm", "m", "in"]);
-const ANGLE_UNITS = new Set<Unit>(["rad", "deg"]);
 
 export function validateSelector(selector: Selector | undefined): void {
   if (!selector) {
@@ -192,17 +204,17 @@ export function validateExtrudeAxis(value: ExtrudeAxis, message: string): void {
 }
 
 export function validateExtrudeMode(mode: unknown): void {
-  if (mode === "solid" || mode === "surface") return;
+  if (isContractValue(EXTRUDE_MODES, mode)) return;
   throw new CompileError("validation_extrude_mode", 'Extrude mode must be "solid" or "surface"');
 }
 
 export function validateUnwrapMode(mode: unknown): void {
-  if (mode === "strict" || mode === "experimental") return;
+  if (isContractValue(UNWRAP_MODES, mode)) return;
   throw new CompileError("validation_unwrap_mode", 'Unwrap mode must be "strict" or "experimental"');
 }
 
 export function validateSweepOrientation(orientation: unknown): void {
-  if (orientation === "frenet" || orientation === "fixed") return;
+  if (isContractValue(SWEEP_ORIENTATIONS, orientation)) return;
   throw new CompileError(
     "validation_sweep_orientation",
     'Sweep orientation must be "frenet" or "fixed"'
@@ -210,12 +222,12 @@ export function validateSweepOrientation(orientation: unknown): void {
 }
 
 export function validateRibThicknessSide(side: unknown): void {
-  if (side === "symmetric" || side === "oneSided") return;
+  if (isContractValue(RIB_THICKNESS_SIDES, side)) return;
   throw new CompileError("validation_rib_side", 'Rib/Web side must be "symmetric" or "oneSided"');
 }
 
 export function validateThickenDirection(direction: unknown): void {
-  if (direction === "normal" || direction === "reverse") return;
+  if (isContractValue(THICKEN_DIRECTIONS, direction)) return;
   throw new CompileError(
     "validation_thicken_direction",
     'Thicken direction must be "normal" or "reverse"'
@@ -223,7 +235,7 @@ export function validateThickenDirection(direction: unknown): void {
 }
 
 export function validateTrimSurfaceKeep(keep: unknown): void {
-  if (keep === "inside" || keep === "outside" || keep === "both") return;
+  if (isContractValue(TRIM_SURFACE_KEEPS, keep)) return;
   throw new CompileError(
     "validation_trim_surface_keep",
     'Trim surface keep must be "inside", "outside", or "both"'
@@ -231,7 +243,7 @@ export function validateTrimSurfaceKeep(keep: unknown): void {
 }
 
 export function validateExtendSurfaceMode(mode: unknown): void {
-  if (mode === "natural" || mode === "tangent") return;
+  if (isContractValue(EXTEND_SURFACE_MODES, mode)) return;
   throw new CompileError(
     "validation_extend_surface_mode",
     'Extend surface mode must be "natural" or "tangent"'
@@ -239,7 +251,7 @@ export function validateExtendSurfaceMode(mode: unknown): void {
 }
 
 export function validateShellDirection(direction: unknown): void {
-  if (direction === "inside" || direction === "outside") return;
+  if (direction === TRIM_SURFACE_KEEPS[0] || direction === TRIM_SURFACE_KEEPS[1]) return;
   throw new CompileError(
     "validation_shell_direction",
     'Shell direction must be "inside" or "outside"'
@@ -247,7 +259,7 @@ export function validateShellDirection(direction: unknown): void {
 }
 
 export function validateThreadHandedness(handedness: unknown): void {
-  if (handedness === "right" || handedness === "left") return;
+  if (isContractValue(THREAD_HANDEDNESS, handedness)) return;
   throw new CompileError(
     "validation_thread_handedness",
     'Thread handedness must be "right" or "left"'
@@ -255,14 +267,7 @@ export function validateThreadHandedness(handedness: unknown): void {
 }
 
 export function validateHoleEndCondition(endCondition: unknown): void {
-  if (
-    endCondition === "blind" ||
-    endCondition === "throughAll" ||
-    endCondition === "upToNext" ||
-    endCondition === "upToLast"
-  ) {
-    return;
-  }
+  if (isContractValue(HOLE_END_CONDITIONS, endCondition)) return;
   throw new CompileError(
     "validation_hole_end_condition",
     "Hole endCondition must be one of blind, throughAll, upToNext, upToLast"
@@ -351,7 +356,7 @@ export function validatePathSegment(segment: PathSegment, label: string): void {
 }
 
 export function ensureAxis(value: AxisDirection | undefined, message: string): void {
-  if (!value || !AXIS_DIRECTIONS.has(value)) {
+  if (!value || !isContractValue(AXIS_DIRECTIONS, value)) {
     throw new CompileError("validation_axis", message);
   }
 }
@@ -368,7 +373,7 @@ export function isSelector(value: unknown): value is Selector {
 }
 
 export function ensureUnit(value: Unit): void {
-  if (!LENGTH_UNITS.has(value) && !ANGLE_UNITS.has(value)) {
+  if (!isContractValue(LENGTH_UNITS, value) && !isContractValue(ANGLE_UNITS, value)) {
     throw new CompileError("validation_unit", `Unknown unit ${String(value)}`);
   }
 }
@@ -402,5 +407,5 @@ export function ensureFiniteNumber(value: unknown, code: string, message: string
 }
 
 export function isParamType(value: ParamType): boolean {
-  return value === "length" || value === "angle" || value === "count";
+  return isContractValue(PARAM_TYPES, value);
 }

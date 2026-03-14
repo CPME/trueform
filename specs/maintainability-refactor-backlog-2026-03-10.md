@@ -177,11 +177,15 @@ Goal: reduce manual drift between:
 Guardrail status:
 - `src/ir_validate.ts` is now under the long-term `<= 1800` line target via
   extracted sketch/profile, FTI, core, and structure validation modules.
+- shared IR schema/version/enum primitives now live in `src/ir_contract.ts`
+  and schema parity coverage exists in
+  `src/tests/ir_contract_schema_parity.module.test.ts`
 
 Open work:
 
 1. Introduce generated schema/validator from a canonical contract source.
-2. Add parity coverage that fails on contract drift.
+2. Expand parity coverage beyond shared enums/feature presence so deeper
+   structural contract drift also fails fast.
 3. Keep external `IR_SCHEMA` payload shape source-compatible.
 
 Acceptance checks:

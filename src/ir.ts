@@ -1,19 +1,39 @@
+import {
+  ANGLE_UNITS,
+  AXIS_DIRECTIONS,
+  DATUM_MODIFIERS,
+  EXTEND_SURFACE_MODES,
+  EXTRUDE_MODES,
+  HOLE_END_CONDITIONS,
+  LENGTH_UNITS,
+  PARAM_TYPES,
+  POINT_LOCATORS,
+  RIB_THICKNESS_SIDES,
+  SWEEP_ORIENTATIONS,
+  TF_IR_SCHEMA,
+  TF_IR_VERSION,
+  THICKEN_DIRECTIONS,
+  THREAD_HANDEDNESS,
+  TOLERANCE_MODIFIERS,
+  TRIM_SURFACE_KEEPS,
+  UNITS,
+  UNWRAP_MODES,
+} from "./ir_contract.js";
+
 export type ID = string;
 
-export type LengthUnit = "mm" | "cm" | "m" | "in";
-export type AngleUnit = "rad" | "deg";
-export type Unit = LengthUnit | AngleUnit;
+export { TF_IR_SCHEMA, TF_IR_VERSION } from "./ir_contract.js";
+
+export type LengthUnit = (typeof LENGTH_UNITS)[number];
+export type AngleUnit = (typeof ANGLE_UNITS)[number];
+export type Unit = (typeof UNITS)[number];
 export type Units = LengthUnit;
-
-export const TF_IR_SCHEMA = "trueform.ir.v1";
 export type IrSchema = typeof TF_IR_SCHEMA;
-
-export const TF_IR_VERSION = 1 as const;
 export type IrVersion = typeof TF_IR_VERSION;
 
-export type AxisDirection = "+X" | "-X" | "+Y" | "-Y" | "+Z" | "-Z";
+export type AxisDirection = (typeof AXIS_DIRECTIONS)[number];
 
-export type ParamType = "length" | "angle" | "count";
+export type ParamType = (typeof PARAM_TYPES)[number];
 
 export type Expr =
   | { kind: "expr.literal"; value: number; unit?: Unit }
@@ -31,12 +51,12 @@ export type AxisSpec =
   | { kind: "axis.datum"; ref: ID };
 
 export type ExtrudeAxis = AxisSpec | { kind: "axis.sketch.normal" };
-export type ExtrudeMode = "solid" | "surface";
-export type ThickenDirection = "normal" | "reverse";
-export type UnwrapMode = "strict" | "experimental";
-export type ThreadHandedness = "right" | "left";
-export type HoleEndCondition = "blind" | "throughAll" | "upToNext" | "upToLast";
-export type RibThicknessSide = "symmetric" | "oneSided";
+export type ExtrudeMode = (typeof EXTRUDE_MODES)[number];
+export type ThickenDirection = (typeof THICKEN_DIRECTIONS)[number];
+export type UnwrapMode = (typeof UNWRAP_MODES)[number];
+export type ThreadHandedness = (typeof THREAD_HANDEDNESS)[number];
+export type HoleEndCondition = (typeof HOLE_END_CONDITIONS)[number];
+export type RibThicknessSide = (typeof RIB_THICKNESS_SIDES)[number];
 
 export type ParamDef = {
   id: ID;
@@ -427,7 +447,7 @@ export type Path3D =
   | { kind: "path.spline"; points: Point3D[]; closed?: boolean; degree?: Scalar }
   | { kind: "path.segments"; segments: PathSegment[] };
 
-export type SweepOrientation = "frenet" | "fixed";
+export type SweepOrientation = (typeof SWEEP_ORIENTATIONS)[number];
 
 export type Extrude = FeatureBase & {
   kind: "feature.extrude";
@@ -600,7 +620,7 @@ export type SplitFace = FeatureBase & {
   result: string;
 };
 
-export type TrimSurfaceKeep = "inside" | "outside" | "both";
+export type TrimSurfaceKeep = (typeof TRIM_SURFACE_KEEPS)[number];
 
 export type TrimSurface = FeatureBase & {
   kind: "feature.trim.surface";
@@ -610,7 +630,7 @@ export type TrimSurface = FeatureBase & {
   result: string;
 };
 
-export type ExtendSurfaceMode = "natural" | "tangent";
+export type ExtendSurfaceMode = (typeof EXTEND_SURFACE_MODES)[number];
 
 export type ExtendSurface = FeatureBase & {
   kind: "feature.extend.surface";
@@ -856,7 +876,7 @@ export type RefAxis = {
   selector: Selector;
 };
 
-export type PointLocator = "center" | "mid" | "start" | "end";
+export type PointLocator = (typeof POINT_LOCATORS)[number];
 
 export type RefPoint = {
   kind: "ref.point";
@@ -864,16 +884,9 @@ export type RefPoint = {
   locator?: PointLocator;
 };
 
-export type DatumModifier = "MMB" | "LMB" | "RMB";
+export type DatumModifier = (typeof DATUM_MODIFIERS)[number];
 
-export type ToleranceModifier =
-  | "MMC"
-  | "LMC"
-  | "RFS"
-  | "PROJECTED"
-  | "FREE_STATE"
-  | "TANGENT_PLANE"
-  | "STATISTICAL";
+export type ToleranceModifier = (typeof TOLERANCE_MODIFIERS)[number];
 
 export type DatumRef = {
   kind: "datum.ref";
