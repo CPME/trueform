@@ -13,6 +13,14 @@ import type {
 import type { IntentFeature } from "./ir.js";
 import { BackendError } from "./errors.js";
 import type { PmiPayload } from "./pmi.js";
+import { assignStableSelectionIds, type CollectedSubshape } from "./occt/selection_ids.js";
+import {
+  normalizeSelectionToken,
+  numberFingerprint,
+  stringArrayFingerprint,
+  stringFingerprint,
+  vectorFingerprint,
+} from "./occt/selection_fingerprint.js";
 
 export type NativeShapeHandle = string;
 
@@ -123,7 +131,7 @@ export class OcctNativeBackend implements BackendAsync {
       upstream: serializeKernelResult(input.upstream),
     });
     const response = await this.transport.execFeature(request);
-    return deserializeKernelResult(response.result);
+    return canonicalizeNativeSelectionIds(deserializeKernelResult(response.result));
   }
 
   async mesh(target: KernelObject, opts?: MeshOptions): Promise<MeshData> {
@@ -192,4 +200,73 @@ function requireHandle(target: KernelObject): NativeShapeHandle {
     throw new Error("Native OCCT backend requires a shape handle in target.meta.handle");
   }
   return handle;
+}
+
+function canonicalizeNativeSelectionIds(result: KernelResult): KernelResult {
+  const selections = result.selections.slice();
+  for (const kind of ["face", "edge"] as const) {
+    const indexed = selections
+      .map((selection, index) => ({ selection, index }))
+      .filter(({ selection }) => selection.kind === kind && selection.id === kind);
+    if (indexed.length === 0) continue;
+    const assignments = assignStableSelectionIds(
+      kind,
+      indexed.map(({ selection }) => nativeSelectionEntry(selection)),
+      {
+        normalizeSelectionToken,
+        stringFingerprint,
+        stringArrayFingerprint,
+        numberFingerprint,
+        vectorFingerprint,
+      }
+    );
+    for (let i = 0; i < indexed.length; i += 1) {
+      const target = indexed[i];
+      const assignment = assignments[i];
+      if (!target || !assignment) continue;
+      selections[target.index] = {
+        ...target.selection,
+        id: assignment.id,
+        record: assignment.record,
+        meta: assignment.aliases
+          ? { ...target.selection.meta, selectionAliases: assignment.aliases.slice() }
+          : target.selection.meta,
+      };
+    }
+  }
+  return { ...result, selections };
+}
+
+function nativeSelectionEntry(selection: KernelSelection): CollectedSubshape {
+  const entry: CollectedSubshape = {
+    meta: { ...selection.meta },
+  };
+  const slot =
+    typeof selection.meta["selectionSlot"] === "string" &&
+    selection.meta["selectionSlot"].trim().length > 0
+      ? (selection.meta["selectionSlot"] as string)
+      : undefined;
+  const role =
+    typeof selection.meta["role"] === "string" && selection.meta["role"].trim().length > 0
+      ? (selection.meta["role"] as string)
+      : undefined;
+  const lineage =
+    selection.meta["selectionLineage"] &&
+    typeof selection.meta["selectionLineage"] === "object"
+      ? (selection.meta["selectionLineage"] as any)
+      : undefined;
+  const aliases =
+    Array.isArray(selection.meta["selectionAliases"]) &&
+    selection.meta["selectionAliases"].every((entry) => typeof entry === "string")
+      ? (selection.meta["selectionAliases"] as string[])
+      : undefined;
+  if (slot || role || lineage || aliases) {
+    entry.ledger = {
+      slot,
+      role,
+      lineage,
+      aliases,
+    };
+  }
+  return entry;
 }

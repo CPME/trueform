@@ -2,6 +2,7 @@
 #include "json.hpp"
 
 #include <BRepAdaptor_Surface.hxx>
+#include <BRepAdaptor_Curve.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
@@ -188,6 +189,51 @@ static std::string selectionOwnerToken(const std::string& ownerKey) {
     if (ch == ':') ch = '.';
   }
   return token;
+}
+
+static void annotateExtrudeRectangleFaceIds(KernelResult& result,
+                                            const std::string& featureId,
+                                            const std::string& ownerKey,
+                                            const std::string& axisDir) {
+  if (axisDir != "+Z") return;
+  const std::string ownerToken = selectionOwnerToken(ownerKey);
+  std::vector<KernelSelection*> sideFaces;
+  for (auto& selection : result.selections) {
+    if (selection.kind != "face") continue;
+    const std::string normal = selection.meta.value("normal", "");
+    if (normal == "+Z") {
+      selection.id = "face:" + ownerToken + "~" + featureId + ".top";
+      continue;
+    }
+    if (normal == "-Z") {
+      selection.id = "face:" + ownerToken + "~" + featureId + ".bottom";
+      continue;
+    }
+    sideFaces.push_back(&selection);
+  }
+  std::sort(sideFaces.begin(), sideFaces.end(), [](const KernelSelection* a, const KernelSelection* b) {
+    const json centerA = a->meta.value("center", json::array({0, 0, 0}));
+    const json centerB = b->meta.value("center", json::array({0, 0, 0}));
+    const double ax = centerA.size() >= 1 ? parseScalar(centerA[0]) : 0.0;
+    const double ay = centerA.size() >= 2 ? parseScalar(centerA[1]) : 0.0;
+    const double bx = centerB.size() >= 1 ? parseScalar(centerB[0]) : 0.0;
+    const double by = centerB.size() >= 2 ? parseScalar(centerB[1]) : 0.0;
+    const auto rank = [](double x, double y) {
+      double angle = std::atan2(y, x);
+      double shifted = angle + M_PI_2;
+      if (shifted < 0) shifted += 2.0 * M_PI;
+      return shifted;
+    };
+    const double rankA = rank(ax, ay);
+    const double rankB = rank(bx, by);
+    if (std::abs(rankA - rankB) > 1e-9) return rankA < rankB;
+    if (std::abs(ax - bx) > 1e-9) return ax < bx;
+    return ay < by;
+  });
+  for (std::size_t index = 0; index < sideFaces.size(); ++index) {
+    sideFaces[index]->id =
+        "face:" + ownerToken + "~" + featureId + ".side." + std::to_string(index + 1);
+  }
 }
 
 static TopoDS_Face makeRectangleFace(double width, double height, const gp_Pnt& center) {
@@ -589,15 +635,41 @@ static KernelResult collectSelections(const TopoDS_Shape& shape,
     bool planar = false;
     std::string normalDir;
     std::optional<gp_Vec> normalVec;
+    std::string surfaceType;
     try {
       BRepAdaptor_Surface adaptor(face, true);
-      if (adaptor.GetType() == GeomAbs_Plane) {
+      const auto type = adaptor.GetType();
+      if (type == GeomAbs_Plane) {
         planar = true;
+        surfaceType = "plane";
         gp_Pln plane = adaptor.Plane();
         gp_Dir dir = plane.Axis().Direction();
         gp_Vec vec(dir.X(), dir.Y(), dir.Z());
+        if (face.Orientation() == TopAbs_REVERSED) {
+          vec.Reverse();
+        }
         normalVec = vec;
         normalDir = axisDirectionFromVector(vec);
+      } else if (type == GeomAbs_Cylinder) {
+        surfaceType = "cylinder";
+      } else if (type == GeomAbs_Cone) {
+        surfaceType = "cone";
+      } else if (type == GeomAbs_Sphere) {
+        surfaceType = "sphere";
+      } else if (type == GeomAbs_Torus) {
+        surfaceType = "torus";
+      } else if (type == GeomAbs_BSplineSurface) {
+        surfaceType = "bspline";
+      } else if (type == GeomAbs_BezierSurface) {
+        surfaceType = "bezier";
+      } else if (type == GeomAbs_SurfaceOfExtrusion) {
+        surfaceType = "extrusion";
+      } else if (type == GeomAbs_SurfaceOfRevolution) {
+        surfaceType = "revolution";
+      } else if (type == GeomAbs_OffsetSurface) {
+        surfaceType = "offset";
+      } else {
+        surfaceType = "other";
       }
     } catch (...) {
     }
@@ -611,6 +683,9 @@ static KernelResult collectSelections(const TopoDS_Shape& shape,
     sel.kind = "face";
     sel.meta = makeFaceMeta(faceHandle, ownerHandle, ownerKey, featureId, center, area,
                             planar, normalDir, normalVec, tags);
+    if (!surfaceType.empty()) {
+      sel.meta["surfaceType"] = surfaceType;
+    }
     result.selections.push_back(sel);
   }
 
@@ -620,10 +695,41 @@ static KernelResult collectSelections(const TopoDS_Shape& shape,
     TopoDS_Edge edge = TopoDS::Edge(edgeMap(index));
     std::string edgeHandle = registry.registerShape(edge);
     gp_Pnt center = shapeCenter(edge);
+    std::string curveType;
+    std::optional<double> radius;
+    try {
+      BRepAdaptor_Curve adaptor(edge);
+      const auto type = adaptor.GetType();
+      if (type == GeomAbs_Line) {
+        curveType = "line";
+      } else if (type == GeomAbs_Circle) {
+        curveType = "circle";
+        radius = adaptor.Circle().Radius();
+      } else if (type == GeomAbs_Ellipse) {
+        curveType = "ellipse";
+      } else if (type == GeomAbs_Hyperbola) {
+        curveType = "hyperbola";
+      } else if (type == GeomAbs_Parabola) {
+        curveType = "parabola";
+      } else if (type == GeomAbs_BezierCurve) {
+        curveType = "bezier";
+      } else if (type == GeomAbs_BSplineCurve) {
+        curveType = "bspline";
+      } else {
+        curveType = "other";
+      }
+    } catch (...) {
+    }
     KernelSelection sel;
     sel.id = "edge";
     sel.kind = "edge";
     sel.meta = makeEdgeMeta(edgeHandle, ownerHandle, ownerKey, featureId, center, tags);
+    if (!curveType.empty()) {
+      sel.meta["curveType"] = curveType;
+    }
+    if (radius && std::isfinite(*radius) && *radius > 0) {
+      sel.meta["radius"] = *radius;
+    }
     result.selections.push_back(sel);
   }
 
@@ -1474,6 +1580,10 @@ int main(int argc, char** argv) {
       const std::string resultKey = feature.value("result", "body:main");
       KernelResult built = collectSelections(
           solid, session.registry, featureId, resultKey, "solid", tags);
+      if (profile.value("kind", "") == "profile.rectangle") {
+        annotateExtrudeRectangleFaceIds(
+            built, featureId, resultKey, axisDirectionFromVector(axis));
+      }
       KernelResult merged = mergeResults(upstream, built);
       session.current = merged;
 

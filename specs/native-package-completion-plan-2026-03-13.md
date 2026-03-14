@@ -82,6 +82,8 @@ Status:
   OCCT.js backend for the supported primitive solid flows
 - native face-root flows (`feature.plane`, `feature.surface`) now match the
   direct backend on output kind/id and emitted root face selection id
+- the currently supported native feature set now matches the direct backend on
+  emitted face/edge/solid selection ids, not just output keys and kinds
 
 ## Package Ownership Finish Plan
 

@@ -128,7 +128,7 @@ function selectionCountByKind(
 
 const tests = [
   {
-    name: "occt native server parity: supported primitive feature flows match direct backend outputs and selection counts",
+    name: "occt native server parity: supported primitive feature flows match direct backend outputs and selection ids",
     fn: async () => {
       if (process.env.TF_NATIVE_SERVER !== "1") {
         return;
@@ -150,6 +150,7 @@ const tests = [
             selectionCounts: Record<string, number>;
             solidSelectionIds: string[];
             faceSelectionIds: string[];
+            edgeSelectionIds: string[];
           }
         >();
 
@@ -170,6 +171,10 @@ const tests = [
               .sort(),
             faceSelectionIds: native.final.selections
               .filter((selection) => selection.kind === "face")
+              .map((selection) => selection.id)
+              .sort(),
+            edgeSelectionIds: native.final.selections
+              .filter((selection) => selection.kind === "edge")
               .map((selection) => selection.id)
               .sort(),
           });
@@ -219,16 +224,22 @@ const tests = [
               .sort(),
             `${parityCase.name}: solid selection ids drifted`
           );
-          if (parityCase.name === "plane" || parityCase.name === "surface") {
-            assert.deepEqual(
-              snapshot.faceSelectionIds,
-              direct.final.selections
-                .filter((selection) => selection.kind === "face")
-                .map((selection) => selection.id)
-                .sort(),
-              `${parityCase.name}: face selection ids drifted`
-            );
-          }
+          assert.deepEqual(
+            snapshot.faceSelectionIds,
+            direct.final.selections
+              .filter((selection) => selection.kind === "face")
+              .map((selection) => selection.id)
+              .sort(),
+            `${parityCase.name}: face selection ids drifted`
+          );
+          assert.deepEqual(
+            snapshot.edgeSelectionIds,
+            direct.final.selections
+              .filter((selection) => selection.kind === "edge")
+              .map((selection) => selection.id)
+              .sort(),
+            `${parityCase.name}: edge selection ids drifted`
+          );
         }
       } finally {
         await stopServer(server);
