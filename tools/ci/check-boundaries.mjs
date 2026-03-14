@@ -37,7 +37,7 @@ for (const token of forbiddenRootTokens) {
   }
 }
 
-const dslFiles = await walkTsFiles(resolve("src/dsl"));
+const dslFiles = await walkFiles(resolve("src/dsl"), [".ts"]);
 const coreFiles = [
   ...dslFiles.map((f) => relativize(f)),
   "src/compiler.ts",
@@ -67,6 +67,16 @@ for (const file of coreFiles) {
   }
 }
 
+const srcFiles = (await walkFiles(resolve("src"), [".ts"])).map((file) => relativize(file));
+const appFiles = (await walkFiles(resolve("apps"), [".mjs", ".ts", ".js"])).map((file) =>
+  relativize(file)
+);
+const projectSourceFiles = [...srcFiles, ...appFiles];
+
+await checkResolutionContextUtilityBoundaries(projectSourceFiles, boundaryErrors);
+await checkSelectionSlotUtilityBoundaries(projectSourceFiles, boundaryErrors);
+await checkTfServiceBoundaries(boundaryErrors);
+
 if (boundaryErrors.length > 0) {
   console.error("Boundary guardrail failed:");
   for (const err of boundaryErrors) console.error(`- ${err}`);
@@ -75,16 +85,16 @@ if (boundaryErrors.length > 0) {
 
 console.log("Boundary guardrail passed.");
 
-async function walkTsFiles(dir) {
+async function walkFiles(dir, extensions) {
   const out = [];
   const entries = await readdir(dir, { withFileTypes: true });
   for (const entry of entries) {
     const full = resolve(dir, entry.name);
     if (entry.isDirectory()) {
-      out.push(...(await walkTsFiles(full)));
+      out.push(...(await walkFiles(full, extensions)));
       continue;
     }
-    if (entry.isFile() && entry.name.endsWith(".ts")) {
+    if (entry.isFile() && extensions.some((ext) => entry.name.endsWith(ext))) {
       out.push(full);
     }
   }
@@ -94,4 +104,73 @@ async function walkTsFiles(dir) {
 function relativize(path) {
   const cwd = resolve(".");
   return path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path;
+}
+
+async function checkResolutionContextUtilityBoundaries(files, boundaryErrors) {
+  const allowedFiles = new Set([
+    "src/resolution_context.ts",
+    "src/occt/selection_resolution.ts",
+  ]);
+
+  for (const file of files) {
+    if (allowedFiles.has(file)) continue;
+    const content = await readFile(resolve(file), "utf8");
+    if (
+      content.includes("const named = new Map") &&
+      content.includes("upstream.outputs") &&
+      content.includes('obj.kind === "face"')
+    ) {
+      boundaryErrors.push(
+        `Resolution-context builder logic should live in src/resolution_context.ts or src/occt/selection_resolution.ts, found in ${file}`
+      );
+    }
+  }
+}
+
+async function checkSelectionSlotUtilityBoundaries(files, boundaryErrors) {
+  for (const file of files) {
+    if (file === "src/selection_slots.ts") continue;
+    const content = await readFile(resolve(file), "utf8");
+    if (/\bfunction\s+parseSplitBranchSlot\b/.test(content)) {
+      boundaryErrors.push(
+        `parseSplitBranchSlot must stay centralized in src/selection_slots.ts, found in ${file}`
+      );
+    }
+    if (/\bfunction\s+semanticBaseSlot\b/.test(content)) {
+      boundaryErrors.push(
+        `semanticBaseSlot must stay centralized in src/selection_slots.ts, found in ${file}`
+      );
+    }
+  }
+}
+
+async function checkTfServiceBoundaries(boundaryErrors) {
+  const tfServiceFiles = (await walkFiles(resolve("apps/tf-service"), [".mjs"])).map((file) =>
+    relativize(file)
+  );
+
+  for (const file of tfServiceFiles) {
+    const content = await readFile(resolve(file), "utf8");
+    const imports = [...content.matchAll(/from\s+["'](.+?)["']/g)].map((match) => match[1]);
+
+    if (file.startsWith("apps/tf-service/route_")) {
+      for (const specifier of imports) {
+        if (specifier === "./server.mjs" || specifier.startsWith("./route_")) {
+          boundaryErrors.push(
+            `tf-service route modules must not import server or peer routes: ${file} -> ${specifier}`
+          );
+        }
+      }
+    }
+
+    if (file.startsWith("apps/tf-service/service_") || file === "apps/tf-service/job_runtime.mjs") {
+      for (const specifier of imports) {
+        if (specifier === "./server.mjs" || specifier.startsWith("./route_")) {
+          boundaryErrors.push(
+            `tf-service services/job runtime must not import server or routes: ${file} -> ${specifier}`
+          );
+        }
+      }
+    }
+  }
 }

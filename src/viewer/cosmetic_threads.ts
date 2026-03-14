@@ -1,10 +1,10 @@
 import type { MeshData, KernelResult } from "../backend.js";
 import type { IntentPart, CosmeticThread, Units, Scalar } from "../ir.js";
 import { buildParamContext, normalizeScalar, type ParamOverrides } from "../params.js";
+import { kernelResultToResolutionContext } from "../resolution_context.js";
 import {
   resolveSelector,
   type ResolutionContext,
-  type Selection,
 } from "../selectors.js";
 
 type Vec3 = [number, number, number];
@@ -19,18 +19,7 @@ export type CosmeticThreadEdgeOptions = {
 };
 
 export function buildResolutionContext(result: KernelResult): ResolutionContext {
-  const named = new Map<string, Selection>();
-  for (const [key, output] of result.outputs) {
-    if (
-      output.kind === "face" ||
-      output.kind === "edge" ||
-      output.kind === "solid" ||
-      output.kind === "surface"
-    ) {
-      named.set(key, { id: output.id, kind: output.kind, meta: output.meta });
-    }
-  }
-  return { selections: result.selections as Selection[], named };
+  return kernelResultToResolutionContext(result);
 }
 
 export function appendCosmeticThreadEdges(

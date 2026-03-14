@@ -223,10 +223,22 @@ Requirements:
 
 ### P2: Additional Guardrails
 
-1. Add guardrail to block new duplicate resolution-context builders.
-2. Add guardrail for selector slot utility duplication.
-3. Add architectural module-boundary checks for runtime route/service/store
-   layers.
+Progress:
+- `tools/ci/check-boundaries.mjs` now blocks new duplicate generic
+  resolution-context builders outside `src/resolution_context.ts` and
+  `src/occt/selection_resolution.ts`.
+- `tools/ci/check-boundaries.mjs` now blocks duplicate declarations of
+  `parseSplitBranchSlot` and `semanticBaseSlot` outside
+  `src/selection_slots.ts`.
+- `tools/ci/check-boundaries.mjs` now enforces the `apps/tf-service`
+  route/service/job-runtime layering so those modules cannot drift back into a
+  single import graph.
+
+Open work:
+1. Expand the runtime boundary checks from import rules to ownership rules
+   around shared state stores if route/service responsibilities drift again.
+2. Add stronger consumer-style verification for workspace packages that are not
+   shipped through the root `trueform` tarball.
 
 ## Execution Rules
 
