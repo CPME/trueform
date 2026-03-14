@@ -80,6 +80,8 @@ Status:
   `npm run verify:native-live`
 - native output object ids and root solid selection ids now match the direct
   OCCT.js backend for the supported primitive solid flows
+- native face-root flows (`feature.plane`, `feature.surface`) now match the
+  direct backend on output kind/id and emitted root face selection id
 
 ## Package Ownership Finish Plan
 

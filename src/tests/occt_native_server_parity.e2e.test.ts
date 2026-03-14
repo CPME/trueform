@@ -102,6 +102,18 @@ const parityCases = [
       ),
     ]),
   },
+  {
+    name: "plane",
+    part: dsl.part("native-parity-plane", [
+      dsl.plane("plane-1", 30, 18, "surface:plane"),
+    ]),
+  },
+  {
+    name: "surface",
+    part: dsl.part("native-parity-surface", [
+      dsl.surface("surface-1", dsl.profileRect(20, 10), "surface:main"),
+    ]),
+  },
 ] as const;
 
 function selectionCountByKind(
@@ -137,6 +149,7 @@ const tests = [
             outputIds: string[];
             selectionCounts: Record<string, number>;
             solidSelectionIds: string[];
+            faceSelectionIds: string[];
           }
         >();
 
@@ -153,6 +166,10 @@ const tests = [
             selectionCounts: selectionCountByKind(native.final.selections),
             solidSelectionIds: native.final.selections
               .filter((selection) => selection.kind === "solid")
+              .map((selection) => selection.id)
+              .sort(),
+            faceSelectionIds: native.final.selections
+              .filter((selection) => selection.kind === "face")
               .map((selection) => selection.id)
               .sort(),
           });
@@ -202,6 +219,16 @@ const tests = [
               .sort(),
             `${parityCase.name}: solid selection ids drifted`
           );
+          if (parityCase.name === "plane" || parityCase.name === "surface") {
+            assert.deepEqual(
+              snapshot.faceSelectionIds,
+              direct.final.selections
+                .filter((selection) => selection.kind === "face")
+                .map((selection) => selection.id)
+                .sort(),
+              `${parityCase.name}: face selection ids drifted`
+            );
+          }
         }
       } finally {
         await stopServer(server);

@@ -223,6 +223,8 @@ Progress:
 - Live native-server parity coverage now checks supported primitive feature
   flows against the direct OCCT.js backend for output keys, output kinds,
   output ids, root solid selection ids, and selection counts.
+- Face-root native flows now also match the direct backend on emitted root face
+  selection ids for `feature.plane` and `feature.surface`.
 - `npm run verify:workspace-packages` now provides one repeatable gate for
   package-local typechecks plus workspace parity/entrypoint tests.
 - `npm run verify:native-live` now provides one repeatable gate for native HTTP,

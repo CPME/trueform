@@ -603,7 +603,11 @@ static KernelResult collectSelections(const TopoDS_Shape& shape,
     }
 
     KernelSelection sel;
-    sel.id = "face";
+    if (outputKind == "surface" && faceMap.Extent() == 1) {
+      sel.id = "face:" + ownerToken + "~" + featureId + ".seed";
+    } else {
+      sel.id = "face";
+    }
     sel.kind = "face";
     sel.meta = makeFaceMeta(faceHandle, ownerHandle, ownerKey, featureId, center, area,
                             planar, normalDir, normalVec, tags);
@@ -625,7 +629,7 @@ static KernelResult collectSelections(const TopoDS_Shape& shape,
 
   KernelObject output;
   output.id = featureId + ":" + (outputKind == "solid" ? "solid" : "face");
-  output.kind = outputKind;
+  output.kind = outputKind == "solid" ? "solid" : "face";
   output.meta = json::object();
   output.meta["handle"] = ownerHandle;
   output.meta["ownerKey"] = ownerKey;

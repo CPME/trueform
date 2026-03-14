@@ -104,7 +104,7 @@ const tests = [
         const frameSurfaceResult = await buildPartAsync(frameSurfacePart, backend);
         const surface = frameSurfaceResult.final.outputs.get("surface:main");
         const frame = frameSurfaceResult.final.outputs.get("datum:frame-a");
-        assert.equal(surface?.kind, "surface");
+        assert.equal(surface?.kind, "face");
         assert.equal(frame?.kind, "datum");
 
         const planeRevolvePart = dsl.part("native-plane-revolve", [
@@ -123,7 +123,7 @@ const tests = [
         const planeRevolveResult = await buildPartAsync(planeRevolvePart, backend);
         const plane = planeRevolveResult.final.outputs.get("surface:plane");
         const revolvedBody = planeRevolveResult.final.outputs.get("body:revolve");
-        assert.equal(plane?.kind, "surface");
+        assert.equal(plane?.kind, "face");
         assert.equal(revolvedBody?.kind, "solid");
 
         const pipePart = dsl.part("native-pipe", [
