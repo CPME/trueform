@@ -88,11 +88,11 @@
       "targetOutput": "body:main",
       "kind": "solid",
       "faces": 21,
-      "edges": 98,
-      "solids": 2,
+      "edges": 102,
+      "solids": 1,
       "extent": [84, 40, 44],
-      "area": 18776.348,
-      "volume": 91344.915,
+      "area": 18583.975,
+      "volume": 91309.915,
       "surfaceTypes": { "plane": 21 }
     },
     "sweep-sketch": {

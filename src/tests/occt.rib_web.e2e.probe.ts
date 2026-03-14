@@ -7,6 +7,7 @@ import {
   assertValidShape,
   countEdges,
   countFaces,
+  countSolids,
   getBackendContext,
   runTests,
 } from "./occt_test_utils.js";
@@ -74,6 +75,15 @@ const tests = [
       assert.ok(
         mainVolume > ribbedVolume,
         `expected final union to include web material (${mainVolume} <= ${ribbedVolume})`
+      );
+      assert.ok(
+        countEdges(occt, mainShape) > countEdges(occt, ribbedShape),
+        "expected web union to add final edge topology"
+      );
+      assert.equal(
+        countSolids(occt, mainShape),
+        1,
+        "expected rib/web example main output to fuse into a single solid"
       );
     },
   },

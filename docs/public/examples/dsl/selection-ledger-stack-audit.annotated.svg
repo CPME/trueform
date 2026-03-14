@@ -25,7 +25,7 @@
   <circle cx="1264" cy="166" r="10" class="swatch-b" />
   <text x="1286" y="171" class="legend-label">B  current edge (post-fillet)</text>
   <text x="1286" y="191" class="legend-id">edge:body.main~union-main.</text>
-  <text x="1286" y="208" class="legend-id">hac46414663d12f7f.20</text>
+  <text x="1286" y="208" class="legend-id">fillet.seed.1.join.top</text>
 
   <circle cx="1264" cy="236" r="10" class="swatch-c" />
   <text x="1286" y="241" class="legend-label">C  fillet face</text>

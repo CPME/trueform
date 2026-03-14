@@ -241,7 +241,7 @@ const examplePart = part("example-rib-web", [
     side: "oneSided",
   }),
   web("web-1", profileRef("profile:web"), 2, 80, "body:web", ["support-union", "rib-sketch"], {
-    side: "oneSided",
+    side: "symmetric",
   }),
   booleanOp(
     "union-rib",

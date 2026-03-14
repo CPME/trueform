@@ -722,13 +722,20 @@ const examplePart = part(&quot;example-rib-web&quot;, [
     side: &quot;oneSided&quot;,
   }),
   web(&quot;web-1&quot;, profileRef(&quot;profile:web&quot;), 2, 80, &quot;body:web&quot;, [&quot;support-union&quot;, &quot;rib-sketch&quot;], {
-    side: &quot;oneSided&quot;,
+    side: &quot;symmetric&quot;,
   }),
   booleanOp(
-    &quot;union-rib-web&quot;,
+    &quot;union-rib&quot;,
     &quot;union&quot;,
     selectorNamed(&quot;body:support&quot;),
     selectorNamed(&quot;body:rib&quot;),
+    &quot;body:ribbed&quot;
+  ),
+  booleanOp(
+    &quot;union-rib-web&quot;,
+    &quot;union&quot;,
+    selectorNamed(&quot;body:ribbed&quot;),
+    selectorNamed(&quot;body:web&quot;),
     &quot;body:main&quot;
   ),
 ]);</code></pre>

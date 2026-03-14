@@ -491,7 +491,7 @@ export const dslFeatureExamples: DslFeatureExample[] = [
           side: "oneSided",
         }),
         web("web-1", profileRef("profile:web"), 2, 80, "body:web", ["support-union", "rib-sketch"], {
-          side: "oneSided",
+          side: "symmetric",
         }),
         booleanOp(
           "union-rib",
@@ -1011,7 +1011,7 @@ export const dslFeatureExamples: DslFeatureExample[] = [
           depthTest: false,
         },
         {
-          selectionId: "edge:body.main~union-main.hac46414663d12f7f.20",
+          selectionId: "edge:body.main~union-main.fillet.seed.1.join.top",
           alpha: 0,
           wireframe: true,
           wireColor: [6, 182, 212],
