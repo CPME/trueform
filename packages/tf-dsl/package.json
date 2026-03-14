@@ -2,5 +2,18 @@
   "name": "@trueform/dsl",
   "version": "0.0.1",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "source": "./src/index.ts",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./geometry": {
+      "types": "./geometry.d.ts",
+      "default": "./geometry.js"
+    }
+  }
 }

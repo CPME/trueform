@@ -198,11 +198,21 @@ Acceptance checks:
 Goal: finish replacing package forwarders/placeholders with package-owned
 source.
 
-Targets:
-- `packages/tf-dsl`
+Progress:
+- `packages/tf-dsl` now owns explicit workspace entrypoints, package-local
+  wrappers, and cross-package parity coverage in
+  `src/tests/workspace_dsl_entrypoint.e2e.test.ts` and
+  `src/tests/workspace_dsl_surface_parity.e2e.test.ts`.
+- `packages/tf-export` now owns explicit workspace entrypoints, package-local
+  wrappers, and cross-package parity coverage in
+  `src/tests/workspace_export_entrypoint.e2e.test.ts` and
+  `src/tests/workspace_export_surface_parity.e2e.test.ts`.
+
+Remaining targets:
 - `packages/tf-backend-ocjs`
 - `packages/tf-backend-native`
-- `packages/tf-export`
+- move more source ownership behind package-local module trees instead of
+  keeping transitional wrappers pointed at `src/*`
 
 Requirements:
 - keep the root `trueform` compatibility facade stable
