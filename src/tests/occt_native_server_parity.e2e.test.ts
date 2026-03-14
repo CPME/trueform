@@ -134,7 +134,9 @@ const tests = [
           {
             outputKeys: string[];
             outputKinds: string[];
+            outputIds: string[];
             selectionCounts: Record<string, number>;
+            solidSelectionIds: string[];
           }
         >();
 
@@ -145,7 +147,14 @@ const tests = [
             outputKinds: [...native.final.outputs.entries()]
               .map(([key, value]) => `${key}:${value.kind}`)
               .sort(),
+            outputIds: [...native.final.outputs.entries()]
+              .map(([key, value]) => `${key}:${value.id}`)
+              .sort(),
             selectionCounts: selectionCountByKind(native.final.selections),
+            solidSelectionIds: native.final.selections
+              .filter((selection) => selection.kind === "solid")
+              .map((selection) => selection.id)
+              .sort(),
           });
         }
 
@@ -166,16 +175,32 @@ const tests = [
           const directOutputKinds = [...direct.final.outputs.entries()]
             .map(([key, value]) => `${key}:${value.kind}`)
             .sort();
+          const directOutputIds = [...direct.final.outputs.entries()]
+            .map(([key, value]) => `${key}:${value.id}`)
+            .sort();
           assert.deepEqual(
             snapshot.outputKinds,
             directOutputKinds,
             `${parityCase.name}: output kinds drifted`
+          );
+          assert.deepEqual(
+            snapshot.outputIds,
+            directOutputIds,
+            `${parityCase.name}: output ids drifted`
           );
 
           assert.deepEqual(
             snapshot.selectionCounts,
             selectionCountByKind(direct.final.selections),
             `${parityCase.name}: selection counts drifted`
+          );
+          assert.deepEqual(
+            snapshot.solidSelectionIds,
+            direct.final.selections
+              .filter((selection) => selection.kind === "solid")
+              .map((selection) => selection.id)
+              .sort(),
+            `${parityCase.name}: solid selection ids drifted`
           );
         }
       } finally {

@@ -182,6 +182,14 @@ static json pointToJson(const gp_Pnt& pnt) {
   return json::array({pnt.X(), pnt.Y(), pnt.Z()});
 }
 
+static std::string selectionOwnerToken(const std::string& ownerKey) {
+  std::string token = ownerKey;
+  for (char& ch : token) {
+    if (ch == ':') ch = '.';
+  }
+  return token;
+}
+
 static TopoDS_Face makeRectangleFace(double width, double height, const gp_Pnt& center) {
   const double halfW = width / 2.0;
   const double halfH = height / 2.0;
@@ -550,11 +558,12 @@ static KernelResult collectSelections(const TopoDS_Shape& shape,
                                       const json& tags) {
   KernelResult result;
   const std::string ownerHandle = registry.registerShape(shape);
+  const std::string ownerToken = selectionOwnerToken(ownerKey);
 
   if (outputKind == "solid") {
     gp_Pnt solidCenter = shapeCenter(shape);
     KernelSelection solidSelection;
-    solidSelection.id = "solid";
+    solidSelection.id = "solid:" + ownerToken + "~" + featureId + ".body";
     solidSelection.kind = "solid";
     solidSelection.meta = makeSolidMeta(ownerHandle, ownerKey, featureId, solidCenter, tags);
     result.selections.push_back(solidSelection);
@@ -615,10 +624,12 @@ static KernelResult collectSelections(const TopoDS_Shape& shape,
   }
 
   KernelObject output;
-  output.id = featureId + ":" + ownerKey;
+  output.id = featureId + ":" + (outputKind == "solid" ? "solid" : "face");
   output.kind = outputKind;
   output.meta = json::object();
   output.meta["handle"] = ownerHandle;
+  output.meta["ownerKey"] = ownerKey;
+  output.meta["createdBy"] = featureId;
   output.meta["role"] = outputKind == "solid" ? "body" : "surface";
   result.outputs[ownerKey] = output;
   return result;

@@ -221,8 +221,8 @@ Progress:
   `feature.extrude`, `feature.revolve`, `feature.pipe`, `feature.loft`, and
   `feature.sweep`.
 - Live native-server parity coverage now checks supported primitive feature
-  flows against the direct OCCT.js backend for output keys, output kinds, and
-  selection counts.
+  flows against the direct OCCT.js backend for output keys, output kinds,
+  output ids, root solid selection ids, and selection counts.
 - `npm run verify:workspace-packages` now provides one repeatable gate for
   package-local typechecks plus workspace parity/entrypoint tests.
 - `npm run verify:native-live` now provides one repeatable gate for native HTTP,

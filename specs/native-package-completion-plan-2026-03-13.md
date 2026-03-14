@@ -78,6 +78,8 @@ Status:
   `src/tests/occt_native_server_parity.e2e.test.ts`
 - repeatable live-native verification now exists as
   `npm run verify:native-live`
+- native output object ids and root solid selection ids now match the direct
+  OCCT.js backend for the supported primitive solid flows
 
 ## Package Ownership Finish Plan
 
