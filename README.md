@@ -4,7 +4,7 @@
 
 Docs: [https://cpme.github.io/trueform/](https://cpme.github.io/trueform/)
 
-TrueForm is a declarative, intent-first modeling layer that compiles to interchangeable geometric backends (OpenCascade.js today, native OCCT server support in progress).
+TrueForm is a declarative, intent-first modeling layer that compiles to interchangeable geometric backends (OpenCascade.js today, with a live-tested native OCCT transport/server path for the currently supported feature surface).
 It lets humans and agents describe what a part is (features, constraints, assertions)
 without scripting kernel steps.
 
@@ -38,7 +38,8 @@ flowchart LR
 - Step 1 contract direction: mate connectors live on parts, and assembly intent is stored in a separate assembly file/document.
 - Split assembly storage remains a draft target rather than a shipped default until the v1 contract explicitly promotes it.
 - Assembly data contracts can evolve ahead of solver maturity, but stable assembly workflows still depend on stable part-level semantic references and connector behavior.
-- Experimental native OCCT backend supports server-side CAD compute and AP242 export via native HTTP transport.
+- Native OCCT backend supports server-side CAD compute, explicit capability reporting, AP242 export, and parity-backed verification for the currently supported native feature surface.
+- Public workspace package surfaces now exist for `@trueform/core`, `@trueform/dsl`, `@trueform/export`, `@trueform/api`, `@trueform/service-client`, `@trueform/backend-ocjs`, and `@trueform/backend-native`, while `trueform` remains the compatibility facade.
 
 ## Quickstart
 ```bash
@@ -46,21 +47,20 @@ git clone https://github.com/CPME/trueform.git
 cd trueform
 npm install
 npm test
+npm run verify:workspace-packages
 ```
 
 ## Minimal Example
 ```ts
-import { buildPart } from "trueform";
-import { part } from "trueform/dsl/core";
-import { extrude, profileRect, profileRef, sketch2d } from "trueform/dsl/geometry";
+import { buildPart, dsl } from "trueform";
 
-const plate = part("plate", [
-  sketch2d("sketch-base", [
-    { name: "profile:base", profile: profileRect(100, 60) },
+const plate = dsl.part("plate", [
+  dsl.sketch2d("sketch-base", [
+    { name: "profile:base", profile: dsl.profileRect(100, 60) },
   ]),
-  extrude(
+  dsl.extrude(
     "base-extrude",
-    profileRef("profile:base"),
+    dsl.profileRef("profile:base"),
     6,
     "body:main",
     ["sketch-base"]
@@ -68,6 +68,12 @@ const plate = part("plate", [
 ]);
 
 // const result = buildPart(plate, backend);
+```
+
+Native verification loop:
+
+```bash
+npm run verify:native-live
 ```
 
 ## Viewer

@@ -19,6 +19,15 @@ npm install
 npm run build
 ```
 
+## Verify The Package Surfaces
+
+```bash
+npm run verify:workspace-packages
+```
+
+This checks the public workspace package entrypoints and their parity with the
+root `trueform` compatibility facade.
+
 ## Run the Example
 
 ```bash
@@ -28,18 +37,15 @@ npm run example
 ## Basic Usage
 
 ```ts
-import { buildPart } from "trueform";
-import { part } from "trueform/dsl/core";
-import { sketch2d, profileRect, profileRef } from "trueform/dsl/sketch";
-import { extrude } from "trueform/dsl/features";
+import { buildPart, dsl } from "trueform";
 
-const plate = part("plate", [
-  sketch2d("sketch-base", [
-    { name: "profile:base", profile: profileRect(100, 60) },
+const plate = dsl.part("plate", [
+  dsl.sketch2d("sketch-base", [
+    { name: "profile:base", profile: dsl.profileRect(100, 60) },
   ]),
-  extrude(
+  dsl.extrude(
     "base-extrude",
-    profileRef("profile:base"),
+    dsl.profileRef("profile:base"),
     6,
     "body:main",
     ["sketch-base"]
@@ -52,6 +58,16 @@ const plate = part("plate", [
 ```
 
 `buildPart` returns a deterministic build result with the final outputs and per-feature steps. For a concrete example, see `src/examples/hello.ts`.
+
+## Native Backend Verification
+
+```bash
+npm run verify:native-live
+```
+
+This rebuilds the repo, rebuilds the native OCCT server, and runs the live
+native HTTP, PMI export, and native-vs-direct parity checks for the currently
+supported native feature set.
 
 ## Quick Mesh Export (Viewer)
 

@@ -9,8 +9,10 @@ flowchart TB
   A["DSL Authoring<br/>features, selectors, tolerancing intent"] --> B["Compiler<br/>normalize + validate + dependency DAG"]
   B --> C["Deterministic Build Executor"]
   C --> D["Backend Boundary (SPI)"]
-  D --> E["OpenCascade.js Kernel"]
+  D --> E["OpenCascade.js Backend"]
+  D --> N["Native OCCT Transport/Server"]
   E --> F["Named Outputs + Semantic Topology Metadata"]
+  N --> F
   F --> G["Mesh / STEP / Runtime APIs"]
   G --> H["Runtime Service<br/>jobs, sessions, artifacts"]
 
@@ -21,7 +23,7 @@ flowchart TB
 
   class A author;
   class B,C compile;
-  class D,E backend;
+  class D,E,N backend;
   class F,G,H output;
 ```
 
@@ -57,7 +59,24 @@ flowchart TB
 ## Backend Boundary
 
 - The backend executes normalized features and returns outputs + selection metadata.
-- Kernel types remain backend-internal (OpenCascade.js in v1).
+- Kernel types remain backend-internal.
+- The OCCT.js backend is the primary in-process implementation.
+- The native backend is available through local/HTTP transport adapters with
+  explicit capability reporting and a live native parity loop for the currently
+  supported feature surface.
+
+## Package Surfaces
+
+- `trueform` remains the aggregate compatibility facade.
+- Public package-oriented entrypoints are also available through:
+  - `@trueform/core`
+  - `@trueform/dsl`
+  - `@trueform/export`
+  - `@trueform/api`
+  - `@trueform/service-client`
+  - `@trueform/backend-ocjs`
+  - `@trueform/backend-native`
+- Workspace package verification lives behind `npm run verify:workspace-packages`.
 
 For details, see:
 - `specs/spec.md`
