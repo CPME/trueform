@@ -116,6 +116,11 @@ Exit gate:
 Exit gate:
 - package source no longer points back into `src/*` for the owned layer
 
+Status:
+- `@trueform/backend-native` now has a package-local build and package-local
+  implementation modules for its public backend/transport surface rather than
+  pointing directly at root `dist/*`
+
 ### Phase P4: Publishable package model
 
 - make package manifests complete and consumer-oriented

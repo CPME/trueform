@@ -213,6 +213,8 @@ Progress:
 - `packages/tf-backend-ocjs` and `packages/tf-backend-native` now own explicit
   workspace entrypoints, package-local wrappers, and cross-package parity
   coverage for the backend surfaces.
+- `packages/tf-backend-native` now also owns a package-local build plus
+  package-local implementation modules for its public backend/transport surface.
 - Native backend capability reporting now exists across the wrapper,
   local-transport, HTTP-transport, and native-server layers so backend contract
   mismatches are observable instead of implicit.

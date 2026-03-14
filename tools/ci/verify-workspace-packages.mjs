@@ -11,6 +11,7 @@ const commands = [
   ["npx", ["tsc", "-p", "packages/tf-service-client/tsconfig.json"]],
   ["npx", ["tsc", "-p", "packages/tf-backend-ocjs/tsconfig.json"]],
   ["npx", ["tsc", "-p", "packages/tf-backend-native/tsconfig.json"]],
+  ["npx", ["tsc", "-p", "packages/tf-backend-native/tsconfig.build.json"]],
   ["node", ["dist/tests/workspace_core_entrypoint.e2e.test.js"]],
   ["node", ["dist/tests/workspace_core_surface_parity.e2e.test.js"]],
   ["node", ["dist/tests/workspace_dsl_entrypoint.e2e.test.js"]],

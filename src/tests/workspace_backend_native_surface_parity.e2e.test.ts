@@ -12,6 +12,20 @@ const REQUIRED_EXPORTS = [
 ];
 const FORBIDDEN_EXPORTS = ["buildAssembly", "InMemoryJobQueue", "TfServiceClient"];
 
+function fakeTransport() {
+  return {
+    async execFeature() {
+      return { result: { outputs: [], selections: [] } };
+    },
+    async mesh() {
+      return { positions: [], indices: [] };
+    },
+    async exportStep() {
+      return new Uint8Array();
+    },
+  };
+}
+
 const tests = [
   {
     name: "workspace backend-native parity: required exports exist in root and package entrypoint",
@@ -33,13 +47,21 @@ const tests = [
   {
     name: "workspace backend-native parity: root and package exports map to same implementation",
     fn: async () => {
-      for (const key of REQUIRED_EXPORTS) {
-        assert.equal(
-          workspaceBackend[key],
-          (rootExperimentalModule as Record<string, unknown>)[key],
-          `mismatched backend-native export identity for ${key}`
-        );
-      }
+      const rootExports = rootExperimentalModule as Record<string, unknown>;
+      const rootBackend = new (rootExports.OcctNativeBackend as new (...args: any[]) => any)({
+        transport: fakeTransport(),
+      });
+      const workspaceNative = new (workspaceBackend.OcctNativeBackend as new (...args: any[]) => any)({
+        transport: fakeTransport(),
+      });
+      assert.deepEqual(
+        await workspaceNative.capabilities(),
+        await rootBackend.capabilities()
+      );
+      assert.equal(typeof workspaceBackend.HttpOcctTransport, "function");
+      assert.equal(typeof rootExports.HttpOcctTransport, "function");
+      assert.equal(typeof workspaceBackend.LocalOcctTransport, "function");
+      assert.equal(typeof rootExports.LocalOcctTransport, "function");
     },
   },
   {

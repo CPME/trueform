@@ -5,6 +5,13 @@ import { runTests } from "./occt_test_utils.js";
 const backendModuleId = "@trueform/backend-native";
 const workspaceBackend = (await import(backendModuleId)) as Record<string, unknown>;
 
+function prototypeMethods(value: unknown): string[] {
+  if (typeof value !== "function") return [];
+  return Object.getOwnPropertyNames((value as { prototype?: object }).prototype ?? {})
+    .filter((name) => name !== "constructor")
+    .sort();
+}
+
 const tests = [
   {
     name: "workspace backend-native: exposes stable native backend contracts",
@@ -17,17 +24,17 @@ const tests = [
   {
     name: "workspace backend-native: package entrypoint stays source-compatible with root experimental surface",
     fn: async () => {
-      assert.equal(
-        workspaceBackend.OcctNativeBackend,
-        (rootExperimentalModule as Record<string, unknown>).OcctNativeBackend
+      assert.deepEqual(
+        prototypeMethods(workspaceBackend.OcctNativeBackend),
+        prototypeMethods((rootExperimentalModule as Record<string, unknown>).OcctNativeBackend)
       );
-      assert.equal(
-        workspaceBackend.HttpOcctTransport,
-        (rootExperimentalModule as Record<string, unknown>).HttpOcctTransport
+      assert.deepEqual(
+        prototypeMethods(workspaceBackend.HttpOcctTransport),
+        prototypeMethods((rootExperimentalModule as Record<string, unknown>).HttpOcctTransport)
       );
-      assert.equal(
-        workspaceBackend.LocalOcctTransport,
-        (rootExperimentalModule as Record<string, unknown>).LocalOcctTransport
+      assert.deepEqual(
+        prototypeMethods(workspaceBackend.LocalOcctTransport),
+        prototypeMethods((rootExperimentalModule as Record<string, unknown>).LocalOcctTransport)
       );
     },
   },
