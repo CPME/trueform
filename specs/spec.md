@@ -8,8 +8,12 @@ Current implementation note:
 - The shipped surface today is the `trueform` root package plus explicit subpaths
   (`trueform/backend`, `trueform/backend-spi`, `trueform/experimental`,
   `trueform/export`, `trueform/api`).
-- Workspace extraction to `@trueform/*` packages is in progress; this spec
-  describes the durable architecture and target module boundaries.
+- Public workspace packages now also exist for `@trueform/core`,
+  `@trueform/dsl`, `@trueform/export`, `@trueform/api`,
+  `@trueform/service-client`, `@trueform/backend-ocjs`, and
+  `@trueform/backend-native`, with package-local build/parity verification.
+- The root `trueform` package remains the aggregate compatibility facade; this
+  spec describes the durable architecture and target module boundaries.
 
 ---
 
@@ -46,7 +50,14 @@ Current implementation note:
   * exporting (mesh/STEP/STL as supported)
 * Implements evaluators for assertions (cheap/local tier)
 
-(Optional later / experimental) Package 4: `@trueform/backend-native` (server/native)
+Package 4: `@trueform/backend-native` (server/native)
+
+**The native transport/client backend surface.**
+
+* Provides local and HTTP transport adapters for a native OCCT server/runtime
+* Reports explicit backend capabilities
+* Shares parity-backed behavior with the OCJS backend for the currently
+  supported native feature surface
 
 ---
 

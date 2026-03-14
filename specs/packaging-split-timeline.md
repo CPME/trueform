@@ -1,7 +1,7 @@
-# Packaging Split Timeline (Draft)
+# Packaging Split Timeline
 
 Date: 2026-02-11
-Status: Draft
+Status: Active
 
 ## Goal
 
@@ -80,9 +80,9 @@ PR 2: extract stable core modules.
 - Keep top-level facade re-exports intact.
 - PR 2a completed: introduced `src/core.ts` and mapped workspace `@trueform/core`
   to the built core artifact for compatibility-safe adoption.
-- PR 2b in progress: added package-local source entrypoint at
+- PR 2b completed: added package-local source entrypoint at
   `packages/tf-core/src/index.ts` as a forwarder to root core exports.
-- PR 2c in progress: initial package-local module files added (`ir`, `dsl`,
+- PR 2c completed: initial package-local module files added (`ir`, `dsl`,
   `compiler`, `executor`, `pmi`, and utility facades) and wired through the
   local package index.
 - PR 2d completed: package-level `tf-core` typecheck gate is active and
@@ -97,7 +97,10 @@ PR 4: extract backend implementations.
 - Keep subpath compatibility exports from `trueform`.
 - PR 4a completed: added explicit workspace entrypoints for
   `@trueform/backend-ocjs` and `@trueform/backend-native` plus package parity
-  tests; implementation ownership is still transitional and rooted in `src/*`.
+  tests.
+- PR 4b completed: both backend packages now build package-local `dist/*`
+  entrypoints, and the native backend package owns package-local transport
+  modules for its public surface.
 
 PR 5: extract export tooling package.
 - Move STEP/GLB/3MF/SVG/DXF exporters to `packages/tf-export`.
@@ -116,3 +119,16 @@ PR 7 (major release gate): optional facade slimming.
 - [x] Phase 0 guardrails and explicit subpaths.
 - [x] Phase 1 PR 1 scaffolding (workspace config + placeholder package manifests).
 - [x] Phase 1 PR 2 core module extraction (bridge + package-local facades + parity/typecheck gates).
+- [x] Phase 1 PR 3 DSL package extraction (workspace entrypoints + parity gates).
+- [x] Phase 1 PR 4 backend package extraction (workspace entrypoints + package-local builds + native parity gates).
+- [x] Phase 1 PR 5 export/API/client package entrypoints (workspace entrypoints + package-local builds).
+
+## Current State
+
+- All public workspace packages build package-local `dist/*` entrypoints.
+- `packages/*/src` is guarded from importing root `src/*` directly.
+- `trueform` remains the stable compatibility facade while `@trueform/*`
+  entrypoints are available for package-oriented consumers.
+- Native backend support is live-tested through the native verification loop,
+  with explicit capability reporting and parity checks for the currently
+  supported native feature surface.

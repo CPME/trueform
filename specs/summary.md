@@ -1,6 +1,6 @@
 # TrueForm
 
-TrueForm is a declarative, intent-first modeling layer that compiles to interchangeable geometric backends (OpenCascade.js today, native OCCT support in progress). It lets agents and web apps describe **what** a part is (features, constraints, assertions) without scripting kernel steps.
+TrueForm is a declarative, intent-first modeling layer that compiles to interchangeable geometric backends (OpenCascade.js today, with a live-tested native OCCT transport/server path for the currently supported feature surface). It lets agents and web apps describe **what** a part is (features, constraints, assertions) without scripting kernel steps.
 
 ## What It Promises (and Not)
 
@@ -24,10 +24,11 @@ Non-promises:
   storage remains draft-only until explicitly promoted
 - Features: `Sketch2D` (line/arc/circle/ellipse/rect/slot/polygon/spline/point), `profile.rect/circle/poly/sketch`, `Extrude`, `Surface`, `Revolve`, `Loft`, `Sweep`, `Pipe`, `PipeSweep`, `HexTubeSweep`, `Mirror`, `Shell`, `TrimSurface`, `ExtendSurface`, `Knit`, `Draft`, `Thicken`, `Thread`, `Hole`, `Pattern` (linear/circular layout + feature/body replication), `Fillet`, `Chamfer`, `Boolean`
 - Outputs are named; `body:main` remains a common convention but is not the only valid output
-- Runtime target: Node + OpenCascade.js
+- Runtime target: Node + OpenCascade.js, with native OCCT transport/server support for a parity-backed subset of feature flows
 - Runtime service and `/v1` API contracts exist alongside the core library for app-builder integrations
 - Export tooling exists in dedicated modules (`src/export/*`) and is distinct from core compile
 - Features that remain in development are tracked in `src/feature_staging.ts`; unsupported workflows (for example, full feature/body patterns) must still throw explicit errors in the OCJS backend.
+- Public workspace package surfaces now exist for `@trueform/core`, `@trueform/dsl`, `@trueform/export`, `@trueform/api`, `@trueform/service-client`, `@trueform/backend-ocjs`, and `@trueform/backend-native`, while `trueform` remains the aggregate compatibility facade.
 
 ## What Problem It Solves
 
