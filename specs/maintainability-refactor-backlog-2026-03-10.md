@@ -207,6 +207,9 @@ Progress:
   wrappers, and cross-package parity coverage in
   `src/tests/workspace_export_entrypoint.e2e.test.ts` and
   `src/tests/workspace_export_surface_parity.e2e.test.ts`.
+- `packages/tf-api` and `packages/tf-service-client` now follow the same
+  explicit workspace-entrypoint pattern so the runtime-facing consumer surfaces
+  do not depend on legacy direct manifest wiring.
 
 Remaining targets:
 - `packages/tf-backend-ocjs`
