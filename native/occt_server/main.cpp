@@ -236,6 +236,23 @@ static TopoDS_Face buildProfileFace(const json& profile) {
   throw std::runtime_error("Unsupported profile kind: " + kind);
 }
 
+static json resolveProfileJson(const json& profileRef, const KernelResult& upstream) {
+  const std::string kind = profileRef.value("kind", "");
+  if (kind != "profile.ref") return profileRef;
+  const std::string name = profileRef.value("name", "");
+  auto it = upstream.outputs.find(name);
+  if (it == upstream.outputs.end()) {
+    throw std::runtime_error("Missing profile output: " + name);
+  }
+  if (it->second.kind != "profile") {
+    throw std::runtime_error("Output is not a profile: " + name);
+  }
+  if (!it->second.meta.contains("profile") || !it->second.meta["profile"].is_object()) {
+    throw std::runtime_error("Profile output missing profile data: " + name);
+  }
+  return it->second.meta["profile"];
+}
+
 static gp_Vec parseAxis(const json& axis) {
   if (axis.is_string()) {
     return axisVectorFromString(axis.get<std::string>());
@@ -326,6 +343,34 @@ static KernelResult makeDatumResult(const std::string& key,
   return result;
 }
 
+static KernelResult makeSketchProfileResult(const json& feature) {
+  KernelResult result;
+  const std::string featureId = feature.value("id", "sketch");
+  const json profiles = feature.value("profiles", json::array());
+  for (const auto& entry : profiles) {
+    const std::string name = entry.value("name", "");
+    if (name.empty()) {
+      throw std::runtime_error("feature.sketch2d profile entry missing name");
+    }
+    const json profile = entry.value("profile", json::object());
+    const std::string profileKind = profile.value("kind", "");
+    if (profileKind != "profile.rectangle" &&
+        profileKind != "profile.circle" &&
+        profileKind != "profile.poly") {
+      throw std::runtime_error("Native backend sketch2d currently supports only primitive profile outputs");
+    }
+    KernelObject output;
+    output.id = featureId + ":" + name;
+    output.kind = "profile";
+    output.meta = {
+        {"profile", profile},
+        {"createdBy", featureId},
+    };
+    result.outputs[name] = output;
+  }
+  return result;
+}
+
 static gp_Pnt shapeCenter(const TopoDS_Shape& shape) {
   Bnd_Box box;
   BRepBndLib::Add(shape, box);
@@ -340,16 +385,19 @@ static KernelResult collectSelections(const TopoDS_Shape& shape,
                                       ShapeRegistry& registry,
                                       const std::string& featureId,
                                       const std::string& ownerKey,
+                                      const std::string& outputKind,
                                       const json& tags) {
   KernelResult result;
   const std::string ownerHandle = registry.registerShape(shape);
 
-  gp_Pnt solidCenter = shapeCenter(shape);
-  KernelSelection solidSelection;
-  solidSelection.id = "solid";
-  solidSelection.kind = "solid";
-  solidSelection.meta = makeSolidMeta(ownerHandle, ownerKey, featureId, solidCenter, tags);
-  result.selections.push_back(solidSelection);
+  if (outputKind == "solid") {
+    gp_Pnt solidCenter = shapeCenter(shape);
+    KernelSelection solidSelection;
+    solidSelection.id = "solid";
+    solidSelection.kind = "solid";
+    solidSelection.meta = makeSolidMeta(ownerHandle, ownerKey, featureId, solidCenter, tags);
+    result.selections.push_back(solidSelection);
+  }
 
   TopExp_Explorer faceExp(shape, TopAbs_FACE);
   for (; faceExp.More(); faceExp.Next()) {
@@ -405,10 +453,10 @@ static KernelResult collectSelections(const TopoDS_Shape& shape,
 
   KernelObject output;
   output.id = featureId + ":" + ownerKey;
-  output.kind = "solid";
+  output.kind = outputKind;
   output.meta = json::object();
   output.meta["handle"] = ownerHandle;
-  output.meta["role"] = "body";
+  output.meta["role"] = outputKind == "solid" ? "body" : "surface";
   result.outputs[ownerKey] = output;
   return result;
 }
@@ -881,11 +929,14 @@ static std::vector<unsigned char> exportStepWithPmi(const TopoDS_Shape& shape,
 static json capabilitiesPayload() {
   json payload;
   payload["name"] = "opencascade.native";
-  payload["featureKinds"] = json::array({"datum.plane", "datum.axis", "feature.extrude"});
+  payload["featureKinds"] = json::array({"datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.surface"});
   payload["featureStages"] = {
       {"datum.plane", {{"stage", "stable"}}},
       {"datum.axis", {{"stage", "stable"}}},
+      {"datum.frame", {{"stage", "stable"}}},
+      {"feature.sketch2d", {{"stage", "stable"}}},
       {"feature.extrude", {{"stage", "stable"}}},
+      {"feature.surface", {{"stage", "stable"}}},
   };
   payload["mesh"] = true;
   payload["exports"] = {
@@ -990,13 +1041,77 @@ int main(int argc, char** argv) {
         return;
       }
 
+      if (kind == "datum.frame") {
+        std::string error;
+        auto selection = resolveSelector(feature.value("on", json::object()), upstream, error);
+        if (!selection) {
+          throw std::runtime_error(error.empty() ? "datum.frame selector failed" : error);
+        }
+        if (selection->kind != "face") {
+          throw std::runtime_error("datum.frame must resolve to a face");
+        }
+        const std::string handle = selection->meta.value("handle", "");
+        if (handle.empty()) {
+          throw std::runtime_error("datum.frame face selection missing handle");
+        }
+        TopoDS_Shape shape = session.registry.get(handle);
+        TopoDS_Face face = TopoDS::Face(shape);
+        BRepAdaptor_Surface adaptor(face, true);
+        if (adaptor.GetType() != GeomAbs_Plane) {
+          throw std::runtime_error("datum.frame currently requires a planar face");
+        }
+        gp_Pln plane = adaptor.Plane();
+        gp_Ax3 ax3 = plane.Position();
+        gp_Pnt origin = ax3.Location();
+        gp_Dir xDir = ax3.XDirection();
+        gp_Dir yDir = ax3.YDirection();
+        gp_Dir normal = ax3.Direction();
+        json meta;
+        meta["type"] = "frame";
+        meta["origin"] = pointToJson(origin);
+        meta["xDir"] = json::array({xDir.X(), xDir.Y(), xDir.Z()});
+        meta["yDir"] = json::array({yDir.X(), yDir.Y(), yDir.Z()});
+        meta["normal"] = json::array({normal.X(), normal.Y(), normal.Z()});
+        KernelResult built = makeDatumResult("datum:" + featureId, featureId + ":datum", meta);
+        KernelResult merged = mergeResults(upstream, built);
+        session.current = merged;
+
+        json response;
+        response["result"] = serializeKernelResult(built);
+        res.set_content(response.dump(), "application/json");
+        return;
+      }
+
+      if (kind == "feature.sketch2d") {
+        KernelResult built = makeSketchProfileResult(feature);
+        KernelResult merged = mergeResults(upstream, built);
+        session.current = merged;
+
+        json response;
+        response["result"] = serializeKernelResult(built);
+        res.set_content(response.dump(), "application/json");
+        return;
+      }
+
+      if (kind == "feature.surface") {
+        const json profile = resolveProfileJson(feature.value("profile", json::object()), upstream);
+        TopoDS_Face face = buildProfileFace(profile);
+        const std::string resultKey = feature.value("result", "surface:main");
+        KernelResult built = collectSelections(
+            face, session.registry, featureId, resultKey, "surface", tags);
+        KernelResult merged = mergeResults(upstream, built);
+        session.current = merged;
+
+        json response;
+        response["result"] = serializeKernelResult(built);
+        res.set_content(response.dump(), "application/json");
+        return;
+      }
+
       if (kind != "feature.extrude") {
         throw std::runtime_error("Unsupported feature kind: " + kind);
       }
-      const json profile = feature.value("profile", json::object());
-      if (profile.value("kind", "") == "profile.ref") {
-        throw std::runtime_error("profile.ref not supported in native backend yet");
-      }
+      const json profile = resolveProfileJson(feature.value("profile", json::object()), upstream);
       TopoDS_Face face = buildProfileFace(profile);
       json depthJson = feature.value("depth", 0.0);
       if (depthJson.is_string() && depthJson.get<std::string>() == "throughAll") {
@@ -1010,7 +1125,8 @@ int main(int argc, char** argv) {
       TopoDS_Shape solid = BRepPrimAPI_MakePrism(face, vec);
 
       const std::string resultKey = feature.value("result", "body:main");
-      KernelResult built = collectSelections(solid, session.registry, featureId, resultKey, tags);
+      KernelResult built = collectSelections(
+          solid, session.registry, featureId, resultKey, "solid", tags);
       KernelResult merged = mergeResults(upstream, built);
       session.current = merged;
 

@@ -33,12 +33,18 @@ Exit gate:
   first:
   - `datum.plane`
   - `datum.axis`
-  - later `datum.frame` when selector-backed face resolution is mature enough
+  - `datum.frame`
+  - `feature.sketch2d` primitive-profile outputs
+  - `feature.surface` for primitive/profile-ref flows
 - keep capability list accurate to implemented kinds
 
 Exit gate:
 - native server can build datum-only parts and mixed datum + simple-solid parts
 - live-server tests cover those paths
+
+Status:
+- current live-tested native baseline includes `datum.plane`, `datum.axis`,
+  `datum.frame`, `feature.sketch2d`, `feature.surface`, and `feature.extrude`
 
 ### Phase N3: Feature-port waves
 
@@ -110,3 +116,4 @@ Exit gate:
 1. native-server `datum.plane` + `datum.axis`
 2. native-local parity test against direct OCCT.js backend
 3. `verify:workspace-packages` CI command
+4. native-server sketch/profile-ref + surface/frame baseline

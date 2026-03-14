@@ -61,7 +61,7 @@ const tests = [
         const backend = new OcctNativeBackend({ transport });
         const caps = await backend.capabilities?.();
         assert.equal(caps?.name, "opencascade.native");
-        assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "feature.extrude"]);
+        assert.deepEqual(caps?.featureKinds, ["datum.plane", "datum.axis", "datum.frame", "feature.sketch2d", "feature.extrude", "feature.surface"]);
         assert.deepEqual(caps?.exports, { step: true, stl: false });
 
         const datumPart = dsl.part("native-datum", [
@@ -73,6 +73,39 @@ const tests = [
         const axis = datumResult.final.outputs.get("datum:axis-a");
         assert.equal(datum?.kind, "datum");
         assert.equal(axis?.kind, "datum");
+
+        const sketchExtrudePart = dsl.part("native-sketch-extrude", [
+          dsl.sketch2d("sketch-base", [
+            { name: "profile:base", profile: dsl.profileRect(40, 20) },
+          ]),
+          dsl.extrude(
+            "base",
+            dsl.profileRef("profile:base"),
+            8,
+            "body:main",
+            ["sketch-base"]
+          ),
+        ]);
+        const sketchExtrudeResult = await buildPartAsync(sketchExtrudePart, backend);
+        const sketchBody = sketchExtrudeResult.final.outputs.get("body:main");
+        assert.ok(sketchBody, "missing sketch-driven body:main output");
+
+        const frameSurfacePart = dsl.part("native-surface-frame", [
+          dsl.sketch2d("sketch-surface", [
+            { name: "profile:surface", profile: dsl.profileRect(20, 10) },
+          ]),
+          dsl.surface("surface-1", dsl.profileRef("profile:surface"), "surface:main", ["sketch-surface"]),
+          dsl.datumFrame(
+            "frame-a",
+            dsl.selectorFace([dsl.predPlanar()], [dsl.rankMaxArea()]),
+            ["surface-1"]
+          ),
+        ]);
+        const frameSurfaceResult = await buildPartAsync(frameSurfacePart, backend);
+        const surface = frameSurfaceResult.final.outputs.get("surface:main");
+        const frame = frameSurfaceResult.final.outputs.get("datum:frame-a");
+        assert.equal(surface?.kind, "surface");
+        assert.equal(frame?.kind, "datum");
 
         const target = dsl.refSurface(
           dsl.selectorFace(
