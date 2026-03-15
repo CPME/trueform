@@ -30,6 +30,39 @@ export type IsoRenderLayer = {
   depthTest?: boolean;
 };
 
+type TransparentTriangle = {
+  x0: number;
+  y0: number;
+  z0: number;
+  x1: number;
+  y1: number;
+  z1: number;
+  x2: number;
+  y2: number;
+  z2: number;
+  denom: number;
+  minPx: number;
+  maxPx: number;
+  minPy: number;
+  maxPy: number;
+  r: number;
+  g: number;
+  b: number;
+  alpha: number;
+  depthTest: boolean;
+};
+
+type QueuedTransparentLayer = {
+  triangles: TransparentTriangle[];
+  wireframe:
+    | {
+        segments: number[];
+        color: [number, number, number, number];
+        wireDepthTest: boolean;
+      }
+    | null;
+};
+
 const PNG_SIGNATURE = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 ]);
@@ -161,6 +194,7 @@ export function renderIsometricPngLayers(
 
   const globalZ = new Float32Array(width * height);
   globalZ.fill(-Infinity);
+  const transparentLayers: QueuedTransparentLayer[] = [];
 
   for (const layer of layers) {
     const mesh = layer.mesh;
@@ -175,9 +209,12 @@ export function renderIsometricPngLayers(
     const wireColor = layer.wireColor ?? opts.wireColor ?? [32, 40, 52];
     const wireDepthTest = layer.wireDepthTest ?? opts.wireDepthTest ?? true;
     const depthTest = layer.depthTest !== false;
-    const zBuffer = depthTest
+    const fillZBuffer = depthTest
       ? globalZ
       : new Float32Array(width * height).fill(-Infinity);
+    const isTransparentFill = baseAlpha > 0 && baseAlpha < 1;
+
+    const layerTransparentTriangles: TransparentTriangle[] = [];
 
     if (vertexCount > 0) {
       const viewX = new Float32Array(vertexCount);
@@ -220,21 +257,29 @@ export function renderIsometricPngLayers(
 
         const denom = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
         if (Math.abs(denom) < 1e-6) continue;
+        if (baseAlpha <= 0) continue;
 
-        const shade = computeTriangleShade(
-          i0,
-          i1,
-          i2,
-          normalsOk ? normals : null,
-          viewX,
-          viewY,
-          viewZ,
-          right,
-          up,
-          viewDir,
-          lightDirView
-        );
-        const intensity = clamp(ambient + diffuse * shade, 0, 1);
+        const intensity = isTransparentFill
+          ? 1
+          : clamp(
+              ambient +
+                diffuse *
+                  computeTriangleShade(
+                    i0,
+                    i1,
+                    i2,
+                    normalsOk ? normals : null,
+                    viewX,
+                    viewY,
+                    viewZ,
+                    right,
+                    up,
+                    viewDir,
+                    lightDirView
+                  ),
+              0,
+              1
+            );
         const r = clampByte((baseColor[0] ?? 0) * intensity);
         const g = clampByte((baseColor[1] ?? 0) * intensity);
         const b = clampByte((baseColor[2] ?? 0) * intensity);
@@ -243,32 +288,108 @@ export function renderIsometricPngLayers(
         const maxPx = clampInt(Math.ceil(Math.max(x0, x1, x2)), 0, width - 1);
         const minPy = clampInt(Math.floor(Math.min(y0, y1, y2)), 0, height - 1);
         const maxPy = clampInt(Math.ceil(Math.max(y0, y1, y2)), 0, height - 1);
-        for (let py = minPy; py <= maxPy; py += 1) {
-          for (let px = minPx; px <= maxPx; px += 1) {
-            const fx = px + 0.5;
-            const fy = py + 0.5;
-            const w0 = ((y1 - y2) * (fx - x2) + (x2 - x1) * (fy - y2)) / denom;
-            const w1 = ((y2 - y0) * (fx - x2) + (x0 - x2) * (fy - y2)) / denom;
-            const w2 = 1 - w0 - w1;
-            const insidePositive = w0 >= 0 && w1 >= 0 && w2 >= 0;
-            const insideNegative = w0 <= 0 && w1 <= 0 && w2 <= 0;
-            if (!insidePositive && !insideNegative) continue;
-            const z = w0 * z0 + w1 * z1 + w2 * z2;
-            const idx = py * width + px;
-            const prior = zBuffer[idx] ?? -Infinity;
-            if (z < prior - 1e-6) continue;
-            zBuffer[idx] = z;
-            if (depthTest) globalZ[idx] = z;
-            blendPixel(rgba, idx * 4, r, g, b, baseAlpha);
-          }
+        const triangle: TransparentTriangle = {
+          x0,
+          y0,
+          z0,
+          x1,
+          y1,
+          z1,
+          x2,
+          y2,
+          z2,
+          denom,
+          minPx,
+          maxPx,
+          minPy,
+          maxPy,
+          r,
+          g,
+          b,
+          alpha: baseAlpha,
+          depthTest,
+        };
+        if (isTransparentFill) {
+          layerTransparentTriangles.push(triangle);
+          continue;
         }
+        rasterizeTriangle(rgba, width, triangle, fillZBuffer, fillZBuffer);
       }
     }
 
+    let transparentWireframe: QueuedTransparentLayer["wireframe"] = null;
     if (wireframe) {
       const segments = resolveEdgeSegments(mesh, positions.length / 3);
+      const color: [number, number, number, number] = [
+        wireColor[0] ?? 0,
+        wireColor[1] ?? 0,
+        wireColor[2] ?? 0,
+        255,
+      ];
+      if (isTransparentFill) {
+        transparentWireframe = {
+          segments,
+          color,
+          wireDepthTest,
+        };
+      } else {
+        drawWireframe(
+          segments,
+          center,
+          right,
+          up,
+          viewDir,
+          viewMidX,
+          viewMidY,
+          scale,
+          screenCenterX,
+          screenCenterY,
+          width,
+          height,
+        rgba,
+        color,
+          fillZBuffer,
+        wireDepthTest
+        );
+      }
+    }
+
+    if (isTransparentFill) {
+      transparentLayers.push({
+        triangles: layerTransparentTriangles,
+        wireframe: transparentWireframe,
+      });
+    }
+  }
+
+  for (const layer of transparentLayers) {
+    const transparentZ = new Float32Array(width * height);
+    transparentZ.fill(-Infinity);
+    const transparentPixels = Buffer.alloc(width * height * 4);
+    for (const triangle of layer.triangles) {
+      captureTransparentTriangle(
+        width,
+        triangle,
+        triangle.depthTest ? globalZ : null,
+        transparentZ,
+        transparentPixels
+      );
+    }
+    for (let i = 0; i < transparentPixels.length; i += 4) {
+      const alphaByte = transparentPixels[i + 3] ?? 0;
+      if (alphaByte <= 0) continue;
+      blendPixel(
+        rgba,
+        i,
+        transparentPixels[i] ?? 0,
+        transparentPixels[i + 1] ?? 0,
+        transparentPixels[i + 2] ?? 0,
+        alphaByte / 255
+      );
+    }
+    if (layer.wireframe) {
       drawWireframe(
-        segments,
+        layer.wireframe.segments,
         center,
         right,
         up,
@@ -281,14 +402,86 @@ export function renderIsometricPngLayers(
         width,
         height,
         rgba,
-        [wireColor[0] ?? 0, wireColor[1] ?? 0, wireColor[2] ?? 0, 255],
-        zBuffer,
-        wireDepthTest
+        layer.wireframe.color,
+        globalZ,
+        layer.wireframe.wireDepthTest
       );
     }
   }
 
   return writePng(width, height, rgba);
+}
+
+function rasterizeTriangle(
+  rgba: Buffer,
+  width: number,
+  triangle: TransparentTriangle,
+  testBuffer: Float32Array | null,
+  writeBuffer: Float32Array | null
+): void {
+  for (let py = triangle.minPy; py <= triangle.maxPy; py += 1) {
+    for (let px = triangle.minPx; px <= triangle.maxPx; px += 1) {
+      const fx = px + 0.5;
+      const fy = py + 0.5;
+      const w0 =
+        ((triangle.y1 - triangle.y2) * (fx - triangle.x2) +
+          (triangle.x2 - triangle.x1) * (fy - triangle.y2)) /
+        triangle.denom;
+      const w1 =
+        ((triangle.y2 - triangle.y0) * (fx - triangle.x2) +
+          (triangle.x0 - triangle.x2) * (fy - triangle.y2)) /
+        triangle.denom;
+      const w2 = 1 - w0 - w1;
+      const insidePositive = w0 >= 0 && w1 >= 0 && w2 >= 0;
+      const insideNegative = w0 <= 0 && w1 <= 0 && w2 <= 0;
+      if (!insidePositive && !insideNegative) continue;
+      const z = w0 * triangle.z0 + w1 * triangle.z1 + w2 * triangle.z2;
+      const idx = py * width + px;
+      const prior = testBuffer?.[idx] ?? -Infinity;
+      if (z < prior - 1e-6) continue;
+      if (writeBuffer) writeBuffer[idx] = z;
+      blendPixel(rgba, idx * 4, triangle.r, triangle.g, triangle.b, triangle.alpha);
+    }
+  }
+}
+
+function captureTransparentTriangle(
+  width: number,
+  triangle: TransparentTriangle,
+  opaqueDepth: Float32Array | null,
+  transparentDepth: Float32Array,
+  transparentPixels: Buffer
+): void {
+  for (let py = triangle.minPy; py <= triangle.maxPy; py += 1) {
+    for (let px = triangle.minPx; px <= triangle.maxPx; px += 1) {
+      const fx = px + 0.5;
+      const fy = py + 0.5;
+      const w0 =
+        ((triangle.y1 - triangle.y2) * (fx - triangle.x2) +
+          (triangle.x2 - triangle.x1) * (fy - triangle.y2)) /
+        triangle.denom;
+      const w1 =
+        ((triangle.y2 - triangle.y0) * (fx - triangle.x2) +
+          (triangle.x0 - triangle.x2) * (fy - triangle.y2)) /
+        triangle.denom;
+      const w2 = 1 - w0 - w1;
+      const insidePositive = w0 >= 0 && w1 >= 0 && w2 >= 0;
+      const insideNegative = w0 <= 0 && w1 <= 0 && w2 <= 0;
+      if (!insidePositive && !insideNegative) continue;
+      const z = w0 * triangle.z0 + w1 * triangle.z1 + w2 * triangle.z2;
+      const idx = py * width + px;
+      const opaque = opaqueDepth?.[idx] ?? -Infinity;
+      if (z < opaque - 1e-6) continue;
+      const prior = transparentDepth[idx] ?? -Infinity;
+      if (z < prior - 1e-6) continue;
+      transparentDepth[idx] = z;
+      const offset = idx * 4;
+      transparentPixels[offset] = triangle.r;
+      transparentPixels[offset + 1] = triangle.g;
+      transparentPixels[offset + 2] = triangle.b;
+      transparentPixels[offset + 3] = clampByte(triangle.alpha * 255);
+    }
+  }
 }
 
 function buildTriangleIndices(mesh: MeshData, vertexCount: number): number[] {

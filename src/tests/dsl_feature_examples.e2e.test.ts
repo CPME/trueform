@@ -4,21 +4,31 @@ import { runTests } from "./occt_test_utils.js";
 
 const tests = [
   {
-    name: "dsl feature examples: boolean intersect ghost layers do not occlude the result body",
+    name: "dsl feature examples: boolean intersect keeps translucent operand overlays depth-tested",
     fn: async () => {
       const example = dslFeatureExamples.find((entry) => entry.id === "boolean-intersect");
       assert.ok(example, "missing boolean-intersect example");
       assert.ok(example.render?.layers, "boolean-intersect example should define render layers");
       assert.equal(example.render.layers.length, 3, "boolean-intersect should keep three render layers");
       assert.equal(
+        example.render.layers[0]?.alpha,
+        0.2,
+        "left operand layer should remain translucent"
+      );
+      assert.equal(
+        example.render.layers[1]?.alpha,
+        0.2,
+        "right operand layer should remain translucent"
+      );
+      assert.equal(
         example.render.layers[0]?.depthTest,
-        false,
-        "left operand ghost layer should render as an underlay"
+        true,
+        "left operand overlay should stay depth-tested"
       );
       assert.equal(
         example.render.layers[1]?.depthTest,
-        false,
-        "right operand ghost layer should render as an underlay"
+        true,
+        "right operand overlay should stay depth-tested"
       );
       assert.equal(
         example.render.layers[2]?.depthTest,

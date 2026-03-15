@@ -1113,20 +1113,25 @@ export const dslFeatureExamples: DslFeatureExample[] = [
       ),
     ]),
     render: {
+      meshOpts: {
+        linearDeflection: 0.05,
+        angularDeflection: 0.05,
+        parallel: true,
+      },
       layers: [
         {
           output: "body:a",
           color: [66, 133, 244],
           alpha: 0.2,
           wireframe: false,
-          depthTest: false,
+          depthTest: true,
         },
         {
           output: "body:b",
           color: [251, 188, 5],
           alpha: 0.2,
           wireframe: false,
-          depthTest: false,
+          depthTest: true,
         },
         {
           output: "body:main",
