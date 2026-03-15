@@ -41,9 +41,18 @@ export type BooleanSemanticEdgeDescriptor = {
   };
 };
 
-export function describeBooleanSemanticEdge(
+export type AdjacentFaceSemanticEdgeDescriptor = {
+  slot: string;
+  relation: "bound" | "join";
+  faceSlots: [string, string];
+  baseFaceSlots: [string, string];
+  rootSlot: string;
+  targetSlot: string;
+};
+
+export function describeSemanticEdgeFromAdjacentFaces(
   adjacentFaceSlots: unknown
-): BooleanSemanticEdgeDescriptor | null {
+): AdjacentFaceSemanticEdgeDescriptor | null {
   const adjacentSlots = normalizeAdjacentFaceSlots(adjacentFaceSlots);
   if (adjacentSlots.length !== 2) return null;
 
@@ -80,16 +89,35 @@ export function describeBooleanSemanticEdge(
   const baseTarget = semanticBaseSlot(targetSlot);
   return {
     slot: `${rootSlot}.${relation}.${targetSlot}`,
-    signature: `boolean.edge.v1|${relation}|${rootSlot}|${targetSlot}|${baseRoot}|${baseTarget}`,
+    relation,
+    faceSlots: [a, b],
+    baseFaceSlots: [baseRoot, baseTarget],
+    rootSlot,
+    targetSlot,
+  };
+}
+
+export function describeBooleanSemanticEdge(
+  adjacentFaceSlots: unknown
+): BooleanSemanticEdgeDescriptor | null {
+  const descriptor = describeSemanticEdgeFromAdjacentFaces(adjacentFaceSlots);
+  if (!descriptor) return null;
+  return {
+    slot: descriptor.slot,
+    signature: `boolean.edge.v1|${descriptor.relation}|${descriptor.rootSlot}|${descriptor.targetSlot}|${descriptor.baseFaceSlots[0]}|${descriptor.baseFaceSlots[1]}`,
     provenance: {
       version: 1,
-      relation,
-      faceSlots: [a, b],
-      baseFaceSlots: [baseRoot, baseTarget],
-      rootSlot,
-      targetSlot,
+      relation: descriptor.relation,
+      faceSlots: descriptor.faceSlots,
+      baseFaceSlots: descriptor.baseFaceSlots,
+      rootSlot: descriptor.rootSlot,
+      targetSlot: descriptor.targetSlot,
     },
   };
+}
+
+export function deriveSemanticEdgeSlotFromAdjacentFaces(adjacentFaceSlots: unknown): string | null {
+  return describeSemanticEdgeFromAdjacentFaces(adjacentFaceSlots)?.slot ?? null;
 }
 
 export function deriveBooleanSemanticEdgeSlot(adjacentFaceSlots: unknown): string | null {

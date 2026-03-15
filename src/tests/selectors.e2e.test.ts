@@ -146,6 +146,29 @@ const tests = [
     },
   },
   {
+    name: "selectors: semantic edge ids rebind when only the owner alias changes",
+    fn: async () => {
+      const selector = dsl.selectorNamed("edge:body.main~extrude-2.side.1.bound.top");
+      const ctx = {
+        selections: [
+          {
+            id: "edge:body.auto-extrude-2~extrude-2.side.1.bound.top",
+            kind: "edge" as const,
+            meta: {
+              ownerKey: "body:auto-extrude-2",
+              createdBy: "extrude-2",
+              selectionSlot: "side.1.bound.top",
+              adjacentFaceSlots: ["side.1", "top"],
+            },
+          },
+        ],
+        named: new Map(),
+      };
+      const resolved = resolveSelector(selector, ctx);
+      assert.equal(resolved.id, "edge:body.auto-extrude-2~extrude-2.side.1.bound.top");
+    },
+  },
+  {
     name: "selectors: owner-alias fallback stays explicit when alias-only rebind is ambiguous",
     fn: async () => {
       const selector = dsl.selectorNamed("face:body.main~extrude-2.top");

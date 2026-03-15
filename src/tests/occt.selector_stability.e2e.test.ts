@@ -397,6 +397,116 @@ const matrix: MatrixCase[] = [
     },
   },
   {
+    name: "stable edge id keeps fillet resolved when only the source owner alias changes",
+    buildSeedPart: () =>
+      dsl.part("selector-matrix-seed-fillet-owner-alias", [
+        dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:main"),
+      ]),
+    captureSelectionId: topStableEdgeId,
+    buildEditedPart: (selectionId) =>
+      dsl.part("selector-matrix-fillet-owner-alias", [
+        dsl.fillet("edge-fillet", dsl.selectorNamed(selectionId), 1),
+        dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:renamed"),
+      ]),
+    assertEdited: ({ occt, result, selectionId }) => {
+      assert.ok(
+        selectionId.includes(".bound.top"),
+        `expected captured fillet edge id to be semantic, got ${selectionId}`
+      );
+      assert.ok(
+        result.order.indexOf("base") < result.order.indexOf("edge-fillet"),
+        `expected stable edge id to anchor fillet ordering after owner rename (order=${result.order.join(",")})`
+      );
+      const baseStep = stepByFeatureId(result, "base");
+      assert.ok(baseStep, "missing base step for fillet owner-alias rebind");
+      assert.equal(
+        baseStep.result.selections.some((selection) => selection.id === selectionId),
+        false,
+        "expected owner alias rename to change the emitted base edge id"
+      );
+      const renamedEdge = (baseStep.result.selections as SelectionRecord[]).find(
+        (selection) =>
+          selection.kind === "edge" &&
+          selection.meta["createdBy"] === "base" &&
+          selection.meta["selectionSlot"] === "side.1.bound.top"
+      );
+      assert.ok(renamedEdge, "missing renamed semantic edge after owner alias change");
+      assert.notEqual(renamedEdge?.id, selectionId);
+      assert.ok(
+        renamedEdge?.id.startsWith("edge:body.renamed~base."),
+        `expected renamed edge id to use body:renamed owner token, got ${renamedEdge?.id ?? ""}`
+      );
+      const baseBody = baseStep.result.outputs.get("body:renamed");
+      const finalBody = result.final.outputs.get("body:renamed");
+      assert.ok(baseBody, "missing renamed base output body:renamed");
+      assert.ok(finalBody, "missing final output body:renamed");
+      const baseShape = baseBody.meta["shape"] as any;
+      const finalShape = finalBody.meta["shape"] as any;
+      assert.ok(baseShape, "missing renamed base shape for fillet");
+      assert.ok(finalShape, "missing renamed final shape for fillet");
+      assertValidShape(occt, finalShape, "stable-id fillet after owner rename solid");
+      assert.ok(
+        countFaces(occt, finalShape) > countFaces(occt, baseShape),
+        "expected fillet to add faces after alias-only owner rename"
+      );
+    },
+  },
+  {
+    name: "stable edge id keeps chamfer resolved when only the source owner alias changes",
+    buildSeedPart: () =>
+      dsl.part("selector-matrix-seed-chamfer-owner-alias", [
+        dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:main"),
+      ]),
+    captureSelectionId: topStableEdgeId,
+    buildEditedPart: (selectionId) =>
+      dsl.part("selector-matrix-chamfer-owner-alias", [
+        dsl.chamfer("edge-chamfer", dsl.selectorNamed(selectionId), 1.25),
+        dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:renamed"),
+      ]),
+    assertEdited: ({ occt, result, selectionId }) => {
+      assert.ok(
+        selectionId.includes(".bound.top"),
+        `expected captured chamfer edge id to be semantic, got ${selectionId}`
+      );
+      assert.ok(
+        result.order.indexOf("base") < result.order.indexOf("edge-chamfer"),
+        `expected stable edge id to anchor chamfer ordering after owner rename (order=${result.order.join(",")})`
+      );
+      const baseStep = stepByFeatureId(result, "base");
+      assert.ok(baseStep, "missing base step for chamfer owner-alias rebind");
+      assert.equal(
+        baseStep.result.selections.some((selection) => selection.id === selectionId),
+        false,
+        "expected owner alias rename to change the emitted base edge id"
+      );
+      const renamedEdge = (baseStep.result.selections as SelectionRecord[]).find(
+        (selection) =>
+          selection.kind === "edge" &&
+          selection.meta["createdBy"] === "base" &&
+          selection.meta["selectionSlot"] === "side.1.bound.top"
+      );
+      assert.ok(renamedEdge, "missing renamed semantic edge after owner alias change");
+      assert.notEqual(renamedEdge?.id, selectionId);
+      assert.ok(
+        renamedEdge?.id.startsWith("edge:body.renamed~base."),
+        `expected renamed edge id to use body:renamed owner token, got ${renamedEdge?.id ?? ""}`
+      );
+      const baseBody = baseStep.result.outputs.get("body:renamed");
+      const finalBody = result.final.outputs.get("body:renamed");
+      assert.ok(baseBody, "missing renamed base output body:renamed");
+      assert.ok(finalBody, "missing final output body:renamed");
+      const baseShape = baseBody.meta["shape"] as any;
+      const finalShape = finalBody.meta["shape"] as any;
+      assert.ok(baseShape, "missing renamed base shape for chamfer");
+      assert.ok(finalShape, "missing renamed final shape for chamfer");
+      assertValidShape(occt, finalShape, "stable-id chamfer after owner rename solid");
+      assert.ok(
+        countFaces(occt, finalShape) > countFaces(occt, baseShape),
+        "expected chamfer to add faces after alias-only owner rename"
+      );
+    },
+  },
+  {
     name: "stable boolean cut face id keeps move face resolved after upstream edits",
     buildSeedPart: () =>
       dsl.part("selector-matrix-seed-boolean-cut", [

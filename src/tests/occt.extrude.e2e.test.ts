@@ -208,6 +208,42 @@ const tests = [
     },
   },
   {
+    name: "occt e2e: extrude edge ids expose semantic slots with legacy aliases",
+    fn: async () => {
+      const { backend } = await getBackendContext();
+      const result = buildPart(
+        dsl.part("extrude-stable-edge-seed", [
+          dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:main"),
+        ]),
+        backend
+      );
+
+      const baseEdges = result.final.selections.filter(
+        (selection) => selection.kind === "edge" && selection.meta["createdBy"] === "base"
+      );
+      assert.equal(baseEdges.length, 12, `expected 12 base edges, got ${baseEdges.length}`);
+      assert.equal(
+        baseEdges.every((selection) => typeof selection.meta["selectionSlot"] === "string"),
+        true,
+        "expected all extrude edges to publish semantic selection slots"
+      );
+
+      const topEdge = baseEdges.find(
+        (selection) => selection.meta["selectionSlot"] === "side.1.bound.top"
+      );
+      assert.ok(topEdge, "missing semantic top boundary edge");
+      assert.equal(topEdge?.id, "edge:body.main~base.side.1.bound.top");
+      const aliases = Array.isArray(topEdge?.meta["selectionAliases"])
+        ? (topEdge?.meta["selectionAliases"] as string[])
+        : [];
+      assert.equal(aliases.length, 1, "expected one legacy alias for semantic extrude edge");
+      assert.ok(
+        aliases[0]?.startsWith("edge:body.main~base.h"),
+        `expected legacy hash alias for semantic extrude edge, got ${aliases[0] ?? ""}`
+      );
+    },
+  },
+  {
     name: "occt e2e: extrude along sketch normal",
     fn: async () => {
       const { occt, backend } = await getBackendContext();
