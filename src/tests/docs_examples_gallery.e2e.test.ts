@@ -30,6 +30,26 @@ const tests = [
         /activateCode\(targetId\)/,
         "gallery should wire title clicks to code activation"
       );
+      assert.match(
+        html,
+        /<h2 class="section-title">Sketch 2D<\/h2>/,
+        "gallery should group sketch examples into the unified workflow sections"
+      );
+      assert.match(
+        html,
+        /<h2 class="section-title">Boolean &amp; Combine<\/h2>/,
+        "gallery should expose boolean examples as their own workflow section"
+      );
+      assert.doesNotMatch(
+        html,
+        /<h2 class="section-title">DSL Examples<\/h2>/,
+        "gallery should no longer split the app into separate DSL and sketch top-level sections"
+      );
+      assert.doesNotMatch(
+        html,
+        /<h2 class="section-title">Sketch Examples<\/h2>/,
+        "gallery should no longer keep sketch examples in a separate top-level section"
+      );
     },
   },
 ];

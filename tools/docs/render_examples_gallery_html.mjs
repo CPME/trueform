@@ -77,6 +77,39 @@ const sketchCodeTargets = {
   "rect-array": { doc: "sketches", heading: "Rectangle Array" },
 };
 
+const gallerySections = [
+  {
+    key: "sketch-2d",
+    title: "Sketch 2D",
+    description: "2D primitives and profile-building helpers used as inputs for downstream modeling features.",
+  },
+  {
+    key: "create",
+    title: "Create",
+    description: "Base shape construction across solids, surfaces, sweeps, and shell/thicken workflows.",
+  },
+  {
+    key: "modify",
+    title: "Modify",
+    description: "Feature edits, detailing, and review-oriented examples for changing existing geometry.",
+  },
+  {
+    key: "boolean",
+    title: "Boolean & Combine",
+    description: "Union, subtract, and intersect examples with source-body ghost overlays for readability.",
+  },
+  {
+    key: "pattern",
+    title: "Pattern & Transform",
+    description: "Body/feature repetition plus mirror and move operations for arranging geometry.",
+  },
+  {
+    key: "inspect",
+    title: "Inspect & PMI",
+    description: "Curve interrogation, tolerancing, and cosmetic annotation examples.",
+  },
+];
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -111,10 +144,51 @@ function extractCodeBlock(markdown, heading) {
   return codeMatch[1].trim();
 }
 
-function classifyDsl(exampleId) {
-  if (exampleId.includes("array") || exampleId === "feature-array") return "Generators";
-  if (exampleId === "tolerancing" || exampleId === "thread-cosmetic") return "PMI";
-  return "Features";
+function classifyExample(sourceKind, exampleId) {
+  if (sourceKind === "sketch") return "sketch-2d";
+
+  if (exampleId === "curve-intersect" || exampleId === "tolerancing" || exampleId === "thread-cosmetic") {
+    return "inspect";
+  }
+
+  if (exampleId === "boolean" || exampleId === "boolean-cut" || exampleId === "boolean-intersect") {
+    return "boolean";
+  }
+
+  if (
+    exampleId === "pattern" ||
+    exampleId === "pattern-circular" ||
+    exampleId === "feature-array" ||
+    exampleId === "spline-array" ||
+    exampleId === "circular-array" ||
+    exampleId === "radial-array" ||
+    exampleId === "mirror" ||
+    exampleId === "move-body"
+  ) {
+    return "pattern";
+  }
+
+  if (
+    exampleId === "hole" ||
+    exampleId === "hole-advanced" ||
+    exampleId === "fillet" ||
+    exampleId === "selection-ledger-fillet-edge-review" ||
+    exampleId === "selection-ledger-fillet-seam-review" ||
+    exampleId === "selection-ledger-stack-audit" ||
+    exampleId === "variable-fillet" ||
+    exampleId === "chamfer" ||
+    exampleId === "selection-ledger-chamfer-edge-review" ||
+    exampleId === "selection-ledger-chamfer-join-review" ||
+    exampleId === "variable-chamfer" ||
+    exampleId === "delete-face" ||
+    exampleId === "replace-face" ||
+    exampleId === "move-face" ||
+    exampleId === "draft"
+  ) {
+    return "modify";
+  }
+
+  return "create";
 }
 
 function toExamplesRelativePath(imagePath) {
@@ -164,6 +238,19 @@ function renderCodeSection(entry) {
     </article>`;
 }
 
+function renderGallerySection(section, cards) {
+  if (!cards.length) return "";
+  return `
+      <section class="gallery-section" id="section-${section.key}">
+        <div class="section-header">
+          <h2 class="section-title">${escapeHtml(section.title)}</h2>
+          <p class="section-copy">${escapeHtml(section.description)}</p>
+        </div>
+        <div class="grid">${cards.join("\n")}
+        </div>
+      </section>`;
+}
+
 try {
   const [dslManifestRaw, sketchManifestRaw] = await Promise.all([
     fs.readFile(dslManifestPath, "utf8"),
@@ -179,8 +266,9 @@ try {
   }
 
   const codeEntries = [];
+  const galleryCardsBySection = new Map(gallerySections.map((section) => [section.key, []]));
 
-  const dslCards = (dslManifest.examples ?? []).map((example) => {
+  (dslManifest.examples ?? []).forEach((example) => {
     const target = dslCodeTargets[example.id];
     if (!target) {
       throw new Error(`Missing DSL code mapping for example id: ${example.id}`);
@@ -198,10 +286,11 @@ try {
       sourceLabel: `docs/reference/dsl/examples/${target.doc}.md -> ${target.heading}`,
       code,
     });
-    return renderCard(example, anchor, classifyDsl(example.id));
+    const sectionKey = classifyExample("dsl", example.id);
+    galleryCardsBySection.get(sectionKey)?.push(renderCard(example, anchor, gallerySections.find((section) => section.key === sectionKey)?.title ?? "DSL"));
   });
 
-  const sketchCards = (sketchManifest.examples ?? []).map((example) => {
+  (sketchManifest.examples ?? []).forEach((example) => {
     const target = sketchCodeTargets[example.id];
     if (!target) {
       throw new Error(`Missing sketch code mapping for example id: ${example.id}`);
@@ -219,7 +308,8 @@ try {
       sourceLabel: `docs/reference/dsl/examples/${target.doc}.md -> ${target.heading}`,
       code,
     });
-    return renderCard(example, anchor, "Sketch");
+    const sectionKey = classifyExample("sketch", example.id);
+    galleryCardsBySection.get(sectionKey)?.push(renderCard(example, anchor, gallerySections.find((section) => section.key === sectionKey)?.title ?? "Sketch"));
   });
 
   const html = `<!doctype html>
@@ -248,6 +338,14 @@ try {
       h1 { margin: 0 0 10px; font-size: 28px; }
       p.lead { margin: 0 0 24px; color: var(--muted); }
       .section-title { margin: 26px 0 12px; font-size: 20px; }
+      .gallery-section + .gallery-section { margin-top: 26px; }
+      .section-header { margin-bottom: 12px; }
+      .section-copy {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+      }
       .grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -382,15 +480,9 @@ try {
   <body>
     <main id="top">
       <h1>TrueForm Example Gallery</h1>
-      <p class="lead">Click an image for a larger preview, or click a feature title to jump to its matching code snippet.</p>
+      <p class="lead">Examples are grouped by workflow. Click an image for a larger preview, or click a title to jump to the matching code snippet.</p>
 
-      <h2 class="section-title">DSL Examples</h2>
-      <section class="grid">${dslCards.join("\n")}
-      </section>
-
-      <h2 class="section-title">Sketch Examples</h2>
-      <section class="grid">${sketchCards.join("\n")}
-      </section>
+${gallerySections.map((section) => renderGallerySection(section, galleryCardsBySection.get(section.key) ?? [])).join("\n")}
 
       <h2 class="section-title">Example Code</h2>
       <section class="code-list">${codeEntries.map(renderCodeSection).join("\n")}

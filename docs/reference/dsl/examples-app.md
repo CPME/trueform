@@ -6,7 +6,7 @@ import { withBase } from "vitepress";
 const examplesAppHref = withBase("/examples/index.html");
 </script>
 
-Open the standalone examples app directly:
+Open the standalone examples app directly. The gallery groups all DSL examples, including sketch workflows, by modeling task instead of splitting sketch into a separate top-level app section:
 
 <a :href="examplesAppHref" target="_blank" rel="noreferrer">Open Examples App</a>
 
