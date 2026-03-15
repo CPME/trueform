@@ -48,17 +48,28 @@ export type BooleanSemanticEdgeDescriptor = {
 
 export type AdjacentFaceSemanticEdgeDescriptor = {
   slot: string;
-  relation: "bound" | "join";
-  faceSlots: [string, string];
-  baseFaceSlots: [string, string];
+  relation: "bound" | "join" | "seam";
+  faceSlots: [string] | [string, string];
+  baseFaceSlots: [string] | [string, string];
   rootSlot: string;
-  targetSlot: string;
+  targetSlot?: string;
 };
 
 export function describeSemanticEdgeFromAdjacentFaces(
   adjacentFaceSlots: unknown
 ): AdjacentFaceSemanticEdgeDescriptor | null {
   const adjacentSlots = normalizeAdjacentFaceSlots(adjacentFaceSlots);
+  if (adjacentSlots.length === 1) {
+    const rootSlot = adjacentSlots[0];
+    if (!rootSlot) return null;
+    return {
+      slot: `${rootSlot}.seam`,
+      relation: "seam",
+      faceSlots: [rootSlot],
+      baseFaceSlots: [semanticBaseSlot(rootSlot)],
+      rootSlot,
+    };
+  }
   if (adjacentSlots.length !== 2) return null;
 
   const [a, b] = adjacentSlots.slice().sort();
@@ -106,15 +117,22 @@ export function describeBooleanSemanticEdge(
   adjacentFaceSlots: unknown
 ): BooleanSemanticEdgeDescriptor | null {
   const descriptor = describeSemanticEdgeFromAdjacentFaces(adjacentFaceSlots);
-  if (!descriptor) return null;
+  if (!descriptor || descriptor.relation === "seam" || descriptor.targetSlot === undefined) {
+    return null;
+  }
+  const [faceSlotA, faceSlotB] = descriptor.faceSlots;
+  const [baseRootSlot, baseTargetSlot] = descriptor.baseFaceSlots;
+  if (faceSlotB === undefined || baseTargetSlot === undefined) {
+    return null;
+  }
   return {
     slot: descriptor.slot,
-    signature: `boolean.edge.v1|${descriptor.relation}|${descriptor.rootSlot}|${descriptor.targetSlot}|${descriptor.baseFaceSlots[0]}|${descriptor.baseFaceSlots[1]}`,
+    signature: `boolean.edge.v1|${descriptor.relation}|${descriptor.rootSlot}|${descriptor.targetSlot}|${baseRootSlot}|${baseTargetSlot}`,
     provenance: {
       version: 1,
       relation: descriptor.relation,
-      faceSlots: descriptor.faceSlots,
-      baseFaceSlots: descriptor.baseFaceSlots,
+      faceSlots: [faceSlotA, faceSlotB],
+      baseFaceSlots: [baseRootSlot, baseTargetSlot],
       rootSlot: descriptor.rootSlot,
       targetSlot: descriptor.targetSlot,
     },

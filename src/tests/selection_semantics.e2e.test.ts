@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   deriveBooleanSemanticEdgeSlot,
   describeBooleanSemanticEdge,
+  describeSemanticEdgeFromAdjacentFaces,
 } from "../selection_semantics.js";
 import { runTests } from "./occt_test_utils.js";
 
@@ -57,6 +58,18 @@ const tests = [
         deriveBooleanSemanticEdgeSlot(["outer", "start"]),
         "outer.bound.start"
       );
+    },
+  },
+  {
+    name: "selection semantics: single semantic adjacent face slot derives seam semantics",
+    fn: async () => {
+      assert.deepEqual(describeSemanticEdgeFromAdjacentFaces(["outer"]), {
+        slot: "outer.seam",
+        relation: "seam",
+        faceSlots: ["outer"],
+        baseFaceSlots: ["outer"],
+        rootSlot: "outer",
+      });
     },
   },
   {

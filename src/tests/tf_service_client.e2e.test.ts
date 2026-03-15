@@ -166,14 +166,14 @@ const tests = [
       const capabilities = {
         semanticTopology: {
           enabled: true,
-          contractVersion: "beta-2026-03-02",
+          contractVersion: "beta-2026-03-14",
         },
       };
 
       assert.equal(isSemanticTopologyEnabled(capabilities), true);
       assert.equal(
         getSemanticTopologyContractVersion(capabilities),
-        "beta-2026-03-02"
+        "beta-2026-03-14"
       );
       assert.equal(isSemanticTopologyEnabled({ semanticTopology: { enabled: false } }), false);
       assert.equal(getSemanticTopologyContractVersion({ semanticTopology: {} }), null);

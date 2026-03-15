@@ -385,6 +385,7 @@ const tests = [
             contractVersion?: string;
             selectionTransport?: {
               canonicalSelectionIdField?: string;
+              canonicalOnly?: string;
               buildResultIndex?: string;
               meshSelections?: string;
               relationship?: string;
@@ -452,10 +453,14 @@ const tests = [
           "Treat error.code as the stable programmatic key; message text is diagnostic only."
         );
         assert.equal(capabilities.semanticTopology?.enabled, true);
-        assert.equal(capabilities.semanticTopology?.contractVersion, "beta-2026-03-02");
+        assert.equal(capabilities.semanticTopology?.contractVersion, "beta-2026-03-14");
         assert.equal(
           capabilities.semanticTopology?.selectionTransport?.canonicalSelectionIdField,
           "selection.id"
+        );
+        assert.equal(
+          capabilities.semanticTopology?.selectionTransport?.canonicalOnly,
+          "Semantic selections expose exactly one canonical id. Legacy alias ids are not emitted or resolved."
         );
         assert.equal(
           capabilities.semanticTopology?.selectionTransport?.relationship,
@@ -463,7 +468,7 @@ const tests = [
         );
         assert.equal(
           capabilities.semanticTopology?.selectionTransport?.clientRule,
-          "Persist emitted selection ids exactly as returned and do not synthesize ids from metadata."
+          "Persist emitted selection ids exactly as returned. Do not synthesize, rewrite, or alias ids from metadata."
         );
         assert.equal(
           capabilities.semanticTopology?.selectorRebinding?.policy,
@@ -478,6 +483,12 @@ const tests = [
         assert.equal(
           capabilities.semanticTopology?.unsupportedWorkflows?.includes(
             "automatic migration of legacy numeric selectors"
+          ),
+          true
+        );
+        assert.equal(
+          capabilities.semanticTopology?.unsupportedWorkflows?.includes(
+            "automatic migration of legacy hash aliases for semantic selections"
           ),
           true
         );
@@ -2006,6 +2017,7 @@ const tests = [
             selection.meta?.["normal"] === "+Z"
         );
         assert.ok(topFace, "missing stable top face selection");
+        assert.equal(topFace?.meta?.["selectionAliases"], undefined);
         const stableFaceId = String(topFace?.id ?? "");
         assert.ok(
           stableFaceId.startsWith("face:body.main~base."),
@@ -2086,6 +2098,95 @@ const tests = [
           `expected runtime feature order to anchor stable face id (order=${featureOrder.join(",")})`
         );
         assert.equal(editedJob.result?.outputs?.["profile:cut"]?.kind, "profile");
+      } finally {
+        await runtime.stop();
+      }
+    },
+  },
+  {
+    name: "runtime service: canonical semantic edge ids round-trip without alias rewriting",
+    fn: async () => {
+      const runtime = await startRuntimeServer();
+      try {
+        const seedPart = dsl.part("runtime-stable-edge-seed", [
+          dsl.extrude("base", dsl.profileRect(20, 20), 10, "body:main"),
+        ]);
+        const seedSubmit = await fetchJsonWithStatus<{ id: string; jobId: string; state: string }>(
+          `${runtime.baseUrl}/v1/build`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              part: seedPart,
+              options: { meshProfile: "interactive" },
+            }),
+          }
+        );
+        const seedJob = await pollJob(runtime.baseUrl, seedSubmit.jobId);
+        assert.equal(seedJob.state, "succeeded");
+        const seedMeshAssetUrl = String(seedJob.result?.mesh?.asset?.url ?? "");
+        assert.ok(seedMeshAssetUrl.length > 0, "missing seed mesh asset url");
+        const seedMesh = await fetchJson<{
+          selections?: Array<{ id?: string; kind?: string; meta?: Record<string, unknown> }>;
+        }>(`${runtime.baseUrl}${seedMeshAssetUrl}`);
+        const stableEdge = findMeshSelection(
+          seedMesh,
+          (selection) =>
+            selection.kind === "edge" &&
+            selection.meta?.["createdBy"] === "base" &&
+            selection.meta?.["selectionSlot"] === "side.1.bound.top"
+        );
+        assert.ok(stableEdge, "missing canonical semantic edge selection");
+        assert.equal(stableEdge?.meta?.["selectionAliases"], undefined);
+        const stableEdgeId = String(stableEdge?.id ?? "");
+        assert.equal(stableEdgeId, "edge:body.main~base.side.1.bound.top");
+
+        const editedPart = dsl.part("runtime-stable-edge-edited", [
+          dsl.fillet("edge-fillet", dsl.selectorNamed(stableEdgeId), 1),
+          dsl.extrude("base", dsl.profileRect(28, 16), 24, "body:main"),
+        ]);
+        const editedSubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(`${runtime.baseUrl}/v1/build`, 202, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            part: editedPart,
+            options: { meshProfile: "interactive" },
+          }),
+        });
+        const editedJob = await pollJob(runtime.baseUrl, editedSubmit.jobId);
+        assert.equal(editedJob.state, "succeeded");
+        const featureOrder = Array.isArray(editedJob.result?.featureOrder)
+          ? editedJob.result.featureOrder.map((entry: unknown) => String(entry))
+          : [];
+        assert.ok(
+          featureOrder.indexOf("base") < featureOrder.indexOf("edge-fillet"),
+          `expected runtime feature order to anchor canonical edge id (order=${featureOrder.join(",")})`
+        );
+
+        const missingAliasPart = dsl.part("runtime-stable-edge-alias-missing", [
+          dsl.fillet("edge-fillet", dsl.selectorNamed("edge:body.main~base.hdeadbeef"), 1),
+          dsl.extrude("base", dsl.profileRect(28, 16), 24, "body:main"),
+        ]);
+        const missingAliasSubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(`${runtime.baseUrl}/v1/build`, 202, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            part: missingAliasPart,
+            options: { meshProfile: "interactive" },
+          }),
+        });
+        const missingAliasJob = await pollJob(runtime.baseUrl, missingAliasSubmit.jobId);
+        assert.equal(missingAliasJob.state, "failed");
+        assert.equal(missingAliasJob.error?.code, "selector_named_missing");
       } finally {
         await runtime.stop();
       }

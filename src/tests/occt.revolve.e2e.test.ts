@@ -106,7 +106,9 @@ const tests = [
         "edge:body.main~sketch-revolve.profile.line-1.join.profile.line-2",
         "edge:body.main~sketch-revolve.profile.line-1.join.profile.line-4",
         "edge:body.main~sketch-revolve.profile.line-2.join.profile.line-3",
+        "edge:body.main~sketch-revolve.profile.line-2.seam",
         "edge:body.main~sketch-revolve.profile.line-3.join.profile.line-4",
+        "edge:body.main~sketch-revolve.profile.line-4.seam",
       ]);
       const cornerEdge = result.final.selections.find(
         (selection) =>

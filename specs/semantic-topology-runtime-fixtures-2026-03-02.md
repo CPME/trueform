@@ -1,7 +1,7 @@
 # Semantic Topology Runtime Fixtures
 
 These are the canonical runtime fixtures for validating the
-`beta-2026-03-02` semantic-topology contract through the actual `/v1/build`
+`beta-2026-03-14` semantic-topology contract through the actual `/v1/build`
 boundary.
 
 ## Fixture A: Boolean Union Face And Edge Parity

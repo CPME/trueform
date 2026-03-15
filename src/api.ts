@@ -84,7 +84,7 @@ export const TF_RUNTIME_ERROR_CONTRACT = {
 
 export const TF_RUNTIME_SEMANTIC_TOPOLOGY = {
   enabled: true,
-  contractVersion: "beta-2026-03-02",
+  contractVersion: "beta-2026-03-14",
   selectionTransport: {
     canonicalSelectionIdField: "selection.id",
     buildResultIndex:
@@ -95,7 +95,10 @@ export const TF_RUNTIME_SEMANTIC_TOPOLOGY = {
       "mesh selections are a scoped subset of build-result canonical ids when the same topology is present in both payloads.",
     edgeMeshMapping:
       "mesh.edgeIndices are raw backend edge-occurrence indices; mesh.edgeSelectionIndices map rendered edge segments to indexes in mesh.selections.",
-    clientRule: "Persist emitted selection ids exactly as returned and do not synthesize ids from metadata.",
+    canonicalOnly:
+      "Semantic selections expose exactly one canonical id. Legacy alias ids are not emitted or resolved.",
+    clientRule:
+      "Persist emitted selection ids exactly as returned. Do not synthesize, rewrite, or alias ids from metadata.",
   },
   selectorRebinding: {
     policy: "deterministic_and_conservative",
@@ -106,8 +109,9 @@ export const TF_RUNTIME_SEMANTIC_TOPOLOGY = {
     ],
   },
   supportedWorkflows: [
-    "direct-pick semantic face ids for primary prismatic output faces",
-    "direct-pick semantic edge ids for primary prismatic output edges",
+    "direct-pick semantic face and edge ids for primary prismatic output topology",
+    "direct-pick semantic face and edge ids for revolve creator outputs with history-backed slots",
+    "direct-pick semantic face and edge ids for pipe and pipe sweep creator outputs",
     "split face slot families",
     "fillet/chamfer semantic edge families",
     "boolean subtract semantic cut faces and cut-derived edges",
@@ -117,6 +121,8 @@ export const TF_RUNTIME_SEMANTIC_TOPOLOGY = {
   unsupportedWorkflows: [
     "broad heuristic selector repair beyond documented migrations",
     "automatic migration of legacy numeric selectors",
+    "automatic migration of legacy hash aliases for semantic selections",
+    "generic sweep/loft creator outputs without strong semantic face slots",
     "general-purpose vertex or free-point direct-pick ids",
   ],
 } as const;

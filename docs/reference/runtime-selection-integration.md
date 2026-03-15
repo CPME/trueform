@@ -9,6 +9,8 @@ This is the canonical consumer workflow for semantic topology.
 
 - Gate direct-pick persistence on `/v1/capabilities.semanticTopology`.
 - Persist emitted `selection.id` values exactly as returned.
+- Treat semantic selections as canonical-only. TrueForm does not emit legacy
+  alias ids for them.
 - Treat the id as an opaque token even when it looks readable.
 - Use mesh data for hit testing and highlighting only.
 - Map picks back to semantic ids immediately.
@@ -57,7 +59,7 @@ if (!isSemanticTopologyEnabled(capabilities)) {
 }
 
 const contractVersion = getSemanticTopologyContractVersion(capabilities);
-if (contractVersion !== "beta-2026-03-02") {
+if (contractVersion !== "beta-2026-03-14") {
   throw new Error(`unsupported_semantic_topology_contract:${String(contractVersion)}`);
 }
 ```
@@ -138,6 +140,10 @@ const holeFeature = hole(
 Do not derive a new token from `selectionSlot`, `selectionLineage`,
 `adjacentFaceSlots`, `selectionSignature`, or `selectionProvenance`.
 
+Some unsupported or partially covered creator families may still return
+hash-shaped canonical ids. Those ids are still canonical and must also be
+persisted exactly as returned.
+
 ## Error Handling
 
 Selector failures are a normal part of the contract when a stored semantic id
@@ -168,6 +174,8 @@ Recommended UI behavior:
 - Do not persist mesh-local handles, triangle ids, or edge traversal order.
 - Do not parse readable semantic fragments out of `selection.id` and rebuild the
   token yourself.
+- Do not expect `selection.meta.selectionAliases`; semantic selections no longer
+  carry legacy alias ids.
 - Do not promote `selection.meta` into a second reference format.
 - Do not assume all topology-changing workflows are covered outside the
   documented semantic-topology beta scope.

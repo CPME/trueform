@@ -1,4 +1,8 @@
 import type { KernelSelection, KernelSelectionRecord } from "../backend.js";
+import {
+  assertSelectionContractInvariants,
+  warnSelectionContractCoverageGaps,
+} from "../selection_contract.js";
 import type { CollectedSubshape, SelectionCollectionOptions } from "./operation_contexts.js";
 import { describeSemanticEdgeFromAdjacentFaces } from "../selection_semantics.js";
 
@@ -161,6 +165,10 @@ export function collectSelections(params: {
       record: assignment.record,
     });
   }
+
+  const contractContext = { featureId, ownerKey };
+  assertSelectionContractInvariants(selections, contractContext);
+  warnSelectionContractCoverageGaps(selections, contractContext);
 
   return selections;
 }

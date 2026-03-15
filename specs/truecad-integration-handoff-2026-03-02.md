@@ -32,6 +32,8 @@ selection/persistence contract for supported workflows.
 - `GET /v1/capabilities.errorContract` is the stable programmatic error-code
   surface for client UX and recovery behavior.
 - TrueCAD must persist them exactly as returned.
+- Semantic selections are canonical-only. TrueForm does not emit legacy alias
+  ids for them.
 - TrueCAD must not reconstruct ids from `selectionSlot`, `adjacentFaceSlots`,
   `role`, or other metadata.
 - `selectionSlot`, `selectionLineage`, and adjacency metadata are display and
@@ -47,6 +49,8 @@ selection/persistence contract for supported workflows.
 
 - Wherever the web app stores selected topology, persist the emitted
   `selectionId` exactly as returned by TrueForm.
+- Do not expect or store `selectionAliases`; semantic selections no longer
+  expose them.
 - Remove any client logic that derives references from face order, edge order,
   mesh triangle identity, or ad hoc naming.
 - Treat the full string token as canonical, even when it contains readable
@@ -159,7 +163,7 @@ TrueCAD should target the currently documented TrueForm contract in:
 At runtime, gate the beta flow on:
 
 - `GET /v1/capabilities.semanticTopology.enabled === true`
-- `GET /v1/capabilities.semanticTopology.contractVersion === "beta-2026-03-02"`
+- `GET /v1/capabilities.semanticTopology.contractVersion === "beta-2026-03-14"`
 
 Relevant examples already supported by TrueForm include:
 

@@ -110,13 +110,14 @@ Response:
   },
   "semanticTopology": {
     "enabled": true,
-    "contractVersion": "beta-2026-03-02",
+    "contractVersion": "beta-2026-03-14",
     "selectionTransport": {
       "canonicalSelectionIdField": "selection.id",
       "buildResultIndex": "result.selections lists canonical ids by kind across the full final selection set.",
       "meshSelections": "result.mesh.asset.selections reuses canonical ids for the requested output scope only.",
       "relationship": "mesh selections are a scoped subset of build-result canonical ids when the same topology is present in both payloads.",
-      "clientRule": "Persist emitted selection ids exactly as returned and do not synthesize ids from metadata."
+      "canonicalOnly": "Semantic selections expose exactly one canonical id. Legacy alias ids are not emitted or resolved.",
+      "clientRule": "Persist emitted selection ids exactly as returned. Do not synthesize, rewrite, or alias ids from metadata."
     },
     "selectorRebinding": {
       "policy": "deterministic_and_conservative",
@@ -128,8 +129,9 @@ Response:
       ]
     },
     "supportedWorkflows": [
-      "direct-pick semantic face ids for primary prismatic output faces",
-      "direct-pick semantic edge ids for primary prismatic output edges",
+      "direct-pick semantic face and edge ids for primary prismatic output topology",
+      "direct-pick semantic face and edge ids for revolve creator outputs with history-backed slots",
+      "direct-pick semantic face and edge ids for pipe and pipe sweep creator outputs",
       "split face slot families",
       "fillet/chamfer semantic edge families",
       "boolean subtract semantic cut faces and cut-derived edges",
@@ -139,6 +141,8 @@ Response:
     "unsupportedWorkflows": [
       "broad heuristic selector repair beyond documented migrations",
       "automatic migration of legacy numeric selectors",
+      "automatic migration of legacy hash aliases for semantic selections",
+      "generic sweep/loft creator outputs without strong semantic face slots",
       "general-purpose vertex or free-point direct-pick ids"
     ]
   }
@@ -165,10 +169,15 @@ Client rules:
 - Treat `semanticTopology.enabled` and `semanticTopology.contractVersion` as the
   gating signal for direct-pick semantic-id flows.
 - Persist the full emitted `selection.id` token exactly as returned.
+- Semantic selections are canonical-only; legacy alias ids are not emitted or
+  resolved.
 - Use `selection.meta` fields such as `selectionSlot`, `selectionLineage`,
   `adjacentFaceSlots`, `selectionSignature`, or `selectionProvenance` for
   display, diagnostics, or runtime-assisted repair only.
-- Do not synthesize new ids from metadata.
+- Do not synthesize, rewrite, or alias ids from metadata.
+- Some creator families outside the documented support matrix may still emit
+  hash-shaped canonical ids. Those ids remain canonical and must also be
+  persisted exactly as returned.
 
 Selection transport rules:
 - `result.selections` is the canonical build-result index of ids by kind across
