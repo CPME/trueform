@@ -135,13 +135,23 @@ function renderCard(example, codeAnchor, category) {
   const title = escapeHtml(example.title);
   const image = escapeHtml(toExamplesRelativePath(example.image));
   return `
-    <a class="card" href="#${codeAnchor}">
-      <img src="${image}" alt="${title}" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="${image}"
+        data-preview-title="${title}"
+        aria-label="Open larger preview for ${title}"
+      >
+        <img src="${image}" alt="${title}" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">${title}</div>
-        <div class="card-meta">${escapeHtml(category)}</div>
+        <a class="card-title-link" href="#${codeAnchor}" data-code-target="${codeAnchor}">
+          <div class="card-title">${title}</div>
+          <div class="card-meta">${escapeHtml(category)}</div>
+        </a>
       </div>
-    </a>`;
+    </article>`;
 }
 
 function renderCodeSection(entry) {
@@ -244,9 +254,6 @@ try {
         gap: 14px;
       }
       .card {
-        display: block;
-        text-decoration: none;
-        color: inherit;
         border: 1px solid var(--border);
         border-radius: 12px;
         overflow: hidden;
@@ -254,8 +261,27 @@ try {
         transition: transform .12s ease, border-color .12s ease;
       }
       .card:hover { transform: translateY(-2px); border-color: var(--accent); }
-      .card img { display: block; width: 100%; aspect-ratio: 4/3; object-fit: cover; background: #0a111c; }
+      .card-image-button {
+        display: block;
+        width: 100%;
+        padding: 0;
+        border: 0;
+        cursor: zoom-in;
+        background: #0a111c;
+      }
+      .card-image-button img {
+        display: block;
+        width: 100%;
+        aspect-ratio: 4/3;
+        object-fit: cover;
+        background: #0a111c;
+      }
       .card-body { padding: 10px 12px; }
+      .card-title-link {
+        display: block;
+        color: inherit;
+        text-decoration: none;
+      }
       .card-title { font-size: 14px; font-weight: 600; line-height: 1.35; }
       .card-meta { margin-top: 4px; font-size: 12px; color: var(--muted); }
       .code-list { margin-top: 36px; display: grid; gap: 16px; }
@@ -264,6 +290,13 @@ try {
         border-radius: 12px;
         background: #0d1727;
         padding: 14px;
+        scroll-margin-top: 24px;
+        transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+      }
+      .code-entry.is-active {
+        border-color: rgba(78, 201, 176, 0.88);
+        box-shadow: 0 0 0 1px rgba(78, 201, 176, 0.3);
+        transform: translateY(-1px);
       }
       .code-entry h3 { margin: 0 0 6px; font-size: 17px; }
       .code-meta { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
@@ -282,16 +315,74 @@ try {
         text-decoration: none;
         font-size: 13px;
       }
+      .lightbox[hidden] { display: none; }
+      .lightbox {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgba(4, 9, 16, 0.78);
+        backdrop-filter: blur(6px);
+      }
+      .lightbox-panel {
+        width: min(1100px, 100%);
+        max-height: calc(100vh - 40px);
+        border: 1px solid rgba(159, 176, 200, 0.2);
+        border-radius: 18px;
+        overflow: hidden;
+        background: rgba(8, 13, 23, 0.96);
+        box-shadow: 0 28px 70px rgba(0, 0, 0, 0.45);
+      }
+      .lightbox-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(159, 176, 200, 0.14);
+      }
+      .lightbox-title { margin: 0; font-size: 15px; }
+      .lightbox-close {
+        padding: 8px 12px;
+        border: 1px solid rgba(159, 176, 200, 0.24);
+        border-radius: 999px;
+        color: var(--text);
+        background: transparent;
+        cursor: pointer;
+      }
+      .lightbox-body {
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        overflow: auto;
+        max-height: calc(100vh - 120px);
+        background:
+          radial-gradient(circle at top, rgba(78, 201, 176, 0.08), transparent 42%),
+          linear-gradient(180deg, rgba(16, 26, 40, 0.95), rgba(7, 13, 23, 0.98));
+      }
+      .lightbox-body img {
+        display: block;
+        max-width: 100%;
+        max-height: calc(100vh - 180px);
+        width: auto;
+        height: auto;
+        object-fit: contain;
+      }
       @media (max-width: 720px) {
         main { padding: 20px 12px 42px; }
         h1 { font-size: 24px; }
+        .lightbox { padding: 12px; }
+        .lightbox-header { padding: 12px 14px; }
+        .lightbox-body { padding: 12px; }
       }
     </style>
   </head>
   <body>
     <main id="top">
       <h1>TrueForm Example Gallery</h1>
-      <p class="lead">All rendered examples in one page. Click any tile to jump to the matching code snippet.</p>
+      <p class="lead">Click an image for a larger preview, or click a feature title to jump to its matching code snippet.</p>
 
       <h2 class="section-title">DSL Examples</h2>
       <section class="grid">${dslCards.join("\n")}
@@ -305,6 +396,84 @@ try {
       <section class="code-list">${codeEntries.map(renderCodeSection).join("\n")}
       </section>
     </main>
+    <div class="lightbox" id="image-preview-modal" hidden>
+      <div class="lightbox-panel" role="dialog" aria-modal="true" aria-labelledby="image-preview-title">
+        <div class="lightbox-header">
+          <h2 class="lightbox-title" id="image-preview-title">Example Preview</h2>
+          <button class="lightbox-close" id="image-preview-close" type="button" aria-label="Close image preview">
+            Close
+          </button>
+        </div>
+        <div class="lightbox-body">
+          <img id="image-preview-image" alt="" />
+        </div>
+      </div>
+    </div>
+    <script>
+      (() => {
+        const modal = document.getElementById("image-preview-modal");
+        const previewImage = document.getElementById("image-preview-image");
+        const previewTitle = document.getElementById("image-preview-title");
+        const closeButton = document.getElementById("image-preview-close");
+        const codeEntries = Array.from(document.querySelectorAll(".code-entry"));
+
+        function clearActiveCode() {
+          for (const entry of codeEntries) entry.classList.remove("is-active");
+        }
+
+        function activateCode(targetId) {
+          const entry = document.getElementById(targetId);
+          if (!entry) return;
+          clearActiveCode();
+          entry.classList.add("is-active");
+          entry.scrollIntoView({ behavior: "smooth", block: "start" });
+          history.replaceState(null, "", "#" + targetId);
+        }
+
+        function closeModal() {
+          if (!modal || !previewImage || !previewTitle) return;
+          modal.hidden = true;
+          previewImage.removeAttribute("src");
+          previewImage.alt = "";
+          previewTitle.textContent = "Example Preview";
+        }
+
+        document.querySelectorAll("[data-code-target]").forEach((link) => {
+          link.addEventListener("click", (event) => {
+            const targetId = link.getAttribute("data-code-target");
+            if (!targetId) return;
+            event.preventDefault();
+            activateCode(targetId);
+          });
+        });
+
+        document.querySelectorAll("[data-preview-src]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const src = button.getAttribute("data-preview-src");
+            const title = button.getAttribute("data-preview-title") || "Example Preview";
+            if (!modal || !previewImage || !previewTitle || !src) return;
+            previewImage.src = src;
+            previewImage.alt = title;
+            previewTitle.textContent = title;
+            modal.hidden = false;
+          });
+        });
+
+        closeButton?.addEventListener("click", closeModal);
+        modal?.addEventListener("click", (event) => {
+          if (event.target === modal) closeModal();
+        });
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape" && modal && !modal.hidden) {
+            closeModal();
+          }
+        });
+
+        if (window.location.hash.startsWith("#code-")) {
+          activateCode(window.location.hash.slice(1));
+        }
+      })();
+    </script>
   </body>
 </html>`;
 

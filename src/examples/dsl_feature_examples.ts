@@ -1119,14 +1119,14 @@ export const dslFeatureExamples: DslFeatureExample[] = [
           color: [66, 133, 244],
           alpha: 0.2,
           wireframe: false,
-          depthTest: true,
+          depthTest: false,
         },
         {
           output: "body:b",
           color: [251, 188, 5],
           alpha: 0.2,
           wireframe: false,
-          depthTest: true,
+          depthTest: false,
         },
         {
           output: "body:main",

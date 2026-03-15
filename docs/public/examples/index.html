@@ -30,9 +30,6 @@
         gap: 14px;
       }
       .card {
-        display: block;
-        text-decoration: none;
-        color: inherit;
         border: 1px solid var(--border);
         border-radius: 12px;
         overflow: hidden;
@@ -40,8 +37,27 @@
         transition: transform .12s ease, border-color .12s ease;
       }
       .card:hover { transform: translateY(-2px); border-color: var(--accent); }
-      .card img { display: block; width: 100%; aspect-ratio: 4/3; object-fit: cover; background: #0a111c; }
+      .card-image-button {
+        display: block;
+        width: 100%;
+        padding: 0;
+        border: 0;
+        cursor: zoom-in;
+        background: #0a111c;
+      }
+      .card-image-button img {
+        display: block;
+        width: 100%;
+        aspect-ratio: 4/3;
+        object-fit: cover;
+        background: #0a111c;
+      }
       .card-body { padding: 10px 12px; }
+      .card-title-link {
+        display: block;
+        color: inherit;
+        text-decoration: none;
+      }
       .card-title { font-size: 14px; font-weight: 600; line-height: 1.35; }
       .card-meta { margin-top: 4px; font-size: 12px; color: var(--muted); }
       .code-list { margin-top: 36px; display: grid; gap: 16px; }
@@ -50,6 +66,13 @@
         border-radius: 12px;
         background: #0d1727;
         padding: 14px;
+        scroll-margin-top: 24px;
+        transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+      }
+      .code-entry.is-active {
+        border-color: rgba(78, 201, 176, 0.88);
+        box-shadow: 0 0 0 1px rgba(78, 201, 176, 0.3);
+        transform: translateY(-1px);
       }
       .code-entry h3 { margin: 0 0 6px; font-size: 17px; }
       .code-meta { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
@@ -68,453 +91,1051 @@
         text-decoration: none;
         font-size: 13px;
       }
+      .lightbox[hidden] { display: none; }
+      .lightbox {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgba(4, 9, 16, 0.78);
+        backdrop-filter: blur(6px);
+      }
+      .lightbox-panel {
+        width: min(1100px, 100%);
+        max-height: calc(100vh - 40px);
+        border: 1px solid rgba(159, 176, 200, 0.2);
+        border-radius: 18px;
+        overflow: hidden;
+        background: rgba(8, 13, 23, 0.96);
+        box-shadow: 0 28px 70px rgba(0, 0, 0, 0.45);
+      }
+      .lightbox-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(159, 176, 200, 0.14);
+      }
+      .lightbox-title { margin: 0; font-size: 15px; }
+      .lightbox-close {
+        padding: 8px 12px;
+        border: 1px solid rgba(159, 176, 200, 0.24);
+        border-radius: 999px;
+        color: var(--text);
+        background: transparent;
+        cursor: pointer;
+      }
+      .lightbox-body {
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        overflow: auto;
+        max-height: calc(100vh - 120px);
+        background:
+          radial-gradient(circle at top, rgba(78, 201, 176, 0.08), transparent 42%),
+          linear-gradient(180deg, rgba(16, 26, 40, 0.95), rgba(7, 13, 23, 0.98));
+      }
+      .lightbox-body img {
+        display: block;
+        max-width: 100%;
+        max-height: calc(100vh - 180px);
+        width: auto;
+        height: auto;
+        object-fit: contain;
+      }
       @media (max-width: 720px) {
         main { padding: 20px 12px 42px; }
         h1 { font-size: 24px; }
+        .lightbox { padding: 12px; }
+        .lightbox-header { padding: 12px 14px; }
+        .lightbox-body { padding: 12px; }
       }
     </style>
   </head>
   <body>
     <main id="top">
       <h1>TrueForm Example Gallery</h1>
-      <p class="lead">All rendered examples in one page. Click any tile to jump to the matching code snippet.</p>
+      <p class="lead">Click an image for a larger preview, or click a feature title to jump to its matching code snippet.</p>
 
       <h2 class="section-title">DSL Examples</h2>
       <section class="grid">
-    <a class="card" href="#code-dsl-extrude">
-      <img src="./dsl/extrude.iso.png" alt="Extrude" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/extrude.iso.png"
+        data-preview-title="Extrude"
+        aria-label="Open larger preview for Extrude"
+      >
+        <img src="./dsl/extrude.iso.png" alt="Extrude" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Extrude</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-extrude" data-code-target="code-dsl-extrude">
+          <div class="card-title">Extrude</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-selection-ledger-extrude-review">
-      <img src="./dsl/selection-ledger-extrude-review.iso.png" alt="Selection Ledger Extrude Review" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/selection-ledger-extrude-review.iso.png"
+        data-preview-title="Selection Ledger Extrude Review"
+        aria-label="Open larger preview for Selection Ledger Extrude Review"
+      >
+        <img src="./dsl/selection-ledger-extrude-review.iso.png" alt="Selection Ledger Extrude Review" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Selection Ledger Extrude Review</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-selection-ledger-extrude-review" data-code-target="code-dsl-selection-ledger-extrude-review">
+          <div class="card-title">Selection Ledger Extrude Review</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-surface">
-      <img src="./dsl/surface.iso.png" alt="Surface" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/surface.iso.png"
+        data-preview-title="Surface"
+        aria-label="Open larger preview for Surface"
+      >
+        <img src="./dsl/surface.iso.png" alt="Surface" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Surface</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-surface" data-code-target="code-dsl-surface">
+          <div class="card-title">Surface</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-extrude-surface">
-      <img src="./dsl/extrude-surface.iso.png" alt="Extrude (Surface)" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/extrude-surface.iso.png"
+        data-preview-title="Extrude (Surface)"
+        aria-label="Open larger preview for Extrude (Surface)"
+      >
+        <img src="./dsl/extrude-surface.iso.png" alt="Extrude (Surface)" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Extrude (Surface)</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-extrude-surface" data-code-target="code-dsl-extrude-surface">
+          <div class="card-title">Extrude (Surface)</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-curve-intersect">
-      <img src="./dsl/curve-intersect.iso.png" alt="Curve Intersect (Staging)" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/curve-intersect.iso.png"
+        data-preview-title="Curve Intersect (Staging)"
+        aria-label="Open larger preview for Curve Intersect (Staging)"
+      >
+        <img src="./dsl/curve-intersect.iso.png" alt="Curve Intersect (Staging)" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Curve Intersect (Staging)</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-curve-intersect" data-code-target="code-dsl-curve-intersect">
+          <div class="card-title">Curve Intersect (Staging)</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-revolve">
-      <img src="./dsl/revolve.iso.png" alt="Revolve" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/revolve.iso.png"
+        data-preview-title="Revolve"
+        aria-label="Open larger preview for Revolve"
+      >
+        <img src="./dsl/revolve.iso.png" alt="Revolve" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Revolve</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-revolve" data-code-target="code-dsl-revolve">
+          <div class="card-title">Revolve</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-selection-ledger-revolve-review">
-      <img src="./dsl/selection-ledger-revolve-review.iso.png" alt="Selection Ledger Revolve Review" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/selection-ledger-revolve-review.iso.png"
+        data-preview-title="Selection Ledger Revolve Review"
+        aria-label="Open larger preview for Selection Ledger Revolve Review"
+      >
+        <img src="./dsl/selection-ledger-revolve-review.iso.png" alt="Selection Ledger Revolve Review" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Selection Ledger Revolve Review</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-selection-ledger-revolve-review" data-code-target="code-dsl-selection-ledger-revolve-review">
+          <div class="card-title">Selection Ledger Revolve Review</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-loft">
-      <img src="./dsl/loft.iso.png" alt="Loft" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/loft.iso.png"
+        data-preview-title="Loft"
+        aria-label="Open larger preview for Loft"
+      >
+        <img src="./dsl/loft.iso.png" alt="Loft" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Loft</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-loft" data-code-target="code-dsl-loft">
+          <div class="card-title">Loft</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-sweep">
-      <img src="./dsl/sweep.iso.png" alt="Sweep (Surface)" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/sweep.iso.png"
+        data-preview-title="Sweep (Surface)"
+        aria-label="Open larger preview for Sweep (Surface)"
+      >
+        <img src="./dsl/sweep.iso.png" alt="Sweep (Surface)" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Sweep (Surface)</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-sweep" data-code-target="code-dsl-sweep">
+          <div class="card-title">Sweep (Surface)</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-pipe">
-      <img src="./dsl/pipe.iso.png" alt="Pipe" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/pipe.iso.png"
+        data-preview-title="Pipe"
+        aria-label="Open larger preview for Pipe"
+      >
+        <img src="./dsl/pipe.iso.png" alt="Pipe" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Pipe</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-pipe" data-code-target="code-dsl-pipe">
+          <div class="card-title">Pipe</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-rib-web">
-      <img src="./dsl/rib-web.iso.png" alt="Rib/Web (Staging)" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/rib-web.iso.png"
+        data-preview-title="Rib/Web (Staging)"
+        aria-label="Open larger preview for Rib/Web (Staging)"
+      >
+        <img src="./dsl/rib-web.iso.png" alt="Rib/Web (Staging)" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Rib/Web (Staging)</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-rib-web" data-code-target="code-dsl-rib-web">
+          <div class="card-title">Rib/Web (Staging)</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-sweep-sketch">
-      <img src="./dsl/sweep-sketch.iso.png" alt="Sweep (Arbitrary Sketch)" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/sweep-sketch.iso.png"
+        data-preview-title="Sweep (Arbitrary Sketch)"
+        aria-label="Open larger preview for Sweep (Arbitrary Sketch)"
+      >
+        <img src="./dsl/sweep-sketch.iso.png" alt="Sweep (Arbitrary Sketch)" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Sweep (Arbitrary Sketch)</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-sweep-sketch" data-code-target="code-dsl-sweep-sketch">
+          <div class="card-title">Sweep (Arbitrary Sketch)</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-hole">
-      <img src="./dsl/hole.iso.png" alt="Hole" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/hole.iso.png"
+        data-preview-title="Hole"
+        aria-label="Open larger preview for Hole"
+      >
+        <img src="./dsl/hole.iso.png" alt="Hole" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Hole</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-hole" data-code-target="code-dsl-hole">
+          <div class="card-title">Hole</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-hole-advanced">
-      <img src="./dsl/hole-advanced.iso.png" alt="Hole (Counterbore + Countersink)" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/hole-advanced.iso.png"
+        data-preview-title="Hole (Counterbore + Countersink)"
+        aria-label="Open larger preview for Hole (Counterbore + Countersink)"
+      >
+        <img src="./dsl/hole-advanced.iso.png" alt="Hole (Counterbore + Countersink)" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Hole (Counterbore + Countersink)</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-hole-advanced" data-code-target="code-dsl-hole-advanced">
+          <div class="card-title">Hole (Counterbore + Countersink)</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-fillet">
-      <img src="./dsl/fillet.iso.png" alt="Fillet" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/fillet.iso.png"
+        data-preview-title="Fillet"
+        aria-label="Open larger preview for Fillet"
+      >
+        <img src="./dsl/fillet.iso.png" alt="Fillet" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Fillet</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-fillet" data-code-target="code-dsl-fillet">
+          <div class="card-title">Fillet</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-selection-ledger-fillet-edge-review">
-      <img src="./dsl/selection-ledger-fillet-edge-review.iso.png" alt="Selection Ledger Fillet Edge Review" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/selection-ledger-fillet-edge-review.iso.png"
+        data-preview-title="Selection Ledger Fillet Edge Review"
+        aria-label="Open larger preview for Selection Ledger Fillet Edge Review"
+      >
+        <img src="./dsl/selection-ledger-fillet-edge-review.iso.png" alt="Selection Ledger Fillet Edge Review" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Selection Ledger Fillet Edge Review</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-selection-ledger-fillet-edge-review" data-code-target="code-dsl-selection-ledger-fillet-edge-review">
+          <div class="card-title">Selection Ledger Fillet Edge Review</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-selection-ledger-fillet-seam-review">
-      <img src="./dsl/selection-ledger-fillet-seam-review.iso.png" alt="Selection Ledger Fillet Seam Review" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/selection-ledger-fillet-seam-review.iso.png"
+        data-preview-title="Selection Ledger Fillet Seam Review"
+        aria-label="Open larger preview for Selection Ledger Fillet Seam Review"
+      >
+        <img src="./dsl/selection-ledger-fillet-seam-review.iso.png" alt="Selection Ledger Fillet Seam Review" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Selection Ledger Fillet Seam Review</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-selection-ledger-fillet-seam-review" data-code-target="code-dsl-selection-ledger-fillet-seam-review">
+          <div class="card-title">Selection Ledger Fillet Seam Review</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-variable-fillet">
-      <img src="./dsl/variable-fillet.iso.png" alt="Variable Fillet" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/variable-fillet.iso.png"
+        data-preview-title="Variable Fillet"
+        aria-label="Open larger preview for Variable Fillet"
+      >
+        <img src="./dsl/variable-fillet.iso.png" alt="Variable Fillet" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Variable Fillet</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-variable-fillet" data-code-target="code-dsl-variable-fillet">
+          <div class="card-title">Variable Fillet</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-chamfer">
-      <img src="./dsl/chamfer.iso.png" alt="Chamfer" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/chamfer.iso.png"
+        data-preview-title="Chamfer"
+        aria-label="Open larger preview for Chamfer"
+      >
+        <img src="./dsl/chamfer.iso.png" alt="Chamfer" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Chamfer</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-chamfer" data-code-target="code-dsl-chamfer">
+          <div class="card-title">Chamfer</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-selection-ledger-chamfer-edge-review">
-      <img src="./dsl/selection-ledger-chamfer-edge-review.iso.png" alt="Selection Ledger Chamfer Edge Review" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/selection-ledger-chamfer-edge-review.iso.png"
+        data-preview-title="Selection Ledger Chamfer Edge Review"
+        aria-label="Open larger preview for Selection Ledger Chamfer Edge Review"
+      >
+        <img src="./dsl/selection-ledger-chamfer-edge-review.iso.png" alt="Selection Ledger Chamfer Edge Review" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Selection Ledger Chamfer Edge Review</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-selection-ledger-chamfer-edge-review" data-code-target="code-dsl-selection-ledger-chamfer-edge-review">
+          <div class="card-title">Selection Ledger Chamfer Edge Review</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-selection-ledger-chamfer-join-review">
-      <img src="./dsl/selection-ledger-chamfer-join-review.iso.png" alt="Selection Ledger Chamfer Join Review" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/selection-ledger-chamfer-join-review.iso.png"
+        data-preview-title="Selection Ledger Chamfer Join Review"
+        aria-label="Open larger preview for Selection Ledger Chamfer Join Review"
+      >
+        <img src="./dsl/selection-ledger-chamfer-join-review.iso.png" alt="Selection Ledger Chamfer Join Review" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Selection Ledger Chamfer Join Review</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-selection-ledger-chamfer-join-review" data-code-target="code-dsl-selection-ledger-chamfer-join-review">
+          <div class="card-title">Selection Ledger Chamfer Join Review</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-selection-ledger-stack-audit">
-      <img src="./dsl/selection-ledger-stack-audit.iso.png" alt="Selection Ledger Multi-Feature Audit" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/selection-ledger-stack-audit.iso.png"
+        data-preview-title="Selection Ledger Multi-Feature Audit"
+        aria-label="Open larger preview for Selection Ledger Multi-Feature Audit"
+      >
+        <img src="./dsl/selection-ledger-stack-audit.iso.png" alt="Selection Ledger Multi-Feature Audit" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Selection Ledger Multi-Feature Audit</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-selection-ledger-stack-audit" data-code-target="code-dsl-selection-ledger-stack-audit">
+          <div class="card-title">Selection Ledger Multi-Feature Audit</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-variable-chamfer">
-      <img src="./dsl/variable-chamfer.iso.png" alt="Variable Chamfer" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/variable-chamfer.iso.png"
+        data-preview-title="Variable Chamfer"
+        aria-label="Open larger preview for Variable Chamfer"
+      >
+        <img src="./dsl/variable-chamfer.iso.png" alt="Variable Chamfer" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Variable Chamfer</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-variable-chamfer" data-code-target="code-dsl-variable-chamfer">
+          <div class="card-title">Variable Chamfer</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-boolean">
-      <img src="./dsl/boolean.iso.png" alt="Boolean Union" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/boolean.iso.png"
+        data-preview-title="Boolean Union"
+        aria-label="Open larger preview for Boolean Union"
+      >
+        <img src="./dsl/boolean.iso.png" alt="Boolean Union" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Boolean Union</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-boolean" data-code-target="code-dsl-boolean">
+          <div class="card-title">Boolean Union</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-boolean-cut">
-      <img src="./dsl/boolean-cut.iso.png" alt="Boolean Subtract" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/boolean-cut.iso.png"
+        data-preview-title="Boolean Subtract"
+        aria-label="Open larger preview for Boolean Subtract"
+      >
+        <img src="./dsl/boolean-cut.iso.png" alt="Boolean Subtract" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Boolean Subtract</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-boolean-cut" data-code-target="code-dsl-boolean-cut">
+          <div class="card-title">Boolean Subtract</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-boolean-intersect">
-      <img src="./dsl/boolean-intersect.iso.png" alt="Boolean Intersect" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/boolean-intersect.iso.png"
+        data-preview-title="Boolean Intersect"
+        aria-label="Open larger preview for Boolean Intersect"
+      >
+        <img src="./dsl/boolean-intersect.iso.png" alt="Boolean Intersect" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Boolean Intersect</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-boolean-intersect" data-code-target="code-dsl-boolean-intersect">
+          <div class="card-title">Boolean Intersect</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-pattern">
-      <img src="./dsl/pattern.iso.png" alt="Pattern (Feature/Body)" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/pattern.iso.png"
+        data-preview-title="Pattern (Feature/Body)"
+        aria-label="Open larger preview for Pattern (Feature/Body)"
+      >
+        <img src="./dsl/pattern.iso.png" alt="Pattern (Feature/Body)" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Pattern (Feature/Body)</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-pattern" data-code-target="code-dsl-pattern">
+          <div class="card-title">Pattern (Feature/Body)</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-pattern-circular">
-      <img src="./dsl/pattern-circular.iso.png" alt="Pattern (Circular)" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/pattern-circular.iso.png"
+        data-preview-title="Pattern (Circular)"
+        aria-label="Open larger preview for Pattern (Circular)"
+      >
+        <img src="./dsl/pattern-circular.iso.png" alt="Pattern (Circular)" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Pattern (Circular)</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-pattern-circular" data-code-target="code-dsl-pattern-circular">
+          <div class="card-title">Pattern (Circular)</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-feature-array">
-      <img src="./dsl/feature-array.iso.png" alt="Feature Array" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/feature-array.iso.png"
+        data-preview-title="Feature Array"
+        aria-label="Open larger preview for Feature Array"
+      >
+        <img src="./dsl/feature-array.iso.png" alt="Feature Array" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Feature Array</div>
-        <div class="card-meta">Generators</div>
+        <a class="card-title-link" href="#code-dsl-feature-array" data-code-target="code-dsl-feature-array">
+          <div class="card-title">Feature Array</div>
+          <div class="card-meta">Generators</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-tolerancing">
-      <img src="./dsl/tolerancing.iso.png" alt="Tolerancing (PMI)" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/tolerancing.iso.png"
+        data-preview-title="Tolerancing (PMI)"
+        aria-label="Open larger preview for Tolerancing (PMI)"
+      >
+        <img src="./dsl/tolerancing.iso.png" alt="Tolerancing (PMI)" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Tolerancing (PMI)</div>
-        <div class="card-meta">PMI</div>
+        <a class="card-title-link" href="#code-dsl-tolerancing" data-code-target="code-dsl-tolerancing">
+          <div class="card-title">Tolerancing (PMI)</div>
+          <div class="card-meta">PMI</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-spline-array">
-      <img src="./dsl/spline-array.iso.png" alt="Spline Array" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/spline-array.iso.png"
+        data-preview-title="Spline Array"
+        aria-label="Open larger preview for Spline Array"
+      >
+        <img src="./dsl/spline-array.iso.png" alt="Spline Array" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Spline Array</div>
-        <div class="card-meta">Generators</div>
+        <a class="card-title-link" href="#code-dsl-spline-array" data-code-target="code-dsl-spline-array">
+          <div class="card-title">Spline Array</div>
+          <div class="card-meta">Generators</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-circular-array">
-      <img src="./dsl/circular-array.iso.png" alt="Circular Array" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/circular-array.iso.png"
+        data-preview-title="Circular Array"
+        aria-label="Open larger preview for Circular Array"
+      >
+        <img src="./dsl/circular-array.iso.png" alt="Circular Array" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Circular Array</div>
-        <div class="card-meta">Generators</div>
+        <a class="card-title-link" href="#code-dsl-circular-array" data-code-target="code-dsl-circular-array">
+          <div class="card-title">Circular Array</div>
+          <div class="card-meta">Generators</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-radial-array">
-      <img src="./dsl/radial-array.iso.png" alt="Radial Array" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/radial-array.iso.png"
+        data-preview-title="Radial Array"
+        aria-label="Open larger preview for Radial Array"
+      >
+        <img src="./dsl/radial-array.iso.png" alt="Radial Array" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Radial Array</div>
-        <div class="card-meta">Generators</div>
+        <a class="card-title-link" href="#code-dsl-radial-array" data-code-target="code-dsl-radial-array">
+          <div class="card-title">Radial Array</div>
+          <div class="card-meta">Generators</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-mirror">
-      <img src="./dsl/mirror.iso.png" alt="Mirror" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/mirror.iso.png"
+        data-preview-title="Mirror"
+        aria-label="Open larger preview for Mirror"
+      >
+        <img src="./dsl/mirror.iso.png" alt="Mirror" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Mirror</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-mirror" data-code-target="code-dsl-mirror">
+          <div class="card-title">Mirror</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-move-body">
-      <img src="./dsl/move-body.iso.png" alt="Move Body" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/move-body.iso.png"
+        data-preview-title="Move Body"
+        aria-label="Open larger preview for Move Body"
+      >
+        <img src="./dsl/move-body.iso.png" alt="Move Body" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Move Body</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-move-body" data-code-target="code-dsl-move-body">
+          <div class="card-title">Move Body</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-delete-face">
-      <img src="./dsl/delete-face.iso.png" alt="Delete Face" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/delete-face.iso.png"
+        data-preview-title="Delete Face"
+        aria-label="Open larger preview for Delete Face"
+      >
+        <img src="./dsl/delete-face.iso.png" alt="Delete Face" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Delete Face</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-delete-face" data-code-target="code-dsl-delete-face">
+          <div class="card-title">Delete Face</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-replace-face">
-      <img src="./dsl/replace-face.iso.png" alt="Replace Face" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/replace-face.iso.png"
+        data-preview-title="Replace Face"
+        aria-label="Open larger preview for Replace Face"
+      >
+        <img src="./dsl/replace-face.iso.png" alt="Replace Face" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Replace Face</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-replace-face" data-code-target="code-dsl-replace-face">
+          <div class="card-title">Replace Face</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-move-face">
-      <img src="./dsl/move-face.iso.png" alt="Move Face" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/move-face.iso.png"
+        data-preview-title="Move Face"
+        aria-label="Open larger preview for Move Face"
+      >
+        <img src="./dsl/move-face.iso.png" alt="Move Face" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Move Face</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-move-face" data-code-target="code-dsl-move-face">
+          <div class="card-title">Move Face</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-draft">
-      <img src="./dsl/draft.iso.png" alt="Draft" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/draft.iso.png"
+        data-preview-title="Draft"
+        aria-label="Open larger preview for Draft"
+      >
+        <img src="./dsl/draft.iso.png" alt="Draft" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Draft</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-draft" data-code-target="code-dsl-draft">
+          <div class="card-title">Draft</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-thicken">
-      <img src="./dsl/thicken.iso.png" alt="Thicken" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/thicken.iso.png"
+        data-preview-title="Thicken"
+        aria-label="Open larger preview for Thicken"
+      >
+        <img src="./dsl/thicken.iso.png" alt="Thicken" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Thicken</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-thicken" data-code-target="code-dsl-thicken">
+          <div class="card-title">Thicken</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-unwrap-box">
-      <img src="./dsl/unwrap-box.iso.png" alt="Unwrap (Box Net)" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/unwrap-box.iso.png"
+        data-preview-title="Unwrap (Box Net)"
+        aria-label="Open larger preview for Unwrap (Box Net)"
+      >
+        <img src="./dsl/unwrap-box.iso.png" alt="Unwrap (Box Net)" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Unwrap (Box Net)</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-unwrap-box" data-code-target="code-dsl-unwrap-box">
+          <div class="card-title">Unwrap (Box Net)</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-shell">
-      <img src="./dsl/shell.iso.png" alt="Shell" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/shell.iso.png"
+        data-preview-title="Shell"
+        aria-label="Open larger preview for Shell"
+      >
+        <img src="./dsl/shell.iso.png" alt="Shell" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Shell</div>
-        <div class="card-meta">Features</div>
+        <a class="card-title-link" href="#code-dsl-shell" data-code-target="code-dsl-shell">
+          <div class="card-title">Shell</div>
+          <div class="card-meta">Features</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-dsl-thread-cosmetic">
-      <img src="./dsl/thread-cosmetic.iso.png" alt="Cosmetic Thread" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/thread-cosmetic.iso.png"
+        data-preview-title="Cosmetic Thread"
+        aria-label="Open larger preview for Cosmetic Thread"
+      >
+        <img src="./dsl/thread-cosmetic.iso.png" alt="Cosmetic Thread" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Cosmetic Thread</div>
-        <div class="card-meta">PMI</div>
+        <a class="card-title-link" href="#code-dsl-thread-cosmetic" data-code-target="code-dsl-thread-cosmetic">
+          <div class="card-title">Cosmetic Thread</div>
+          <div class="card-meta">PMI</div>
+        </a>
       </div>
-    </a>
+    </article>
       </section>
 
       <h2 class="section-title">Sketch Examples</h2>
       <section class="grid">
-    <a class="card" href="#code-sketch-line">
-      <img src="./sketch/line.svg" alt="Line" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./sketch/line.svg"
+        data-preview-title="Line"
+        aria-label="Open larger preview for Line"
+      >
+        <img src="./sketch/line.svg" alt="Line" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Line</div>
-        <div class="card-meta">Sketch</div>
+        <a class="card-title-link" href="#code-sketch-line" data-code-target="code-sketch-line">
+          <div class="card-title">Line</div>
+          <div class="card-meta">Sketch</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-sketch-arc">
-      <img src="./sketch/arc.svg" alt="Arc" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./sketch/arc.svg"
+        data-preview-title="Arc"
+        aria-label="Open larger preview for Arc"
+      >
+        <img src="./sketch/arc.svg" alt="Arc" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Arc</div>
-        <div class="card-meta">Sketch</div>
+        <a class="card-title-link" href="#code-sketch-arc" data-code-target="code-sketch-arc">
+          <div class="card-title">Arc</div>
+          <div class="card-meta">Sketch</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-sketch-circle">
-      <img src="./sketch/circle.svg" alt="Circle" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./sketch/circle.svg"
+        data-preview-title="Circle"
+        aria-label="Open larger preview for Circle"
+      >
+        <img src="./sketch/circle.svg" alt="Circle" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Circle</div>
-        <div class="card-meta">Sketch</div>
+        <a class="card-title-link" href="#code-sketch-circle" data-code-target="code-sketch-circle">
+          <div class="card-title">Circle</div>
+          <div class="card-meta">Sketch</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-sketch-ellipse">
-      <img src="./sketch/ellipse.svg" alt="Ellipse" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./sketch/ellipse.svg"
+        data-preview-title="Ellipse"
+        aria-label="Open larger preview for Ellipse"
+      >
+        <img src="./sketch/ellipse.svg" alt="Ellipse" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Ellipse</div>
-        <div class="card-meta">Sketch</div>
+        <a class="card-title-link" href="#code-sketch-ellipse" data-code-target="code-sketch-ellipse">
+          <div class="card-title">Ellipse</div>
+          <div class="card-meta">Sketch</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-sketch-rect-center">
-      <img src="./sketch/rect-center.svg" alt="Rectangle (Center)" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./sketch/rect-center.svg"
+        data-preview-title="Rectangle (Center)"
+        aria-label="Open larger preview for Rectangle (Center)"
+      >
+        <img src="./sketch/rect-center.svg" alt="Rectangle (Center)" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Rectangle (Center)</div>
-        <div class="card-meta">Sketch</div>
+        <a class="card-title-link" href="#code-sketch-rect-center" data-code-target="code-sketch-rect-center">
+          <div class="card-title">Rectangle (Center)</div>
+          <div class="card-meta">Sketch</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-sketch-rect-corner">
-      <img src="./sketch/rect-corner.svg" alt="Rectangle (Corner)" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./sketch/rect-corner.svg"
+        data-preview-title="Rectangle (Corner)"
+        aria-label="Open larger preview for Rectangle (Corner)"
+      >
+        <img src="./sketch/rect-corner.svg" alt="Rectangle (Corner)" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Rectangle (Corner)</div>
-        <div class="card-meta">Sketch</div>
+        <a class="card-title-link" href="#code-sketch-rect-corner" data-code-target="code-sketch-rect-corner">
+          <div class="card-title">Rectangle (Corner)</div>
+          <div class="card-meta">Sketch</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-sketch-slot">
-      <img src="./sketch/slot.svg" alt="Slot" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./sketch/slot.svg"
+        data-preview-title="Slot"
+        aria-label="Open larger preview for Slot"
+      >
+        <img src="./sketch/slot.svg" alt="Slot" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Slot</div>
-        <div class="card-meta">Sketch</div>
+        <a class="card-title-link" href="#code-sketch-slot" data-code-target="code-sketch-slot">
+          <div class="card-title">Slot</div>
+          <div class="card-meta">Sketch</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-sketch-polygon">
-      <img src="./sketch/polygon.svg" alt="Polygon" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./sketch/polygon.svg"
+        data-preview-title="Polygon"
+        aria-label="Open larger preview for Polygon"
+      >
+        <img src="./sketch/polygon.svg" alt="Polygon" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Polygon</div>
-        <div class="card-meta">Sketch</div>
+        <a class="card-title-link" href="#code-sketch-polygon" data-code-target="code-sketch-polygon">
+          <div class="card-title">Polygon</div>
+          <div class="card-meta">Sketch</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-sketch-spline">
-      <img src="./sketch/spline.svg" alt="Spline" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./sketch/spline.svg"
+        data-preview-title="Spline"
+        aria-label="Open larger preview for Spline"
+      >
+        <img src="./sketch/spline.svg" alt="Spline" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Spline</div>
-        <div class="card-meta">Sketch</div>
+        <a class="card-title-link" href="#code-sketch-spline" data-code-target="code-sketch-spline">
+          <div class="card-title">Spline</div>
+          <div class="card-meta">Sketch</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-sketch-point">
-      <img src="./sketch/point.svg" alt="Point" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./sketch/point.svg"
+        data-preview-title="Point"
+        aria-label="Open larger preview for Point"
+      >
+        <img src="./sketch/point.svg" alt="Point" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Point</div>
-        <div class="card-meta">Sketch</div>
+        <a class="card-title-link" href="#code-sketch-point" data-code-target="code-sketch-point">
+          <div class="card-title">Point</div>
+          <div class="card-meta">Sketch</div>
+        </a>
       </div>
-    </a>
+    </article>
 
-    <a class="card" href="#code-sketch-rect-array">
-      <img src="./sketch/rect-array.svg" alt="Rectangle Array" loading="lazy" />
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./sketch/rect-array.svg"
+        data-preview-title="Rectangle Array"
+        aria-label="Open larger preview for Rectangle Array"
+      >
+        <img src="./sketch/rect-array.svg" alt="Rectangle Array" loading="lazy" />
+      </button>
       <div class="card-body">
-        <div class="card-title">Rectangle Array</div>
-        <div class="card-meta">Sketch</div>
+        <a class="card-title-link" href="#code-sketch-rect-array" data-code-target="code-sketch-rect-array">
+          <div class="card-title">Rectangle Array</div>
+          <div class="card-meta">Sketch</div>
+        </a>
       </div>
-    </a>
+    </article>
       </section>
 
       <h2 class="section-title">Example Code</h2>
@@ -1614,5 +2235,83 @@ const examplePart = part(&quot;example-thread-cosmetic&quot;, [
     </article>
       </section>
     </main>
+    <div class="lightbox" id="image-preview-modal" hidden>
+      <div class="lightbox-panel" role="dialog" aria-modal="true" aria-labelledby="image-preview-title">
+        <div class="lightbox-header">
+          <h2 class="lightbox-title" id="image-preview-title">Example Preview</h2>
+          <button class="lightbox-close" id="image-preview-close" type="button" aria-label="Close image preview">
+            Close
+          </button>
+        </div>
+        <div class="lightbox-body">
+          <img id="image-preview-image" alt="" />
+        </div>
+      </div>
+    </div>
+    <script>
+      (() => {
+        const modal = document.getElementById("image-preview-modal");
+        const previewImage = document.getElementById("image-preview-image");
+        const previewTitle = document.getElementById("image-preview-title");
+        const closeButton = document.getElementById("image-preview-close");
+        const codeEntries = Array.from(document.querySelectorAll(".code-entry"));
+
+        function clearActiveCode() {
+          for (const entry of codeEntries) entry.classList.remove("is-active");
+        }
+
+        function activateCode(targetId) {
+          const entry = document.getElementById(targetId);
+          if (!entry) return;
+          clearActiveCode();
+          entry.classList.add("is-active");
+          entry.scrollIntoView({ behavior: "smooth", block: "start" });
+          history.replaceState(null, "", "#" + targetId);
+        }
+
+        function closeModal() {
+          if (!modal || !previewImage || !previewTitle) return;
+          modal.hidden = true;
+          previewImage.removeAttribute("src");
+          previewImage.alt = "";
+          previewTitle.textContent = "Example Preview";
+        }
+
+        document.querySelectorAll("[data-code-target]").forEach((link) => {
+          link.addEventListener("click", (event) => {
+            const targetId = link.getAttribute("data-code-target");
+            if (!targetId) return;
+            event.preventDefault();
+            activateCode(targetId);
+          });
+        });
+
+        document.querySelectorAll("[data-preview-src]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const src = button.getAttribute("data-preview-src");
+            const title = button.getAttribute("data-preview-title") || "Example Preview";
+            if (!modal || !previewImage || !previewTitle || !src) return;
+            previewImage.src = src;
+            previewImage.alt = title;
+            previewTitle.textContent = title;
+            modal.hidden = false;
+          });
+        });
+
+        closeButton?.addEventListener("click", closeModal);
+        modal?.addEventListener("click", (event) => {
+          if (event.target === modal) closeModal();
+        });
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape" && modal && !modal.hidden) {
+            closeModal();
+          }
+        });
+
+        if (window.location.hash.startsWith("#code-")) {
+          activateCode(window.location.hash.slice(1));
+        }
+      })();
+    </script>
   </body>
 </html>
