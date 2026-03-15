@@ -22,12 +22,12 @@ const tests = [
       );
       assert.match(
         html,
-        /data-preview-src="\.\/dsl\/selection-ledger-extrude-review\.annotated\.svg"/,
-        "selection-ledger review cards should prefer annotated previews when available"
+        /data-preview-src="\.\/dsl\/selection-ledger-extrude-review\.annotated\.png"/,
+        "selection-ledger review cards should prefer rendered annotated previews when available"
       );
       assert.match(
         html,
-        /data-preview-src="\.\/dsl\/selection-ledger-revolve-review\.annotated\.svg"/,
+        /data-preview-src="\.\/dsl\/selection-ledger-revolve-review\.annotated\.png"/,
         "selection-ledger revolve review should also prefer annotated previews"
       );
       assert.match(

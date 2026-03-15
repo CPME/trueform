@@ -212,14 +212,21 @@ async function resolvePreviewPath(imagePath) {
   const baseName = parsed.name.endsWith(".iso")
     ? parsed.name.slice(0, -".iso".length)
     : parsed.name;
-  const annotatedAbsolutePath = path.join(parsed.dir, `${baseName}.annotated.svg`);
-  try {
-    await fs.access(annotatedAbsolutePath);
-    const annotatedRelative = path.relative(examplesRoot, annotatedAbsolutePath).replaceAll(path.sep, "/");
-    return `./${annotatedRelative}`;
-  } catch {
-    return relativePath;
+  const candidates = [
+    path.join(parsed.dir, `${baseName}.annotated.png`),
+    path.join(parsed.dir, `${baseName}.annotated.color.png`),
+    path.join(parsed.dir, `${baseName}.annotated.svg`),
+  ];
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      const candidateRelative = path.relative(examplesRoot, candidate).replaceAll(path.sep, "/");
+      return `./${candidateRelative}`;
+    } catch {
+      continue;
+    }
   }
+  return relativePath;
 }
 
 function renderCard(example, codeAnchor, category, previewPath) {
