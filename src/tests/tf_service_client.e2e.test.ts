@@ -1,5 +1,18 @@
 import assert from "node:assert/strict";
-import { TfServiceClient } from "../service_client.js";
+import {
+  TF_SELECTOR_ERROR_CODES,
+  TfServiceClient,
+  getEdgeSelection,
+  getEdgeSelectionId,
+  getMeshSelection,
+  getMeshSelectionId,
+  getSemanticTopologyContractVersion,
+  indexBuildSelectionIds,
+  isSelectorError,
+  isSelectorErrorCode,
+  isSemanticTopologyEnabled,
+  selectionIdToNamedSelector,
+} from "../service_client.js";
 import { runTests } from "./occt_test_utils.js";
 
 type FetchCall = {
@@ -145,6 +158,100 @@ const tests = [
         { event: "job", state: "running" },
         { event: "end", state: "succeeded" },
       ]);
+    },
+  },
+  {
+    name: "tf service client: exposes semantic topology gating and selector error helpers",
+    fn: async () => {
+      const capabilities = {
+        semanticTopology: {
+          enabled: true,
+          contractVersion: "beta-2026-03-02",
+        },
+      };
+
+      assert.equal(isSemanticTopologyEnabled(capabilities), true);
+      assert.equal(
+        getSemanticTopologyContractVersion(capabilities),
+        "beta-2026-03-02"
+      );
+      assert.equal(isSemanticTopologyEnabled({ semanticTopology: { enabled: false } }), false);
+      assert.equal(getSemanticTopologyContractVersion({ semanticTopology: {} }), null);
+
+      assert.equal(
+        isSelectorErrorCode("selector_named_missing"),
+        true
+      );
+      assert.equal(
+        isSelectorErrorCode("runtime_error"),
+        false
+      );
+      assert.deepEqual(TF_SELECTOR_ERROR_CODES, [
+        "selector_named_missing",
+        "selector_ambiguous",
+        "selector_empty",
+        "selector_empty_after_rank",
+        "selector_legacy_numeric_unsupported",
+      ]);
+      assert.equal(
+        isSelectorError({ code: "selector_empty_after_rank" }),
+        true
+      );
+      assert.equal(isSelectorError({ code: "runtime_error" }), false);
+
+      assert.deepEqual(selectionIdToNamedSelector("face:body.main~base.top"), {
+        kind: "selector.named",
+        name: "face:body.main~base.top",
+      });
+      assert.throws(() => selectionIdToNamedSelector(""), /selection_id_required/);
+    },
+  },
+  {
+    name: "tf service client: indexes build selections and maps mesh selections back to semantic ids",
+    fn: async () => {
+      const buildSelectionIndex = indexBuildSelectionIds({
+        selections: {
+          faces: ["face:body.main~base.top", "face:body.main~base.bottom"],
+          edges: ["edge:body.main~base.side.1.bound.top"],
+          solids: ["solid:body.main~base.seed"],
+          points: ["face:body.main~base.top.point.center"],
+        },
+      });
+
+      assert.equal(buildSelectionIndex.all.has("face:body.main~base.top"), true);
+      assert.equal(
+        buildSelectionIndex.edges.has("edge:body.main~base.side.1.bound.top"),
+        true
+      );
+      assert.equal(buildSelectionIndex.surfaces.size, 0);
+
+      const mesh = {
+        selections: [
+          {
+            id: "face:body.main~base.top",
+            kind: "face",
+          },
+          {
+            id: "edge:body.main~base.side.1.bound.top",
+            kind: "edge",
+          },
+        ],
+        edgeSelectionIndices: [1, -1],
+      };
+
+      assert.deepEqual(getMeshSelection(mesh, 0), {
+        id: "face:body.main~base.top",
+        kind: "face",
+      });
+      assert.equal(getMeshSelectionId(mesh, 0), "face:body.main~base.top");
+      assert.equal(getMeshSelection(mesh, 5), null);
+      assert.deepEqual(getEdgeSelection(mesh, 0), {
+        id: "edge:body.main~base.side.1.bound.top",
+        kind: "edge",
+      });
+      assert.equal(getEdgeSelectionId(mesh, 0), "edge:body.main~base.side.1.bound.top");
+      assert.equal(getEdgeSelection(mesh, 1), null);
+      assert.equal(getEdgeSelectionId(mesh, 1), null);
     },
   },
   {

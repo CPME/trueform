@@ -1,5 +1,6 @@
 import {
   TF_API_ENDPOINTS,
+  TF_RUNTIME_ERROR_CONTRACT,
   type RuntimeAssemblySolveRequest,
   type RuntimeBuildRequest,
   type RuntimeJobAccepted,
@@ -14,6 +15,60 @@ export type JobState = RuntimeJobState;
 export type ServiceJob<T = unknown> = RuntimeJobRecord<T>;
 
 export type ServiceJobAccepted = RuntimeJobAccepted;
+
+export type SelectorErrorCode = (typeof TF_RUNTIME_ERROR_CONTRACT.selectorCodes)[number];
+
+export const TF_SELECTOR_ERROR_CODES = [
+  ...TF_RUNTIME_ERROR_CONTRACT.selectorCodes,
+] as readonly SelectorErrorCode[];
+
+export type SemanticTopologyCapabilities = {
+  semanticTopology?: {
+    enabled?: boolean;
+    contractVersion?: string | null;
+  } | null;
+};
+
+export type RuntimeSelectionIdGroups = {
+  faces?: string[];
+  edges?: string[];
+  solids?: string[];
+  surfaces?: string[];
+  points?: string[];
+};
+
+export type RuntimeBuildSelectionSource =
+  | RuntimeSelectionIdGroups
+  | {
+      selections?: RuntimeSelectionIdGroups | null;
+    }
+  | null
+  | undefined;
+
+export type RuntimeSelectionLookup = {
+  all: Set<string>;
+  faces: Set<string>;
+  edges: Set<string>;
+  solids: Set<string>;
+  surfaces: Set<string>;
+  points: Set<string>;
+};
+
+export type RuntimeSelectionRecord = {
+  id?: string;
+  kind?: string;
+  meta?: Record<string, unknown>;
+};
+
+export type RuntimeMeshSelectionSource = {
+  selections?: Array<RuntimeSelectionRecord | null | undefined>;
+  edgeSelectionIndices?: number[];
+} | null | undefined;
+
+export type SelectorNamedRef = {
+  kind: "selector.named";
+  name: string;
+};
 
 export type PollJobOptions = {
   intervalMs?: number;
@@ -42,6 +97,100 @@ type StreamJobEvent<T = unknown> = {
 const DEFAULT_POLL_INTERVAL_MS = 250;
 const DEFAULT_POLL_TIMEOUT_MS = 60_000;
 const TENANT_HEADER = "x-tf-tenant-id";
+
+export function isSemanticTopologyEnabled(
+  capabilities: SemanticTopologyCapabilities | null | undefined
+): boolean {
+  return capabilities?.semanticTopology?.enabled === true;
+}
+
+export function getSemanticTopologyContractVersion(
+  capabilities: SemanticTopologyCapabilities | null | undefined
+): string | null {
+  const version = capabilities?.semanticTopology?.contractVersion;
+  if (typeof version !== "string") return null;
+  return version.trim().length > 0 ? version : null;
+}
+
+export function indexBuildSelectionIds(
+  source: RuntimeBuildSelectionSource
+): RuntimeSelectionLookup {
+  const groups = resolveSelectionGroups(source);
+  const faces = selectionIdSet(groups?.faces);
+  const edges = selectionIdSet(groups?.edges);
+  const solids = selectionIdSet(groups?.solids);
+  const surfaces = selectionIdSet(groups?.surfaces);
+  const points = selectionIdSet(groups?.points);
+  const all = new Set<string>([
+    ...faces,
+    ...edges,
+    ...solids,
+    ...surfaces,
+    ...points,
+  ]);
+  return { all, faces, edges, solids, surfaces, points };
+}
+
+export function getMeshSelection(
+  mesh: RuntimeMeshSelectionSource,
+  selectionIndex: number
+): RuntimeSelectionRecord | null {
+  if (!Number.isInteger(selectionIndex) || selectionIndex < 0) return null;
+  const selection = mesh?.selections?.[selectionIndex];
+  if (!selection || typeof selection !== "object") return null;
+  return selection;
+}
+
+export function getMeshSelectionId(
+  mesh: RuntimeMeshSelectionSource,
+  selectionIndex: number
+): string | null {
+  return selectionIdOrNull(getMeshSelection(mesh, selectionIndex)?.id);
+}
+
+export function getEdgeSelection(
+  mesh: RuntimeMeshSelectionSource,
+  segmentIndex: number
+): RuntimeSelectionRecord | null {
+  if (!Number.isInteger(segmentIndex) || segmentIndex < 0) return null;
+  const rawSelectionIndex = mesh?.edgeSelectionIndices?.[segmentIndex];
+  if (
+    typeof rawSelectionIndex !== "number" ||
+    !Number.isInteger(rawSelectionIndex) ||
+    rawSelectionIndex < 0
+  ) {
+    return null;
+  }
+  return getMeshSelection(mesh, rawSelectionIndex);
+}
+
+export function getEdgeSelectionId(
+  mesh: RuntimeMeshSelectionSource,
+  segmentIndex: number
+): string | null {
+  return selectionIdOrNull(getEdgeSelection(mesh, segmentIndex)?.id);
+}
+
+export function selectionIdToNamedSelector(selectionId: string): SelectorNamedRef {
+  if (selectionId.length === 0) {
+    throw new Error("selection_id_required");
+  }
+  return {
+    kind: "selector.named",
+    name: selectionId,
+  };
+}
+
+export function isSelectorErrorCode(code: string | null | undefined): code is SelectorErrorCode {
+  return (
+    typeof code === "string" &&
+    (TF_SELECTOR_ERROR_CODES as readonly string[]).includes(code)
+  );
+}
+
+export function isSelectorError(error: { code?: unknown } | null | undefined): boolean {
+  return isSelectorErrorCode(typeof error?.code === "string" ? error.code : undefined);
+}
 
 export class TfServiceClient {
   private baseUrl: string;
@@ -316,6 +465,28 @@ export class TfServiceClient {
     }
     return this.fetchImpl(url, init);
   }
+}
+
+function resolveSelectionGroups(
+  source: RuntimeBuildSelectionSource
+): RuntimeSelectionIdGroups | null {
+  if (!source || typeof source !== "object") return null;
+  if ("selections" in source) {
+    const selections = source.selections;
+    return selections && typeof selections === "object" ? selections : null;
+  }
+  return source as RuntimeSelectionIdGroups;
+}
+
+function selectionIdSet(entries: unknown): Set<string> {
+  if (!Array.isArray(entries)) return new Set<string>();
+  return new Set(
+    entries.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+  );
+}
+
+function selectionIdOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function isTerminalState(state: JobState): boolean {

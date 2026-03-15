@@ -5,7 +5,20 @@ import { runTests } from "./occt_test_utils.js";
 const serviceClientModuleId = "@trueform/service-client";
 const workspaceServiceClient = (await import(serviceClientModuleId)) as Record<string, unknown>;
 
-const REQUIRED_EXPORTS = ["TfServiceClient"];
+const REQUIRED_EXPORTS = [
+  "TF_SELECTOR_ERROR_CODES",
+  "TfServiceClient",
+  "getEdgeSelection",
+  "getEdgeSelectionId",
+  "getMeshSelection",
+  "getMeshSelectionId",
+  "getSemanticTopologyContractVersion",
+  "indexBuildSelectionIds",
+  "isSelectorError",
+  "isSelectorErrorCode",
+  "isSemanticTopologyEnabled",
+  "selectionIdToNamedSelector",
+];
 
 const tests = [
   {

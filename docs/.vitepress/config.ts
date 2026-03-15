@@ -22,6 +22,10 @@ export default defineConfig({
       ],
       "/reference/": [
         { text: "Architecture", link: "/reference/architecture" },
+        { text: "Runtime Selection Integration", link: "/reference/runtime-selection-integration" },
+        { text: "API Reference", link: "/reference/api" },
+        { text: "Interactive Runtime Profile", link: "/reference/runtime-interactive-profile" },
+        { text: "Runtime Payload Fixtures", link: "/reference/runtime-payload-fixtures" },
         {
           text: "DSL",
           items: [
@@ -40,7 +44,6 @@ export default defineConfig({
             { text: "Examples", link: "/reference/dsl/examples/" },
           ],
         },
-        { text: "API Reference", link: "/reference/api" },
       ],
     },
   },

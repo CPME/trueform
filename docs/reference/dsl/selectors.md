@@ -43,6 +43,11 @@ Examples:
 
 Selectors are the primary stable-reference mechanism for authored workflows.
 
+External app note:
+- This page describes authored selector shapes.
+- For runtime-facing selection persistence, mesh hit mapping, and stored-id
+  round-tripping, use [Runtime Selection Integration](../runtime-selection-integration).
+
 Guidance:
 - Prefer datums, predicates, ranking, and named outputs when authoring new
   features.

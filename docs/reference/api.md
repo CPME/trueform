@@ -20,8 +20,12 @@ Runtime guidance:
 - Use `/v1/health` for runtime/dependency readiness and `/v1/metrics` for cache/store counters.
 - Use build/compile `ValidationOptions.stagedFeatures` (or runtime `options.stagedFeatures`) to allow, warn, or block staged features.
 - For machine-readable feature payload validation, use `IR_SCHEMA` (`src/ir_schema.ts`) and its per-feature `$defs` entries.
+- For external selection persistence and round-tripping, use the runtime
+  selection integration workflow instead of inferring semantics from mesh or
+  metadata payloads.
 
 Additional runtime docs:
+- [Runtime Selection Integration](./runtime-selection-integration)
 - [Interactive Runtime Profile](./runtime-interactive-profile)
 - [Runtime Payload Fixtures](./runtime-payload-fixtures)
 

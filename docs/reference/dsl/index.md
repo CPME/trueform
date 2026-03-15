@@ -34,6 +34,10 @@ Compatibility note:
 - [Selectors, Predicates, Ranking](./selectors)
 - [Examples](./examples/)
 
+Runtime consumer docs:
+
+- [Runtime Selection Integration](../runtime-selection-integration)
+
 ## Generated API Reference
 
 You can generate a full API reference from TSDoc comments:
