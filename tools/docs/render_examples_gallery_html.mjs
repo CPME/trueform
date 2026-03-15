@@ -205,9 +205,26 @@ function toExamplesRelativePath(imagePath) {
   return imagePath;
 }
 
-function renderCard(example, codeAnchor, category) {
+async function resolvePreviewPath(imagePath) {
+  const relativePath = toExamplesRelativePath(imagePath);
+  const absolutePath = path.join(examplesRoot, relativePath.replace(/^\.\//, ""));
+  const parsed = path.parse(absolutePath);
+  const baseName = parsed.name.endsWith(".iso")
+    ? parsed.name.slice(0, -".iso".length)
+    : parsed.name;
+  const annotatedAbsolutePath = path.join(parsed.dir, `${baseName}.annotated.svg`);
+  try {
+    await fs.access(annotatedAbsolutePath);
+    const annotatedRelative = path.relative(examplesRoot, annotatedAbsolutePath).replaceAll(path.sep, "/");
+    return `./${annotatedRelative}`;
+  } catch {
+    return relativePath;
+  }
+}
+
+function renderCard(example, codeAnchor, category, previewPath) {
   const title = escapeHtml(example.title);
-  const image = escapeHtml(toExamplesRelativePath(example.image));
+  const image = escapeHtml(previewPath);
   return `
     <article class="card">
       <button
@@ -268,7 +285,7 @@ try {
   const codeEntries = [];
   const galleryCardsBySection = new Map(gallerySections.map((section) => [section.key, []]));
 
-  (dslManifest.examples ?? []).forEach((example) => {
+  for (const example of dslManifest.examples ?? []) {
     const target = dslCodeTargets[example.id];
     if (!target) {
       throw new Error(`Missing DSL code mapping for example id: ${example.id}`);
@@ -287,10 +304,16 @@ try {
       code,
     });
     const sectionKey = classifyExample("dsl", example.id);
-    galleryCardsBySection.get(sectionKey)?.push(renderCard(example, anchor, gallerySections.find((section) => section.key === sectionKey)?.title ?? "DSL"));
-  });
+    const previewPath = await resolvePreviewPath(example.image);
+    galleryCardsBySection.get(sectionKey)?.push(renderCard(
+      example,
+      anchor,
+      gallerySections.find((section) => section.key === sectionKey)?.title ?? "DSL",
+      previewPath
+    ));
+  }
 
-  (sketchManifest.examples ?? []).forEach((example) => {
+  for (const example of sketchManifest.examples ?? []) {
     const target = sketchCodeTargets[example.id];
     if (!target) {
       throw new Error(`Missing sketch code mapping for example id: ${example.id}`);
@@ -309,8 +332,14 @@ try {
       code,
     });
     const sectionKey = classifyExample("sketch", example.id);
-    galleryCardsBySection.get(sectionKey)?.push(renderCard(example, anchor, gallerySections.find((section) => section.key === sectionKey)?.title ?? "Sketch"));
-  });
+    const previewPath = await resolvePreviewPath(example.image);
+    galleryCardsBySection.get(sectionKey)?.push(renderCard(
+      example,
+      anchor,
+      gallerySections.find((section) => section.key === sectionKey)?.title ?? "Sketch",
+      previewPath
+    ));
+  }
 
   const html = `<!doctype html>
 <html lang="en">

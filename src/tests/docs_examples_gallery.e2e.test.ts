@@ -22,6 +22,16 @@ const tests = [
       );
       assert.match(
         html,
+        /data-preview-src="\.\/dsl\/selection-ledger-extrude-review\.annotated\.svg"/,
+        "selection-ledger review cards should prefer annotated previews when available"
+      );
+      assert.match(
+        html,
+        /data-preview-src="\.\/dsl\/selection-ledger-revolve-review\.annotated\.svg"/,
+        "selection-ledger revolve review should also prefer annotated previews"
+      );
+      assert.match(
+        html,
         /id="image-preview-modal"/,
         "gallery should include the image preview modal container"
       );
