@@ -31,7 +31,27 @@ export type IsoRenderLayer = {
   depthTest?: boolean;
 };
 
-type TransparentTriangle = {
+type SmoothShade = {
+  baseR: number;
+  baseG: number;
+  baseB: number;
+  ambient: number;
+  diffuse: number;
+  lightX: number;
+  lightY: number;
+  lightZ: number;
+  nx0: number;
+  ny0: number;
+  nz0: number;
+  nx1: number;
+  ny1: number;
+  nz1: number;
+  nx2: number;
+  ny2: number;
+  nz2: number;
+};
+
+type RasterTriangle = {
   x0: number;
   y0: number;
   z0: number;
@@ -52,10 +72,11 @@ type TransparentTriangle = {
   alpha: number;
   depthTest: boolean;
   depthBias: number;
+  smoothShade?: SmoothShade;
 };
 
 type QueuedTransparentLayer = {
-  triangles: TransparentTriangle[];
+  triangles: RasterTriangle[];
   wireframe:
     | {
         segments: number[];
@@ -219,7 +240,7 @@ export function renderIsometricPngLayers(
       : new Float32Array(width * height).fill(-Infinity);
     const isTransparentFill = (baseAlpha > 0 && baseAlpha < 1) || screenSpaceTint;
 
-    const layerTransparentTriangles: TransparentTriangle[] = [];
+    const layerTransparentTriangles: RasterTriangle[] = [];
 
     if (vertexCount > 0) {
       const viewX = new Float32Array(vertexCount);
@@ -227,6 +248,9 @@ export function renderIsometricPngLayers(
       const viewZ = new Float32Array(vertexCount);
       const screenX = new Float32Array(vertexCount);
       const screenY = new Float32Array(vertexCount);
+      const normalX = normalsOk ? new Float32Array(vertexCount) : null;
+      const normalY = normalsOk ? new Float32Array(vertexCount) : null;
+      const normalZ = normalsOk ? new Float32Array(vertexCount) : null;
       for (let i = 0; i < vertexCount; i += 1) {
         const idx = i * 3;
         const px = (positions[idx] ?? 0) - center[0];
@@ -240,6 +264,23 @@ export function renderIsometricPngLayers(
         viewZ[i] = vz;
         screenX[i] = screenCenterX + (vx - viewMidX) * scale;
         screenY[i] = screenCenterY - (vy - viewMidY) * scale;
+        if (normalsOk && normalX && normalY && normalZ) {
+          const worldNx = normals[idx] ?? 0;
+          const worldNy = normals[idx + 1] ?? 0;
+          const worldNz = normals[idx + 2] ?? 0;
+          const vxn =
+            right[0] * worldNx + right[1] * worldNy + right[2] * worldNz;
+          const vyn = up[0] * worldNx + up[1] * worldNy + up[2] * worldNz;
+          const vzn =
+            viewDir[0] * worldNx + viewDir[1] * worldNy + viewDir[2] * worldNz;
+          const nLen = Math.hypot(vxn, vyn, vzn);
+          if (nLen > 1e-6) {
+            const inv = 1 / nLen;
+            normalX[i] = vxn * inv;
+            normalY[i] = vyn * inv;
+            normalZ[i] = vzn * inv;
+          }
+        }
       }
 
       const indices = buildTriangleIndices(mesh, vertexCount);
@@ -264,7 +305,17 @@ export function renderIsometricPngLayers(
         if (Math.abs(denom) < 1e-6) continue;
         if (baseAlpha <= 0) continue;
 
-        const intensity = screenSpaceTint
+        // Use the mesh normals when we have them so curved faces shade smoothly
+        // across triangle boundaries in both native OCCT and occt.js previews.
+        const useSmoothShade =
+          !screenSpaceTint &&
+          !isTransparentFill &&
+          normalX !== null &&
+          normalY !== null &&
+          normalZ !== null;
+        const intensity = useSmoothShade
+          ? 1
+          : screenSpaceTint
           ? 1
           : isTransparentFill
           ? 1
@@ -287,15 +338,18 @@ export function renderIsometricPngLayers(
               0,
               1
             );
-        const r = clampByte((baseColor[0] ?? 0) * intensity);
-        const g = clampByte((baseColor[1] ?? 0) * intensity);
-        const b = clampByte((baseColor[2] ?? 0) * intensity);
+        const baseR = baseColor[0] ?? 0;
+        const baseG = baseColor[1] ?? 0;
+        const baseB = baseColor[2] ?? 0;
+        const r = clampByte(baseR * intensity);
+        const g = clampByte(baseG * intensity);
+        const b = clampByte(baseB * intensity);
 
         const minPx = clampInt(Math.floor(Math.min(x0, x1, x2)), 0, width - 1);
         const maxPx = clampInt(Math.ceil(Math.max(x0, x1, x2)), 0, width - 1);
         const minPy = clampInt(Math.floor(Math.min(y0, y1, y2)), 0, height - 1);
         const maxPy = clampInt(Math.ceil(Math.max(y0, y1, y2)), 0, height - 1);
-        const triangle: TransparentTriangle = {
+        const triangle: RasterTriangle = {
           x0,
           y0,
           z0,
@@ -317,6 +371,27 @@ export function renderIsometricPngLayers(
           depthTest: screenSpaceTint ? false : depthTest,
           depthBias:
             !screenSpaceTint && isTransparentFill && depthTest ? transparentDepthBias : 0,
+          smoothShade: useSmoothShade
+            ? {
+                baseR,
+                baseG,
+                baseB,
+                ambient,
+                diffuse,
+                lightX: lightDirView[0],
+                lightY: lightDirView[1],
+                lightZ: lightDirView[2],
+                nx0: normalX[i0] ?? 0,
+                ny0: normalY[i0] ?? 0,
+                nz0: normalZ[i0] ?? 0,
+                nx1: normalX[i1] ?? 0,
+                ny1: normalY[i1] ?? 0,
+                nz1: normalZ[i1] ?? 0,
+                nx2: normalX[i2] ?? 0,
+                ny2: normalY[i2] ?? 0,
+                nz2: normalZ[i2] ?? 0,
+              }
+            : undefined,
         };
         if (isTransparentFill) {
           layerTransparentTriangles.push(triangle);
@@ -424,7 +499,7 @@ export function renderIsometricPngLayers(
 function rasterizeTriangle(
   rgba: Buffer,
   width: number,
-  triangle: TransparentTriangle,
+  triangle: RasterTriangle,
   testBuffer: Float32Array | null,
   writeBuffer: Float32Array | null
 ): void {
@@ -450,6 +525,38 @@ function rasterizeTriangle(
       const prior = testBuffer?.[idx] ?? -Infinity;
       if (z < prior - 1e-6) continue;
       if (writeBuffer) writeBuffer[idx] = z;
+      const smoothShade = triangle.smoothShade;
+      if (smoothShade) {
+        let nx =
+          w0 * smoothShade.nx0 + w1 * smoothShade.nx1 + w2 * smoothShade.nx2;
+        let ny =
+          w0 * smoothShade.ny0 + w1 * smoothShade.ny1 + w2 * smoothShade.ny2;
+        let nz =
+          w0 * smoothShade.nz0 + w1 * smoothShade.nz1 + w2 * smoothShade.nz2;
+        const nLen = Math.hypot(nx, ny, nz);
+        let intensity = smoothShade.ambient;
+        if (nLen > 1e-6) {
+          const inv = 1 / nLen;
+          nx *= inv;
+          ny *= inv;
+          nz *= inv;
+          const dotNL =
+            nx * smoothShade.lightX +
+            ny * smoothShade.lightY +
+            nz * smoothShade.lightZ;
+          intensity += smoothShade.diffuse * Math.max(0, dotNL);
+        }
+        intensity = clamp(intensity, 0, 1);
+        blendPixel(
+          rgba,
+          idx * 4,
+          clampByte(smoothShade.baseR * intensity),
+          clampByte(smoothShade.baseG * intensity),
+          clampByte(smoothShade.baseB * intensity),
+          triangle.alpha
+        );
+        continue;
+      }
       blendPixel(rgba, idx * 4, triangle.r, triangle.g, triangle.b, triangle.alpha);
     }
   }
@@ -457,7 +564,7 @@ function rasterizeTriangle(
 
 function captureTransparentTriangle(
   width: number,
-  triangle: TransparentTriangle,
+  triangle: RasterTriangle,
   opaqueDepth: Float32Array | null,
   transparentDepth: Float32Array,
   transparentPixels: Buffer

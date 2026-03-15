@@ -23,6 +23,23 @@ function makeQuadMesh(z: number): MeshData {
   };
 }
 
+function makeGradientTriangleMesh(): MeshData {
+  const tilted = Math.sqrt(0.5);
+  return {
+    positions: [
+      -1, -1, 0,
+       1, -1, 0,
+       0,  1.2, 0,
+    ],
+    indices: [0, 1, 2],
+    normals: [
+      0, 0, 1,
+      tilted, 0, tilted,
+      0, 0, 1,
+    ],
+  };
+}
+
 function readPngPixel(png: Buffer, x: number, y: number): [number, number, number, number] {
   const signature = png.subarray(0, 8);
   assert.deepEqual(
@@ -208,6 +225,36 @@ const tests = [
       assert.ok(b > 80, "front transparent layer should tint the opaque base");
       assert.ok(g > b, "opaque base should remain visible through the front transparent layer");
       assert.ok(r < 24, "behind transparent layer should not leak through the opaque base");
+    },
+  },
+  {
+    name: "viewer isometric: interpolates mesh normals across opaque triangles",
+    fn: async () => {
+      const png = renderIsometricPng(makeGradientTriangleMesh(), {
+        width: 120,
+        height: 120,
+        padding: 12,
+        viewDir: [0, 0, 1],
+        lightDir: [1, 0, 1],
+        ambient: 0,
+        diffuse: 1,
+        background: [255, 255, 255],
+        backgroundAlpha: 1,
+        baseColor: [180, 200, 220],
+        wireframe: false,
+      });
+      const left = readPngPixel(png, 42, 74);
+      const right = readPngPixel(png, 78, 74);
+      assert.ok(left[3] > 0, "left sample should land on the rendered triangle");
+      assert.ok(right[3] > 0, "right sample should land on the rendered triangle");
+      assert.ok(
+        right[0] - left[0] > 24,
+        "right side should shade brighter than left when normals are interpolated"
+      );
+      assert.ok(
+        right[1] - left[1] > 24,
+        "green channel should also show a smooth lighting ramp across the triangle"
+      );
     },
   },
   {
