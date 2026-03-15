@@ -258,6 +258,50 @@ const tests = [
     },
   },
   {
+    name: "viewer isometric: optional specular highlight brightens smooth curved shading",
+    fn: async () => {
+      const lit = renderIsometricPng(makeGradientTriangleMesh(), {
+        width: 120,
+        height: 120,
+        padding: 12,
+        viewDir: [0, 0, 1],
+        lightDir: [0, 0, 1],
+        ambient: 0,
+        diffuse: 0,
+        specular: 1,
+        shininess: 8,
+        background: [255, 255, 255],
+        backgroundAlpha: 1,
+        baseColor: [180, 200, 220],
+        wireframe: false,
+      });
+      const unlit = renderIsometricPng(makeGradientTriangleMesh(), {
+        width: 120,
+        height: 120,
+        padding: 12,
+        viewDir: [0, 0, 1],
+        lightDir: [0, 0, 1],
+        ambient: 0,
+        diffuse: 0,
+        specular: 0,
+        background: [255, 255, 255],
+        backgroundAlpha: 1,
+        baseColor: [180, 200, 220],
+        wireframe: false,
+      });
+      const highlighted = readPngPixel(lit, 60, 74);
+      const flat = readPngPixel(unlit, 60, 74);
+      assert.ok(
+        highlighted[0] - flat[0] > 80,
+        "specular highlight should materially brighten the center sample"
+      );
+      assert.ok(
+        highlighted[1] - flat[1] > 80,
+        "specular highlight should materially brighten all color channels"
+      );
+    },
+  },
+  {
     name: "viewer isometric: coplanar transparent layers tint opaque geometry without dropping out",
     fn: async () => {
       const png = renderIsometricPngLayers(

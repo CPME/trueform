@@ -15,6 +15,8 @@ export type IsoRenderOptions = {
   lightDir?: Vec3;
   ambient?: number;
   diffuse?: number;
+  specular?: number;
+  shininess?: number;
   wireframe?: boolean;
   wireColor?: Vec3;
   wireDepthTest?: boolean;
@@ -37,6 +39,11 @@ type SmoothShade = {
   baseB: number;
   ambient: number;
   diffuse: number;
+  specular: number;
+  shininess: number;
+  halfX: number;
+  halfY: number;
+  halfZ: number;
   lightX: number;
   lightY: number;
   lightZ: number;
@@ -122,6 +129,8 @@ export function renderIsometricPngLayers(
   const backgroundAlpha = clamp(opts.backgroundAlpha ?? 0, 0, 1);
   const ambient = clamp(opts.ambient ?? 0.35, 0, 1);
   const diffuse = clamp(opts.diffuse ?? 0.65, 0, 1);
+  const specular = clamp(opts.specular ?? 0, 0, 1);
+  const shininess = Math.max(1, opts.shininess ?? 24);
 
   const viewDir = normalize(opts.viewDir ?? [1, 1, -1]);
   const worldUp: Vec3 = [0, 0, 1];
@@ -205,6 +214,11 @@ export function renderIsometricPngLayers(
     dot(right, lightDirWorld),
     dot(up, lightDirWorld),
     dot(viewDir, lightDirWorld),
+  ]);
+  const halfDirView = normalize([
+    lightDirView[0],
+    lightDirView[1],
+    lightDirView[2] + 1,
   ]);
 
   const rgba = Buffer.alloc(width * height * 4);
@@ -378,6 +392,11 @@ export function renderIsometricPngLayers(
                 baseB,
                 ambient,
                 diffuse,
+                specular,
+                shininess,
+                halfX: halfDirView[0],
+                halfY: halfDirView[1],
+                halfZ: halfDirView[2],
                 lightX: lightDirView[0],
                 lightY: lightDirView[1],
                 lightZ: lightDirView[2],
@@ -545,6 +564,15 @@ function rasterizeTriangle(
             ny * smoothShade.lightY +
             nz * smoothShade.lightZ;
           intensity += smoothShade.diffuse * Math.max(0, dotNL);
+          if (smoothShade.specular > 0) {
+            const dotNH =
+              nx * smoothShade.halfX +
+              ny * smoothShade.halfY +
+              nz * smoothShade.halfZ;
+            intensity +=
+              smoothShade.specular *
+              Math.pow(Math.max(0, dotNH), smoothShade.shininess);
+          }
         }
         intensity = clamp(intensity, 0, 1);
         blendPixel(

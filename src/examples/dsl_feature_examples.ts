@@ -92,6 +92,8 @@ export type DslFeatureExample = {
       lightDir?: [number, number, number];
       ambient?: number;
       diffuse?: number;
+      specular?: number;
+      shininess?: number;
     };
     layers?: Array<{
       output: string;
@@ -240,8 +242,11 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     render: {
       renderOpts: {
         viewDir: [1.55, -0.75, 0.85],
-        ambient: 1,
-        diffuse: 0,
+        lightDir: [0.9, -0.55, 0.35],
+        ambient: 0.22,
+        diffuse: 0.5,
+        specular: 0.45,
+        shininess: 28,
       },
       layers: [
         {
