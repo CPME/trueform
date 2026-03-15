@@ -160,7 +160,7 @@ const tests = [
             componentId: "component.1",
             grounded: false,
             componentStatus: "underconstrained",
-            remainingDegreesOfFreedom: 2,
+            remainingDegreesOfFreedom: 4,
             status: "underconstrained",
           },
           {
@@ -168,7 +168,7 @@ const tests = [
             componentId: "component.1",
             grounded: false,
             componentStatus: "underconstrained",
-            remainingDegreesOfFreedom: 3,
+            remainingDegreesOfFreedom: 4,
             status: "underconstrained",
           },
           {
@@ -176,7 +176,7 @@ const tests = [
             componentId: "component.1",
             grounded: false,
             componentStatus: "underconstrained",
-            remainingDegreesOfFreedom: 3,
+            remainingDegreesOfFreedom: 4,
             status: "underconstrained",
           },
           {
@@ -184,7 +184,7 @@ const tests = [
             componentId: "component.1",
             grounded: false,
             componentStatus: "underconstrained",
-            remainingDegreesOfFreedom: 3,
+            remainingDegreesOfFreedom: 4,
             status: "underconstrained",
           },
         ]
@@ -253,6 +253,10 @@ const tests = [
         report.constraintStatus.map((entry) => entry.status),
         ["satisfied", "satisfied", "satisfied", "satisfied"]
       );
+      const redundant = report.constraintStatus.find((entry) => entry.constraintId === "c-distance");
+      assert.equal(redundant?.diagnosticType, "redundant");
+      assert.equal(redundant?.code, "sketch_constraint_redundant");
+      assert.ok(redundant?.message?.includes("redundant"));
       assert.deepEqual(
         report.entityStatus.map((entry) => ({
           entityId: entry.entityId,
@@ -340,6 +344,72 @@ const tests = [
           "satisfied",
         ]
       );
+      const freeMotionDirections = report.componentStatus[0]?.freeMotionDirections ?? [];
+      assert.equal(freeMotionDirections.length, 2);
+      assert.equal(
+        freeMotionDirections.every((entry) => entry.classification === "rigid-body"),
+        true
+      );
+      const line1StartDeltas = freeMotionDirections
+        .map(
+          (entry) =>
+            entry.handles.find(
+              (handle) =>
+                handle.kind === "point" &&
+                handle.entityId === "line-1" &&
+                handle.handle === "start"
+            ) as Extract<(typeof entry.handles)[number], { kind: "point" }>
+        )
+        .map((handle) => handle.delta.map((value) => Math.round(value)).join(","))
+        .sort();
+      assert.deepEqual(line1StartDeltas, ["0,1", "1,0"]);
+    },
+  },
+  {
+    name: "sketch constraints: grounded underconstrained components expose internal free-motion directions",
+    fn: async () => {
+      const report = solveSketchConstraintsDetailed(
+        "sketch-internal-motion",
+        [
+          dsl.sketchLine("line-1", [0, 0], [10, 1]),
+          dsl.sketchLine("line-2", [10, 0], [15, 4]),
+        ],
+        [
+          dsl.sketchConstraintFixPoint("c-fix-start", dsl.sketchPointRef("line-1", "start"), {
+            x: 0,
+            y: 0,
+          }),
+          dsl.sketchConstraintHorizontal("c-horizontal", "line-1"),
+          dsl.sketchConstraintDistance(
+            "c-line-1-distance",
+            dsl.sketchPointRef("line-1", "start"),
+            dsl.sketchPointRef("line-1", "end"),
+            10
+          ),
+          dsl.sketchConstraintCoincident(
+            "c-join",
+            dsl.sketchPointRef("line-1", "end"),
+            dsl.sketchPointRef("line-2", "start")
+          ),
+          dsl.sketchConstraintDistance(
+            "c-line-2-distance",
+            dsl.sketchPointRef("line-2", "start"),
+            dsl.sketchPointRef("line-2", "end"),
+            10
+          ),
+        ]
+      );
+
+      assert.equal(report.status, "underconstrained");
+      assert.equal(report.componentStatus[0]?.grounded, true);
+      const directions = report.componentStatus[0]?.freeMotionDirections ?? [];
+      assert.equal(directions.length, 1);
+      assert.equal(directions[0]?.classification, "internal");
+      const endHandle = directions[0]?.handles.find(
+        (entry) => entry.kind === "point" && entry.entityId === "line-2" && entry.handle === "end"
+      ) as Extract<(typeof directions)[number]["handles"][number], { kind: "point" }> | undefined;
+      assert.ok(endHandle, "missing line end motion handle");
+      assert.equal(Math.round(Math.hypot(endHandle.delta[0], endHandle.delta[1])), 1);
     },
   },
   {
@@ -448,7 +518,9 @@ const tests = [
       assert.equal(report.status, "conflict");
       assert.equal(report.constraintStatus[1]?.constraintId, "c-horizontal");
       assert.equal(report.constraintStatus[1]?.status, "unsatisfied");
-      assert.equal(report.constraintStatus[1]?.code, "sketch_constraint_unsatisfied");
+      assert.equal(report.constraintStatus[1]?.code, "sketch_constraint_conflict");
+      assert.equal(report.constraintStatus[1]?.diagnosticType, "conflict");
+      assert.deepEqual(report.constraintStatus[1]?.relatedConstraintIds, ["c-fix-end"]);
       assert.ok(report.constraintStatus[1]?.message?.includes("c-horizontal"));
       assert.deepEqual(
         report.entityStatus.map((entry) => ({

@@ -365,7 +365,14 @@ export function estimateRigidBodyModes(
   jacobian: number[][],
   variables: ScalarVariable[]
 ): number {
-  if (variables.length === 0) return 0;
+  return listAdmissibleRigidBodyModes(jacobian, variables).length;
+}
+
+export function listAdmissibleRigidBodyModes(
+  jacobian: number[][],
+  variables: ScalarVariable[]
+): number[][] {
+  if (variables.length === 0) return [];
   const xMode = variables.map((variable) => (variable.kind === "x" ? 1 : 0));
   const yMode = variables.map((variable) => (variable.kind === "y" ? 1 : 0));
   const rotationMode = variables.map((variable) => {
@@ -379,8 +386,7 @@ export function estimateRigidBodyModes(
     const projected = matrixVectorNorm(jacobian, mode);
     return projected <= 1e-5 * Math.max(1, modeNorm);
   });
-  if (admissibleModes.length === 0) return 0;
-  return estimateMatrixRank(admissibleModes);
+  return orthonormalizeVectorBasis(admissibleModes);
 }
 
 export function matrixVectorNorm(matrix: number[][], vector: number[]): number {
@@ -443,6 +449,152 @@ export function estimateMatrixRank(matrix: number[][], relativeTolerance = 1e-6)
   }
 
   return rank;
+}
+
+export function orthonormalizeVectorBasis(
+  vectors: number[][],
+  tolerance = 1e-8
+): number[][] {
+  const basis: number[][] = [];
+  for (const candidate of vectors) {
+    const next = candidate.slice();
+    for (const existing of basis) {
+      const projection = vectorDot(next, existing);
+      if (Math.abs(projection) <= tolerance) continue;
+      for (let index = 0; index < next.length; index += 1) {
+        next[index] = (next[index] ?? 0) - projection * (existing[index] ?? 0);
+      }
+    }
+    const norm = vectorNorm(next);
+    if (norm <= tolerance) continue;
+    basis.push(canonicalizeDirection(next.map((value) => value / norm), tolerance));
+  }
+  return basis;
+}
+
+export function canonicalizeDirection(
+  values: number[],
+  tolerance = 1e-8
+): number[] {
+  const next = values.slice();
+  for (const value of next) {
+    if (Math.abs(value) <= tolerance) continue;
+    if (value < 0) {
+      for (let index = 0; index < next.length; index += 1) {
+        next[index] = -(next[index] ?? 0);
+      }
+    }
+    break;
+  }
+  return next;
+}
+
+export function estimateNullspaceBasis(
+  matrix: number[][],
+  relativeTolerance = 1e-6
+): number[][] {
+  const rows = matrix.length;
+  if (rows === 0) return [];
+  const cols = matrix[0]?.length ?? 0;
+  if (cols === 0) return [];
+  const { rref, pivotColumns, freeColumns } = buildReducedRowEchelonForm(matrix, relativeTolerance);
+  if (freeColumns.length === 0) return [];
+  const pivotRowByColumn = new Map<number, number>();
+  for (let rowIndex = 0; rowIndex < pivotColumns.length; rowIndex += 1) {
+    const column = pivotColumns[rowIndex];
+    if (column !== undefined) pivotRowByColumn.set(column, rowIndex);
+  }
+  const basis: number[][] = [];
+  for (const freeColumn of freeColumns) {
+    const direction = new Array(cols).fill(0);
+    direction[freeColumn] = 1;
+    for (const pivotColumn of pivotColumns) {
+      const rowIndex = pivotRowByColumn.get(pivotColumn);
+      if (rowIndex === undefined) continue;
+      direction[pivotColumn] = -(rref[rowIndex]?.[freeColumn] ?? 0);
+    }
+    const norm = vectorNorm(direction);
+    if (norm <= 1e-8) continue;
+    basis.push(canonicalizeDirection(direction.map((value) => value / norm)));
+  }
+  return orthonormalizeVectorBasis(basis);
+}
+
+export function removeBasisProjection(
+  vector: number[],
+  basis: number[][]
+): number[] {
+  const next = vector.slice();
+  for (const direction of basis) {
+    const projection = vectorDot(next, direction);
+    if (Math.abs(projection) <= 1e-10) continue;
+    for (let index = 0; index < next.length; index += 1) {
+      next[index] = (next[index] ?? 0) - projection * (direction[index] ?? 0);
+    }
+  }
+  return next;
+}
+
+function buildReducedRowEchelonForm(
+  matrix: number[][],
+  relativeTolerance = 1e-6
+): { rref: number[][]; pivotColumns: number[]; freeColumns: number[] } {
+  const rows = matrix.length;
+  const cols = matrix[0]?.length ?? 0;
+  const working = matrix.map((row) => row.slice());
+  let maxAbs = 0;
+  for (const row of working) {
+    for (const value of row) maxAbs = Math.max(maxAbs, Math.abs(value));
+  }
+  const tolerance = Math.max(1e-10, maxAbs * relativeTolerance);
+  const pivotColumns: number[] = [];
+  let pivotRow = 0;
+
+  for (let col = 0; col < cols && pivotRow < rows; col += 1) {
+    let bestRow = pivotRow;
+    let bestValue = Math.abs(working[pivotRow]?.[col] ?? 0);
+    for (let row = pivotRow + 1; row < rows; row += 1) {
+      const value = Math.abs(working[row]?.[col] ?? 0);
+      if (value > bestValue) {
+        bestValue = value;
+        bestRow = row;
+      }
+    }
+    if (bestValue <= tolerance) continue;
+    if (bestRow !== pivotRow) {
+      const temp = working[pivotRow];
+      working[pivotRow] = working[bestRow] ?? [];
+      working[bestRow] = temp ?? [];
+    }
+    const pivot = working[pivotRow]?.[col] ?? 0;
+    if (Math.abs(pivot) <= tolerance) continue;
+    const pivotData = working[pivotRow];
+    if (!pivotData) continue;
+    for (let currentCol = col; currentCol < cols; currentCol += 1) {
+      pivotData[currentCol] = (pivotData[currentCol] ?? 0) / pivot;
+      if (Math.abs(pivotData[currentCol] ?? 0) <= tolerance) pivotData[currentCol] = 0;
+    }
+    for (let row = 0; row < rows; row += 1) {
+      if (row === pivotRow) continue;
+      const rowData = working[row];
+      if (!rowData) continue;
+      const factor = rowData[col] ?? 0;
+      if (Math.abs(factor) <= tolerance) continue;
+      for (let currentCol = col; currentCol < cols; currentCol += 1) {
+        rowData[currentCol] = (rowData[currentCol] ?? 0) - factor * (pivotData[currentCol] ?? 0);
+        if (Math.abs(rowData[currentCol] ?? 0) <= tolerance) rowData[currentCol] = 0;
+      }
+    }
+    pivotColumns.push(col);
+    pivotRow += 1;
+  }
+
+  const pivotColumnSet = new Set(pivotColumns);
+  const freeColumns: number[] = [];
+  for (let col = 0; col < cols; col += 1) {
+    if (!pivotColumnSet.has(col)) freeColumns.push(col);
+  }
+  return { rref: working, pivotColumns, freeColumns };
 }
 
 export function chooseClosestDirection(

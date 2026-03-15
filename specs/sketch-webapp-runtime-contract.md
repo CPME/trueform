@@ -1,7 +1,7 @@
 # Sketch Webapp Runtime Contract
 
 Status: reference contract (TrueForm surface frozen, TrueCAD wiring pending)
-Updated: 2026-03-05
+Updated: 2026-03-14
 Owner: sketch/runtime
 
 Purpose: define the interaction contract between TrueCAD and the shared
@@ -58,7 +58,12 @@ The following API surface is now treated as stable for TrueCAD integration:
 - `solveMeta.solvedComponentIds`
 - `solveMeta.skippedComponentIds`
 
-4. Async/session behavior guarantees
+4. Stable diagnostic and drag-guidance contract
+- `componentStatus[].freeMotionDirections`
+- `constraintStatus[].diagnosticType`
+- `constraintStatus[].relatedConstraintIds`
+
+5. Async/session behavior guarantees
 - Async solve yields to the next macrotask before executing the canonical solve.
 - Async solve honors abort both before and after the yield boundary.
 - Session warm-start state is not promoted from aborted solves.
@@ -72,6 +77,8 @@ The following API surface is now treated as stable for TrueCAD integration:
 - Use transient constraints for inference/snaps.
 - Use `changedEntityIds` / `changedConstraintIds` to target affected components.
 - Use bounded budgets (`maxTimeMs`, `maxIterations`) and abort superseded work.
+- Prefer `freeMotionDirections` to keep preview motion inside the admissible DOF
+  subspace when the sketch is not fully constrained.
 
 2. Commit solve (pointer-up)
 - Run with relaxed/no strict budget.

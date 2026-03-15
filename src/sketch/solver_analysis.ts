@@ -1,6 +1,14 @@
 import { CompileError } from "../errors.js";
 import type { SketchConstraint, SketchEntity } from "../ir.js";
+import {
+  estimateNullspaceBasis,
+  listAdmissibleRigidBodyModes,
+  orthonormalizeVectorBasis,
+  removeBasisProjection,
+  vectorNorm,
+} from "./solver_math.js";
 import type {
+  SketchConstraintMotionDirection,
   SketchConstraintComponentSolveStatus,
   SketchConstraintComponentStatus,
   SketchConstraintEntityStatus,
@@ -33,6 +41,7 @@ type SketchConstraintComponentAnalysis = {
   rigidBodyDegreesOfFreedom: number;
   grounded: boolean;
   redundantEquations: number;
+  freeMotionDirections: SketchConstraintMotionDirection[];
 };
 
 type SketchConstraintSolveAnalysis = {
@@ -332,8 +341,13 @@ export function analyzeDegreesOfFreedom(
   }
 
   const rank = deps.estimateMatrixRank(jacobian);
+  const nullspaceBasis = estimateNullspaceBasis(jacobian);
+  const rigidMotionBasis = listAdmissibleRigidBodyModes(jacobian, variables);
+  const internalMotionBasis = orthonormalizeVectorBasis(
+    nullspaceBasis.map((direction) => removeBasisProjection(direction, rigidMotionBasis))
+  );
   const remainingDegreesOfFreedom = Math.max(0, variables.length - rank);
-  const rigidModes = deps.estimateRigidBodyModes(jacobian, variables);
+  const rigidModes = rigidMotionBasis.length;
   const internalRemainingDegreesOfFreedom = Math.max(
     0,
     remainingDegreesOfFreedom - Math.min(remainingDegreesOfFreedom, rigidModes)
@@ -356,9 +370,11 @@ export function analyzeDegreesOfFreedom(
       perEntityRemaining.set(entity.id, total);
       continue;
     }
-    const submatrix = jacobian.map((row) => columns.map((index) => row[index] ?? 0));
-    const localRank = deps.estimateMatrixRank(submatrix);
-    perEntityRemaining.set(entity.id, Math.max(0, total - localRank));
+    const entityMotionBasis = nullspaceBasis.map((direction) =>
+      columns.map((index) => direction[index] ?? 0)
+    );
+    const attributedRemaining = deps.estimateMatrixRank(entityMotionBasis, 1e-5);
+    perEntityRemaining.set(entity.id, Math.min(total, attributedRemaining));
   }
 
   const variableIndexByEntity = new Map<string, number[]>();
@@ -388,10 +404,20 @@ export function analyzeDegreesOfFreedom(
     );
     const componentRank = deps.estimateMatrixRank(componentJacobian);
     const componentRemainingDegreesOfFreedom = Math.max(0, componentVariables.length - componentRank);
-    const componentRigidBodyDegreesOfFreedom = deps.estimateRigidBodyModes(
+    const resolvedComponentVariables = componentVariables
+      .map((index) => variables[index])
+      .filter((value): value is ScalarVariable => !!value);
+    const componentNullspaceBasis = estimateNullspaceBasis(componentJacobian);
+    const componentRigidMotionBasis = listAdmissibleRigidBodyModes(
       componentJacobian,
-      componentVariables.map((index) => variables[index]).filter((value): value is ScalarVariable => !!value)
+      resolvedComponentVariables
     );
+    const componentInternalMotionBasis = orthonormalizeVectorBasis(
+      componentNullspaceBasis.map((direction) =>
+        removeBasisProjection(direction, componentRigidMotionBasis)
+      )
+    );
+    const componentRigidBodyDegreesOfFreedom = componentRigidMotionBasis.length;
     const componentInternalRemainingDegreesOfFreedom = Math.max(
       0,
       componentRemainingDegreesOfFreedom -
@@ -409,6 +435,12 @@ export function analyzeDegreesOfFreedom(
       rigidBodyDegreesOfFreedom: componentRigidBodyDegreesOfFreedom,
       grounded: componentRigidBodyDegreesOfFreedom === 0,
       redundantEquations: Math.max(0, componentRowIndexes.length - componentRank),
+      freeMotionDirections: buildFreeMotionDirections(
+        component.componentId,
+        resolvedComponentVariables,
+        componentInternalMotionBasis,
+        componentRigidMotionBasis
+      ),
     });
   }
 
@@ -472,6 +504,7 @@ export function buildComponentStatus(
     Math.max(0, remainingDegreesOfFreedom - Math.min(remainingDegreesOfFreedom, rigidBodyDegreesOfFreedom));
   const grounded = componentAnalysis?.grounded ?? rigidBodyDegreesOfFreedom === 0;
   const redundantEquations = componentAnalysis?.redundantEquations ?? 0;
+  const freeMotionDirections = componentAnalysis?.freeMotionDirections ?? [];
   const hasConflict = constraintStatus.some(
     (entry) => entry.status === "unsatisfied" && component.constraintIds.includes(entry.constraintId)
   );
@@ -496,6 +529,106 @@ export function buildComponentStatus(
     rigidBodyDegreesOfFreedom,
     grounded,
     status,
+    freeMotionDirections,
+  };
+}
+
+function buildFreeMotionDirections(
+  componentId: string,
+  variables: ScalarVariable[],
+  internalMotionBasis: number[][],
+  rigidMotionBasis: number[][]
+): SketchConstraintMotionDirection[] {
+  return [
+    ...internalMotionBasis.map((direction, index) =>
+      buildFreeMotionDirection(componentId, variables, direction, index + 1, "internal")
+    ),
+    ...rigidMotionBasis.map((direction, index) =>
+      buildFreeMotionDirection(componentId, variables, direction, index + 1, "rigid-body")
+    ),
+  ].filter((direction): direction is SketchConstraintMotionDirection => direction !== null);
+}
+
+function buildFreeMotionDirection(
+  componentId: string,
+  variables: ScalarVariable[],
+  direction: number[],
+  ordinal: number,
+  classification: SketchConstraintMotionDirection["classification"]
+): SketchConstraintMotionDirection | null {
+  const magnitude = vectorNorm(direction);
+  if (magnitude <= 1e-8) return null;
+  const normalized = direction.map((value) => value / magnitude);
+  const grouped = new Map<
+    string,
+    {
+      entityId: string;
+      handle: string;
+      point?: [number, number];
+      scalar?: number;
+    }
+  >();
+
+  for (let index = 0; index < variables.length; index += 1) {
+    const variable = variables[index];
+    if (!variable) continue;
+    const delta = normalized[index] ?? 0;
+    if (Math.abs(delta) <= 1e-8) continue;
+    const key = `${variable.entityId}#${variable.handle}`;
+    const current = grouped.get(key) ?? {
+      entityId: variable.entityId,
+      handle: variable.handle,
+    };
+    if (variable.kind === "scalar") {
+      current.scalar = (current.scalar ?? 0) + delta;
+    } else {
+      const point = current.point ?? [0, 0];
+      if (variable.kind === "x") point[0] += delta;
+      else point[1] += delta;
+      current.point = point;
+    }
+    grouped.set(key, current);
+  }
+
+  const handles = [...grouped.values()]
+    .map((entry) => {
+      if (entry.point) {
+        const delta: [number, number] = [entry.point[0], entry.point[1]];
+        const pointMagnitude = Math.hypot(delta[0], delta[1]);
+        if (pointMagnitude <= 1e-8) return null;
+        return {
+          entityId: entry.entityId,
+          handle: entry.handle,
+          kind: "point" as const,
+          delta,
+          magnitude: pointMagnitude,
+        };
+      }
+      const scalar = entry.scalar ?? 0;
+      const scalarMagnitude = Math.abs(scalar);
+      if (scalarMagnitude <= 1e-8) return null;
+      return {
+        entityId: entry.entityId,
+        handle: entry.handle,
+        kind: "scalar" as const,
+        delta: scalar,
+        magnitude: scalarMagnitude,
+      };
+    })
+    .filter(
+      (entry): entry is NonNullable<typeof entry> => entry !== null
+    )
+    .sort((left, right) =>
+      left.entityId.localeCompare(right.entityId) || left.handle.localeCompare(right.handle)
+    );
+  if (handles.length === 0) return null;
+
+  return {
+    directionId: `${componentId}.direction.${classification}.${ordinal}`,
+    classification,
+    magnitude,
+    entityIds: [...new Set(handles.map((entry) => entry.entityId))],
+    handles,
   };
 }
 

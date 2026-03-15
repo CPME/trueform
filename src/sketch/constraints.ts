@@ -89,6 +89,31 @@ export type SketchConstraintComponentSolveStatus =
 
 export type SketchConstraintDiagnosticStatus = "satisfied" | "unsatisfied";
 export type SketchConstraintSource = "authored" | "transient";
+export type SketchConstraintDiagnosticType = "conflict" | "redundant";
+
+export type SketchConstraintMotionHandleDelta =
+  | {
+      entityId: string;
+      handle: string;
+      kind: "point";
+      delta: [number, number];
+      magnitude: number;
+    }
+  | {
+      entityId: string;
+      handle: string;
+      kind: "scalar";
+      delta: number;
+      magnitude: number;
+    };
+
+export type SketchConstraintMotionDirection = {
+  directionId: string;
+  classification: "rigid-body" | "internal";
+  magnitude: number;
+  entityIds: string[];
+  handles: SketchConstraintMotionHandleDelta[];
+};
 
 export type SketchConstraintSolveOptions = {
   transientConstraints?: SketchConstraint[];
@@ -114,6 +139,8 @@ export type SketchConstraintStatus = {
   status: SketchConstraintDiagnosticStatus;
   residual: number;
   entityIds: string[];
+  diagnosticType?: SketchConstraintDiagnosticType;
+  relatedConstraintIds?: string[];
   code?: string;
   message?: string;
 };
@@ -139,6 +166,7 @@ export type SketchConstraintComponentStatus = {
   rigidBodyDegreesOfFreedom: number;
   grounded: boolean;
   status: SketchConstraintComponentSolveStatus;
+  freeMotionDirections: SketchConstraintMotionDirection[];
 };
 
 export type SketchConstraintSolveReport = {
@@ -189,6 +217,7 @@ type SketchConstraintComponentAnalysis = {
   rigidBodyDegreesOfFreedom: number;
   grounded: boolean;
   redundantEquations: number;
+  freeMotionDirections: SketchConstraintMotionDirection[];
 };
 
 type SketchConstraintSolveAnalysis = {
@@ -301,6 +330,16 @@ export function solveSketchConstraintsDetailed(
   constraints: SketchConstraint[],
   options?: SketchConstraintSolveOptions
 ): SketchConstraintSolveReport {
+  return solveSketchConstraintsDetailedInternal(sketchId, entities, constraints, options, true);
+}
+
+function solveSketchConstraintsDetailedInternal(
+  sketchId: string,
+  entities: SketchEntity[],
+  constraints: SketchConstraint[],
+  options: SketchConstraintSolveOptions | undefined,
+  enrichDiagnostics: boolean
+): SketchConstraintSolveReport {
   const execution = createSketchSolveExecutionState(options);
   const transientConstraints = options?.transientConstraints ?? [];
   const allConstraints = [...constraints, ...transientConstraints];
@@ -378,7 +417,7 @@ export function solveSketchConstraintsDetailed(
   for (const constraint of transientConstraints) {
     constraintSourceById.set(constraint.id, "transient");
   }
-  const constraintStatus = allConstraints.map((constraint) =>
+  let constraintStatus = allConstraints.map((constraint) =>
     buildConstraintStatus(
       sketchId,
       entityMap,
@@ -386,6 +425,17 @@ export function solveSketchConstraintsDetailed(
       constraintSourceById.get(constraint.id) ?? "authored"
     )
   );
+  if (enrichDiagnostics) {
+    constraintStatus = enrichConstraintDiagnostics(
+      sketchId,
+      solvedEntities,
+      allConstraints,
+      components,
+      constraintStatus,
+      execution,
+      options
+    );
+  }
 
   const maxResidual = constraintStatus.reduce(
     (max, entry) => Math.max(max, Number.isFinite(entry.residual) ? entry.residual : max),
@@ -541,6 +591,217 @@ function checkAndRecordSolveStop(execution: SketchSolveExecutionState): boolean 
     return true;
   }
   return false;
+}
+
+function enrichConstraintDiagnostics(
+  sketchId: string,
+  solvedEntities: SketchEntity[],
+  constraints: SketchConstraint[],
+  components: SketchConstraintComponent[],
+  constraintStatus: SketchConstraintStatus[],
+  execution: SketchSolveExecutionState,
+  options: SketchConstraintSolveOptions | undefined
+): SketchConstraintStatus[] {
+  if (constraints.length < 2) return constraintStatus;
+  if (execution.termination) return constraintStatus;
+  if (options?.maxIterations !== undefined || options?.maxTimeMs !== undefined) {
+    return constraintStatus;
+  }
+  if (constraints.length > 24) return constraintStatus;
+
+  const enriched = constraintStatus.map((entry) => ({ ...entry }));
+  const statusById = new Map(enriched.map((entry) => [entry.constraintId, entry]));
+  const constraintById = new Map(constraints.map((constraint) => [constraint.id, constraint]));
+
+  for (const component of components) {
+    const componentEntities = solvedEntities.filter((entity) => component.entityIds.includes(entity.id));
+    const componentConstraints = component.constraintIds
+      .map((constraintId) => constraintById.get(constraintId))
+      .filter((constraint): constraint is SketchConstraint => !!constraint);
+    if (componentConstraints.length < 2) continue;
+    const componentStatusEntries = component.constraintIds
+      .map((constraintId) => statusById.get(constraintId))
+      .filter((entry): entry is SketchConstraintStatus => !!entry);
+    const unsatisfied = componentStatusEntries.filter((entry) => entry.status === "unsatisfied");
+    if (unsatisfied.length > 0) {
+      enrichConflictDiagnosticsForComponent(
+        sketchId,
+        componentEntities,
+        componentConstraints,
+        componentStatusEntries,
+        statusById
+      );
+      continue;
+    }
+    enrichRedundancyDiagnosticsForComponent(
+      sketchId,
+      componentEntities,
+      componentConstraints,
+      componentStatusEntries,
+      statusById
+    );
+  }
+  return enriched;
+}
+
+function enrichConflictDiagnosticsForComponent(
+  sketchId: string,
+  componentEntities: SketchEntity[],
+  componentConstraints: SketchConstraint[],
+  componentStatusEntries: SketchConstraintStatus[],
+  statusById: Map<string, SketchConstraintStatus>
+): void {
+  const baselineUnsatisfiedCount = componentStatusEntries.filter(
+    (entry) => entry.status === "unsatisfied"
+  ).length;
+  for (const entry of componentStatusEntries) {
+    if (entry.status !== "unsatisfied") continue;
+    let bestRelatedIds: string[] = [];
+    let bestTargetSatisfied = false;
+    let bestUnsatisfiedCount = Number.POSITIVE_INFINITY;
+    let bestResidual = Number.POSITIVE_INFINITY;
+
+    for (const candidate of componentConstraints) {
+      if (candidate.id === entry.constraintId) continue;
+      const report = simulateConstraintSolveReport(
+        sketchId,
+        componentEntities,
+        componentConstraints.filter((constraint) => constraint.id !== candidate.id)
+      );
+      const target = report.report.constraintStatus.find(
+        (status) => status.constraintId === entry.constraintId
+      );
+      if (!target) continue;
+      const unsatisfiedCount = report.report.constraintStatus.filter(
+        (status) => status.status === "unsatisfied"
+      ).length;
+      const targetSatisfied = target.status === "satisfied";
+      const targetResidual = target.residual;
+      const improved =
+        targetSatisfied ||
+        unsatisfiedCount < baselineUnsatisfiedCount ||
+        targetResidual + 1e-9 < entry.residual;
+      if (!improved) continue;
+      const better =
+        Number(targetSatisfied) > Number(bestTargetSatisfied) ||
+        (targetSatisfied === bestTargetSatisfied && unsatisfiedCount < bestUnsatisfiedCount) ||
+        (targetSatisfied === bestTargetSatisfied &&
+          unsatisfiedCount === bestUnsatisfiedCount &&
+          targetResidual + 1e-9 < bestResidual);
+      if (better) {
+        bestRelatedIds = [candidate.id];
+        bestTargetSatisfied = targetSatisfied;
+        bestUnsatisfiedCount = unsatisfiedCount;
+        bestResidual = targetResidual;
+        continue;
+      }
+      const tied =
+        targetSatisfied === bestTargetSatisfied &&
+        unsatisfiedCount === bestUnsatisfiedCount &&
+        Math.abs(targetResidual - bestResidual) <= 1e-9;
+      if (tied) bestRelatedIds.push(candidate.id);
+    }
+
+    if (bestRelatedIds.length === 0) continue;
+    const target = statusById.get(entry.constraintId);
+    if (!target) continue;
+    target.diagnosticType = "conflict";
+    target.relatedConstraintIds = [...new Set(bestRelatedIds)].sort();
+    target.code = "sketch_constraint_conflict";
+    target.message = `Sketch ${sketchId} constraint ${entry.constraintId} likely conflicts with ${target.relatedConstraintIds.join(", ")}`;
+  }
+}
+
+function enrichRedundancyDiagnosticsForComponent(
+  sketchId: string,
+  componentEntities: SketchEntity[],
+  componentConstraints: SketchConstraint[],
+  componentStatusEntries: SketchConstraintStatus[],
+  statusById: Map<string, SketchConstraintStatus>
+): void {
+  const base = simulateConstraintSolveReport(sketchId, componentEntities, componentConstraints);
+  const baseRedundantEquations = base.analysis?.redundantEquations ?? 0;
+  const baseRemainingDegreesOfFreedom = base.report.remainingDegreesOfFreedom;
+  if (baseRedundantEquations <= 0) return;
+
+  for (const entry of componentStatusEntries) {
+    if (entry.status !== "satisfied") continue;
+    const reducedConstraints = componentConstraints.filter(
+      (constraint) => constraint.id !== entry.constraintId
+    );
+    if (reducedConstraints.length === 0) continue;
+    const reduced = simulateConstraintSolveReport(sketchId, componentEntities, reducedConstraints);
+    const reducedRedundantEquations = reduced.analysis?.redundantEquations ?? 0;
+    const reducedUnsatisfiedCount = reduced.report.constraintStatus.filter(
+      (status) => status.status === "unsatisfied"
+    ).length;
+    if (reducedUnsatisfiedCount > 0) continue;
+    if (reduced.report.remainingDegreesOfFreedom !== baseRemainingDegreesOfFreedom) continue;
+    if (reducedRedundantEquations >= baseRedundantEquations) continue;
+    const target = statusById.get(entry.constraintId);
+    if (!target) continue;
+    target.diagnosticType = "redundant";
+    target.relatedConstraintIds = componentConstraints
+      .filter((constraint) => constraint.id !== entry.constraintId)
+      .filter((constraint) =>
+        listConstraintEntityIds(constraint).some((entityId) => target.entityIds.includes(entityId))
+      )
+      .map((constraint) => constraint.id)
+      .sort();
+    target.code = "sketch_constraint_redundant";
+    target.message = `Sketch ${sketchId} constraint ${entry.constraintId} is redundant with the remaining component constraints`;
+  }
+}
+
+function simulateConstraintSolveReport(
+  sketchId: string,
+  entities: SketchEntity[],
+  constraints: SketchConstraint[]
+): {
+  report: SketchConstraintSolveReport;
+  analysis: SketchConstraintSolveAnalysis | null;
+} {
+  const simulatedEntities = cloneSketchEntities(entities);
+  const entityMap = new Map(simulatedEntities.map((entity) => [entity.id, entity]));
+  const components = buildConstraintComponents(simulatedEntities, constraints);
+  const execution = createSketchSolveExecutionState();
+  const constraintById = new Map(constraints.map((constraint) => [constraint.id, constraint]));
+
+  for (const component of components) {
+    const componentConstraints = component.constraintIds
+      .map((constraintId) => constraintById.get(constraintId))
+      .filter((constraint): constraint is SketchConstraint => !!constraint);
+    if (componentConstraints.length === 0) continue;
+    const componentEntities = component.entityIds
+      .map((entityId) => entityMap.get(entityId))
+      .filter((entity): entity is SketchEntity => !!entity);
+    solveSketchConstraintsNumerically(
+      sketchId,
+      componentEntities,
+      entityMap,
+      componentConstraints,
+      execution
+    );
+    polishSketchConstraints(sketchId, entityMap, componentConstraints, execution);
+  }
+
+  const constraintStatus = constraints.map((constraint) =>
+    buildConstraintStatus(sketchId, entityMap, constraint, "authored")
+  );
+  const analysis = analyzeDegreesOfFreedom(simulatedEntities, constraints, components);
+  return {
+    report: buildSolveReport(
+      simulatedEntities,
+      constraints,
+      constraintStatus,
+      components,
+      finalizeSolveMeta(execution, "converged", constraintStatus.reduce(
+        (max, entry) => Math.max(max, Number.isFinite(entry.residual) ? entry.residual : max),
+        0
+      ))
+    ),
+    analysis,
+  };
 }
 
 function collectActiveComponentIds(
