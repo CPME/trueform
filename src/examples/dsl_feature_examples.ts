@@ -96,6 +96,7 @@ export type DslFeatureExample = {
       output: string;
       color?: [number, number, number];
       alpha?: number;
+      screenSpaceTint?: boolean;
       wireframe?: boolean;
       wireColor?: [number, number, number];
       wireDepthTest?: boolean;
@@ -1123,6 +1124,7 @@ export const dslFeatureExamples: DslFeatureExample[] = [
           output: "body:a",
           color: [66, 133, 244],
           alpha: 0.2,
+          screenSpaceTint: true,
           wireframe: false,
           depthTest: true,
         },
@@ -1130,6 +1132,7 @@ export const dslFeatureExamples: DslFeatureExample[] = [
           output: "body:b",
           color: [251, 188, 5],
           alpha: 0.2,
+          screenSpaceTint: true,
           wireframe: false,
           depthTest: true,
         },

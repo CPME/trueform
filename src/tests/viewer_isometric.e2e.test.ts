@@ -210,6 +210,45 @@ const tests = [
       assert.ok(r < 24, "behind transparent layer should not leak through the opaque base");
     },
   },
+  {
+    name: "viewer isometric: coplanar transparent layers tint opaque geometry without dropping out",
+    fn: async () => {
+      const png = renderIsometricPngLayers(
+        [
+          {
+            mesh: makeQuadMesh(0),
+            baseColor: [0, 220, 0],
+            baseAlpha: 1,
+            wireframe: false,
+            depthTest: true,
+          },
+          {
+            mesh: makeQuadMesh(0),
+            baseColor: [0, 0, 255],
+            baseAlpha: 0.45,
+            wireframe: false,
+            depthTest: true,
+          },
+        ],
+        {
+          width: 120,
+          height: 120,
+          padding: 12,
+          viewDir: [0, 0, -1],
+          lightDir: [0, 0, -1],
+          ambient: 1,
+          diffuse: 0,
+          background: [255, 255, 255],
+          backgroundAlpha: 1,
+        }
+      );
+      const [r, g, b, a] = readPngPixel(png, 60, 60);
+      assert.ok(a > 0, "center pixel should be covered");
+      assert.ok(b > 80, "coplanar transparent layer should still tint the opaque base");
+      assert.ok(g > b, "opaque base should remain visible under the coplanar tint");
+      assert.ok(r < 24, "coplanar tint test should not introduce red leakage");
+    },
+  },
 ];
 
 runTests(tests).catch((err) => {

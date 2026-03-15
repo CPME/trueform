@@ -24,6 +24,7 @@ export type IsoRenderLayer = {
   mesh: MeshData;
   baseColor?: Vec3;
   baseAlpha?: number;
+  screenSpaceTint?: boolean;
   wireframe?: boolean;
   wireColor?: Vec3;
   wireDepthTest?: boolean;
@@ -50,6 +51,7 @@ type TransparentTriangle = {
   b: number;
   alpha: number;
   depthTest: boolean;
+  depthBias: number;
 };
 
 type QueuedTransparentLayer = {
@@ -195,6 +197,8 @@ export function renderIsometricPngLayers(
   const globalZ = new Float32Array(width * height);
   globalZ.fill(-Infinity);
   const transparentLayers: QueuedTransparentLayer[] = [];
+  const sceneSpan = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 1);
+  const transparentDepthBias = sceneSpan * 1e-4;
 
   for (const layer of layers) {
     const mesh = layer.mesh;
@@ -205,6 +209,7 @@ export function renderIsometricPngLayers(
     const normalsOk = Array.isArray(normals) && normals.length === positions.length;
     const baseColor = layer.baseColor ?? opts.baseColor ?? [154, 192, 230];
     const baseAlpha = clamp(layer.baseAlpha ?? opts.baseAlpha ?? 1, 0, 1);
+    const screenSpaceTint = layer.screenSpaceTint === true && baseAlpha > 0;
     const wireframe = layer.wireframe ?? opts.wireframe ?? true;
     const wireColor = layer.wireColor ?? opts.wireColor ?? [32, 40, 52];
     const wireDepthTest = layer.wireDepthTest ?? opts.wireDepthTest ?? true;
@@ -212,7 +217,7 @@ export function renderIsometricPngLayers(
     const fillZBuffer = depthTest
       ? globalZ
       : new Float32Array(width * height).fill(-Infinity);
-    const isTransparentFill = baseAlpha > 0 && baseAlpha < 1;
+    const isTransparentFill = (baseAlpha > 0 && baseAlpha < 1) || screenSpaceTint;
 
     const layerTransparentTriangles: TransparentTriangle[] = [];
 
@@ -259,7 +264,9 @@ export function renderIsometricPngLayers(
         if (Math.abs(denom) < 1e-6) continue;
         if (baseAlpha <= 0) continue;
 
-        const intensity = isTransparentFill
+        const intensity = screenSpaceTint
+          ? 1
+          : isTransparentFill
           ? 1
           : clamp(
               ambient +
@@ -307,7 +314,9 @@ export function renderIsometricPngLayers(
           g,
           b,
           alpha: baseAlpha,
-          depthTest,
+          depthTest: screenSpaceTint ? false : depthTest,
+          depthBias:
+            !screenSpaceTint && isTransparentFill && depthTest ? transparentDepthBias : 0,
         };
         if (isTransparentFill) {
           layerTransparentTriangles.push(triangle);
@@ -435,7 +444,8 @@ function rasterizeTriangle(
       const insidePositive = w0 >= 0 && w1 >= 0 && w2 >= 0;
       const insideNegative = w0 <= 0 && w1 <= 0 && w2 <= 0;
       if (!insidePositive && !insideNegative) continue;
-      const z = w0 * triangle.z0 + w1 * triangle.z1 + w2 * triangle.z2;
+      const z =
+        w0 * triangle.z0 + w1 * triangle.z1 + w2 * triangle.z2 + triangle.depthBias;
       const idx = py * width + px;
       const prior = testBuffer?.[idx] ?? -Infinity;
       if (z < prior - 1e-6) continue;

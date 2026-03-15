@@ -194,6 +194,7 @@ try {
           mesh: meshWithThreads,
           baseColor: layer.color,
           baseAlpha: layer.alpha,
+          screenSpaceTint: layer.screenSpaceTint,
           wireframe: layer.wireframe,
           wireColor: layer.wireColor,
           wireDepthTest: layer.wireDepthTest,
