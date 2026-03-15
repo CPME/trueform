@@ -81,6 +81,9 @@ function makeContext(state: {
       return fn(...(argSets[0] ?? []));
     },
     makeCylinder: (radius, height, axis, center) => ({ kind: "cylinder", radius, height, axis, center }),
+    makePipeSelectionLedgerPlan: ({ axis, length, innerRadius }) => ({
+      solid: { slot: `pipe:${axis.join(",")}:${length}:${innerRadius}` },
+    }),
     makeBoolean: (_op, left, right) => ({ kind: "cut", left, right }),
     splitByTools: (shape, tools) => {
       state.splitCalls.push({ shape, tools });
@@ -221,7 +224,7 @@ const tests = [
 
       assert.equal(result.outputs.get("body:pipe")?.kind, "solid");
       assert.equal(state.splitCalls.length, 1);
-      assert.deepEqual(state.selections, [{ ownerKey: "body:pipe", rootKind: undefined, hasLedgerPlan: false }]);
+      assert.deepEqual(state.selections, [{ ownerKey: "body:pipe", rootKind: undefined, hasLedgerPlan: true }]);
       assert.deepEqual(result.outputs.get("body:pipe")?.meta["shape"], {
         kind: "normalized",
         shape: {

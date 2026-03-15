@@ -51,6 +51,15 @@ const tests = [
     },
   },
   {
+    name: "selection semantics: pipe-style outer/start adjacency keeps bound semantics",
+    fn: async () => {
+      assert.equal(
+        deriveBooleanSemanticEdgeSlot(["outer", "start"]),
+        "outer.bound.start"
+      );
+    },
+  },
+  {
     name: "selection semantics: semantic edge descriptors capture split provenance and signature",
     fn: async () => {
       assert.deepEqual(

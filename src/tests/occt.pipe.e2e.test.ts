@@ -29,6 +29,34 @@ const tests = [
 
       const faceCount = countFaces(occt, shape);
       assert.ok(faceCount >= 4, `expected multiple faces, got ${faceCount}`);
+
+      const faceSlots = new Set(
+        result.final.selections
+          .filter(
+            (selection) =>
+              selection.kind === "face" &&
+              selection.meta["createdBy"] === "pipe-1" &&
+              typeof selection.meta["selectionSlot"] === "string"
+          )
+          .map((selection) => selection.meta["selectionSlot"] as string)
+      );
+      assert.deepEqual(Array.from(faceSlots).sort(), ["end", "inner", "outer", "start"]);
+
+      const outerStartEdge = result.final.selections.find(
+        (selection) =>
+          selection.kind === "edge" &&
+          selection.meta["createdBy"] === "pipe-1" &&
+          selection.meta["selectionSlot"] === "outer.bound.start"
+      );
+      assert.ok(outerStartEdge, "missing semantic pipe edge outer.bound.start");
+      const aliases = Array.isArray(outerStartEdge?.meta["selectionAliases"])
+        ? (outerStartEdge?.meta["selectionAliases"] as string[])
+        : [];
+      assert.equal(aliases.length, 1, "expected one legacy alias for semantic pipe edge");
+      assert.ok(
+        aliases[0]?.startsWith("edge:body.main~pipe-1.h"),
+        `expected legacy hash alias for semantic pipe edge, got ${aliases[0] ?? ""}`
+      );
     },
   },
   {

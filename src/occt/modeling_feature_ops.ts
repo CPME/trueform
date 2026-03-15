@@ -64,6 +64,12 @@ export type ModelingFeatureContext = {
     axis: [number, number, number],
     center: [number, number, number]
   ) => unknown;
+  makePipeSelectionLedgerPlan: (opts: {
+    axis: [number, number, number];
+    origin: [number, number, number];
+    innerRadius: number;
+    length: number;
+  }) => SelectionLedgerPlan;
   makeBoolean: (op: "cut", left: unknown, right: unknown) => unknown;
   splitByTools: (shape: unknown, tools: unknown[]) => unknown;
   normalizeSolid: (shape: unknown) => unknown;
@@ -373,6 +379,14 @@ export function execPipe(
     resultKey: feature.result,
     outputKind: "solid",
     tags: feature.tags,
+    opts: {
+      ledgerPlan: ctx.makePipeSelectionLedgerPlan({
+        axis: axisDir,
+        origin: originVec,
+        innerRadius,
+        length,
+      }),
+    },
     collectSelections: ctx.collectSelections,
   });
 }

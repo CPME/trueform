@@ -25,6 +25,7 @@ function makeSweepContext(state: {
       state.selections.push({ ownerKey, rootKind: opts?.rootKind });
       return [{ id: `${ownerKey}:${opts?.rootKind ?? "solid"}`, kind: "solid", meta: {} }];
     },
+    makePipeSweepSelectionLedgerPlan: () => ({ solid: { slot: "pipe-sweep:solid" } }),
     makePipeSolid: (spine, profile, frameOrOpts, maybeOpts) => {
       state.pipeCalls.push({ spine, profile, frameOrOpts, maybeOpts });
       return { tag: `pipe:${state.pipeCalls.length}` };

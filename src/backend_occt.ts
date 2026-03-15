@@ -220,6 +220,7 @@ import {
 } from "./occt/sketch_wire_builder.js";
 import {
   buildPathWire as buildOcctPathWire,
+  pathEndTangent as buildOcctPathEndTangent,
   pathStartTangent as buildOcctPathStartTangent,
   type PathWireBuilderDeps,
 } from "./occt/path_wire_builder.js";
@@ -248,6 +249,8 @@ import {
   makeFaceMutationSelectionLedgerPlan as makeOcctFaceMutationSelectionLedgerPlan,
   makeHoleSelectionLedgerPlan as makeOcctHoleSelectionLedgerPlan,
   makeKnitSelectionLedgerPlan as makeOcctKnitSelectionLedgerPlan,
+  makePipeSelectionLedgerPlan as makeOcctPipeSelectionLedgerPlan,
+  makePipeSweepSelectionLedgerPlan as makeOcctPipeSweepSelectionLedgerPlan,
   makePrismSelectionLedgerPlan as makeOcctPrismSelectionLedgerPlan,
   makeRevolveSelectionLedgerPlan as makeOcctRevolveSelectionLedgerPlan,
   makeSplitFaceSelectionLedgerPlan as makeOcctSplitFaceSelectionLedgerPlan,
@@ -767,6 +770,7 @@ export class OcctBackend extends OcctBackendMeshSupport implements Backend {
       callWithFallback: (target, methods, argSets) =>
         this.callWithFallback(target, methods, argSets as any),
       makeCylinder: (radius, height, axis, center) => this.makeCylinder(radius, height, axis, center),
+      makePipeSelectionLedgerPlan: (opts) => this.makePipeSelectionLedgerPlan(opts),
       makeBoolean: (op, left, right) => this.makeBoolean(op, left, right),
       splitByTools: (shape, tools) => this.splitByTools(shape, tools as any[]),
       normalizeSolid: (shape) => this.normalizeSolid(shape),
@@ -1109,6 +1113,7 @@ export class OcctBackend extends OcctBackendMeshSupport implements Backend {
         this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
       countSolids: (shape) => this.countSolids(shape),
       isValidShape: (shape) => this.isValidShape(shape),
+      makePipeSweepSelectionLedgerPlan: (opts) => this.makePipeSweepSelectionLedgerPlan(opts),
       makeBoolean: (op, left, right) => this.makeBoolean(op, left, right),
       makeCircleEdge: (center, radius, normal) => this.makeCircleEdge(center, radius, normal),
       makeFaceFromWire: (wire) => this.makeFaceFromWire(wire),
@@ -1119,6 +1124,7 @@ export class OcctBackend extends OcctBackendMeshSupport implements Backend {
         this.makeRingFace(center, normal, outerRadius, innerRadius),
       makeWireFromEdges: (edges) => this.makeWireFromEdges(edges as any[]),
       normalizeSolid: (shape) => this.normalizeSolid(shape),
+      pathEndTangent: (path) => this.pathEndTangent(path),
       pathStartTangent: (path) => this.pathStartTangent(path),
       planeBasisFromNormal: (origin, normal) => this.planeBasisFromNormal(origin, normal),
       readFace: (shape) => this.readFace(shape),
@@ -1179,6 +1185,7 @@ export class OcctBackend extends OcctBackendMeshSupport implements Backend {
       buildProfileWire: (profile) => this.buildProfileWire(profile),
       collectSelections: (shape, featureId, ownerKey, featureTags, opts) =>
         this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
+      makePipeSweepSelectionLedgerPlan: (opts) => this.makePipeSweepSelectionLedgerPlan(opts),
       makePipeSolid: (spine, profile, frameOrOpts, maybeOpts) =>
         this.invokePipeSolid(spine, profile, frameOrOpts, maybeOpts),
       resolvePlaneBasis: (planeRef, upstream, resolver) =>
@@ -1792,6 +1799,23 @@ export class OcctBackend extends OcctBackendMeshSupport implements Backend {
     return makeOcctRevolveSelectionLedgerPlan(this.selectionLedgerContext(), angleRad, opts);
   }
 
+  private makePipeSelectionLedgerPlan(opts: {
+    axis: [number, number, number];
+    origin: [number, number, number];
+    innerRadius: number;
+    length: number;
+  }): SelectionLedgerPlan {
+    return makeOcctPipeSelectionLedgerPlan(this.selectionLedgerContext(), opts);
+  }
+
+  private makePipeSweepSelectionLedgerPlan(opts: {
+    startCenter: [number, number, number];
+    endCenter: [number, number, number];
+    hasInnerWall: boolean;
+  }): SelectionLedgerPlan {
+    return makeOcctPipeSweepSelectionLedgerPlan(this.selectionLedgerContext(), opts);
+  }
+
   private makeFaceMutationSelectionLedgerPlan(
     upstream: KernelResult,
     ownerShape: any,
@@ -2190,6 +2214,15 @@ export class OcctBackend extends OcctBackendMeshSupport implements Backend {
     tangent: [number, number, number];
   } {
     return buildOcctPathStartTangent(path, {
+      point3Numbers: (point: Point3D, label: string) => this.point3Numbers(point, label),
+    });
+  }
+
+  private pathEndTangent(path: Path3D): {
+    end: [number, number, number];
+    tangent: [number, number, number];
+  } {
+    return buildOcctPathEndTangent(path, {
       point3Numbers: (point: Point3D, label: string) => this.point3Numbers(point, label),
     });
   }

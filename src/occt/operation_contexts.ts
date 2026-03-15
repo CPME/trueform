@@ -417,6 +417,11 @@ export type SweepFeatureContext = {
   ) => KernelSelection[];
   countSolids: (shape: unknown) => number;
   isValidShape: (shape: unknown) => boolean;
+  makePipeSweepSelectionLedgerPlan: (opts: {
+    startCenter: [number, number, number];
+    endCenter: [number, number, number];
+    hasInnerWall: boolean;
+  }) => SelectionLedgerPlan;
   makeBoolean: (op: "cut" | "intersect", left: unknown, right: unknown) => unknown;
   makeCircleEdge: (
     center: [number, number, number],
@@ -439,6 +444,9 @@ export type SweepFeatureContext = {
   ) => unknown;
   makeWireFromEdges: (edges: unknown[]) => unknown;
   normalizeSolid: (shape: unknown) => unknown;
+  pathEndTangent: (
+    path: Path3D
+  ) => { end: [number, number, number]; tangent: [number, number, number] };
   pathStartTangent: (
     path: Path3D
   ) => { start: [number, number, number]; tangent: [number, number, number] };
@@ -532,6 +540,11 @@ export type SweepContext = {
     featureTags?: string[],
     opts?: SelectionCollectionOptions
   ) => KernelSelection[];
+  makePipeSweepSelectionLedgerPlan: (opts: {
+    startCenter: [number, number, number];
+    endCenter: [number, number, number];
+    hasInnerWall: boolean;
+  }) => SelectionLedgerPlan;
   makePipeSolid: (
     spine: unknown,
     profile: unknown,

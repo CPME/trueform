@@ -7,15 +7,21 @@ import { expectNumber, isFiniteVec, normalizeVector } from "./vector_math.js";
 function resolveSweepPlane(
   ctx: SweepFeatureContext,
   feature: PipeSweep | HexTubeSweep
-): { spine: unknown; plane: ReturnType<SweepFeatureContext["planeBasisFromNormal"]> } {
+): {
+  spine: unknown;
+  plane: ReturnType<SweepFeatureContext["planeBasisFromNormal"]>;
+  start: [number, number, number];
+  end: [number, number, number];
+} {
   const spine = ctx.buildPathWire(feature.path);
   const { start, tangent } = ctx.pathStartTangent(feature.path);
+  const { end } = ctx.pathEndTangent(feature.path);
   const axis = normalizeVector(tangent);
   if (!isFiniteVec(axis)) {
     const label = feature.kind === "feature.pipeSweep" ? "pipe sweep" : "hex tube sweep";
     throw new Error(`OCCT backend: ${label} path tangent is degenerate`);
   }
-  return { spine, plane: ctx.planeBasisFromNormal(start, axis) };
+  return { spine, plane: ctx.planeBasisFromNormal(start, axis), start, end };
 }
 
 export function execPipeSweep(
@@ -41,7 +47,7 @@ export function execPipeSweep(
     );
   }
 
-  const { spine, plane } = resolveSweepPlane(ctx, feature);
+  const { spine, plane, start, end } = resolveSweepPlane(ctx, feature);
   const mode = feature.mode ?? "solid";
   if (mode === "surface") {
     const outerEdge = ctx.makeCircleEdge(plane.origin, outerRadius, plane.normal);
@@ -99,7 +105,14 @@ export function execPipeSweep(
     resultKey: feature.result,
     outputKind: "solid",
     tags: feature.tags,
-    opts: { rootKind: "solid" },
+    opts: {
+      rootKind: "solid",
+      ledgerPlan: ctx.makePipeSweepSelectionLedgerPlan({
+        startCenter: start,
+        endCenter: end,
+        hasInnerWall: innerRadius > 0,
+      }),
+    },
     collectSelections: ctx.collectSelections,
   });
 }

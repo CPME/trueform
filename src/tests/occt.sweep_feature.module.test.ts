@@ -29,6 +29,7 @@ function makeSweepContext(state: {
     },
     countSolids: () => 1,
     isValidShape: () => true,
+    makePipeSweepSelectionLedgerPlan: () => ({ solid: { slot: "pipe-sweep:solid" } }),
     makeBoolean: (_op, left, right) => {
       state.cuts.push({ left, right });
       return { tag: "cut-builder" };
@@ -59,6 +60,7 @@ function makeSweepContext(state: {
     }),
     makeWireFromEdges: (edges) => ({ tag: "wire", edges }),
     normalizeSolid: (shape) => ({ tag: "normalized", shape }),
+    pathEndTangent: () => ({ end: [0, 0, 10], tangent: [0, 0, 1] }),
     pathStartTangent: () => ({ start: [0, 0, 0], tangent: [0, 0, 1] }),
     planeBasisFromNormal: (origin, normal) => ({
       origin,

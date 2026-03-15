@@ -151,6 +151,58 @@ export function pathStartTangent(
   throw new Error("OCCT backend: unsupported path segment");
 }
 
+export function pathEndTangent(
+  path: Path3D,
+  deps: Pick<PathWireBuilderDeps, "point3Numbers">
+): { end: [number, number, number]; tangent: [number, number, number] } {
+  if (path.kind === "path.polyline") {
+    if (path.points.length < 2) {
+      throw new Error("OCCT backend: path needs at least 2 points");
+    }
+    const prevPoint = path.points[path.points.length - 2];
+    const endPoint = path.points[path.points.length - 1];
+    if (!prevPoint || !endPoint) {
+      throw new Error("OCCT backend: path needs at least 2 points");
+    }
+    const prev = deps.point3Numbers(prevPoint, "path point");
+    const end = deps.point3Numbers(endPoint, "path point");
+    return { end, tangent: subVec(end, prev) };
+  }
+  if (path.kind === "path.spline") {
+    if (path.points.length < 2) {
+      throw new Error("OCCT backend: path needs at least 2 points");
+    }
+    const prevPoint = path.points[path.points.length - 2];
+    const endPoint = path.points[path.points.length - 1];
+    if (!prevPoint || !endPoint) {
+      throw new Error("OCCT backend: path needs at least 2 points");
+    }
+    const prev = deps.point3Numbers(prevPoint, "path point");
+    const end = deps.point3Numbers(endPoint, "path point");
+    return { end, tangent: subVec(end, prev) };
+  }
+  if (path.segments.length === 0) {
+    throw new Error("OCCT backend: path has no segments");
+  }
+  const last = path.segments[path.segments.length - 1];
+  if (!last) {
+    throw new Error("OCCT backend: path has no segments");
+  }
+  if (last.kind === "path.line") {
+    const start = deps.point3Numbers(last.start, "path line start");
+    const end = deps.point3Numbers(last.end, "path line end");
+    return { end, tangent: subVec(end, start) };
+  }
+  if (last.kind === "path.arc") {
+    const start = deps.point3Numbers(last.start, "path arc start");
+    const end = deps.point3Numbers(last.end, "path arc end");
+    const center = deps.point3Numbers(last.center, "path arc center");
+    const mid = arcMidpointFromCenter(start, end, center, last.direction);
+    return { end, tangent: subVec(end, mid) };
+  }
+  throw new Error("OCCT backend: unsupported path segment");
+}
+
 export function arcMidpointFromCenter(
   start: [number, number, number],
   end: [number, number, number],

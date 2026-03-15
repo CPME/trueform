@@ -20,12 +20,17 @@ function isRightSemanticSlot(slot: string): boolean {
 
 function isCapSemanticSlot(slot: string): boolean {
   const base = semanticBaseSlot(slot);
-  return base === "top" || base === "bottom";
+  return base === "top" || base === "bottom" || base === "start" || base === "end";
 }
 
 function isSideSemanticSlot(slot: string): boolean {
   const base = semanticBaseSlot(slot);
-  return /^side\.\d+$/.test(base) || /^right\.side\.\d+$/.test(base);
+  return (
+    /^side\.\d+$/.test(base) ||
+    /^right\.side\.\d+$/.test(base) ||
+    base === "outer" ||
+    base === "inner"
+  );
 }
 
 export type BooleanSemanticEdgeDescriptor = {
