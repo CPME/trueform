@@ -33,7 +33,6 @@ export type KernelSelectionRecord = {
   role?: string;
   slot?: string;
   lineage: KernelSelectionLineage;
-  aliases?: ID[];
 };
 
 export type KernelSelection = {

@@ -9,7 +9,6 @@ export type SelectionLedgerHint = {
   slot?: string;
   role?: string;
   lineage?: KernelSelectionLineage;
-  aliases?: string[];
   signature?: string;
   provenance?: Record<string, unknown>;
 };
@@ -21,7 +20,6 @@ export type CollectedSubshape = {
 
 export type SelectionIdAssignment = {
   id: string;
-  aliases?: string[];
   record: KernelSelectionRecord;
 };
 
@@ -38,20 +36,10 @@ export function applySelectionLedgerHint(
   hint: SelectionLedgerHint
 ): void {
   const existing = entry.ledger;
-  const aliases = new Set<string>();
-  for (const candidate of [existing?.aliases, hint.aliases]) {
-    if (!Array.isArray(candidate)) continue;
-    for (const alias of candidate) {
-      if (typeof alias === "string" && alias.trim().length > 0) {
-        aliases.add(alias.trim());
-      }
-    }
-  }
   entry.ledger = {
     slot: typeof hint.slot === "string" && hint.slot.length > 0 ? hint.slot : existing?.slot,
     role: typeof hint.role === "string" && hint.role.length > 0 ? hint.role : existing?.role,
     lineage: hint.lineage ?? existing?.lineage,
-    aliases: aliases.size > 0 ? Array.from(aliases) : existing?.aliases,
   };
   if (entry.ledger?.role) {
     if (
@@ -69,9 +57,6 @@ export function applySelectionLedgerHint(
   if (entry.ledger?.lineage) {
     entry.meta.selectionLineage = entry.ledger.lineage;
   }
-  if (entry.ledger?.aliases && entry.ledger.aliases.length > 0) {
-    entry.meta.selectionAliases = entry.ledger.aliases.slice();
-  }
   if (typeof hint.signature === "string" && hint.signature.length > 0) {
     entry.meta.selectionSignature = hint.signature;
   }
@@ -88,7 +73,6 @@ export function assignStableSelectionIds(
   type DecoratedEntry = {
     index: number;
     baseId: string;
-    legacyBaseId?: string;
     tieHash: string;
     record: KernelSelectionRecord;
   };
@@ -98,9 +82,6 @@ export function assignStableSelectionIds(
     return {
       index,
       baseId: buildStableSelectionBaseId(kind, entry.meta, record, fns),
-      legacyBaseId: record.slot
-        ? buildLegacyStableSelectionBaseId(kind, entry.meta, record, fns)
-        : undefined,
       tieHash: hashValue(selectionTieBreakerFingerprint(kind, entry.meta, fns)),
       record,
     };
@@ -124,20 +105,8 @@ export function assignStableSelectionIds(
       const entry = bucket[i];
       if (!entry) continue;
       const id = bucket.length === 1 ? entry.baseId : `${entry.baseId}.${i + 1}`;
-      const aliases =
-        entry.legacyBaseId && entry.legacyBaseId !== entry.baseId
-          ? [bucket.length === 1 ? entry.legacyBaseId : `${entry.legacyBaseId}.${i + 1}`]
-          : undefined;
-      if (aliases) {
-        entry.record.aliases = aliases;
-        const targetEntry = entries[entry.index];
-        if (targetEntry) {
-          targetEntry.meta.selectionAliases = aliases.slice();
-        }
-      }
       assignments[entry.index] = {
         id,
-        aliases,
         record: entry.record,
       };
     }
@@ -180,7 +149,6 @@ function buildSelectionRecord(
     role: entry.ledger?.role ?? fns.stringFingerprint(entry.meta.role),
     slot: entry.ledger?.slot,
     lineage: entry.ledger?.lineage ?? { kind: "created" },
-    aliases: entry.ledger?.aliases,
   };
 }
 

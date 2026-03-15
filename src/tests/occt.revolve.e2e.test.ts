@@ -114,14 +114,7 @@ const tests = [
           selection.id ===
             "edge:body.main~sketch-revolve.profile.line-1.join.profile.line-2"
       );
-      const aliases = Array.isArray(cornerEdge?.meta["selectionAliases"])
-        ? (cornerEdge?.meta["selectionAliases"] as string[])
-        : [];
-      assert.equal(aliases.length, 1, "expected one legacy alias for semantic revolve edge");
-      assert.ok(
-        aliases[0]?.startsWith("edge:body.main~sketch-revolve.h"),
-        `expected legacy hash alias for semantic revolve edge, got ${aliases[0] ?? ""}`
-      );
+      assert.ok(cornerEdge, "missing semantic revolve corner edge");
     },
   },
 ];

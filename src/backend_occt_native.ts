@@ -228,9 +228,7 @@ function canonicalizeNativeSelectionIds(result: KernelResult): KernelResult {
         ...target.selection,
         id: assignment.id,
         record: assignment.record,
-        meta: assignment.aliases
-          ? { ...target.selection.meta, selectionAliases: assignment.aliases.slice() }
-          : target.selection.meta,
+        meta: target.selection.meta,
       };
     }
   }
@@ -255,17 +253,11 @@ function nativeSelectionEntry(selection: KernelSelection): CollectedSubshape {
     typeof selection.meta["selectionLineage"] === "object"
       ? (selection.meta["selectionLineage"] as any)
       : undefined;
-  const aliases =
-    Array.isArray(selection.meta["selectionAliases"]) &&
-    selection.meta["selectionAliases"].every((entry) => typeof entry === "string")
-      ? (selection.meta["selectionAliases"] as string[])
-      : undefined;
-  if (slot || role || lineage || aliases) {
+  if (slot || role || lineage) {
     entry.ledger = {
       slot,
       role,
       lineage,
-      aliases,
     };
   }
   return entry;

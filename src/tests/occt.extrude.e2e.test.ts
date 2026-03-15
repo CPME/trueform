@@ -173,14 +173,6 @@ const tests = [
         `expected durable face id, got ${stableFaceId}`
       );
       assert.equal(stableFaceId, "face:body.main~base.top");
-      const aliases = Array.isArray(topFace?.meta["selectionAliases"])
-        ? (topFace?.meta["selectionAliases"] as string[])
-        : [];
-      assert.equal(aliases.length, 1, "expected one legacy alias for top face");
-      assert.ok(
-        aliases[0]?.startsWith("face:body.main~base.h"),
-        `expected legacy hash alias, got ${aliases[0]}`
-      );
 
       const editedPart = dsl.part("extrude-stable-face-edited", [
         dsl.sketch2d(
@@ -208,7 +200,7 @@ const tests = [
     },
   },
   {
-    name: "occt e2e: extrude edge ids expose semantic slots with legacy aliases",
+    name: "occt e2e: extrude edge ids expose semantic slots",
     fn: async () => {
       const { backend } = await getBackendContext();
       const result = buildPart(
@@ -233,14 +225,6 @@ const tests = [
       );
       assert.ok(topEdge, "missing semantic top boundary edge");
       assert.equal(topEdge?.id, "edge:body.main~base.side.1.bound.top");
-      const aliases = Array.isArray(topEdge?.meta["selectionAliases"])
-        ? (topEdge?.meta["selectionAliases"] as string[])
-        : [];
-      assert.equal(aliases.length, 1, "expected one legacy alias for semantic extrude edge");
-      assert.ok(
-        aliases[0]?.startsWith("edge:body.main~base.h"),
-        `expected legacy hash alias for semantic extrude edge, got ${aliases[0] ?? ""}`
-      );
     },
   },
   {

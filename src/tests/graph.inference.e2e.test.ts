@@ -293,13 +293,13 @@ const tests = [
     },
   },
   {
-    name: "graph: selector.named explicit stable selection id is accepted",
+    name: "graph: selector.named explicit semantic selection id is accepted",
     fn: async () => {
       const part = dsl.part("named-selection-id", [
         dsl.extrude("base", dsl.profileRect(10, 10), 5, "body:main"),
         dsl.fillet(
           "fillet",
-          dsl.selectorNamed("edge:body.main~base.hseed"),
+          dsl.selectorNamed("edge:body.main~base.side.1.bound.top"),
           1,
           ["base"]
         ),
@@ -621,7 +621,7 @@ const tests = [
         dsl.sketch2d(
           "a-sketch",
           [{ name: "profile:cut", profile: dsl.profileRect(4, 4) }],
-          { plane: dsl.selectorNamed("face:body.main~z-extrude.hseed") }
+          { plane: dsl.selectorNamed("face:body.main~z-extrude.top") }
         ),
         dsl.extrude("z-extrude", dsl.profileRect(20, 20), 6, "body:main"),
       ]);

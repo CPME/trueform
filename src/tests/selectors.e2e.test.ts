@@ -468,7 +468,7 @@ const tests = [
       const ctx = {
         selections: [
           {
-            id: "face:body.main~base.hseed",
+            id: "face:body.main~base.top",
             kind: "face" as const,
             meta: { planar: true, area: 10, center: [0, 0, 0], centerZ: 0 },
           },

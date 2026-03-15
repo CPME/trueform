@@ -279,14 +279,7 @@ function hasDirectSelectionReference(
   ctx: ReturnType<typeof kernelResultToResolutionContext>
 ): boolean {
   if (ctx.named.has(target)) return true;
-  return ctx.selections.some((selection) => {
-    if (selection.id === target) return true;
-    const aliases = selection.meta["selectionAliases"];
-    return (
-      Array.isArray(aliases) &&
-      aliases.some((entry) => typeof entry === "string" && entry === target)
-    );
-  });
+  return ctx.selections.some((selection) => selection.id === target);
 }
 
 function parsePointAnchorId(

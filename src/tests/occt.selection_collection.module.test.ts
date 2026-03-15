@@ -42,7 +42,7 @@ function makeDeps(options: TestDepsOptions) {
     assignStableSelectionIds: (
       kind: "face" | "edge" | "solid" | "surface",
       entries: CollectedSubshape[]
-    ): Array<{ id: string; aliases?: string[]; record: KernelSelectionRecord }> =>
+    ): Array<{ id: string; record: KernelSelectionRecord }> =>
       assignStableSelectionIds(kind, entries, {
         normalizeSelectionToken,
         stringFingerprint,
@@ -80,7 +80,7 @@ function makeDeps(options: TestDepsOptions) {
 
 const tests = [
   {
-    name: "selection collection module: semantic edge fallback derives slot and legacy alias from adjacent face slots",
+    name: "selection collection module: semantic edge fallback derives slot from adjacent face slots",
     fn: async () => {
       const owner: TestShape = { id: "owner" };
       const faceA: CollectedSubshape = {
@@ -127,14 +127,6 @@ const tests = [
       assert.ok(edge, "missing edge selection");
       assert.equal(edge?.id, "edge:body.main~base.side.1.bound.top");
       assert.equal(edge?.meta["selectionSlot"], "side.1.bound.top");
-      const aliases = Array.isArray(edge?.meta["selectionAliases"])
-        ? (edge?.meta["selectionAliases"] as string[])
-        : [];
-      assert.equal(aliases.length, 1, "expected one legacy alias for semantic fallback edge");
-      assert.ok(
-        aliases[0]?.startsWith("edge:body.main~base.h"),
-        `expected legacy hash alias, got ${aliases[0] ?? ""}`
-      );
     },
   },
   {

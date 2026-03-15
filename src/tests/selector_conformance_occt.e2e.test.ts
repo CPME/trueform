@@ -6,7 +6,6 @@ async function main(): Promise<void> {
   const tests = selectorConformanceTests({
     name: "occt-backend",
     backend,
-    expectSelectionAliases: true,
   });
   await runTests(tests);
 }

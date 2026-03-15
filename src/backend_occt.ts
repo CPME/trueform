@@ -394,7 +394,6 @@ type FaceSurfaceMap = Map<number, Array<{ face: any; surface: FaceSurfaceClass }
 
 type SelectionIdAssignment = {
   id: string;
-  aliases?: string[];
   record: KernelSelectionRecord;
 };
 

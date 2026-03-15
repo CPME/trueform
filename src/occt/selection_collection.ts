@@ -11,7 +11,6 @@ type FaceSelectionBinding = {
 
 type SelectionIdAssignment = {
   id: string;
-  aliases?: string[];
   record: KernelSelectionRecord;
 };
 

@@ -49,14 +49,7 @@ const tests = [
           selection.meta["selectionSlot"] === "outer.bound.start"
       );
       assert.ok(outerStartEdge, "missing semantic pipe edge outer.bound.start");
-      const aliases = Array.isArray(outerStartEdge?.meta["selectionAliases"])
-        ? (outerStartEdge?.meta["selectionAliases"] as string[])
-        : [];
-      assert.equal(aliases.length, 1, "expected one legacy alias for semantic pipe edge");
-      assert.ok(
-        aliases[0]?.startsWith("edge:body.main~pipe-1.h"),
-        `expected legacy hash alias for semantic pipe edge, got ${aliases[0] ?? ""}`
-      );
+      assert.equal(outerStartEdge?.id, "edge:body.main~pipe-1.outer.bound.start");
     },
   },
   {

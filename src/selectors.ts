@@ -105,21 +105,12 @@ function resolveNamedSingle(
   const selectionHit = ctx.selections.find((selection) => selection.id === normalized);
   if (selectionHit) return { selection: selectionHit };
 
-  const aliasHit = ctx.selections.find((selection) => selectionHasAlias(selection, normalized));
-  if (aliasHit) return { selection: aliasHit };
-
   const rebound = resolveStableSelectionRebind(normalized, ctx);
   if (rebound) return { selection: rebound };
 
   const legacyError = legacyNumericSelectorError(normalized);
   if (legacyError) return { selection: null, error: legacyError };
   return { selection: null };
-}
-
-function selectionHasAlias(selection: Selection, target: string): boolean {
-  const aliases = selection.meta["selectionAliases"];
-  if (!Array.isArray(aliases)) return false;
-  return aliases.some((entry) => typeof entry === "string" && entry === target);
 }
 
 type ParsedStableSelectionRef = {

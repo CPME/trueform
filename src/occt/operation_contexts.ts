@@ -20,7 +20,6 @@ export type SelectionLedgerHint = {
   slot?: string;
   role?: string;
   lineage?: KernelSelectionLineage;
-  aliases?: string[];
   signature?: string;
   provenance?: Record<string, unknown>;
 };

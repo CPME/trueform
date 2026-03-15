@@ -10,7 +10,6 @@ import type { TestCase } from "./occt_test_utils.js";
 export type SelectorConformanceAsyncTarget = {
   name: string;
   backend: BackendAsync;
-  expectSelectionAliases?: boolean;
 };
 
 export function selectorConformanceTestsAsync(
@@ -74,27 +73,6 @@ export function selectorConformanceTestsAsync(
         );
         assert.ok(topFace, "missing stable top face selection");
         const selector = dsl.selectorNamed(String(topFace?.id ?? ""));
-        const selection = resolveSelector(selector, kernelResultToResolutionContext(result.final));
-        assert.equal(selection.id, topFace?.id);
-      },
-    },
-    {
-      name: `${target.name}: selector resolves stable selection alias`,
-      fn: async () => {
-        if (!target.expectSelectionAliases) return;
-        const result = await buildPartAsync(part, target.backend);
-        const topFace = result.final.selections.find(
-          (selection) =>
-            selection.kind === "face" &&
-            selection.meta["createdBy"] === "base-extrude" &&
-            selection.meta["normal"] === "+Z"
-        );
-        assert.ok(topFace, "missing stable top face selection");
-        const aliases = Array.isArray(topFace?.meta["selectionAliases"])
-          ? (topFace?.meta["selectionAliases"] as string[])
-          : [];
-        assert.ok(aliases.length > 0, "missing stable selection alias");
-        const selector = dsl.selectorNamed(String(aliases[0] ?? ""));
         const selection = resolveSelector(selector, kernelResultToResolutionContext(result.final));
         assert.equal(selection.id, topFace?.id);
       },

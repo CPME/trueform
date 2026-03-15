@@ -54,14 +54,7 @@ const tests = [
           selection.meta["selectionSlot"] === "outer.bound.start"
       );
       assert.ok(semanticEdge, "missing semantic pipe sweep edge outer.bound.start");
-      const aliases = Array.isArray(semanticEdge?.meta["selectionAliases"])
-        ? (semanticEdge?.meta["selectionAliases"] as string[])
-        : [];
-      assert.equal(aliases.length, 1, "expected one legacy alias for semantic pipe sweep edge");
-      assert.ok(
-        aliases[0]?.startsWith("edge:body.main~sweep-1.h"),
-        `expected legacy hash alias for semantic pipe sweep edge, got ${aliases[0] ?? ""}`
-      );
+      assert.equal(semanticEdge?.id, "edge:body.main~sweep-1.outer.bound.start");
     },
   },
   {
