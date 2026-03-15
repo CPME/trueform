@@ -92,6 +92,36 @@ const tests = [
         "face:body.main~sketch-revolve.profile.line-3",
         "face:body.main~sketch-revolve.profile.line-4",
       ]);
+
+      const edgeIds = result.final.selections
+        .filter(
+          (selection) =>
+            selection.kind === "edge" &&
+            selection.meta["createdBy"] === "sketch-revolve" &&
+            typeof selection.meta["selectionSlot"] === "string"
+        )
+        .map((selection) => selection.id)
+        .sort();
+      assert.deepEqual(edgeIds, [
+        "edge:body.main~sketch-revolve.profile.line-1.join.profile.line-2",
+        "edge:body.main~sketch-revolve.profile.line-1.join.profile.line-4",
+        "edge:body.main~sketch-revolve.profile.line-2.join.profile.line-3",
+        "edge:body.main~sketch-revolve.profile.line-3.join.profile.line-4",
+      ]);
+      const cornerEdge = result.final.selections.find(
+        (selection) =>
+          selection.kind === "edge" &&
+          selection.id ===
+            "edge:body.main~sketch-revolve.profile.line-1.join.profile.line-2"
+      );
+      const aliases = Array.isArray(cornerEdge?.meta["selectionAliases"])
+        ? (cornerEdge?.meta["selectionAliases"] as string[])
+        : [];
+      assert.equal(aliases.length, 1, "expected one legacy alias for semantic revolve edge");
+      assert.ok(
+        aliases[0]?.startsWith("edge:body.main~sketch-revolve.h"),
+        `expected legacy hash alias for semantic revolve edge, got ${aliases[0] ?? ""}`
+      );
     },
   },
 ];

@@ -1,8 +1,6 @@
 import { dot, isFiniteVec, normalizeVector } from "./vector_math.js";
 import type { SelectionLedgerContext, SelectionLedgerPlan } from "./operation_contexts.js";
 import { applyGeneratedDerivedFaceSlots } from "./selection_ledger_common.js";
-import { describeSemanticEdgeFromAdjacentFaces } from "../selection_semantics.js";
-import { hashValue } from "../hash.js";
 
 export function makePrismSelectionLedgerPlan(
   ctx: SelectionLedgerContext,
@@ -24,7 +22,6 @@ export function makePrismSelectionLedgerPlan(
         wire: opts?.wire,
         wireSegmentSlots: opts?.wireSegmentSlots,
       }),
-    edges: (entries) => annotatePrismEdgeSelections(ctx, entries),
   };
 }
 
@@ -164,51 +161,4 @@ function applyPrismHistorySideSlots(
   wireSegmentSlots: string[]
 ): boolean {
   return applyGeneratedDerivedFaceSlots(ctx, sideEntries, prism, wire, wireSegmentSlots, "side");
-}
-
-function annotatePrismEdgeSelections(
-  ctx: SelectionLedgerContext,
-  entries: Array<{
-    shape: unknown;
-    meta: Record<string, unknown>;
-    ledger?: { slot?: string };
-  }>
-): void {
-  const matched = entries
-    .filter((entry) => !entry.ledger?.slot)
-    .map((entry) => ({
-      entry,
-      descriptor: describeSemanticEdgeFromAdjacentFaces(entry.meta["adjacentFaceSlots"]),
-    }))
-    .filter(
-      (
-        candidate
-      ): candidate is {
-        entry: {
-          shape: unknown;
-          meta: Record<string, unknown>;
-          ledger?: { slot?: string };
-        };
-        descriptor: NonNullable<ReturnType<typeof describeSemanticEdgeFromAdjacentFaces>>;
-      } => candidate.descriptor !== null
-    );
-  if (matched.length === 0) return;
-
-  matched.sort((a, b) => {
-    const bySlot = a.descriptor.slot.localeCompare(b.descriptor.slot);
-    if (bySlot !== 0) return bySlot;
-    const aTie = hashValue(ctx.selectionTieBreakerFingerprint("edge", a.entry.meta));
-    const bTie = hashValue(ctx.selectionTieBreakerFingerprint("edge", b.entry.meta));
-    const byTie = aTie.localeCompare(bTie);
-    if (byTie !== 0) return byTie;
-    return ctx.shapeHash(a.entry.shape) - ctx.shapeHash(b.entry.shape);
-  });
-
-  for (const candidate of matched) {
-    ctx.applySelectionLedgerHint(candidate.entry, {
-      slot: candidate.descriptor.slot,
-      role: "edge",
-      lineage: { kind: "created" },
-    });
-  }
 }

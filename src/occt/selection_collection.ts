@@ -1,5 +1,6 @@
 import type { KernelSelection, KernelSelectionRecord } from "../backend.js";
 import type { CollectedSubshape, SelectionCollectionOptions } from "./operation_contexts.js";
+import { describeSemanticEdgeFromAdjacentFaces } from "../selection_semantics.js";
 
 type FaceSelectionBinding = {
   shape: unknown;
@@ -148,6 +149,7 @@ export function collectSelections(params: {
   if (opts?.ledgerPlan?.edges) {
     opts.ledgerPlan.edges(edgeEntries);
   }
+  annotateSemanticEdgeFallbacks(edgeEntries, deps);
   const edgeAssignments = deps.assignStableSelectionIds("edge", edgeEntries);
   for (let i = 0; i < edgeEntries.length; i += 1) {
     const entry = edgeEntries[i];
@@ -162,4 +164,20 @@ export function collectSelections(params: {
   }
 
   return selections;
+}
+
+function annotateSemanticEdgeFallbacks(
+  entries: CollectedSubshape[],
+  deps: Pick<SelectionCollectionDeps, "applySelectionLedgerHint">
+): void {
+  for (const entry of entries) {
+    if (!entry || entry.ledger?.slot) continue;
+    const descriptor = describeSemanticEdgeFromAdjacentFaces(entry.meta["adjacentFaceSlots"]);
+    if (!descriptor) continue;
+    deps.applySelectionLedgerHint(entry, {
+      slot: descriptor.slot,
+      role: "edge",
+      lineage: { kind: "created" },
+    });
+  }
 }
