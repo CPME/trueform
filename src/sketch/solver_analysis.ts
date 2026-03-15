@@ -27,13 +27,13 @@ type ScalarVariable = {
   readPoint?: () => [number, number];
 };
 
-type SketchConstraintComponent = {
+export type SketchConstraintComponent = {
   componentId: string;
   entityIds: string[];
   constraintIds: string[];
 };
 
-type SketchConstraintComponentAnalysis = {
+export type SketchConstraintComponentAnalysis = {
   componentId: string;
   totalDegreesOfFreedom: number;
   remainingDegreesOfFreedom: number;
@@ -44,7 +44,7 @@ type SketchConstraintComponentAnalysis = {
   freeMotionDirections: SketchConstraintMotionDirection[];
 };
 
-type SketchConstraintSolveAnalysis = {
+export type SketchConstraintSolveAnalysis = {
   remainingDegreesOfFreedom: number;
   internalRemainingDegreesOfFreedom: number;
   redundantEquations: number;

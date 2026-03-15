@@ -54,6 +54,8 @@ import {
   buildSolveReport as buildSketchSolveReport,
   buildComponentStatus as buildSketchComponentStatus,
   ensureUniqueConstraintIds as ensureUniqueSketchConstraintIds,
+  type SketchConstraintComponent,
+  type SketchConstraintSolveAnalysis,
   type SolverAnalysisDeps,
 } from "./solver_analysis.js";
 import {
@@ -201,32 +203,6 @@ export type SketchConstraintSolveSession = {
   solve: (input: SketchConstraintSessionSolveInput) => SketchConstraintSolveReport;
   solveAsync: (input: SketchConstraintSessionSolveInput) => Promise<SketchConstraintSolveReport>;
   reset: () => void;
-};
-
-type SketchConstraintComponent = {
-  componentId: string;
-  entityIds: string[];
-  constraintIds: string[];
-};
-
-type SketchConstraintComponentAnalysis = {
-  componentId: string;
-  totalDegreesOfFreedom: number;
-  remainingDegreesOfFreedom: number;
-  internalRemainingDegreesOfFreedom: number;
-  rigidBodyDegreesOfFreedom: number;
-  grounded: boolean;
-  redundantEquations: number;
-  freeMotionDirections: SketchConstraintMotionDirection[];
-};
-
-type SketchConstraintSolveAnalysis = {
-  remainingDegreesOfFreedom: number;
-  internalRemainingDegreesOfFreedom: number;
-  redundantEquations: number;
-  perEntityRemaining: Map<string, number>;
-  componentAnalysis: Map<string, SketchConstraintComponentAnalysis>;
-  entityToComponent: Map<string, string>;
 };
 
 type SketchSolveExecutionState = {
