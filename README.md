@@ -1,8 +1,10 @@
 # TrueForm
 
-![Hex tube sweep](assets/hex-tube-sweep.png)
-
 Docs: [https://cpme.github.io/trueform/](https://cpme.github.io/trueform/)
+
+Examples App: [https://cpme.github.io/trueform/reference/dsl/examples-app.html](https://cpme.github.io/trueform/reference/dsl/examples-app.html)
+
+![Hex tube sweep](assets/hex-tube-sweep.png)
 
 TrueForm is a declarative, intent-first modeling layer that compiles to interchangeable geometric backends (OpenCascade.js today, with a live-tested native OCCT transport/server path for the currently supported feature surface).
 It lets humans and agents describe what a part is (features, constraints, assertions)
