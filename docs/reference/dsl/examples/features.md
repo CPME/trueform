@@ -691,6 +691,9 @@ const examplePart = part("example-boolean", [
 ]);
 ```
 
+Notes:
+- The docs renderer overlays the original inputs in translucent blue and amber so the green union result reads as the combined output volume.
+
 ## Boolean Subtract
 
 ![Boolean subtract example](/examples/dsl/boolean-cut.iso.png)
@@ -702,6 +705,9 @@ const examplePart = part("example-boolean-cut", [
   cut("subtract-1", selectorNamed("body:base"), selectorNamed("body:tool"), "body:main"),
 ]);
 ```
+
+Notes:
+- The docs renderer keeps the source plate and subtracting tool as translucent overlays so the green subtract result and removed volume stay legible at a glance.
 
 ## Boolean Intersect
 
@@ -716,7 +722,7 @@ const examplePart = part("example-boolean-intersect", [
 ```
 
 Notes:
-- The docs renderer overlays `body:a` and `body:b` in translucent colors so the intersection volume is easier to read.
+- The docs renderer overlays the original inputs in translucent blue and amber so the green intersection result stays readable without mesh-striping artifacts.
 
 ## Pattern (Feature/Body)
 

@@ -1073,6 +1073,35 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         ["base", "tool"]
       ),
     ]),
+    render: {
+      layers: [
+        {
+          output: "body:base",
+          color: [66, 133, 244],
+          alpha: 0.2,
+          screenSpaceTint: true,
+          wireframe: false,
+          depthTest: true,
+        },
+        {
+          output: "body:tool",
+          color: [251, 188, 5],
+          alpha: 0.2,
+          screenSpaceTint: true,
+          wireframe: false,
+          depthTest: true,
+        },
+        {
+          output: "body:main",
+          color: [52, 168, 83],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [24, 35, 24],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
   },
   {
     id: "boolean-cut",
@@ -1093,6 +1122,35 @@ export const dslFeatureExamples: DslFeatureExample[] = [
         ["base", "tool"]
       ),
     ]),
+    render: {
+      layers: [
+        {
+          output: "body:base",
+          color: [66, 133, 244],
+          alpha: 0.2,
+          screenSpaceTint: true,
+          wireframe: false,
+          depthTest: true,
+        },
+        {
+          output: "body:tool",
+          color: [251, 188, 5],
+          alpha: 0.2,
+          screenSpaceTint: true,
+          wireframe: false,
+          depthTest: true,
+        },
+        {
+          output: "body:main",
+          color: [52, 168, 83],
+          alpha: 1,
+          wireframe: true,
+          wireColor: [24, 35, 24],
+          wireDepthTest: true,
+          depthTest: true,
+        },
+      ],
+    },
   },
   {
     id: "boolean-intersect",
