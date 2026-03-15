@@ -25,6 +25,7 @@ export function makeBooleanSelectionLedgerPlan(
     op === "subtract" || op === "intersect"
       ? ownerFaceSelectionsForShape(ctx, upstream, leftShape)
       : [];
+  const unionLeftFaces = op === "union" ? ownerFaceSelectionsForShape(ctx, upstream, leftShape) : [];
   const rightPlan =
     op === "subtract" || op === "union"
       ? null
@@ -41,6 +42,7 @@ export function makeBooleanSelectionLedgerPlan(
         annotateBooleanCutFaceSelections(ctx, entries, rightFaces, builder);
         annotateBooleanPreservedFaceSelections(ctx, entries, leftFaces, builder);
       } else if (op === "union") {
+        annotateBooleanPreservedFaceSelections(ctx, entries, unionLeftFaces, builder);
         annotateBooleanUnionFaceSelections(ctx, entries, rightFaces, builder);
       } else if (op === "intersect") {
         annotateBooleanPreservedFaceSelections(ctx, entries, leftFaces, builder);

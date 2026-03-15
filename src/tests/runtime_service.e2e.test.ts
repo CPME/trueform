@@ -344,6 +344,60 @@ function makeRuntimeTrianglePrismPart() {
   ]);
 }
 
+function makeRuntimeBooleanUnionReplayPart(replayEdgeId?: string) {
+  const features = [
+    dsl.sketch2d(
+      "base-sketch",
+      [
+        {
+          name: "profile:base",
+          profile: dsl.profileSketchLoop([
+            "rectangle-1.1",
+            "rectangle-1.2",
+            "rectangle-1.3",
+            "rectangle-1.4",
+          ]),
+        },
+      ],
+      {
+        entities: [
+          dsl.sketchLine("rectangle-1.1", [-10, -10], [10, -10]),
+          dsl.sketchLine("rectangle-1.2", [10, -10], [10, 10]),
+          dsl.sketchLine("rectangle-1.3", [10, 10], [-10, 10]),
+          dsl.sketchLine("rectangle-1.4", [-10, 10], [-10, -10]),
+        ],
+      }
+    ),
+    dsl.extrude("base", dsl.profileRef("profile:base"), 10, "body:seed"),
+    dsl.fillet(
+      "fillet-1",
+      dsl.selectorNamed("edge:body.seed~base.side.rectangle-1.1.join.top"),
+      2,
+      { result: "body:fillet-1" }
+    ),
+    dsl.sketch2d(
+      "boss-sketch",
+      [{ name: "profile:boss", profile: dsl.profileSketchLoop(["circle-1"]) }],
+      {
+        plane: dsl.selectorNamed("face:body.fillet-1~fillet-1.top"),
+        entities: [dsl.sketchCircle("circle-1", [6, 6], 4)],
+      }
+    ),
+    dsl.extrude("boss", dsl.profileRef("profile:boss"), 6, "body:boss"),
+    dsl.booleanOp(
+      "auto-union-1",
+      "union",
+      dsl.selectorNamed("body:fillet-1"),
+      dsl.selectorNamed("body:boss"),
+      "body:main"
+    ),
+  ];
+  if (typeof replayEdgeId === "string" && replayEdgeId.length > 0) {
+    features.push(dsl.fillet("fillet-2", dsl.selectorNamed(replayEdgeId), 0.25, ["auto-union-1"]));
+  }
+  return dsl.part("runtime-boolean-union-replay", features);
+}
+
 const tests = [
   {
     name: "runtime service: documents, lifecycle, cache keys, and mesh profile contract",
@@ -1860,6 +1914,104 @@ const tests = [
             );
           }
         }
+      } finally {
+        await runtime.stop();
+      }
+    },
+  },
+  {
+    name: "runtime service: split boolean union selections stay semantic across build, mesh, and replay",
+    fn: async () => {
+      const runtime = await startRuntimeServer();
+      try {
+        const submit = await fetchJsonWithStatus<{ id: string; jobId: string; state: string }>(
+          `${runtime.baseUrl}/v1/build`,
+          202,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              part: makeRuntimeBooleanUnionReplayPart(),
+              options: { meshProfile: "interactive" },
+            }),
+          }
+        );
+        const job = await pollJob(runtime.baseUrl, submit.jobId);
+        assert.equal(job.state, "succeeded");
+
+        const buildFaceIds = Array.isArray(job.result?.selections?.faces)
+          ? (job.result.selections.faces as string[])
+          : [];
+        const buildEdgeIds = Array.isArray(job.result?.selections?.edges)
+          ? (job.result.selections.edges as string[])
+          : [];
+        const hashIdPattern = /^(face|edge):body\.main~auto-union-1\.h[0-9a-f]+(?:\.\d+)?$/i;
+        assert.equal(
+          buildFaceIds.some((id) => hashIdPattern.test(id)),
+          false,
+          `expected semantic split face ids only, got ${buildFaceIds.join(", ")}`
+        );
+        assert.equal(
+          buildEdgeIds.some((id) => hashIdPattern.test(id)),
+          false,
+          `expected semantic split edge ids only, got ${buildEdgeIds.join(", ")}`
+        );
+
+        const replayEdgeId =
+          "edge:body.main~auto-union-1.side.rectangle-1.3.join.split.top.branch.2";
+        assert.equal(
+          buildFaceIds.some((id) => id.includes(".split.top.branch.")),
+          true
+        );
+        assert.equal(
+          buildEdgeIds.includes("edge:body.main~auto-union-1.side.rectangle-1.3.join.side.rectangle-1.4"),
+          true
+        );
+        assert.equal(buildEdgeIds.includes(replayEdgeId), true);
+
+        const meshAssetUrl = String(job.result?.mesh?.asset?.url ?? "");
+        assert.ok(meshAssetUrl.length > 0, "missing mesh asset url");
+        const mesh = await fetchJson<{
+          selections?: Array<{ id?: string; kind?: string; meta?: Record<string, unknown> }>;
+        }>(`${runtime.baseUrl}${meshAssetUrl}`);
+
+        for (const selection of mesh.selections ?? []) {
+          if (!selection?.id) continue;
+          assert.equal(
+            hashIdPattern.test(selection.id),
+            false,
+            `expected mesh selection id to stay semantic, got ${selection.id}`
+          );
+          if (selection.kind === "face") {
+            assert.equal(
+              buildFaceIds.includes(selection.id),
+              true,
+              `mesh face id missing from build selection index: ${selection.id}`
+            );
+          }
+          if (selection.kind === "edge") {
+            assert.equal(
+              buildEdgeIds.includes(selection.id),
+              true,
+              `mesh edge id missing from build selection index: ${selection.id}`
+            );
+          }
+        }
+
+        const replaySubmit = await fetchJsonWithStatus<{
+          id: string;
+          jobId: string;
+          state: string;
+        }>(`${runtime.baseUrl}/v1/build`, 202, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            part: makeRuntimeBooleanUnionReplayPart(replayEdgeId),
+            options: { meshProfile: "interactive" },
+          }),
+        });
+        const replayJob = await pollJob(runtime.baseUrl, replaySubmit.jobId);
+        assert.equal(replayJob.state, "succeeded");
       } finally {
         await runtime.stop();
       }
