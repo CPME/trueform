@@ -1228,9 +1228,24 @@ const examplePart = part(&quot;example-surface&quot;, [
 
     <article class="code-entry" id="code-dsl-extrude-surface">
       <h3>Extrude (Surface) (DSL)</h3>
-      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Extrude</p>
-      <pre><code>const examplePart = part(&quot;example-extrude&quot;, [
-  extrude(&quot;base&quot;, profileRect(80, 50), 12, &quot;body:main&quot;),
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Extrude (Surface)</p>
+      <pre><code>const spline = sketchSpline(&quot;spline-1&quot;, [
+  [-30, -12],
+  [-10, 18],
+  [8, -6],
+  [30, 16],
+]);
+const sketch = sketch2d(
+  &quot;sketch-extrude-surface&quot;,
+  [{ name: &quot;profile:open&quot;, profile: profileSketchLoop([&quot;spline-1&quot;], { open: true }) }],
+  { entities: [spline] }
+);
+
+const examplePart = part(&quot;example-extrude-surface&quot;, [
+  sketch,
+  extrude(&quot;surface-extrude&quot;, profileRef(&quot;profile:open&quot;), 18, &quot;surface:wall&quot;, undefined, {
+    mode: &quot;surface&quot;,
+  }),
 ]);</code></pre>
       <a class="back-link" href="#top">Back to gallery</a>
     </article>

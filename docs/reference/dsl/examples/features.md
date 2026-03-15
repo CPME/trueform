@@ -17,6 +17,35 @@ Notes:
 - Default output is `body:*` (mode `solid`).
 - Use `extrude(..., { mode: "surface" })` to extrude a wire/profile into a surface output (`kind: "surface"`).
 
+## Extrude (Surface)
+
+![Extrude surface example](/examples/dsl/extrude-surface.iso.png)
+
+```ts
+const spline = sketchSpline("spline-1", [
+  [-30, -12],
+  [-10, 18],
+  [8, -6],
+  [30, 16],
+]);
+const sketch = sketch2d(
+  "sketch-extrude-surface",
+  [{ name: "profile:open", profile: profileSketchLoop(["spline-1"], { open: true }) }],
+  { entities: [spline] }
+);
+
+const examplePart = part("example-extrude-surface", [
+  sketch,
+  extrude("surface-extrude", profileRef("profile:open"), 18, "surface:wall", undefined, {
+    mode: "surface",
+  }),
+]);
+```
+
+Notes:
+- Open sketch profiles extrude into sheet bodies when `mode: "surface"` is selected.
+- Curved inputs such as splines preserve their curvature across the extrusion direction, producing a waved sheet instead of a flat wall.
+
 ## Surface
 
 ![Surface example](/examples/dsl/surface.iso.png)

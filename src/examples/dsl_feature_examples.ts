@@ -46,6 +46,7 @@ import {
   selectorNamed,
   sketch2d,
   sketchLine,
+  sketchSpline,
   sketchProfileLoop,
   sketchRectCorner,
   surface,
@@ -208,23 +209,28 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     id: "extrude-surface",
     title: "Extrude (Surface)",
     part: (() => {
-      const line = sketchLine("line-1", [0, 0], [30, 0]);
+      const spline = sketchSpline("spline-1", [
+        [-30, -12],
+        [-10, 18],
+        [8, -6],
+        [30, 16],
+      ]);
       const sketch = sketch2d(
         "sketch-extrude-surface",
         [
           {
             name: "profile:open",
-            profile: profileSketchLoop(["line-1"], { open: true }),
+            profile: profileSketchLoop(["spline-1"], { open: true }),
           },
         ],
-        { origin: [0, 0, 0], entities: [line] }
+        { origin: [0, 0, 0], entities: [spline] }
       );
       return part("example-extrude-surface", [
         sketch,
         extrude(
           "surface-extrude",
           profileRef("profile:open"),
-          10,
+          18,
           "surface:wall",
           undefined,
           { mode: "surface" }
@@ -232,12 +238,17 @@ export const dslFeatureExamples: DslFeatureExample[] = [
       ]);
     })(),
     render: {
+      renderOpts: {
+        viewDir: [1.55, -0.75, 0.85],
+        ambient: 1,
+        diffuse: 0,
+      },
       layers: [
         {
           output: "surface:wall",
           color: [154, 192, 230],
           alpha: 1,
-          wireframe: true,
+          wireframe: false,
           wireColor: [32, 40, 52],
           wireDepthTest: true,
           depthTest: true,
