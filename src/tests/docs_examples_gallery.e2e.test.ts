@@ -32,6 +32,31 @@ const tests = [
       );
       assert.match(
         html,
+        /data-preview-src="\.\/dsl\/selection-ledger-fillet-edge-review\.annotated\.png"/,
+        "selection-ledger fillet edge review should prefer rendered annotated previews"
+      );
+      assert.match(
+        html,
+        /data-preview-src="\.\/dsl\/selection-ledger-fillet-seam-review\.annotated\.png"/,
+        "selection-ledger fillet seam review should prefer rendered annotated previews"
+      );
+      assert.match(
+        html,
+        /data-preview-src="\.\/dsl\/selection-ledger-chamfer-edge-review\.annotated\.png"/,
+        "selection-ledger chamfer edge review should prefer rendered annotated previews"
+      );
+      assert.match(
+        html,
+        /data-preview-src="\.\/dsl\/selection-ledger-chamfer-join-review\.annotated\.png"/,
+        "selection-ledger chamfer join review should prefer rendered annotated previews"
+      );
+      assert.match(
+        html,
+        /data-preview-src="\.\/dsl\/selection-ledger-stack-audit\.annotated\.png"/,
+        "selection-ledger stack audit should prefer rendered annotated previews"
+      );
+      assert.match(
+        html,
         /id="image-preview-modal"/,
         "gallery should include the image preview modal container"
       );
