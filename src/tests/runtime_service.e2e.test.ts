@@ -22,6 +22,13 @@ type JobRecord = {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function parseNumberEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : fallback;
+}
+
 async function getFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
@@ -2339,6 +2346,175 @@ const tests = [
         const missingAliasJob = await pollJob(runtime.baseUrl, missingAliasSubmit.jobId);
         assert.equal(missingAliasJob.state, "failed");
         assert.equal(missingAliasJob.error?.code, "selector_named_missing");
+      } finally {
+        await runtime.stop();
+      }
+    },
+  },
+  {
+    name: "runtime service: sketch solve returns detailed diagnostics and transient overlays",
+    fn: async () => {
+      const runtime = await startRuntimeServer();
+      try {
+        const result = await fetchJsonWithStatus<{
+          sketchId: string;
+          report: {
+            status: string;
+            entities: Array<{ id: string; point?: [number, number] }>;
+            constraintStatus: Array<{ constraintId: string; source: string; status: string }>;
+            solveMeta: { termination: string };
+          };
+        }>(`${runtime.baseUrl}/v1/sketch/solve`, 200, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            sketchId: "runtime-sketch-solve",
+            entities: [
+              dsl.sketchLine("line-1", [0, 0], [4, 3]),
+              dsl.sketchPoint("point-1", [7, 9]),
+            ],
+            constraints: [
+              dsl.sketchConstraintFixPoint(
+                "c-fix-origin",
+                dsl.sketchPointRef("line-1", "start"),
+                { x: 0, y: 0 }
+              ),
+            ],
+            options: {
+              transientConstraints: [
+                dsl.sketchConstraintPointOnLine(
+                  "tc-point-on-line",
+                  dsl.sketchPointRef("point-1"),
+                  "line-1"
+                ),
+              ],
+            },
+          }),
+        });
+
+        assert.equal(result.sketchId, "runtime-sketch-solve");
+        assert.equal(result.report.solveMeta.termination, "converged");
+        assert.deepEqual(
+          result.report.constraintStatus.map((entry) => ({
+            constraintId: entry.constraintId,
+            source: entry.source,
+            status: entry.status,
+          })),
+          [
+            {
+              constraintId: "c-fix-origin",
+              source: "authored",
+              status: "satisfied",
+            },
+            {
+              constraintId: "tc-point-on-line",
+              source: "transient",
+              status: "satisfied",
+            },
+          ]
+        );
+        const point = result.report.entities.find((entity) => entity.id === "point-1");
+        assert.ok(point?.point, "missing solved point-1");
+        const [x, y] = point.point ?? [NaN, NaN];
+        assert.ok(Math.abs(x * 3 - y * 4) < 1e-6);
+      } finally {
+        await runtime.stop();
+      }
+    },
+  },
+  {
+    name: "runtime service: sketch solve preview endpoint meets local e2e latency guardrail",
+    fn: async () => {
+      const runtime = await startRuntimeServer();
+      try {
+        const wallSamples: number[] = [];
+        const solveSamples: number[] = [];
+        for (let frame = 0; frame < 48; frame += 1) {
+          const offset = (frame % 9) - 4;
+          const startedAt = Date.now();
+          const result = await fetchJsonWithStatus<{
+            report: {
+              solveMeta: { termination: string; elapsedMs: number };
+            };
+          }>(`${runtime.baseUrl}/v1/sketch/solve`, 200, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              sketchId: "runtime-sketch-preview",
+              entities: [dsl.sketchLine("line-1", [0, 0], [10 + offset, offset])],
+              constraints: [
+                dsl.sketchConstraintFixPoint(
+                  "c-fix",
+                  dsl.sketchPointRef("line-1", "start"),
+                  { x: 0, y: 0 }
+                ),
+                dsl.sketchConstraintHorizontal("c-h", "line-1"),
+                dsl.sketchConstraintDistance(
+                  "c-d",
+                  dsl.sketchPointRef("line-1", "start"),
+                  dsl.sketchPointRef("line-1", "end"),
+                  10
+                ),
+              ],
+              options: {
+                changedEntityIds: ["line-1"],
+                maxTimeMs: 4,
+                maxIterations: 48,
+              },
+            }),
+          });
+          wallSamples.push(Date.now() - startedAt);
+          solveSamples.push(result.report.solveMeta.elapsedMs);
+          assert.ok(
+            result.report.solveMeta.termination === "converged" ||
+              result.report.solveMeta.termination === "time-budget"
+          );
+        }
+
+        const percentileValue = (samples: number[], ratio: number): number => {
+          const sorted = samples.slice().sort((left, right) => left - right);
+          const index = Math.floor((sorted.length - 1) * ratio);
+          return sorted[index] ?? 0;
+        };
+
+        const wallP95 = percentileValue(wallSamples, 0.95);
+        const wallMax = Math.max(...wallSamples, 0);
+        const solveP95 = percentileValue(solveSamples, 0.95);
+        const solveMax = Math.max(...solveSamples, 0);
+
+        const wallP95BudgetMs = parseNumberEnv(
+          "TF_RUNTIME_SKETCH_SOLVE_WALL_P95_BUDGET_MS",
+          40
+        );
+        const wallMaxBudgetMs = parseNumberEnv(
+          "TF_RUNTIME_SKETCH_SOLVE_WALL_MAX_BUDGET_MS",
+          80
+        );
+        const solveP95BudgetMs = parseNumberEnv(
+          "TF_RUNTIME_SKETCH_SOLVE_P95_BUDGET_MS",
+          20
+        );
+        const solveMaxBudgetMs = parseNumberEnv(
+          "TF_RUNTIME_SKETCH_SOLVE_MAX_BUDGET_MS",
+          40
+        );
+
+        assert.ok(
+          wallP95 <= wallP95BudgetMs,
+          `runtime sketch solve wall p95 ${wallP95}ms exceeded budget ${wallP95BudgetMs}ms`
+        );
+        assert.ok(
+          wallMax <= wallMaxBudgetMs,
+          `runtime sketch solve wall max ${wallMax}ms exceeded budget ${wallMaxBudgetMs}ms`
+        );
+        assert.ok(
+          solveP95 <= solveP95BudgetMs,
+          `runtime sketch solve p95 ${solveP95}ms exceeded budget ${solveP95BudgetMs}ms`
+        );
+        assert.ok(
+          solveMax <= solveMaxBudgetMs,
+          `runtime sketch solve max ${solveMax}ms exceeded budget ${solveMaxBudgetMs}ms`
+        );
       } finally {
         await runtime.stop();
       }

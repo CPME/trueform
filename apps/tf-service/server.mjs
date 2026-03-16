@@ -8,6 +8,7 @@ import {
   evaluatePartAssertions,
   evaluatePartDimensions,
   meshOptionsForProfile,
+  solveSketchConstraintsDetailed,
 } from "../../dist/index.js";
 import { residualsForTesting } from "../../dist/assembly.js";
 import {
@@ -911,6 +912,81 @@ export function createTfServiceServer(options = {}) {
     };
   }
 
+  async function handleSketchSolve(request) {
+    const sketchId =
+      typeof request?.sketchId === "string" && request.sketchId.trim().length > 0
+        ? request.sketchId.trim()
+        : null;
+    if (!sketchId) {
+      throw new HttpError(
+        400,
+        "invalid_sketch_solve_request",
+        "Sketch solve request requires non-empty sketchId"
+      );
+    }
+    if (!Array.isArray(request?.entities)) {
+      throw new HttpError(
+        400,
+        "invalid_sketch_solve_request",
+        "Sketch solve request requires entities[]"
+      );
+    }
+    if (!Array.isArray(request?.constraints)) {
+      throw new HttpError(
+        400,
+        "invalid_sketch_solve_request",
+        "Sketch solve request requires constraints[]"
+      );
+    }
+
+    const rawOptions =
+      request?.options && typeof request.options === "object" ? request.options : {};
+    const options = {
+      transientConstraints: Array.isArray(rawOptions.transientConstraints)
+        ? rawOptions.transientConstraints
+        : undefined,
+      warmStartEntities: Array.isArray(rawOptions.warmStartEntities)
+        ? rawOptions.warmStartEntities
+        : undefined,
+      changedEntityIds: Array.isArray(rawOptions.changedEntityIds)
+        ? rawOptions.changedEntityIds
+        : undefined,
+      changedConstraintIds: Array.isArray(rawOptions.changedConstraintIds)
+        ? rawOptions.changedConstraintIds
+        : undefined,
+      maxIterations:
+        typeof rawOptions.maxIterations === "number" ? rawOptions.maxIterations : undefined,
+      maxTimeMs: typeof rawOptions.maxTimeMs === "number" ? rawOptions.maxTimeMs : undefined,
+    };
+
+    try {
+      return {
+        sketchId,
+        report: solveSketchConstraintsDetailed(
+          sketchId,
+          request.entities,
+          request.constraints,
+          options
+        ),
+      };
+    } catch (err) {
+      const code = err && typeof err === "object" && typeof err.code === "string" ? err.code : null;
+      if (code) {
+        const details =
+          err && typeof err === "object" && err.details && typeof err.details === "object"
+            ? err.details
+            : undefined;
+        throw new HttpError(
+          400,
+          code,
+          err instanceof Error ? err.message : String(err),
+          details
+        );
+      }
+      throw err;
+    }
+  }
+
   async function handleMesh(tenantId, request, ctx) {
     await maybeSimulateDelay(request, ctx);
     throwIfCanceled(ctx);
@@ -1300,6 +1376,7 @@ export function createTfServiceServer(options = {}) {
           json,
           readJson,
           enqueueBuild: jobRuntime.enqueueBuild,
+          handleSketchSolve,
           enqueueAssemblySolve: jobRuntime.enqueueAssemblySolve,
           handleMeasure,
           enqueueMesh: jobRuntime.enqueueMesh,

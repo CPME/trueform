@@ -10,6 +10,11 @@ const tests = [
     name: "workspace service-client: @trueform/service-client exposes stable client contracts",
     fn: async () => {
       assert.equal(typeof workspaceServiceClient.TfServiceClient, "function");
+      assert.equal(
+        typeof (workspaceServiceClient.TfServiceClient as { prototype?: Record<string, unknown> })
+          .prototype?.solveSketchConstraints,
+        "function"
+      );
       assert.equal(typeof workspaceServiceClient.isSemanticTopologyEnabled, "function");
       assert.equal(typeof workspaceServiceClient.selectionIdToNamedSelector, "function");
     },

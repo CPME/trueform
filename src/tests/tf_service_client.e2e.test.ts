@@ -129,6 +129,58 @@ const tests = [
     },
   },
   {
+    name: "tf service client: supports synchronous sketch solve endpoint",
+    fn: async () => {
+      const calls: FetchCall[] = [];
+      const fakeFetch: typeof fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        const headers = Object.fromEntries(
+          Object.entries((init?.headers as Record<string, string>) ?? {}).map(([k, v]) => [
+            k.toLowerCase(),
+            String(v),
+          ])
+        );
+        calls.push({
+          url,
+          method: String(init?.method ?? "GET"),
+          headers,
+          body: typeof init?.body === "string" ? init.body : undefined,
+        });
+        if (url.endsWith("/v1/sketch/solve")) {
+          return makeJsonResponse(200, {
+            sketchId: "sketch-1",
+            report: {
+              status: "fully-constrained",
+              solveMeta: { termination: "converged", elapsedMs: 1 },
+            },
+          });
+        }
+        return makeJsonResponse(404, { error: "not found" });
+      };
+
+      const client = new TfServiceClient({
+        baseUrl: "http://127.0.0.1:8080",
+        fetch: fakeFetch,
+        tenantId: "tenant-a",
+      });
+
+      const result = await client.solveSketchConstraints({
+        sketchId: "sketch-1",
+        entities: [],
+        constraints: [],
+      });
+      assert.equal(result.sketchId, "sketch-1");
+      assert.equal(result.report.status, "fully-constrained");
+      assert.equal(result.report.solveMeta.termination, "converged");
+
+      const solveCall = calls.find((call) => call.url.endsWith("/v1/sketch/solve"));
+      assert.ok(solveCall, "missing /v1/sketch/solve call");
+      assert.equal(solveCall?.method, "POST");
+      assert.equal(solveCall?.headers["x-tf-tenant-id"], "tenant-a");
+      assert.ok(solveCall?.body?.includes('"sketchId":"sketch-1"'));
+    },
+  },
+  {
     name: "tf service client: parses stream job events",
     fn: async () => {
       const fakeFetch: typeof fetch = async (input: RequestInfo | URL) => {

@@ -8,6 +8,8 @@ import {
   type RuntimeJobState,
   type RuntimeMeasureRequest,
   type RuntimeMeasureResponse,
+  type RuntimeSketchSolveRequest,
+  type RuntimeSketchSolveResponse,
 } from "./api.js";
 
 export type JobState = RuntimeJobState;
@@ -270,6 +272,16 @@ export class TfServiceClient {
     return this.requestJson<ServiceJobAccepted>({
       method: "POST",
       path: TF_API_ENDPOINTS.buildPartial,
+      body: payload,
+    });
+  }
+
+  async solveSketchConstraints(
+    payload: RuntimeSketchSolveRequest
+  ): Promise<RuntimeSketchSolveResponse> {
+    return this.requestJson<RuntimeSketchSolveResponse>({
+      method: "POST",
+      path: TF_API_ENDPOINTS.sketchSolve,
       body: payload,
     });
   }

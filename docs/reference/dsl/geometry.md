@@ -48,6 +48,11 @@ For intent-first imports, prefer:
 - `sketchConstraintSymmetry(id, a, b, axis) -> SketchConstraint`
 - `sketchConstraintFixPoint(id, point, opts?) -> SketchConstraint`
 
+Headless solve entry points:
+
+- `import { solveSketchConstraintsDetailed } from "trueform"`
+- `import { createSketchConstraintSolveSession } from "trueform"`
+
 Examples:
 - [Sketch primitives](./examples/sketches)
 

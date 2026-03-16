@@ -1,3 +1,8 @@
+import type { SketchConstraint, SketchEntity } from "./ir.js";
+import type {
+  SketchConstraintSolveOptions,
+  SketchConstraintSolveReport,
+} from "./sketch/constraints.js";
 import { TF_STAGED_FEATURES } from "./feature_staging.js";
 import type { FeatureStageEntry } from "./feature_staging.js";
 
@@ -13,6 +18,7 @@ export const TF_API_ENDPOINTS = {
   buildJobs: "/v1/jobs/build",
   buildPartial: "/v1/build/partial",
   buildPartialJobs: "/v1/jobs/build/partial",
+  sketchSolve: "/v1/sketch/solve",
   assemblySolve: "/v1/assembly/solve",
   assemblySolveJobs: "/v1/jobs/assembly/solve",
   measure: "/v1/measure",
@@ -38,6 +44,11 @@ export const TF_RUNTIME_OPTIONAL_FEATURES = {
   },
   buildSessions: {
     enabled: true,
+  },
+  sketch: {
+    solve: true,
+    session: false,
+    transport: "sync-http",
   },
   assembly: {
     solve: true,
@@ -220,6 +231,20 @@ export type RuntimeAssemblySolveRequest = {
     simulateDelayMs?: number;
   };
   timeoutMs?: number;
+};
+
+export type RuntimeSketchSolveOptions = Omit<SketchConstraintSolveOptions, "signal">;
+
+export type RuntimeSketchSolveRequest = {
+  sketchId: string;
+  entities: SketchEntity[];
+  constraints: SketchConstraint[];
+  options?: RuntimeSketchSolveOptions;
+};
+
+export type RuntimeSketchSolveResponse = {
+  sketchId: string;
+  report: SketchConstraintSolveReport;
 };
 
 export type RuntimeMeasureMetric = {
@@ -420,6 +445,29 @@ export const TF_RUNTIME_OPENAPI = {
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/JobAccepted" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/v1/sketch/solve": {
+      post: {
+        summary: "Solve sketch constraints synchronously",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/SketchSolveRequest" },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Detailed sketch solve report",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SketchSolveResponse" },
               },
             },
           },
@@ -667,6 +715,32 @@ export const TF_RUNTIME_OPENAPI = {
           changedFeatureIds: { type: "array", items: { type: "string" } },
           selectorHints: { type: "object", additionalProperties: true },
         },
+      },
+      SketchSolveRequest: {
+        type: "object",
+        required: ["sketchId", "entities", "constraints"],
+        properties: {
+          sketchId: { type: "string" },
+          entities: {
+            type: "array",
+            items: { type: "object", additionalProperties: true },
+          },
+          constraints: {
+            type: "array",
+            items: { type: "object", additionalProperties: true },
+          },
+          options: { type: "object", additionalProperties: true },
+        },
+        additionalProperties: false,
+      },
+      SketchSolveResponse: {
+        type: "object",
+        required: ["sketchId", "report"],
+        properties: {
+          sketchId: { type: "string" },
+          report: { type: "object", additionalProperties: true },
+        },
+        additionalProperties: false,
       },
       AssemblySolveRequest: {
         type: "object",

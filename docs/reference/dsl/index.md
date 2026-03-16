@@ -37,6 +37,7 @@ Compatibility note:
 Runtime consumer docs:
 
 - [Runtime Selection Integration](../runtime-selection-integration)
+- [Runtime Sketch Solver](../runtime-sketch-solver)
 
 ## Generated API Reference
 

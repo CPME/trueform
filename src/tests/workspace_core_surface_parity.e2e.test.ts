@@ -14,10 +14,12 @@ const REQUIRED_CORE_EXPORTS = [
   "emitIrDocument",
   "buildPart",
   "buildPartAsync",
+  "createSketchConstraintSolveSession",
   "evaluatePartAssertions",
   "evaluatePartDimensions",
   "buildPmiPayload",
   "buildPmiJson",
+  "solveSketchConstraintsDetailed",
 ];
 
 const FORBIDDEN_CORE_EXPORTS = [

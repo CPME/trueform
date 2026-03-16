@@ -9,6 +9,7 @@ export async function tryHandleActionRoute(ctx) {
     json,
     readJson,
     enqueueBuild,
+    handleSketchSolve,
     enqueueAssemblySolve,
     handleMeasure,
     enqueueMesh,
@@ -26,6 +27,12 @@ export async function tryHandleActionRoute(ctx) {
     const payload = await readJson(req);
     const job = await enqueueBuild(tenantId, payload);
     json(res, 202, toJobAccepted(job));
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === TF_API_ENDPOINTS.sketchSolve) {
+    const payload = await readJson(req);
+    json(res, 200, await handleSketchSolve(payload));
     return true;
   }
 
