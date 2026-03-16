@@ -225,13 +225,12 @@ function canonicalizeNativeSelectionIds(result: KernelResult): KernelResult {
       const target = indexed[i];
       const assignment = assignments[i];
       if (!target || !assignment) continue;
+      const meta = omitSelectionAliases(target.selection.meta);
       selections[target.index] = {
         ...target.selection,
         id: assignment.id,
         record: assignment.record,
-        meta: assignment.aliases
-          ? { ...target.selection.meta, selectionAliases: assignment.aliases.slice() }
-          : target.selection.meta,
+        meta,
       };
     }
   }
@@ -240,7 +239,7 @@ function canonicalizeNativeSelectionIds(result: KernelResult): KernelResult {
 
 function nativeSelectionEntry(selection: KernelSelection): CollectedSubshape {
   const entry: CollectedSubshape = {
-    meta: { ...selection.meta },
+    meta: omitSelectionAliases(selection.meta),
   };
   const slot =
     typeof selection.meta["selectionSlot"] === "string" &&
@@ -256,18 +255,18 @@ function nativeSelectionEntry(selection: KernelSelection): CollectedSubshape {
     typeof selection.meta["selectionLineage"] === "object"
       ? (selection.meta["selectionLineage"] as KernelSelectionLineage)
       : undefined;
-  const aliases =
-    Array.isArray(selection.meta["selectionAliases"]) &&
-    selection.meta["selectionAliases"].every((entry) => typeof entry === "string")
-      ? (selection.meta["selectionAliases"] as string[])
-      : undefined;
-  if (slot || role || lineage || aliases) {
+  if (slot || role || lineage) {
     entry.ledger = {
       slot,
       role,
       lineage,
-      aliases,
     };
   }
   return entry;
+}
+
+function omitSelectionAliases(meta: Record<string, unknown>): Record<string, unknown> {
+  const nextMeta = { ...meta };
+  delete nextMeta.selectionAliases;
+  return nextMeta;
 }
