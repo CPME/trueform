@@ -22,6 +22,7 @@ To create the open sourced CAD tools and standards that enables the world of har
   - In `trueform`, run `npm run verify:package` to build, pack, validate `dist/*`, and run consumer-style import probes from the packaged artifact.
   - For workspace package boundary changes, also run `npm run verify:workspace-packages` so package-local typechecks and parity surfaces stay aligned.
   - Keep `packages/*/src` pointed at package-local modules or built compatibility artifacts, not at root `src/*`. If a workspace package still depends on root-owned implementation during transition, route it through built `dist/*` and keep `npm run verify:workspace-packages` green.
+  - When shared contracts drop deprecated fields, remove them at adapter/package boundaries instead of restoring them in shared types. Example: `selectionAliases` metadata stays forbidden; native/workspace adapters must strip it rather than reintroduce `aliases` fields into shared selection contracts.
   - Install from the local package artifact in the consumer repo (for example, `npm install ../trueform/temp/package-verify/artifacts/trueform-<version>.tgz`) or install directly from local path (`npm install file:../trueform`).
   - After trueform changes, reinstall in the consumer repo. Never manually copy `dist` into consumer `node_modules`.
 - Before downstream integration work, run `npm run verify:package` in `trueform` and use that tarball/local install flow.
