@@ -9,6 +9,9 @@ Examples App: [https://cpme.github.io/trueform/reference/dsl/examples-app.html](
 TrueForm is a declarative, intent-first modeling layer that compiles to interchangeable geometric backends (OpenCascade.js today, with a live-tested native OCCT transport/server path for the currently supported feature surface).
 It lets humans and agents describe what a part is (features, constraints, assertions)
 without scripting kernel steps.
+The current execution backends are OCCT-based: they build and edit B-rep geometry,
+resolve semantic selectors against subshapes, and only then derive meshes and other
+downstream artifacts for viewing or export.
 
 ## Why
 
@@ -35,6 +38,7 @@ flowchart LR
 
 ## Status
 - V1 compiles a JSON-serializable IR and builds with an OpenCascade.js backend.
+- The backend execution model is B-rep-first, not mesh-first: meshes are derived artifacts for viewing and transport.
 - Runtime target is Node + OpenCascade.js.
 - Core compile is part-centric; assembly solving APIs are experimental and outside the core compile pipeline.
 - Step 1 contract direction: mate connectors live on parts, and assembly intent is stored in a separate assembly file/document.
