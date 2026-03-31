@@ -6,9 +6,7 @@ import {
   booleanOp,
   draft,
   loft,
-  rib,
   sweep,
-  web,
   chamfer,
   variableChamfer,
   datumPlane,
@@ -473,64 +471,6 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     part: part("example-pipe", [
       pipe("pipe-1", "+Z", 60, 24, 18, "body:main"),
     ]),
-  },
-  {
-    id: "rib-web",
-    title: "Rib/Web (Staging)",
-    part: (() => {
-      const ribLine = sketchLine("rib-line", [-4, -20], [-22, -34]);
-      const webLine = sketchLine("web-line", [-12, -36], [16, -20]);
-      const ribSketch = sketch2d(
-        "rib-sketch",
-        [
-          { name: "profile:rib", profile: profileSketchLoop(["rib-line"], { open: true }) },
-          { name: "profile:web", profile: profileSketchLoop(["web-line"], { open: true }) },
-        ],
-        {
-          plane: planeDatum("dp-front"),
-          deps: ["dp-front", "support-union"],
-          entities: [ribLine, webLine],
-        }
-      );
-      return part("example-rib-web", [
-        extrude("base", profileRect(84, 40), 20, "body:base"),
-        extrude("tower", profileRect(20, 40, [-32, 0, 0]), 44, "body:tower"),
-        booleanOp(
-          "support-union",
-          "union",
-          selectorNamed("body:base"),
-          selectorNamed("body:tower"),
-          "body:support"
-        ),
-        datumPlane("dp-front", "+Y"),
-        ribSketch,
-        rib("rib-1", profileRef("profile:rib"), 3, 80, "body:rib", ["support-union", "rib-sketch"], {
-          side: "oneSided",
-        }),
-        web("web-1", profileRef("profile:web"), 2, 80, "body:web", ["support-union", "rib-sketch"], {
-          side: "symmetric",
-        }),
-        booleanOp(
-          "union-rib",
-          "union",
-          selectorNamed("body:support"),
-          selectorNamed("body:rib"),
-          "body:ribbed"
-        ),
-        booleanOp(
-          "union-rib-web",
-          "union",
-          selectorNamed("body:ribbed"),
-          selectorNamed("body:web"),
-          "body:main"
-        ),
-      ]);
-    })(),
-    render: {
-      renderOpts: {
-        viewDir: [0.8, -0.6, 0.5],
-      },
-    },
   },
   {
     id: "sweep-sketch",

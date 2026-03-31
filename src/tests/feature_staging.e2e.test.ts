@@ -10,11 +10,9 @@ import { runTests } from "./occt_test_utils.js";
 
 const tests = [
   {
-    name: "feature staging: registry includes rib/web, surfacing slice 1, curve intersect, and remaining surface-mode staging entries",
+    name: "feature staging: registry includes surfacing slice 1, curve intersect, and remaining surface-mode staging entries",
     fn: async () => {
       const keys = listStagedFeatureKeys();
-      assert.ok(keys.includes("feature.rib"));
-      assert.ok(keys.includes("feature.web"));
       assert.ok(keys.includes("feature.trim.surface"));
       assert.ok(keys.includes("feature.extend.surface"));
       assert.ok(keys.includes("feature.knit"));
@@ -28,24 +26,6 @@ const tests = [
       assert.ok(keys.includes("feature.hexTubeSweep:mode.surface"));
       assert.equal(TF_STAGED_FEATURES["feature.surface"]?.stage, undefined);
       assert.equal(TF_STAGED_FEATURES["feature.revolve:mode.surface"]?.stage, undefined);
-    },
-  },
-  {
-    name: "feature staging: rib resolves to staging entry",
-    fn: async () => {
-      const feature = dsl.rib("rib-1", dsl.profileRef("profile:rib"), 2, 8);
-      const stage = getFeatureStage(feature);
-      assert.equal(stage.key, "feature.rib");
-      assert.equal(stage.stage, "staging");
-    },
-  },
-  {
-    name: "feature staging: web resolves to staging entry",
-    fn: async () => {
-      const feature = dsl.web("web-1", dsl.profileRef("profile:web"), 2, 8);
-      const stage = getFeatureStage(feature);
-      assert.equal(stage.key, "feature.web");
-      assert.equal(stage.stage, "staging");
     },
   },
   {

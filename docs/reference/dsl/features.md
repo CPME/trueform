@@ -8,8 +8,6 @@ import {
   plane,
   revolve,
   sweep,
-  rib,
-  web,
   pipe,
   shell,
   mirror,
@@ -43,8 +41,6 @@ import {
 - `revolve(id, profile, axis, angle, result?, opts?) -> Revolve`
 - `loft(id, profiles, result?, deps?, opts?) -> Loft`
 - `sweep(id, profile, path, result?, deps?, opts?) -> Sweep`
-- `rib(id, profile, thickness, depth, result?, deps?, opts?) -> Rib` (staging)
-- `web(id, profile, thickness, depth, result?, deps?, opts?) -> Web` (staging)
 - `pipe(id, axis, length, outerDiameter, innerDiameter?, result?, opts?) -> Pipe`
 - `shell(id, source, thickness, result?, deps?, opts?) -> Shell`
 - `mirror(id, source, plane, result?, deps?) -> Mirror`
@@ -84,7 +80,6 @@ Examples:
 - [Sweep](./examples/features#sweep)
 - [Sweep (Arbitrary Sketch)](./examples/features#sweep-arbitrary-sketch)
 - [Pipe](./examples/features#pipe)
-- [Rib/Web (Staging)](./examples/features#ribweb-staging)
 - [Shell](./examples/features#shell)
 - [Mirror](./examples/features#mirror)
 - [Move Body](./examples/features#move-body)

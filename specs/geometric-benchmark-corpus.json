@@ -214,14 +214,6 @@
       "parity": "missing"
     },
     {
-      "id": "rib-web",
-      "category": "advanced-profile-ops",
-      "feature": "Rib/web",
-      "parity": "staging",
-      "probe": { "kind": "dist-test", "path": "dist/tests/occt.rib_web.e2e.probe.js" },
-      "notes": "Rib/web thin open-profile workflows now execute in OCCT with staging conformance and failure-mode coverage."
-    },
-    {
       "id": "variable-fillet-chamfer",
       "category": "advanced-hole-and-edge-options",
       "feature": "Variable fillet/chamfer controls",

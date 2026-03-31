@@ -24,7 +24,7 @@ under `specs/`. There is no `ai-tasks/` directory in this checkout.
 
 - `specs/geometric-parity-plan.md`
   - Finish M9 surface-mode reliability hardening.
-  - Promote staged `rib/web` work in M10.
+  - Re-scope M10 advanced profile work after the rib/web restart.
   - Finish M11 advanced surfacing beyond Slice 1.
   - Close M12 after missing-feature work is complete and docs/registry stay aligned.
 - `specs/advanced-surfacing-three-slices-plan.md`

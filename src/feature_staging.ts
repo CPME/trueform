@@ -17,14 +17,6 @@ const SURFACE_MODE_FEATURE_KINDS = new Set<string>([
 ]);
 
 export const TF_STAGED_FEATURES: Readonly<Record<string, FeatureStageEntry>> = Object.freeze({
-  "feature.rib": {
-    stage: "staging" as const,
-    notes: "Rib is staging while open-profile robustness and side-control behavior hardens.",
-  },
-  "feature.web": {
-    stage: "staging" as const,
-    notes: "Web is staging while open-profile robustness and side-control behavior hardens.",
-  },
   "feature.trim.surface": {
     stage: "staging" as const,
     notes: "Trim surface is staging while keep-side coverage expands beyond the initial deterministic subset.",

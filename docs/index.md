@@ -30,7 +30,7 @@ Implemented part feature surface includes:
 - Datums and sketching (`datum.*`, `feature.sketch2d`, sketch entities/profiles).
 - Core solid/surface operations (`extrude`, `surface`, `revolve`, `loft`, `sweep`, `pipe`, `mirror`, `shell`, `draft`, `thicken`, `unwrap`, `thread`, `hole`, `fillet`, `chamfer`, `boolean`).
 - Direct-edit and split operations (`delete.face`, `replace.face`, `move.face`, `move.body`, `split.body`, `split.face`).
-- Advanced profile operations (`rib`, `web`) with thin open-profile workflows.
+- Staged surface and curve workflows, including trim/extend/knit and curve intersection.
 - Pattern intent (`pattern.linear`, `pattern.circular`).
 
 Consolidation note:
@@ -38,7 +38,7 @@ Consolidation note:
 - `pipeSweep`, `hexTubeSweep`, `union`, `cut`, and `intersect` remain available as compatibility aliases.
 
 Staging note:
-- `rib`, `web`, and surface-mode variants for `extrude`, `loft`, `sweep`, `pipeSweep`, and `hexTubeSweep` are currently marked as `staging` in the runtime feature registry (`/v1/capabilities.featureStages`).
+- Surface-mode variants for `extrude`, `loft`, `sweep`, `pipeSweep`, and `hexTubeSweep`, plus `feature.trim.surface`, `feature.extend.surface`, `feature.knit`, and `feature.curve.intersect`, are currently marked as `staging` in the runtime feature registry (`/v1/capabilities.featureStages`).
 - The remaining advertised `featureKinds` are currently `stable` (see `/v1/capabilities.featureStages`).
 
 Outputs are named and not limited to `body:main`; helpers default to `body:<id>` or `surface:<id>` depending on feature/mode.

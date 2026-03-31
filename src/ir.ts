@@ -8,7 +8,6 @@ import {
   LENGTH_UNITS,
   PARAM_TYPES,
   POINT_LOCATORS,
-  RIB_THICKNESS_SIDES,
   SWEEP_ORIENTATIONS,
   TF_IR_SCHEMA,
   TF_IR_VERSION,
@@ -56,7 +55,6 @@ export type ThickenDirection = (typeof THICKEN_DIRECTIONS)[number];
 export type UnwrapMode = (typeof UNWRAP_MODES)[number];
 export type ThreadHandedness = (typeof THREAD_HANDEDNESS)[number];
 export type HoleEndCondition = (typeof HOLE_END_CONDITIONS)[number];
-export type RibThicknessSide = (typeof RIB_THICKNESS_SIDES)[number];
 
 export type ParamDef = {
   id: ID;
@@ -165,8 +163,6 @@ export type IntentFeature =
   | Pipe
   | PipeSweep
   | HexTubeSweep
-  | Rib
-  | Web
   | Mirror
   | ReplaceFace
   | MoveBody
@@ -535,26 +531,6 @@ export type HexTubeSweep = FeatureBase & {
   innerAcrossFlats?: Scalar;
   result: string;
   mode?: ExtrudeMode;
-};
-
-export type Rib = FeatureBase & {
-  kind: "feature.rib";
-  profile: ProfileRef;
-  thickness: Scalar;
-  depth: Scalar;
-  result: string;
-  axis?: ExtrudeAxis;
-  side?: RibThicknessSide;
-};
-
-export type Web = FeatureBase & {
-  kind: "feature.web";
-  profile: ProfileRef;
-  thickness: Scalar;
-  depth: Scalar;
-  result: string;
-  axis?: ExtrudeAxis;
-  side?: RibThicknessSide;
 };
 
 export type Mirror = FeatureBase & {

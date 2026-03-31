@@ -94,7 +94,6 @@ import { execUnwrap as execOcctUnwrap } from "./occt/unwrap_ops.js";
 import { execThicken as execOcctThicken } from "./occt/thicken_ops.js";
 import { execShell as execOcctShell } from "./occt/shell_ops.js";
 import { execBoolean as execOcctBoolean } from "./occt/boolean_ops.js";
-import { execRib as execOcctRib, execWeb as execOcctWeb } from "./occt/thin_profile_ops.js";
 import { execSweep as execOcctSweep } from "./occt/sweep_ops.js";
 import { execSketch as execOcctSketch } from "./occt/sketch_ops.js";
 import { execDraft as execOcctDraft } from "./occt/draft_ops.js";
@@ -209,7 +208,6 @@ import {
   resolveAxisSpec as resolveOcctAxisSpec,
   resolveExtrudeAxis as resolveOcctExtrudeAxis,
   resolvePattern as resolveOcctPattern,
-  resolveThinFeatureAxisSpan as resolveOcctThinFeatureAxisSpan,
   type DatumPatternDeps,
 } from "./occt/datum_pattern_ops.js";
 import {
@@ -279,7 +277,6 @@ import type {
   ShellContext,
   SweepFeatureContext,
   SweepContext,
-  ThinProfileContext,
   SketchContext,
   DraftContext,
   MirrorContext,
@@ -322,7 +319,6 @@ import {
   Shell,
   Pipe,
   PipeSweep,
-  Rib,
   Plane,
   HexTubeSweep,
   PlaneRef,
@@ -338,7 +334,6 @@ import {
   Sketch2D,
   SketchEntity,
   Surface,
-  Web,
   Mirror,
   DeleteFace,
   ReplaceFace,
@@ -426,8 +421,6 @@ export class OcctBackend extends OcctBackendMeshSupport implements Backend {
         "feature.revolve",
         "feature.loft",
         "feature.sweep",
-        "feature.rib",
-        "feature.web",
         "feature.shell",
         "feature.pipe",
         "feature.pipeSweep",
@@ -502,10 +495,6 @@ export class OcctBackend extends OcctBackendMeshSupport implements Backend {
           input.upstream,
           input.resolve
         );
-      case "feature.rib":
-        return this.execRib(input.feature as Rib, input.upstream);
-      case "feature.web":
-        return this.execWeb(input.feature as Web, input.upstream);
       case "feature.shell":
         return this.execShell(
           input.feature as Shell,
@@ -826,23 +815,6 @@ export class OcctBackend extends OcctBackendMeshSupport implements Backend {
     return execOcctSweep(this.sweepContext(resolve), feature, upstream, resolve);
   }
 
-  private execRib(feature: Rib, upstream: KernelResult): KernelResult {
-    return execOcctRib(this.thinProfileContext(), feature, upstream);
-  }
-
-  private execWeb(feature: Web, upstream: KernelResult): KernelResult {
-    return execOcctWeb(this.thinProfileContext(), feature, upstream);
-  }
-
-  private resolveThinFeatureAxisSpan(
-    axis: [number, number, number],
-    origin: [number, number, number],
-    requestedDepth: number,
-    upstream: KernelResult
-  ): { low: number; high: number } | null {
-    return resolveOcctThinFeatureAxisSpan(this.datumPatternDeps(), axis, origin, requestedDepth, upstream);
-  }
-
   private execPipe(feature: Pipe, _upstream: KernelResult): KernelResult {
     return execOcctPipe(this.modelingFeatureContext(), feature);
   }
@@ -1146,34 +1118,6 @@ export class OcctBackend extends OcctBackendMeshSupport implements Backend {
       resolve: (selector, upstream) => resolve(selector as Selector, upstream),
       resolveOwnerShape: (selection, upstream) => this.resolveOwnerShape(selection, upstream),
       splitByTools: (shape, tools) => this.splitByTools(shape, tools as any[]),
-    };
-  }
-
-  private thinProfileContext(): ThinProfileContext {
-    return {
-      addVec: (a, b) => this.addVec(a, b),
-      buildProfileWire: (profile) => this.buildProfileWire(profile),
-      collectEdgesFromShape: (shape) => this.collectEdgesFromShape(shape),
-      collectSelections: (shape, featureId, ownerKey, featureTags, opts) =>
-        this.collectSelections(shape, featureId, ownerKey, featureTags, opts),
-      edgeEndpoints: (edge) => this.edgeEndpoints(edge),
-      isValidShape: (shape) => this.isValidShape(shape),
-      makeFaceFromWire: (wire) => this.makeFaceFromWire(wire),
-      makePolygonWire: (points) => this.makePolygonWire(points),
-      makePrism: (face, vec) => this.makePrism(face, vec),
-      makeSolidFromShells: (shape) => this.makeSolidFromShells(shape),
-      makeVec: (x, y, z) => this.makeVec(x, y, z),
-      normalizeSolid: (shape) => this.normalizeSolid(shape),
-      readShape: (shape) => this.readShape(shape),
-      resolveExtrudeAxis: (axis, profile, upstream) =>
-        this.resolveExtrudeAxis(axis, profile, upstream),
-      resolveProfile: (profileRef, upstream) => this.resolveProfile(profileRef, upstream),
-      resolveThinFeatureAxisSpan: (axis, origin, requestedDepth, upstream) =>
-        this.resolveThinFeatureAxisSpan(axis, origin, requestedDepth, upstream),
-      scaleVec: (v, s) => this.scaleVec(v, s),
-      shapeHasSolid: (shape) => this.shapeHasSolid(shape),
-      subVec: (a, b) => this.subVec(a, b),
-      transformShapeTranslate: (shape, delta) => this.transformShapeTranslate(shape, delta),
     };
   }
 

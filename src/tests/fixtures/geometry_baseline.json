@@ -84,17 +84,6 @@
       "volume": 11875.22,
       "surfaceTypes": { "cylinder": 2, "plane": 2 }
     },
-    "rib-web": {
-      "targetOutput": "body:main",
-      "kind": "solid",
-      "faces": 21,
-      "edges": 102,
-      "solids": 1,
-      "extent": [84, 40, 44],
-      "area": 18583.975,
-      "volume": 91309.915,
-      "surfaceTypes": { "plane": 21 }
-    },
     "sweep-sketch": {
       "targetOutput": "body:main",
       "kind": "solid",

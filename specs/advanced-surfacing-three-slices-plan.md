@@ -12,6 +12,7 @@ Related:
 - `specs/geometric-parity-plan.md` (overall parity tracker)
 - `specs/geometric-benchmark-corpus.json` (scoring source of truth)
 - `specs/feature-staging.md` (staging registry policy)
+- `specs/curve-foundation-plan-2026-03-30.md` (curve work that now precedes guide-curve surfacing)
 
 ## Ownership
 
@@ -24,9 +25,11 @@ The live milestone state stays in `specs/geometric-parity-plan.md`:
 
 ## Outstanding Work Snapshot
 
-1. Finish Slice 2 (`boundary` and `fill`) implementation and validation.
-2. Finish Slice 3 (guide-curve and curve-on-surface infrastructure).
-3. Promote Slice 1 (`trim`, `extend`, `knit`) from staging only after the
+1. Finish Slice 1 promotion hardening (`trim`, `extend`, `knit`).
+2. Land the curve foundation work in `specs/curve-foundation-plan-2026-03-30.md`.
+3. Finish Slice 2 (`boundary` and `fill`) implementation and validation.
+4. Finish Slice 3 (guide-curve and curve-on-surface infrastructure).
+5. Promote Slice 1 (`trim`, `extend`, `knit`) from staging only after the
    parity promotion gates clear.
 
 ## Scope
@@ -221,12 +224,15 @@ Initial continuity scope:
 ## Delivery Order and Dependencies
 
 1. Slice 1 first (topology foundation needed by later patch workflows).
-2. Slice 3 second (guide/curve infra reused by boundary/fill workflows).
-3. Slice 2 third (boundary/fill built on top of topology + curve infra).
+2. Curve foundation next (`helix`, `spiral`, reusable curve outputs, `sketch3d`).
+3. Slice 3 after the curve foundation lands.
+4. Slice 2 after topology + curve infra are both stable.
 
 Rationale:
 - This sequence reduces backend risk and avoids shipping high-level surfacing
   without stable low-level trim/knit behavior.
+- It also avoids building guide-curve surfacing on top of an incomplete 3D
+  curve authoring contract.
 
 ## Parity/Corpus Updates Required
 

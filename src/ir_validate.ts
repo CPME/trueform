@@ -64,7 +64,6 @@ import {
   validatePoint3Scalar,
   validatePredicate,
   validateRankRule,
-  validateRibThicknessSide,
   validateScalar,
   validateSelector,
   validateShellDirection,
@@ -658,38 +657,6 @@ function validateFeature(feature: IntentFeature): void {
         sweep.result,
         "validation_feature_result",
         "Sweep result is required"
-      );
-      return;
-    }
-    case "feature.rib":
-    case "feature.web": {
-      const rib = feature as {
-        profile?: ProfileRef;
-        thickness?: Scalar;
-        depth?: Scalar;
-        result?: string;
-        axis?: ExtrudeAxis;
-        side?: unknown;
-      };
-      validateProfileRef(rib.profile);
-      if (rib.profile?.kind !== "profile.ref") {
-        throw new CompileError(
-          "validation_profile_sketch_ref",
-          `${kind} requires profileRef(...) to an open sketch profile`
-        );
-      }
-      validateScalar(rib.thickness, `${kind} thickness`);
-      validateScalar(rib.depth, `${kind} depth`);
-      if (rib.axis !== undefined) {
-        validateExtrudeAxis(rib.axis, `${kind} axis`);
-      }
-      if (rib.side !== undefined) {
-        validateRibThicknessSide(rib.side);
-      }
-      ensureNonEmptyString(
-        rib.result,
-        "validation_feature_result",
-        `${kind} result is required`
       );
       return;
     }

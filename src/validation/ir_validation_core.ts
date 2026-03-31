@@ -7,7 +7,6 @@ import {
   HOLE_END_CONDITIONS,
   LENGTH_UNITS,
   PARAM_TYPES,
-  RIB_THICKNESS_SIDES,
   SWEEP_ORIENTATIONS,
   THICKEN_DIRECTIONS,
   THREAD_HANDEDNESS,
@@ -219,11 +218,6 @@ export function validateSweepOrientation(orientation: unknown): void {
     "validation_sweep_orientation",
     'Sweep orientation must be "frenet" or "fixed"'
   );
-}
-
-export function validateRibThicknessSide(side: unknown): void {
-  if (isContractValue(RIB_THICKNESS_SIDES, side)) return;
-  throw new CompileError("validation_rib_side", 'Rib/Web side must be "symmetric" or "oneSided"');
 }
 
 export function validateThickenDirection(direction: unknown): void {

@@ -53,9 +53,9 @@ Interpretation:
 | M7: Advanced hole parity (`hole-wizard-standards`) | `completed` | Hole-wizard end-condition execution, parity probe, and failure-mode coverage landed; corpus moved to staging. |
 | M8: Stage graduation wave 1 (direct-edit + variable edge + draft) | `completed` | Direct-edit, variable-edge, and draft promotions landed with conformance/failure/determinism coverage. |
 | M9: Stage graduation wave 2 (thread + surface-mode reliability) | `in_progress` | Thread plus `feature.surface`/surface-mode revolve are promoted; remaining surface-mode entries still staged. |
-| M10: Advanced profile ops (`rib/web`) | `in_progress` | OCCT rib/web thin open-profile execution + probe/failure coverage landed in staging; promotion hardening remains. |
+| M10: Advanced profile ops restart | `not_started` | Prior rib/web slice was removed; any replacement should restart from a narrower, curve-aware design. |
 | M11: Advanced surfacing slice (`boundary/fill/trim/extend/knit`) | `in_progress` | Slice 1 (`feature.trim.surface`, `feature.extend.surface`, `feature.knit`) is now in staging; boundary/fill remains. |
-| M12: Near-parity closure + gate validation | `in_progress` | Coverage/reliability gates are now met; remaining work is missing-feature closure (`rib/web`, advanced surfacing). |
+| M12: Near-parity closure + gate validation | `in_progress` | Coverage/reliability gates are now met; remaining work is missing-feature closure (advanced surfacing plus any restarted advanced profile ops). |
 
 ## Execution Order (Near-Parity Path)
 
@@ -148,6 +148,6 @@ npm run parity:geometric:check
 | 2026-02-24 | M9 progress: promoted modeled thread to ready with deterministic and failure-mode e2e coverage. |
 | 2026-02-24 | M9 progress: promoted `feature.surface` and surface-mode revolve to ready with determinism and negative-path coverage. |
 | 2026-02-24 | Coverage gate exceeded in latest `--no-run` snapshot: `0.914` (`ready=26`, `staging=1`, `missing=2`); reliability gate still pending probe-run measurement. |
-| 2026-02-24 | Full probe run now passes reliability gate: `1.000` (27/27). Remaining near-parity gap is missing-feature implementation (`rib/web`, advanced surfacing). |
-| 2026-02-26 | M10 progress: added staging rib/web feature execution (`feature.rib`, `feature.web`) with OCCT probe + failure-mode tests and corpus/matrix/staging updates. |
+| 2026-02-24 | Full probe run now passes reliability gate: `1.000` (27/27). Remaining near-parity gap is missing-feature implementation in advanced surfacing plus any deferred advanced profile workflows. |
+| 2026-03-30 | `feature.rib` and `feature.web` were removed from the public/runtime surface to allow a restart from a narrower design. |
 | 2026-03-01 | M11 progress: added staging Slice 1 surfacing execution (`feature.trim.surface`, `feature.extend.surface`, `feature.knit`) with deterministic semantic-selection probe coverage and failure-mode tests. |

@@ -115,8 +115,6 @@ function featureResultName(feature: IntentFeature): string | undefined {
     case "feature.pipe":
     case "feature.pipeSweep":
     case "feature.hexTubeSweep":
-    case "feature.rib":
-    case "feature.web":
     case "feature.mirror":
     case "feature.delete.face":
     case "feature.replace.face":
@@ -158,9 +156,7 @@ function inferProfileDependencies(
     feature.kind === "feature.extrude" ||
     feature.kind === "feature.surface" ||
     feature.kind === "feature.revolve" ||
-    feature.kind === "feature.sweep" ||
-    feature.kind === "feature.rib" ||
-    feature.kind === "feature.web"
+    feature.kind === "feature.sweep"
   ) {
     refs.push(feature.profile as ProfileRef);
   } else if (feature.kind === "feature.loft") {
@@ -221,10 +217,6 @@ function inferDatumDependencies(
       addPlaneRefDep((feature as { plane?: PlaneRef }).plane, deps, byId, feature);
       break;
     case "feature.extrude":
-      addExtrudeAxisDep((feature as { axis?: ExtrudeAxis }).axis, deps, byId, feature);
-      break;
-    case "feature.rib":
-    case "feature.web":
       addExtrudeAxisDep((feature as { axis?: ExtrudeAxis }).axis, deps, byId, feature);
       break;
     case "feature.plane":

@@ -12,7 +12,6 @@ export const THICKEN_DIRECTIONS = ["normal", "reverse"] as const;
 export const UNWRAP_MODES = ["strict", "experimental"] as const;
 export const THREAD_HANDEDNESS = ["right", "left"] as const;
 export const HOLE_END_CONDITIONS = ["blind", "throughAll", "upToNext", "upToLast"] as const;
-export const RIB_THICKNESS_SIDES = ["symmetric", "oneSided"] as const;
 export const SWEEP_ORIENTATIONS = ["frenet", "fixed"] as const;
 export const TRIM_SURFACE_KEEPS = ["inside", "outside", "both"] as const;
 export const EXTEND_SURFACE_MODES = ["natural", "tangent"] as const;
