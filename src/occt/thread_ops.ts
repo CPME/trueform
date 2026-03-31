@@ -1,5 +1,6 @@
 import type { KernelResult } from "../backend.js";
 import type { Thread } from "../ir.js";
+import { sampleHelixPathPoints } from "../curve_path_sampling.js";
 import type { PlaneBasis } from "./plane_basis.js";
 import { dot, expectNumber, isFiniteVec, normalizeVector } from "./vector_math.js";
 
@@ -207,19 +208,17 @@ export function buildThreadSolid(params: {
   }
   const profileWire = deps.makePolygonWire(profilePoints);
 
-  const helixPoints: [number, number, number][] = [];
-  for (let i = 0; i <= segments; i += 1) {
-    const t = i / segments;
-    const angleStep = startAngleOffset + angleSpan * t;
-    const cos = Math.cos(angleStep);
-    const sin = Math.sin(angleStep);
-    const radialVec = deps.addVec(
-      deps.scaleVec(basePlane.xDir, pitchRadius * cos),
-      deps.scaleVec(basePlane.yDir, pitchRadius * sin)
-    );
-    const along = deps.scaleVec(axis, cutLength * t);
-    helixPoints.push(deps.addVec(cutOriginVec, deps.addVec(radialVec, along)));
-  }
+  const helixPoints = sampleHelixPathPoints({
+    kind: "path.helix",
+    origin: cutOriginVec,
+    axis,
+    radius: pitchRadius,
+    pitch,
+    length: cutLength,
+    handedness,
+    startAngle: startAngleOffset,
+    segmentsPerTurn: segments / turns,
+  });
   const helixEdge = deps.makeSplineEdge3D({
     kind: "path.spline",
     points: helixPoints,

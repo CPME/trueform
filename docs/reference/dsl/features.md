@@ -80,6 +80,8 @@ Examples:
 - [Sweep](./examples/features#sweep)
 - [Sweep (Arbitrary Sketch)](./examples/features#sweep-arbitrary-sketch)
 - [Pipe](./examples/features#pipe)
+- [Helix Path](./examples/features#helix-path)
+- [Spiral Path](./examples/features#spiral-path)
 - [Shell](./examples/features#shell)
 - [Mirror](./examples/features#mirror)
 - [Move Body](./examples/features#move-body)

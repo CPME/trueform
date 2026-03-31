@@ -514,6 +514,40 @@ function normalizePath3D(
           : normalizeScalar(path.degree, "count", ctx),
     };
   }
+  if (path.kind === "path.helix") {
+    return {
+      ...path,
+      origin: normalizePoint3(path.origin, ctx),
+      axis: normalizePoint3(path.axis, ctx),
+      radius: normalizeScalar(path.radius, "length", ctx),
+      pitch: normalizeScalar(path.pitch, "length", ctx),
+      turns: path.turns === undefined ? undefined : normalizeScalar(path.turns, "count", ctx),
+      length: path.length === undefined ? undefined : normalizeScalar(path.length, "length", ctx),
+      startAngle:
+        path.startAngle === undefined ? undefined : normalizeScalar(path.startAngle, "angle", ctx),
+      segmentsPerTurn:
+        path.segmentsPerTurn === undefined
+          ? undefined
+          : normalizeScalar(path.segmentsPerTurn, "count", ctx),
+    };
+  }
+  if (path.kind === "path.spiral") {
+    return {
+      ...path,
+      origin: normalizePoint3(path.origin, ctx),
+      normal: path.normal === undefined ? undefined : normalizePoint3(path.normal, ctx),
+      xDir: path.xDir === undefined ? undefined : normalizePoint3(path.xDir, ctx),
+      startRadius: normalizeScalar(path.startRadius, "length", ctx),
+      endRadius: normalizeScalar(path.endRadius, "length", ctx),
+      turns: normalizeScalar(path.turns, "count", ctx),
+      startAngle:
+        path.startAngle === undefined ? undefined : normalizeScalar(path.startAngle, "angle", ctx),
+      segmentsPerTurn:
+        path.segmentsPerTurn === undefined
+          ? undefined
+          : normalizeScalar(path.segmentsPerTurn, "count", ctx),
+    };
+  }
   return {
     ...path,
     segments: path.segments.map((segment) => normalizePathSegment(segment, ctx)),

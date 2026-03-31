@@ -547,6 +547,42 @@
       <button
         class="card-image-button"
         type="button"
+        data-preview-src="./dsl/path-helix.iso.png"
+        data-preview-title="Helix Path"
+        aria-label="Open larger preview for Helix Path"
+      >
+        <img src="./dsl/path-helix.iso.png" alt="Helix Path" loading="lazy" />
+      </button>
+      <div class="card-body">
+        <a class="card-title-link" href="#code-dsl-path-helix" data-code-target="code-dsl-path-helix">
+          <div class="card-title">Helix Path</div>
+          <div class="card-meta">Create</div>
+        </a>
+      </div>
+    </article>
+
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
+        data-preview-src="./dsl/path-spiral.iso.png"
+        data-preview-title="Spiral Path"
+        aria-label="Open larger preview for Spiral Path"
+      >
+        <img src="./dsl/path-spiral.iso.png" alt="Spiral Path" loading="lazy" />
+      </button>
+      <div class="card-body">
+        <a class="card-title-link" href="#code-dsl-path-spiral" data-code-target="code-dsl-path-spiral">
+          <div class="card-title">Spiral Path</div>
+          <div class="card-meta">Create</div>
+        </a>
+      </div>
+    </article>
+
+    <article class="card">
+      <button
+        class="card-image-button"
+        type="button"
         data-preview-src="./dsl/sweep-sketch.iso.png"
         data-preview-title="Sweep (Arbitrary Sketch)"
         aria-label="Open larger preview for Sweep (Arbitrary Sketch)"
@@ -1348,6 +1384,50 @@ const examplePart = part(&quot;example-sweep&quot;, [
       <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Pipe</p>
       <pre><code>const examplePart = part(&quot;example-pipe&quot;, [
   pipe(&quot;pipe-1&quot;, &quot;+Z&quot;, 60, 24, 18, &quot;body:main&quot;),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-path-helix">
+      <h3>Helix Path (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Helix Path</p>
+      <pre><code>const examplePart = part(&quot;example-path-helix&quot;, [
+  pipeSweep(
+    &quot;helix-pipe&quot;,
+    pathHelix({
+      origin: [0, 0, 0],
+      axis: [0, 0, 1],
+      radius: 12,
+      pitch: 12,
+      turns: 1.5,
+      segmentsPerTurn: 24,
+    }),
+    4,
+    undefined,
+    &quot;body:main&quot;
+  ),
+]);</code></pre>
+      <a class="back-link" href="#top">Back to gallery</a>
+    </article>
+
+    <article class="code-entry" id="code-dsl-path-spiral">
+      <h3>Spiral Path (DSL)</h3>
+      <p class="code-meta">docs/reference/dsl/examples/features.md -&gt; Spiral Path</p>
+      <pre><code>const examplePart = part(&quot;example-path-spiral&quot;, [
+  pipeSweep(
+    &quot;spiral-pipe&quot;,
+    pathSpiral({
+      origin: [0, 0, 0],
+      normal: [0, 0, 1],
+      startRadius: 10,
+      endRadius: 36,
+      turns: 2,
+      segmentsPerTurn: 60,
+    }),
+    4,
+    undefined,
+    &quot;body:main&quot;
+  ),
 ]);</code></pre>
       <a class="back-link" href="#top">Back to gallery</a>
     </article>

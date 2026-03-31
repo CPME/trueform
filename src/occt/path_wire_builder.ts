@@ -1,4 +1,5 @@
 import type { Path3D, Point3D } from "../ir.js";
+import { sampleHelixPathPoints, sampleSpiralPathPoints } from "../curve_path_sampling.js";
 import {
   clamp,
   cross,
@@ -36,8 +37,8 @@ export type PathWireBuilderDeps = {
 
 export function buildPathWire(path: Path3D, deps: PathWireBuilderDeps) {
   const segments: EdgeSegment[] = [];
-  if (path.kind === "path.spline") {
-    const { edge, start, end } = deps.makeSplineEdge3D(path);
+  if (path.kind === "path.spline" || path.kind === "path.helix" || path.kind === "path.spiral") {
+    const { edge, start, end } = deps.makeSplineEdge3D(asSplinePath(path));
     segments.push({ edge, start, end });
   } else if (path.kind === "path.polyline") {
     const points = path.points;
@@ -116,12 +117,13 @@ export function pathStartTangent(
     const next = deps.point3Numbers(nextPoint, "path point");
     return { start, tangent: subVec(next, start) };
   }
-  if (path.kind === "path.spline") {
-    if (path.points.length < 2) {
+  if (path.kind === "path.spline" || path.kind === "path.helix" || path.kind === "path.spiral") {
+    const points = asSplinePath(path).points;
+    if (points.length < 2) {
       throw new Error("OCCT backend: path needs at least 2 points");
     }
-    const startPoint = path.points[0];
-    const nextPoint = path.points[1];
+    const startPoint = points[0];
+    const nextPoint = points[1];
     if (!startPoint || !nextPoint) {
       throw new Error("OCCT backend: path needs at least 2 points");
     }
@@ -168,12 +170,13 @@ export function pathEndTangent(
     const end = deps.point3Numbers(endPoint, "path point");
     return { end, tangent: subVec(end, prev) };
   }
-  if (path.kind === "path.spline") {
-    if (path.points.length < 2) {
+  if (path.kind === "path.spline" || path.kind === "path.helix" || path.kind === "path.spiral") {
+    const points = asSplinePath(path).points;
+    if (points.length < 2) {
       throw new Error("OCCT backend: path needs at least 2 points");
     }
-    const prevPoint = path.points[path.points.length - 2];
-    const endPoint = path.points[path.points.length - 1];
+    const prevPoint = points[points.length - 2];
+    const endPoint = points[points.length - 1];
     if (!prevPoint || !endPoint) {
       throw new Error("OCCT backend: path needs at least 2 points");
     }
@@ -201,6 +204,16 @@ export function pathEndTangent(
     return { end, tangent: subVec(end, mid) };
   }
   throw new Error("OCCT backend: unsupported path segment");
+}
+
+function asSplinePath(
+  path: Extract<Path3D, { kind: "path.spline" | "path.helix" | "path.spiral" }>
+): Extract<Path3D, { kind: "path.spline" }> {
+  if (path.kind === "path.spline") return path;
+  return {
+    kind: "path.spline",
+    points: path.kind === "path.helix" ? sampleHelixPathPoints(path) : sampleSpiralPathPoints(path),
+  };
 }
 
 export function arcMidpointFromCenter(

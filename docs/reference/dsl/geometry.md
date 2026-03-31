@@ -68,6 +68,8 @@ Examples:
 
 - `pathPolyline(points, opts?) -> Path3D`
 - `pathSpline(points, opts?) -> Path3D`
+- `pathHelix(opts) -> Path3D`
+- `pathSpiral(opts) -> Path3D`
 - `pathSegments(segments) -> Path3D`
 - `pathLine(start, end) -> PathSegment`
 - `pathArc(start, end, center, direction?) -> PathSegment`

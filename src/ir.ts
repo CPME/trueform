@@ -438,10 +438,38 @@ export type PathSegment =
       direction?: "cw" | "ccw";
     };
 
+export type PathHelix = {
+  kind: "path.helix";
+  origin: Point3D;
+  axis: Point3D;
+  radius: Scalar;
+  pitch: Scalar;
+  turns?: Scalar;
+  length?: Scalar;
+  handedness?: ThreadHandedness;
+  startAngle?: Scalar;
+  segmentsPerTurn?: Scalar;
+};
+
+export type PathSpiral = {
+  kind: "path.spiral";
+  origin: Point3D;
+  normal?: Point3D;
+  xDir?: Point3D;
+  startRadius: Scalar;
+  endRadius: Scalar;
+  turns: Scalar;
+  handedness?: ThreadHandedness;
+  startAngle?: Scalar;
+  segmentsPerTurn?: Scalar;
+};
+
 export type Path3D =
   | { kind: "path.polyline"; points: Point3D[]; closed?: boolean }
   | { kind: "path.spline"; points: Point3D[]; closed?: boolean; degree?: Scalar }
-  | { kind: "path.segments"; segments: PathSegment[] };
+  | { kind: "path.segments"; segments: PathSegment[] }
+  | PathHelix
+  | PathSpiral;
 
 export type SweepOrientation = (typeof SWEEP_ORIENTATIONS)[number];
 

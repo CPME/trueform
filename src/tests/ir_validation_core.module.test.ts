@@ -33,6 +33,26 @@ const tests = [
         (error: unknown) =>
           error instanceof CompileError && error.code === "validation_axis_datum"
       );
+      assert.throws(
+        () =>
+          validatePath3D(
+            { kind: "path.helix", origin: [0, 0, 0], axis: [0, 0, 1], radius: 4, pitch: 2 } as any,
+            "Path"
+          ),
+        (error: unknown) =>
+          error instanceof CompileError && error.code === "validation_path_helix_extent"
+      );
+      validatePath3D(
+        {
+          kind: "path.spiral",
+          origin: [0, 0, 0],
+          startRadius: 2,
+          endRadius: 8,
+          turns: 3,
+          handedness: "left",
+        } as any,
+        "Path"
+      );
     },
   },
   {

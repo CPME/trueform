@@ -309,6 +309,64 @@ export function validatePath3D(value: Path3D | undefined, label: string): void {
     if (value.degree !== undefined) validateScalar(value.degree, `${label} spline degree`);
     return;
   }
+  if (value.kind === "path.helix") {
+    validatePoint3Scalar(value.origin, `${label} helix origin`);
+    validatePoint3Scalar(value.axis, `${label} helix axis`);
+    validateScalar(value.radius, `${label} helix radius`);
+    validateScalar(value.pitch, `${label} helix pitch`);
+    if (value.turns !== undefined) validateScalar(value.turns, `${label} helix turns`);
+    if (value.length !== undefined) validateScalar(value.length, `${label} helix length`);
+    if (value.startAngle !== undefined) validateScalar(value.startAngle, `${label} helix start angle`);
+    if (value.segmentsPerTurn !== undefined) {
+      validateScalar(value.segmentsPerTurn, `${label} helix segments per turn`);
+    }
+    if (value.turns === undefined && value.length === undefined) {
+      throw new CompileError(
+        "validation_path_helix_extent",
+        `${label} helix requires turns or length`
+      );
+    }
+    if (value.turns !== undefined && value.length !== undefined) {
+      throw new CompileError(
+        "validation_path_helix_extent",
+        `${label} helix cannot specify both turns and length`
+      );
+    }
+    if (
+      value.handedness !== undefined &&
+      value.handedness !== "right" &&
+      value.handedness !== "left"
+    ) {
+      throw new CompileError(
+        "validation_path_handedness",
+        `${label} helix handedness must be "right" or "left"`
+      );
+    }
+    return;
+  }
+  if (value.kind === "path.spiral") {
+    validatePoint3Scalar(value.origin, `${label} spiral origin`);
+    if (value.normal !== undefined) validatePoint3Scalar(value.normal, `${label} spiral normal`);
+    if (value.xDir !== undefined) validatePoint3Scalar(value.xDir, `${label} spiral xDir`);
+    validateScalar(value.startRadius, `${label} spiral start radius`);
+    validateScalar(value.endRadius, `${label} spiral end radius`);
+    validateScalar(value.turns, `${label} spiral turns`);
+    if (value.startAngle !== undefined) validateScalar(value.startAngle, `${label} spiral start angle`);
+    if (value.segmentsPerTurn !== undefined) {
+      validateScalar(value.segmentsPerTurn, `${label} spiral segments per turn`);
+    }
+    if (
+      value.handedness !== undefined &&
+      value.handedness !== "right" &&
+      value.handedness !== "left"
+    ) {
+      throw new CompileError(
+        "validation_path_handedness",
+        `${label} spiral handedness must be "right" or "left"`
+      );
+    }
+    return;
+  }
   if (value.kind === "path.segments") {
     const segments = ensureArray<PathSegment>(
       value.segments,

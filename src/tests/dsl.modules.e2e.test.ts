@@ -85,6 +85,10 @@ const tests = [
       assert.equal(doc.assemblies?.length, 1);
 
       const profile = sketch.profileRect(2, 3);
+      const helixPath = sketch.pathHelix({ radius: 4, pitch: 6, turns: 2 });
+      assert.equal(helixPath.kind, "path.helix");
+      const spiralPath = sketch.pathSpiral({ startRadius: 2, endRadius: 8, turns: 2 });
+      assert.equal(spiralPath.kind, "path.spiral");
       const extrude = features.extrude("extrude-1", profile, 5);
       assert.equal(extrude.kind, "feature.extrude");
       const plane = features.plane("plane-1", 20, 10);

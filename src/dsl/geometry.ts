@@ -1396,6 +1396,54 @@ export const pathSpline = (
     degree: opts?.degree,
   });
 
+export const pathHelix = (opts: {
+  origin?: Point3D;
+  axis?: Point3D;
+  radius: Scalar;
+  pitch: Scalar;
+  turns?: Scalar;
+  length?: Scalar;
+  handedness?: "right" | "left";
+  startAngle?: Scalar;
+  segmentsPerTurn?: Scalar;
+}): Path3D =>
+  compact({
+    kind: "path.helix",
+    origin: opts.origin ?? [0, 0, 0],
+    axis: opts.axis ?? [0, 0, 1],
+    radius: opts.radius,
+    pitch: opts.pitch,
+    turns: opts.turns,
+    length: opts.length,
+    handedness: opts.handedness,
+    startAngle: opts.startAngle,
+    segmentsPerTurn: opts.segmentsPerTurn,
+  });
+
+export const pathSpiral = (opts: {
+  origin?: Point3D;
+  normal?: Point3D;
+  xDir?: Point3D;
+  startRadius: Scalar;
+  endRadius: Scalar;
+  turns: Scalar;
+  handedness?: "right" | "left";
+  startAngle?: Scalar;
+  segmentsPerTurn?: Scalar;
+}): Path3D =>
+  compact({
+    kind: "path.spiral",
+    origin: opts.origin ?? [0, 0, 0],
+    normal: opts.normal,
+    xDir: opts.xDir,
+    startRadius: opts.startRadius,
+    endRadius: opts.endRadius,
+    turns: opts.turns,
+    handedness: opts.handedness,
+    startAngle: opts.startAngle,
+    segmentsPerTurn: opts.segmentsPerTurn,
+  });
+
 export const pathSegments = (segments: PathSegment[]): Path3D => ({
   kind: "path.segments",
   segments,

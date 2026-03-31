@@ -95,6 +95,53 @@ const tests = [
     },
   },
   {
+    name: "path wire builder: lowers helix and spiral paths through spline sampling",
+    fn: async () => {
+      const helixState = { edges: [] as unknown[], splineCalls: 0 };
+      const helixDeps = makeDeps(helixState);
+      const helixWire = buildPathWire(
+        {
+          kind: "path.helix",
+          origin: [0, 0, 0],
+          axis: [0, 0, 1],
+          radius: 4,
+          pitch: 6,
+          turns: 2,
+        },
+        helixDeps
+      );
+      assert.deepEqual(helixWire, { kind: "wire", edges: [{ kind: "spline-edge" }] });
+      assert.equal(helixState.splineCalls, 1);
+
+      const spiralState = { edges: [] as unknown[], splineCalls: 0 };
+      const spiralDeps = makeDeps(spiralState);
+      const tangent = pathStartTangent(
+        {
+          kind: "path.spiral",
+          origin: [0, 0, 0],
+          startRadius: 2,
+          endRadius: 8,
+          turns: 2,
+        },
+        { point3Numbers: (point) => [Number(point[0]), Number(point[1]), Number(point[2])] }
+      );
+      assert.equal(tangent.start[2], 0);
+      assert.notDeepEqual(tangent.tangent, [0, 0, 0]);
+      const spiralWire = buildPathWire(
+        {
+          kind: "path.spiral",
+          origin: [0, 0, 0],
+          startRadius: 2,
+          endRadius: 8,
+          turns: 2,
+        },
+        spiralDeps
+      );
+      assert.deepEqual(spiralWire, { kind: "wire", edges: [{ kind: "spline-edge" }] });
+      assert.equal(spiralState.splineCalls, 1);
+    },
+  },
+  {
     name: "path wire builder: computes directed arc midpoint and tangent from segment paths",
     fn: async () => {
       const mid = arcMidpointFromCenter([1, 0, 0], [0, 1, 0], [0, 0, 0], "ccw");

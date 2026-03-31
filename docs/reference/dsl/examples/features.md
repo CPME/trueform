@@ -229,6 +229,62 @@ Notes:
 - `pipe` creates a straight cylindrical pipe/tube primitive on a cardinal axis.
 - Use `opts.origin` to place the primitive at an explicit origin.
 
+## Helix Path
+
+![Helix path example](/examples/dsl/path-helix.iso.png)
+
+```ts
+const examplePart = part("example-path-helix", [
+  pipeSweep(
+    "helix-pipe",
+    pathHelix({
+      origin: [0, 0, 0],
+      axis: [0, 0, 1],
+      radius: 12,
+      pitch: 12,
+      turns: 1.5,
+      segmentsPerTurn: 24,
+    }),
+    4,
+    undefined,
+    "body:main"
+  ),
+]);
+```
+
+Notes:
+- `pathHelix(...)` creates a reusable 3D curve path with explicit radius, pitch, and extent.
+- Specify either `turns` or `length`.
+- The current implementation lowers the helix to a deterministic sampled spline for backend execution.
+
+## Spiral Path
+
+![Spiral path example](/examples/dsl/path-spiral.iso.png)
+
+```ts
+const examplePart = part("example-path-spiral", [
+  pipeSweep(
+    "spiral-pipe",
+    pathSpiral({
+      origin: [0, 0, 0],
+      normal: [0, 0, 1],
+      startRadius: 10,
+      endRadius: 36,
+      turns: 2,
+      segmentsPerTurn: 60,
+    }),
+    4,
+    undefined,
+    "body:main"
+  ),
+]);
+```
+
+Notes:
+- `pathSpiral(...)` creates a planar spiral around `origin` and `normal`.
+- `startRadius` and `endRadius` define the radial interpolation across the requested number of turns.
+- The optional `xDir` hint can be used later when you need a specific in-plane start direction.
+
 ## Sweeping Tube Profiles (Consolidated)
 
 ```ts

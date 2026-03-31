@@ -535,12 +535,17 @@ const tests = [
         [0, 0, 0],
         [5, 0, 0],
       ]);
+      const helix = dsl.pathHelix({ radius: 4, pitch: 6, turns: 2 });
+      const spiral = dsl.pathSpiral({ startRadius: 2, endRadius: 10, turns: 3 });
       const spline = dsl.pathSpline([
         [0, 0, 0],
         [5, 2, 0],
         [10, 0, 0],
       ]);
+      assert.equal(path.kind, "path.segments");
       assert.equal(poly.kind, "path.polyline");
+      assert.equal(helix.kind, "path.helix");
+      assert.equal(spiral.kind, "path.spiral");
       assert.equal(spline.kind, "path.spline");
       const pipeSweep = dsl.pipeSweep("pipe-sweep-1", path, 40, 30);
       assert.equal(pipeSweep.kind, "feature.pipeSweep");

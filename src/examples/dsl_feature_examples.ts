@@ -27,9 +27,12 @@ import {
   predNormal,
   pathPolyline,
   pathSpline,
+  pathHelix,
+  pathSpiral,
   patternCircular,
   patternLinear,
   pipe,
+  pipeSweep,
   profileCircle,
   profilePoly,
   profileRect,
@@ -471,6 +474,56 @@ export const dslFeatureExamples: DslFeatureExample[] = [
     part: part("example-pipe", [
       pipe("pipe-1", "+Z", 60, 24, 18, "body:main"),
     ]),
+  },
+  {
+    id: "path-helix",
+    title: "Helix Path",
+    part: part("example-path-helix", [
+      pipeSweep(
+        "helix-pipe",
+        pathHelix({
+          origin: [0, 0, 0],
+          axis: [0, 0, 1],
+          radius: 12,
+          pitch: 12,
+          turns: 1.5,
+          segmentsPerTurn: 24,
+        }),
+        4,
+        undefined,
+        "body:main"
+      ),
+    ]),
+    render: {
+      renderOpts: {
+        viewDir: [0.8, -0.5, 0.4],
+      },
+    },
+  },
+  {
+    id: "path-spiral",
+    title: "Spiral Path",
+    part: part("example-path-spiral", [
+      pipeSweep(
+        "spiral-pipe",
+        pathSpiral({
+          origin: [0, 0, 0],
+          normal: [0, 0, 1],
+          startRadius: 10,
+          endRadius: 36,
+          turns: 2,
+          segmentsPerTurn: 60,
+        }),
+        4,
+        undefined,
+        "body:main"
+      ),
+    ]),
+    render: {
+      renderOpts: {
+        viewDir: [0.4, -0.7, 0.6],
+      },
+    },
   },
   {
     id: "sweep-sketch",

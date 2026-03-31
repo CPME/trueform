@@ -51,6 +51,16 @@
       "image": "/examples/dsl/pipe.iso.png"
     },
     {
+      "id": "path-helix",
+      "title": "Helix Path",
+      "image": "/examples/dsl/path-helix.iso.png"
+    },
+    {
+      "id": "path-spiral",
+      "title": "Spiral Path",
+      "image": "/examples/dsl/path-spiral.iso.png"
+    },
+    {
       "id": "sweep-sketch",
       "title": "Sweep (Arbitrary Sketch)",
       "image": "/examples/dsl/sweep-sketch.iso.png"
